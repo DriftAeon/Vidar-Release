@@ -1,0 +1,3109 @@
+{
+  "about": "lint:ui grandfathered findings (tools/ui/lint-ui.mjs). Rewrite with `npm run lint:ui -- --update-baseline`.",
+  "entries": [
+    {
+      "file": "src/falcon.css",
+      "selector": ".falcon-bar button",
+      "property": "padding",
+      "value": "var(--space-5) 9px",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": ".falcon-bar button",
+      "property": "padding",
+      "value": "var(--space-5) 9px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": ".falcon-bar",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": "#falcon-picker",
+      "property": "padding",
+      "value": "var(--space-5) 7px",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": "#falcon-picker",
+      "property": "padding",
+      "value": "var(--space-5) 7px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": "#falcon-refresh svg",
+      "property": "height",
+      "value": "16px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": "#falcon-refresh",
+      "property": "height",
+      "value": "24px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/falcon.css",
+      "selector": "#falcon-status",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-inspector-input",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-inspector-req",
+      "property": "margin-right",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-actions",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-body",
+      "property": "gap",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-body",
+      "property": "padding",
+      "value": "var(--space-10) var(--space-12)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-cap",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-chip",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-chips",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-connector",
+      "property": "height",
+      "value": "2px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-controls",
+      "property": "gap",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-header-row1",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-header",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-live",
+      "property": "max-height",
+      "value": "200px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-live",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-mark.flow-run-mark",
+      "property": "height",
+      "value": "18px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-output-text",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-output-text",
+      "property": "min-height",
+      "value": "70px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-result",
+      "property": "max-height",
+      "value": "200px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-result",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-seg button",
+      "property": "padding",
+      "value": "var(--space-4) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-stats",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop-task",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/flow/inspector.css",
+      "selector": ".flow-pop",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "selector": "ts:mockInvoke",
+      "property": "background",
+      "value": "#15151b",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "selector": "ts:mockInvoke",
+      "property": "color",
+      "value": "#8888a0",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "selector": "ts:mockInvoke",
+      "property": "color",
+      "value": "#d7b254",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "selector": "ts:mockInvoke",
+      "property": "color",
+      "value": "#e8e5dd",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "selector": "ts:mockInvoke",
+      "property": "font-family",
+      "value": "monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "selector": "ts:mockInvoke",
+      "property": "padding",
+      "value": "24px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/panels/askgate.ts",
+      "selector": "ts:render",
+      "property": "gap",
+      "value": "6px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/panels/askgate.ts",
+      "selector": "ts:render",
+      "property": "margin",
+      "value": "2px 0 6px",
+      "check": "token",
+      "count": 2
+    },
+    {
+      "file": "src/panels/document-dialog.ts",
+      "selector": "ts:documentDialog",
+      "property": "gap",
+      "value": "8px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-dialog.ts",
+      "selector": "ts:documentDialog",
+      "property": "padding",
+      "value": "8px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-act",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-fold, .doc-om-file",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-fold, .doc-om-file",
+      "property": "padding",
+      "value": "var(--space-5) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-foot",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-foot",
+      "property": "padding",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-rule",
+      "property": "height",
+      "value": "1px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": ".doc-om-rule",
+      "property": "margin",
+      "value": "var(--space-4) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-open-menu.css",
+      "selector": "#doc-om",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/loadout-launch.css",
+      "selector": ".launch-facts > div",
+      "property": "padding",
+      "value": "7px 0",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/panels/loadout-launch.css",
+      "selector": ".launch-facts dt",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/panels/preview-fixtures.ts",
+      "selector": "ts:runFixtures",
+      "property": "height",
+      "value": "120px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-btn",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-btn",
+      "property": "padding",
+      "value": "var(--space-5) 14px",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-btn",
+      "property": "padding",
+      "value": "var(--space-5) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-comment",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-comment",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-foot",
+      "property": "padding",
+      "value": "var(--space-10) 14px",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-foot",
+      "property": "padding",
+      "value": "var(--space-10) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-head",
+      "property": "padding",
+      "value": "var(--space-10) 14px",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-head",
+      "property": "padding",
+      "value": "var(--space-10) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-question",
+      "property": "font-size",
+      "value": "12.5px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": ".ask-question",
+      "property": "margin-top",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": "#ask-modal",
+      "property": "border-radius",
+      "value": "10px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/ask-gate.css",
+      "selector": "#ask-modal",
+      "property": "box-shadow",
+      "value": "0 18px 50px rgba(0, 0, 0, 0.66), 0 0 0 1px rgba(0, 0, 0, 0.35)",
+      "check": "colour",
+      "count": 2
+    },
+    {
+      "file": "src/styles/banners.css",
+      "selector": "#config-error, #prefs-error",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/banners.css",
+      "selector": "#config-notice",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/bar-switches.css",
+      "selector": "#auto-speak .auto-speak-icon",
+      "property": "height",
+      "value": "14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bar-switches.css",
+      "selector": "#close-lock, #auto-speak",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bar-switches.css",
+      "selector": "#inspect-chip",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bar-switches.css",
+      "selector": "#inspect-chip",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bar-switches.css",
+      "selector": "#inspect-chip",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bar-switches.css",
+      "selector": "body.inspect-mode, body.inspect-mode *",
+      "property": "cursor",
+      "value": "crosshair !important",
+      "check": "important",
+      "count": 1
+    },
+    {
+      "file": "src/styles/base.css",
+      "selector": ":where(button)",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": ".macro-btn",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": ".macro-btn",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#bottombar",
+      "property": "gap",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#bottombar",
+      "property": "padding",
+      "value": "0 var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#macro-strip",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#status-compact",
+      "property": "padding",
+      "value": "0 var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#status-expanded",
+      "property": "border-radius",
+      "value": "10px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#status-expanded",
+      "property": "box-shadow",
+      "value": "0 8px 24px rgba(0, 0, 0, 0.4)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/bottombar.css",
+      "selector": "#status-expanded",
+      "property": "padding",
+      "value": "14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/cas-dial.css",
+      "selector": "@media (prefers-reduced-motion: no-preference) .cas-spin #cas-ring, .cas-spin #cas-icon",
+      "property": "animation",
+      "value": "cas-rotate 0.33s cubic-bezier(0.2, 0.8, 0.2, 1)",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/cas-dial.css",
+      "selector": "@media (prefers-reduced-motion: no-preference) .cas-spin",
+      "property": "animation",
+      "value": "cas-glow 0.33s ease-out",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/cas-dial.css",
+      "selector": "#cas-ring",
+      "property": "-webkit-mask",
+      "value": "radial-gradient(circle, transparent 57%, #000 60%)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/cas-dial.css",
+      "selector": "#cas-ring",
+      "property": "mask",
+      "value": "radial-gradient(circle, transparent 57%, #000 60%)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/display.css",
+      "selector": ".display-render.display-staging",
+      "property": "height",
+      "value": "calc(100% - 2 * var(--space-10))",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/display.css",
+      "selector": ".display-render.display-staging",
+      "property": "width",
+      "value": "calc(100% - 2 * var(--space-10))",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/display.css",
+      "selector": ".hidden",
+      "property": "display",
+      "value": "none !important",
+      "check": "important",
+      "count": 1
+    },
+    {
+      "file": "src/styles/display.css",
+      "selector": "img.display-png",
+      "property": "background",
+      "value": "color-mix(in srgb, var(--border) 85%, #000)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/dual-view.css",
+      "selector": "#view-sessions.dual .term-container.focused .xterm-screen",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-effort",
+      "property": "border-color",
+      "value": "#cf9b4e",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-effort",
+      "property": "color",
+      "value": "#cf9b4e",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-hook",
+      "property": "border-color",
+      "value": "#c65f74",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-hook",
+      "property": "color",
+      "value": "#c65f74",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-menu-item",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-menu",
+      "property": "box-shadow",
+      "value": "0 4px 16px rgba(0, 0, 0, 0.3)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-model",
+      "property": "border-color",
+      "value": "#4fae94",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-model",
+      "property": "color",
+      "value": "#4fae94",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-permission",
+      "property": "border-color",
+      "value": "#8f96a3",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-permission",
+      "property": "color",
+      "value": "#8f96a3",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-rule",
+      "property": "border-color",
+      "value": "#6f8fae",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-rule",
+      "property": "color",
+      "value": "#6f8fae",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-skill",
+      "property": "border-color",
+      "value": "#a97fc9",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon-skill",
+      "property": "color",
+      "value": "#a97fc9",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon",
+      "property": "padding",
+      "value": "1px var(--space-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-addon",
+      "property": "padding",
+      "value": "1px var(--space-5)",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approval-block",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approval-block",
+      "property": "padding",
+      "value": "0 var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approval-card-head",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approval-card",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approval-detail .tool-input",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approval-detail .tool-input",
+      "property": "max-height",
+      "value": "240px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approvals-head",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approvals-head",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approvals-hide",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approvals-hide",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approvals-list",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approve-btn",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-approve-btn",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-edge-agent",
+      "property": "stroke",
+      "value": "#d7b254",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-edge-input",
+      "property": "stroke",
+      "value": "#6aa6d6",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-edge-output",
+      "property": "stroke",
+      "value": "#c97a4a",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-kind-agent",
+      "property": "background",
+      "value": "#d7b254",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-kind-output",
+      "property": "background",
+      "value": "#c97a4a",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-kind-review",
+      "property": "background",
+      "value": "#b07fd1",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-kind-tool",
+      "property": "background",
+      "value": "#8aa15f",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-kind-trigger",
+      "property": "background",
+      "value": "#6aa6d6",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-agent",
+      "property": "--kind",
+      "value": "#d7b254",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-body",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-footer",
+      "property": "gap",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-footer",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-header",
+      "property": "border-radius",
+      "value": "var(--radius-5) var(--radius-5) 0 0",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-header",
+      "property": "padding",
+      "value": "var(--space-4) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-input",
+      "property": "--kind",
+      "value": "#6aa6d6",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-node-output",
+      "property": "--kind",
+      "value": "#c97a4a",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette-dot",
+      "property": "height",
+      "value": "8px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette-item",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette-label",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette-sep",
+      "property": "height",
+      "value": "1px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette",
+      "property": "box-shadow",
+      "value": "0 8px 24px rgba(0, 0, 0, 0.4)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette",
+      "property": "padding",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-palette",
+      "property": "top",
+      "value": "calc(100% + var(--space-6))",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-picker-name",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-picker-new-wrap, .flow-picker-name-form",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-port svg",
+      "property": "height",
+      "value": "5px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-port",
+      "property": "height",
+      "value": "10px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-run-badge.flow-run-mark.flow-run-ok::after",
+      "property": "height",
+      "value": "7px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-run-badge.flow-run-mark",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-run-badge.flow-run-mark",
+      "property": "height",
+      "value": "14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-run-badge",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-run-badge",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-run-badge",
+      "property": "padding",
+      "value": "1px var(--space-4)",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/flow.css",
+      "selector": ".flow-snap-grid::before",
+      "property": "height",
+      "value": "12288px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/layout.css",
+      "selector": ".character-animation, .character-controls button",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/layout.css",
+      "selector": ".character-body",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/layout.css",
+      "selector": ".character-controls",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/layout.css",
+      "selector": ".character-stage",
+      "property": "background",
+      "value": "#0a1418",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/layout.css",
+      "selector": "#app::after",
+      "property": "height",
+      "value": "2px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/leftbar.css",
+      "selector": ".bar-btn",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/leftbar.css",
+      "selector": ".bar-btn",
+      "property": "font-size",
+      "value": "15px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/leftbar.css",
+      "selector": ".bar-btn",
+      "property": "height",
+      "value": "40px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-bar",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-bar",
+      "property": "height",
+      "value": "6px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-bar",
+      "property": "margin-bottom",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-legend-kb",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-legend-row",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-legend-swatch",
+      "property": "height",
+      "value": "8px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-mono",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/loadout.css",
+      "selector": ".loadout-shade-b",
+      "property": "background",
+      "value": "var(--accent2)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": ".launcher-col button.launcher-session.has-sub",
+      "property": "padding-right",
+      "value": "28px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": ".launcher-col button.launcher-session",
+      "property": "gap",
+      "value": "1px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": ".launcher-note",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-12)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": ".launcher-sub-line",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": ".menu-icon",
+      "property": "height",
+      "value": "18px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": "#cas-menu button",
+      "property": "box-shadow",
+      "value": "0 0 3px var(--cas-c), inset 0 0 10px rgba(0, 0, 0, 0.65), inset 0 0 2px var(--cas-c)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": "#cas-menu button",
+      "property": "padding",
+      "value": "var(--space-5) var(--space-16)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": "#cas-menu",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": "#cas-menu",
+      "property": "gap",
+      "value": "7px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": "#launcher-menu button.has-sub::after, .launcher-col button.has-sub::after",
+      "property": "padding-left",
+      "value": "14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/menus.css",
+      "selector": "#rename-input",
+      "property": "padding",
+      "value": "var(--space-5) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".bar-fill",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".bar",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".bar",
+      "property": "height",
+      "value": "5px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".bar",
+      "property": "margin-top",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".mod-dot-ok, .rack-tool-dot.mod-dot-ok",
+      "property": "color",
+      "value": "#22c55e",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".mod-dot-warn, .rack-tool-dot.mod-dot-warn",
+      "property": "color",
+      "value": "#f59e0b",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".mod-refresh .icn",
+      "property": "height",
+      "value": "11px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".mod-refresh",
+      "property": "padding",
+      "value": "1px var(--space-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".mod-refresh",
+      "property": "padding",
+      "value": "1px var(--space-5)",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".module-head",
+      "property": "padding-bottom",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".module",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-backend",
+      "property": "margin-top",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-backends",
+      "property": "margin-top",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-list",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-name",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-name",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-row",
+      "property": "gap",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-scope",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-tool-dot",
+      "property": "color",
+      "value": "#22c55e",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-tool",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-tool",
+      "property": "margin-top",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": ".rack-tools",
+      "property": "margin-top",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": "#doc-reload .lbl:not(:empty), #doc-comments .lbl:not(:empty)",
+      "property": "margin-left",
+      "value": "var(--space-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": "#status-expanded h3",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": "#status-expanded h4",
+      "property": "margin",
+      "value": "14px 0 var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": "#status-expanded h4",
+      "property": "margin",
+      "value": "14px 0 var(--space-6)",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/modules.css",
+      "selector": "#status-expanded h4",
+      "property": "padding-bottom",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-actions button, .rendered-resume, .q-opt, .palette-row",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-actions button",
+      "property": "padding",
+      "value": "var(--space-4) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-actions",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-msg",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-path",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-path",
+      "property": "font-size",
+      "value": "11.5px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-plan .doc-md",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-plan",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".approval-summary",
+      "property": "margin-bottom",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-agent-pill",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-approval .tool-input",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-sub-text",
+      "property": "font-size",
+      "value": "12.5px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-text > .doc-md code",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-text > .doc-md code",
+      "property": "padding",
+      "value": "0 var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-text > .doc-md p",
+      "property": "margin",
+      "value": "11px 0",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-tool > summary",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-unknown > summary",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".blk-user",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".diff-hunk",
+      "property": "color",
+      "value": "#56c8d8",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".icn",
+      "property": "height",
+      "value": "13px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".q-other",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".q",
+      "property": "margin",
+      "value": "var(--space-6) 0",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered .blk-text",
+      "property": "margin",
+      "value": "14px 0",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered .blk",
+      "property": "margin",
+      "value": "var(--space-6) 0",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-input-row",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-input",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-input",
+      "property": "padding",
+      "value": "7px 9px",
+      "check": "token",
+      "count": 2
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-state::before",
+      "property": "height",
+      "value": "7px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-state[data-state=\"working\"]::before",
+      "property": "animation",
+      "value": "state-pulse 1.2s ease-in-out infinite",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-status",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-status",
+      "property": "gap",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-status",
+      "property": "height",
+      "value": "22px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".rendered-status",
+      "property": "line-height",
+      "value": "22px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".sl-bad",
+      "property": "color",
+      "value": "#ff1a1a",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".sl-cyan",
+      "property": "color",
+      "value": "#56c8d8",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".sl-effort",
+      "property": "color",
+      "value": "#ff1a1a",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".sl-ok",
+      "property": "color",
+      "value": "#5fb865",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".sl-orange",
+      "property": "color",
+      "value": "#d78700",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".st-menu button",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".st-menu button",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-12)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".st-menu",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".tool-children",
+      "property": "padding",
+      "value": "var(--space-4) var(--space-6) var(--space-4) 14px",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".tool-children",
+      "property": "padding",
+      "value": "var(--space-4) var(--space-6) var(--space-4) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".tool-input, .tool-output, .blk-unknown pre, .tool-structured pre",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".tool-input, .tool-output, .blk-unknown pre, .tool-structured pre",
+      "property": "font-size",
+      "value": "11.5px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/rendered.css",
+      "selector": ".tool-input, .tool-output, .blk-unknown pre, .tool-structured pre",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/selects.css",
+      "selector": ".flow-model-select",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-24) var(--space-8) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/selects.css",
+      "selector": ".sc-select, .flow-run-select, .flow-model-select",
+      "property": "background-position",
+      "value": "right var(--space-6) center",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/selects.css",
+      "selector": ".sc-select, .flow-run-select, .flow-model-select",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/selects.css",
+      "selector": ".sc-select, .flow-run-select, .flow-model-select",
+      "property": "padding",
+      "value": "var(--space-4) var(--space-20) var(--space-4) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ag-row.ag-variant",
+      "property": "padding-left",
+      "value": "var(--space-20)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ag-row",
+      "property": "min-height",
+      "value": "40px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ag-row",
+      "property": "padding",
+      "value": "var(--space-6) 0",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ag-variant .ag-name::before",
+      "property": "margin-right",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ch-actions",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ch-alert-title",
+      "property": "margin-bottom",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ch-alert",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".deps-cmd, .vs-cmd",
+      "property": "font-family",
+      "value": "Consolas, \"Cascadia Mono\", monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".deps-cmd, .vs-cmd",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".editor-presets",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".rider-line code",
+      "property": "font-family",
+      "value": "Consolas, \"Cascadia Mono\", monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-bind",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-cat",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-cat",
+      "property": "padding",
+      "value": "var(--space-5) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-cats",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-close",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-close",
+      "property": "height",
+      "value": "26px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-head",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-8) var(--space-8) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-input.ag-cmd",
+      "property": "font-family",
+      "value": "Consolas, \"Cascadia Mono\", monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-input",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-key.reject",
+      "property": "animation",
+      "value": "sc-reject 0.4s ease-out",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-key",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-key",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-key",
+      "property": "padding",
+      "value": "var(--space-4) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-reset",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-reset",
+      "property": "font-size",
+      "value": "15px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-reset",
+      "property": "height",
+      "value": "26px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-row",
+      "property": "padding",
+      "value": "var(--space-8) 14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-rows",
+      "property": "padding",
+      "value": "var(--space-6) 0",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".sc-search",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ws-list",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ws-path",
+      "property": "font-family",
+      "value": "Consolas, \"Cascadia Mono\", monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ws-row.ag-draft",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": ".ws-row.ag-draft",
+      "property": "padding",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": "#shortcuts-modal",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
+      "selector": "#shortcuts-modal",
+      "property": "box-shadow",
+      "value": "0 8px 32px rgba(0, 0, 0, 0.5)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": ".page-host",
+      "property": "padding",
+      "value": "var(--space-16) var(--space-20)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": ".panel-pad h3",
+      "property": "font-size",
+      "value": "15px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": ".panel-pad",
+      "property": "gap",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": ".panel-pad",
+      "property": "padding",
+      "value": "18px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": ".term-container .xterm-viewport",
+      "property": "background-color",
+      "value": "transparent !important",
+      "check": "important",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": ".term-container:focus-within > .page-host",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-host.css",
+      "selector": "*::-webkit-scrollbar",
+      "property": "height",
+      "value": "8px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-search.css",
+      "selector": "#search-overlay button",
+      "property": "font-size",
+      "value": "15px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-search.css",
+      "selector": "#search-overlay button",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-search.css",
+      "selector": "#search-overlay input",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-search.css",
+      "selector": "#search-overlay",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-search.css",
+      "selector": "#search-overlay",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/term-search.css",
+      "selector": "#search-overlay",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-hex",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-hex",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-hex",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-hist",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-hist",
+      "property": "height",
+      "value": "18px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-row",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-swatch",
+      "property": "background-image",
+      "value": "linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%)",
+      "check": "colour",
+      "count": 2
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".eyedrop-swatch",
+      "property": "height",
+      "value": "22px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-input",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-input",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-options",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-preview",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-preview",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-preview",
+      "property": "font-size",
+      "value": "var(--font-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-preview",
+      "property": "max-height",
+      "value": "220px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-preview",
+      "property": "min-height",
+      "value": "80px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-preview",
+      "property": "padding",
+      "value": "var(--space-5) var(--space-6)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-readout",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-readout",
+      "property": "padding-top",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-row",
+      "property": "gap",
+      "value": "var(--space-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-send",
+      "property": "padding",
+      "value": "var(--space-5) var(--space-10)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-text",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-text",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-text",
+      "property": "max-height",
+      "value": "240px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-text",
+      "property": "min-height",
+      "value": "90px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": ".tool-text",
+      "property": "padding",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/toolbench.css",
+      "selector": "body.eyedrop-mode, body.eyedrop-mode *",
+      "property": "cursor",
+      "value": "crosshair !important",
+      "check": "important",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-buttons.css",
+      "selector": ":is(#speak-btn, #listen-btn) .icn",
+      "property": "height",
+      "value": "14px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-buttons.css",
+      "selector": "#listen-btn[data-state=\"busy\"]",
+      "property": "animation",
+      "value": "listen-busy-flash 0.4s ease-out",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-buttons.css",
+      "selector": "#listen-btn[data-state=\"heard\"], #listen-btn[data-state=\"recording\"]",
+      "property": "color",
+      "value": "#e5484d",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-buttons.css",
+      "selector": "#listen-btn[data-state=\"starting\"]",
+      "property": "animation",
+      "value": "listen-pulse 0.6s ease-in-out infinite",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-buttons.css",
+      "selector": "#listen-btn[data-state=\"transcribing\"], #listen-btn[data-state=\"delivering\"]",
+      "property": "animation",
+      "value": "listen-pulse 1.2s ease-in-out infinite",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-buttons.css",
+      "selector": "#speak-btn.busy",
+      "property": "animation",
+      "value": "speak-pulse 1.2s ease-in-out infinite",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": ".vm-actions",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": ".vm-config",
+      "property": "padding-top",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": ".vm-off",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": ".vm-pill.vm-orange",
+      "property": "animation",
+      "value": "speak-pulse 1.2s ease-in-out infinite",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": ".vm-pill",
+      "property": "border-radius",
+      "value": "var(--radius-5)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": ".vm-pill",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-4)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": "#voice-map",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": "#voice-map",
+      "property": "box-shadow",
+      "value": "0 4px 16px rgba(0, 0, 0, 0.4)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-map.css",
+      "selector": "#voice-map",
+      "property": "padding",
+      "value": "var(--space-10) var(--space-12)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-pill.css",
+      "selector": "#voice-pill.flash",
+      "property": "animation",
+      "value": "voice-flash 0.3s ease-out 1",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-pill.css",
+      "selector": "#voice-pill.overlay",
+      "property": "box-shadow",
+      "value": "0 1px 6px rgb(0 0 0 / 0.45)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-pill.css",
+      "selector": "#voice-pill.rec",
+      "property": "animation",
+      "value": "voice-pulse 1.2s ease-in-out infinite",
+      "check": "motion",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-pill.css",
+      "selector": "#voice-pill",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/voice-pill.css",
+      "selector": "#voice-pill",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card .meta button",
+      "property": "padding",
+      "value": "var(--space-2) 7px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card .meta",
+      "property": "gap",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card .meta",
+      "property": "margin-top",
+      "value": "var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card .text",
+      "property": "margin-top",
+      "value": "var(--space-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card textarea",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card textarea",
+      "property": "min-height",
+      "value": "52px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card textarea",
+      "property": "padding",
+      "value": "var(--space-3) var(--space-5)",
+      "check": "legacy",
+      "count": 2
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card.popover",
+      "property": "box-shadow",
+      "value": "0 4px 16px rgba(0, 0, 0, 0.4)",
+      "check": "colour",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-card",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-marker",
+      "property": "height",
+      "value": "10px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md blockquote",
+      "property": "padding-left",
+      "value": "var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md code",
+      "property": "font-family",
+      "value": "\"Cascadia Mono\", Consolas, monospace",
+      "check": "family",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md h1, .doc-md h2, .doc-md h3, .doc-md h4, .doc-md h5, .doc-md h6",
+      "property": "margin",
+      "value": "14px 0 var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md h1, .doc-md h2, .doc-md h3, .doc-md h4, .doc-md h5, .doc-md h6",
+      "property": "margin",
+      "value": "14px 0 var(--space-6)",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md h1",
+      "property": "font-size",
+      "value": "var(--font-18)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md h3",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md p, .doc-md ul, .doc-md ol, .doc-md blockquote, .doc-md pre, .doc-md table",
+      "property": "margin",
+      "value": "var(--space-6) 0",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md pre",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md th, .doc-md td",
+      "property": "padding",
+      "value": "var(--space-2) var(--space-6)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".doc-md ul, .doc-md ol",
+      "property": "padding-left",
+      "value": "22px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".term-container:focus-within .xterm-screen",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".term-container.rendered-host:focus-within",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": ".wb-pane-frame",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": "#doc-body.with-margin",
+      "property": "padding-right",
+      "value": "236px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": "#doc-offer",
+      "property": "padding",
+      "value": "var(--space-2) 7px",
+      "check": "token",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": "#workbench.wb-dropping",
+      "property": "border-radius",
+      "value": "var(--radius-3)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/workbench.css",
+      "selector": "#workbench",
+      "property": "padding",
+      "value": "var(--space-8) var(--space-10)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/zoom-toast.css",
+      "selector": "#zoom-toast, #flow-zoom-toast",
+      "property": "border-radius",
+      "value": "var(--radius-8)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/zoom-toast.css",
+      "selector": "#zoom-toast, #flow-zoom-toast",
+      "property": "font-size",
+      "value": "var(--font-14)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/zoom-toast.css",
+      "selector": "#zoom-toast, #flow-zoom-toast",
+      "property": "padding",
+      "value": "var(--space-6) var(--space-16)",
+      "check": "legacy",
+      "count": 1
+    },
+    {
+      "file": "src/styles/zoom-toast.css",
+      "selector": "#zoom-toast, #flow-zoom-toast",
+      "property": "transition",
+      "value": "opacity 0.3s ease-out",
+      "check": "motion",
+      "count": 1
+    }
+  ]
+}

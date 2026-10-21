@@ -1,0 +1,16 @@
+{
+  "startAt": 0,
+  "maxResults": 20,
+  "total": 3,
+  "comments": [
+    {
+      "author": { "displayName": "Grace Example" },
+      "created": "2026-10-15T09:30:00.000+0000",
+      "body": { "type": "doc", "version": 1, "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Fixed in the branch, please review." }] }] }
+    },
+    {
+      "created": "2026-10-14T12:00:00.000+0000",
+      "body": { "type": "doc", "version": 1, "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Seen on staging too." }] }] }
+    }
+  ]
+}

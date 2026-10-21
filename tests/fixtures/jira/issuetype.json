@@ -1,0 +1,76 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10001",
+    "id": "10001",
+    "name": "Task",
+    "description": "A small, distinct piece of work.",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318",
+    "subtask": false,
+    "avatarId": 10318,
+    "hierarchyLevel": 0
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10002",
+    "id": "10002",
+    "name": "Sub-task",
+    "description": "A small piece of work that is part of a larger task.",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316",
+    "subtask": true,
+    "avatarId": 10316,
+    "hierarchyLevel": -1
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10003",
+    "id": "10003",
+    "name": "Epic",
+    "description": "A big user story that needs to be broken down.",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10307",
+    "subtask": false,
+    "avatarId": 10307,
+    "hierarchyLevel": 1
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10004",
+    "id": "10004",
+    "name": "Bug",
+    "description": "A problem which impairs or prevents the functions of the product.",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10303",
+    "subtask": false,
+    "avatarId": 10303,
+    "hierarchyLevel": 0
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10005",
+    "id": "10005",
+    "name": "Epic",
+    "description": "Team-managed Epic with its own id.",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10307",
+    "subtask": false,
+    "avatarId": 10307,
+    "hierarchyLevel": 1,
+    "scope": { "type": "PROJECT", "project": { "id": "10010" } }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10006",
+    "id": "10006",
+    "name": "Story",
+    "description": "Functionality or a feature expressed as a user goal.",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10315",
+    "subtask": false,
+    "avatarId": 10315,
+    "hierarchyLevel": 0
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10007",
+    "id": "10007",
+    "name": "Technical Sub-task",
+    "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316",
+    "subtask": true
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/issuetype/10008",
+    "id": "10008",
+    "name": "Chore",
+    "subtask": false
+  }
+]

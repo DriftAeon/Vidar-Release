@@ -1,0 +1,15 @@
+{
+  "id": "acme",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Acme" },
+  "module": {
+    "id": "acme",
+    "label": "Acme",
+    "level": "optional",
+    "kind": "agent",
+    "agent": {
+      "gatewayEnv": ["ANTHROPIC_BASE_URL"]
+    }
+  }
+}

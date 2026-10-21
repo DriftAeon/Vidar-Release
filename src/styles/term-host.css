@@ -1,0 +1,33 @@
+/* position: relative so the voice overlay anchors to the pane; the dual-view
+   rule below already relied on it, single view did not */
+.term-container { height: 100%; width: 100%; position: relative; }
+/* page tab body (openPageTab): the container only sizes, so the scroll lives here */
+.page-host {
+  height: 100%; overflow: auto; box-sizing: border-box;
+  padding: var(--space-16) var(--space-20);
+}
+/* keyboard focus parks on the host (tabindex=-1); same ring as a rendered pane */
+.page-host:focus { outline: none; }
+.term-container:focus-within > .page-host { outline: 1px solid var(--accent); outline-offset: -1px; border-radius: var(--radius-3); }
+/* zero sessions: an empty pane holds the terminal's slot beside the open
+   workbench so the layout does not jump. It is not drawn — the dashed edge it
+   used to carry read as a stray border. The first tab takes
+   its place; closing the last brings it back. `.term-placeholder` stays on the
+   element as the marker sessions.ts sets and a hook for later. */
+.term-container .xterm { height: 100%; }
+/* xterm.css defaults the viewport to #000 and it spans the full element —
+   the row-remainder strip under the last row showed pure black against --bg */
+.term-container .xterm-viewport { background-color: transparent !important; }
+/* Themed scrollbars, everywhere. This was four ids plus the xterm viewport,
+   so every other scroller — transcript, modals, palettes, the document pane —
+   kept WebView2's default grey bar, which is invisible on a window edge and
+   glaring next to the right panel. One `*` rule covers scrollers added later. */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius-4); }
+*::-webkit-scrollbar-thumb:hover { background: var(--fg-dim); }
+
+.panel-pad { padding: 18px; height: 100%; display: flex; flex-direction: column; gap: var(--space-10); }
+.panel-pad h3 { font-size: 15px; }
+

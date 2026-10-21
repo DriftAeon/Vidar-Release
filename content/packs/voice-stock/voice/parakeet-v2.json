@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "parakeet-v2",
+  "slot": "stt",
+  "label": "Parakeet TDT 0.6B v2 (CPU, int8)",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/stt_parakeet.py", "--model", "{model}",
+      "--vad-model", "{vidar}/content/local-voice/models/silero_vad.onnx",
+      "--wav", "{wav}", "--out", "{out}"]
+  },
+  "warm": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/stt_parakeet.py", "--serve", "--model", "{model}",
+      "--vad-model", "{vidar}/content/local-voice/models/silero_vad.onnx"]
+  },
+  "stop": null,
+  "status": null,
+  "models": [
+    { "id": "parakeet-tdt-0.6b-v2-int8", "file": "{vidar}/content/local-voice/models/parakeet-tdt-0.6b-v2/encoder-model.int8.onnx",
+      "bytes": 652184014, "sha256": "3e0581fda6ab843888b51e56d7ee78b6d5bc3237ec113af1f732d1d5286aa155",
+      "label": "Parakeet TDT 0.6B v2 (English, int8)", "recommended": true }
+  ],
+  "files": [
+    { "file": "{vidar}/content/local-voice/stt_parakeet.py" },
+    { "file": "{vidar}/content/local-voice/vad_trim.py" },
+    { "file": "{vidar}/content/local-voice/models/parakeet-tdt-0.6b-v2/decoder_joint-model.int8.onnx", "bytes": 8998286,
+      "sha256": "a449f49acd68979d418651dd2dcb737cc0f1bf0225e009e29ee326354edbf7d3" },
+    { "file": "{vidar}/content/local-voice/models/parakeet-tdt-0.6b-v2/nemo128.onnx", "bytes": 139764,
+      "sha256": "a9fde1486ebfcc08f328d75ad4610c67835fea58c73ba57e3209a6f6cf019e9f" },
+    { "file": "{vidar}/content/local-voice/models/parakeet-tdt-0.6b-v2/config.json", "bytes": 97,
+      "sha256": "666903c76b9798caf2c210afd4f6cd60b08a8dbf9800ec8d7a3bc0d2148ac466" },
+    { "file": "{vidar}/content/local-voice/models/parakeet-tdt-0.6b-v2/vocab.txt", "bytes": 9384,
+      "sha256": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d" },
+    { "file": "{vidar}/content/local-voice/models/silero_vad.onnx", "bytes": 1807522,
+      "sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28" }
+  ],
+  "licence": "CC BY 4.0 (model); MIT (onnx-asr)",
+  "source": "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v2-onnx",
+  "fill": "pwsh -File {vidar}/tools/voice/fetch-parakeet.ps1 -Variant v2"
+}

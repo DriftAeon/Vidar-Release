@@ -1,0 +1,36 @@
+/* ---- CAS dial ---- */
+/* The bottom-bar icon button keeps its 16px art inside the divided slot beside Inspect.
+   The disc, ring and icon sit and spin inside it (2026-10-11: swapped with Settings). */
+#cas-dial {
+  justify-content: center; /* base look (background, border, padding, size) comes from bar-switches.css */
+}
+/* white armor disc under the red ring, filling the 16px art area */
+#cas-dial::before {
+  content: ""; position: absolute; inset: 0 var(--space-2); border-radius: 50%;
+  background: var(--fg);
+}
+#cas-glyph { position: relative; }
+#cas-ring {
+  position: absolute; inset: 0 var(--space-2); border-radius: 50%;
+  background: var(--alert);
+  -webkit-mask: radial-gradient(circle, transparent 57%, #000 60%);
+  mask: radial-gradient(circle, transparent 57%, #000 60%);
+}
+#cas-glyph {
+  color: var(--bg);
+  font-weight: 700; font-size: var(--font-11);
+}
+#cas-icon {
+  position: absolute; inset: 0 var(--space-2); width: calc(100% - 2 * var(--space-2)); height: 100%;
+  object-fit: contain; pointer-events: none; /* the brush is a square-edged glyph: no round crop */
+}
+/* The slot is 24px tall; its artwork retains the dial's original 16px size. */
+#bottombar > #cas-dial::before, #bottombar > #cas-dial > #cas-ring,
+#bottombar > #cas-dial > #cas-icon {
+  inset: calc((100% - var(--font-16)) / 2) var(--space-2) auto var(--space-8);
+  width: var(--font-16); height: var(--font-16);
+}
+/* full-badge icons bring their own ring/disc — hide the built-ins */
+#cas-dial.iconized::before { display: none; }
+#cas-dial.iconized #cas-ring { display: none; }
+

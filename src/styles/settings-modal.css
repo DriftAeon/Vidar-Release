@@ -1,0 +1,312 @@
+/* ---- shortcuts modal ----
+   z-index 150 with inspect: above the 100 menu ceiling, so the backdrop
+   covers the launcher/settings menus if one is still open. */
+#shortcuts-backdrop {
+  position: fixed; inset: 0; z-index: 150;
+  background: var(--bg); opacity: 0.6;
+}
+#shortcuts-modal {
+  position: fixed; inset: 0; margin: auto; z-index: 150;
+  /* fixed size: switching pages or searching must not resize it; rows scroll instead */
+  width: 1020px; max-width: 92vw; height: 60vh;
+  display: flex; flex-direction: column;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+#shortcuts-backdrop.hidden, #shortcuts-modal.hidden { display: none; }
+.sc-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-8) var(--space-8) var(--space-8) 14px; font-size: var(--font-13); font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.sc-close {
+  background: none; border: 1px solid transparent; border-radius: var(--radius-5);
+  color: var(--fg-dim); font-size: var(--font-16); line-height: 1; width: 26px; height: 26px;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+/* icon box fills the 26px button's 24px inner box; close.svg draws its glyph at half size, so the X is 12px
+   (was 13px box, 6.5px X) and the button does not grow (2026-10-03) */
+.sc-close .icn { vertical-align: 0; width: var(--row-24); height: var(--row-24); flex-shrink: 0; }
+.sc-close:hover { color: var(--accent); border-color: var(--border); }
+.sc-body { display: flex; flex: 1; min-height: 0; }
+/* category rail: radio-style, the selected one carries the accent */
+.sc-cats {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-8) var(--space-6);
+  border-right: 1px solid var(--border); flex-shrink: 0; width: 140px; /* 110px + icon slot and gap, so "Dependencies" fits */
+}
+.sc-cat {
+  display: inline-flex; align-items: center; gap: var(--space-8);
+  background: none; border: 1px solid transparent; border-radius: var(--radius-5);
+  color: var(--fg-dim); font-size: var(--font-12); text-align: left;
+  padding: var(--space-5) var(--space-10); cursor: pointer; white-space: nowrap;
+}
+/* icon slot, same sizing as .doc-om-fold .gi; empty on categories without art so labels line up */
+.sc-cat .gi { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: var(--font-13); height: var(--font-13); }
+.sc-cat .gi .icn { width: 100%; height: 100%; vertical-align: 0; }
+.sc-cat-sep { height: var(--border-w); margin: var(--space-2) var(--space-4); background: var(--border); flex-shrink: 0; }
+.sc-cat:hover { color: var(--fg); }
+.sc-cat.selected { color: var(--accent); border-color: var(--border); background: var(--bg); }
+.sc-rows { overflow-y: auto; scrollbar-gutter: stable; padding: var(--space-6) 0; flex: 1; min-width: 0; }
+/* each category is its own page; search keeps only matching rows */
+.sc-row.off-page { display: none; }
+.sc-search-wrap { position: relative; display: flex; margin-bottom: var(--space-4); }
+.sc-search-icn {
+  position: absolute; left: var(--space-8); top: 0; bottom: 0; margin: auto 0;
+  width: var(--font-13); height: var(--font-13); vertical-align: 0; pointer-events: none;
+}
+.sc-search {
+  font-size: var(--font-12); background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-4) var(--space-8) var(--space-4) calc(var(--space-8) + var(--font-13) + var(--space-8));
+  flex: 1; min-width: 0; outline: none;
+}
+.sc-search::placeholder { color: var(--fg-dim); }
+.sc-search:focus-visible { border-color: var(--accent); }
+.sc-input {
+  font-size: var(--font-12); background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-4) var(--space-8); width: 260px;
+}
+.sc-input:focus { outline: none; border-color: var(--accent); }
+.sc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-12);
+  padding: var(--space-8) 14px;
+}
+.sc-row + .sc-row { border-top: 1px solid var(--border); }
+/* list editors (Workspaces): name and description above, the control full width below */
+.sc-row.sc-row-wide { flex-direction: column; align-items: stretch; }
+.ws-list { display: flex; flex-direction: column; gap: var(--space-6); }
+.ws-row { display: flex; align-items: center; gap: var(--space-8); }
+.ws-row .ws-name { flex: 0 1 160px; min-width: 0; text-overflow: ellipsis; }
+.ws-row > .ws-btn { flex-shrink: 0; white-space: nowrap; } /* Browse and Remove keep their size; name and path give way */
+.ws-path {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: Consolas, "Cascadia Mono", monospace; font-size: var(--font-12); color: var(--fg-dim);
+}
+.ws-btn.ws-add { align-self: flex-start; }
+/* toggle state (Agents On/Off, Macros Submit) and the disabled floor for every .ws-btn */
+.ws-btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.ws-btn:disabled, .ws-btn:disabled:hover { opacity: 0.5; cursor: default; color: var(--fg-dim); border-color: var(--border); }
+/* Sheen Cap (2026-10-12; mock M3 variant 3): every settings button wears the title bar's
+   Sheen face with its inner top highlight, lifts a step on hover and sinks on press. Gradient and
+   highlight are the named ui-look exception (title bar and settings buttons only). Label on the
+   enabled faces: 6.41:1 minimum (mock). Inline row controls (caret, chip x, add chip) keep their flat look. */
+.ws-btn {
+  --face: var(--titlebar-grad); --depth: var(--titlebar-highlight); --edge: var(--border-strong);
+  --hover-face: linear-gradient(180deg, color-mix(in srgb, var(--titlebar-top), var(--fg) 8%), color-mix(in srgb, var(--bg-titlebar), var(--fg) 5%) 55%, var(--titlebar-bottom));
+  --hover-depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 24%, transparent);
+  --press-face: linear-gradient(180deg, var(--bg), var(--titlebar-bottom));
+  --press-depth: inset 0 2px 2px color-mix(in srgb, black 35%, transparent);
+  background: var(--face); box-shadow: var(--depth); border-color: var(--edge); color: var(--fg);
+  min-height: var(--row-28); padding: 0 var(--space-12); box-sizing: border-box;
+  font: var(--weight-strong) var(--font-12)/var(--line-16) var(--font-ui);
+}
+.ws-btn:hover:not(:disabled) { --face: var(--hover-face); --depth: var(--hover-depth); --edge: var(--fg-dim); color: var(--fg); }
+.ws-btn:active:not(:disabled) { --face: var(--press-face); --depth: var(--press-depth); --edge: var(--border-strong); padding-top: var(--space-2); }
+.ws-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-2); }
+.ws-btn[aria-pressed="true"] { --edge: var(--accent); color: var(--accent); }
+/* Add Workspace is the decision pair's green (decision-pair.css); its label stays white through the
+   .ws-btn hover and focus colours above */
+.ws-btn.ws-add:not(:disabled):is(:hover, :focus-visible, :active) { color: var(--fg-bright); }
+/* Remove: the soft alert tint, not the deny fill (2026-10-16). --fg on --tint-alert reads 11.48:1
+   at the lowest theme (olive); the hover mix (alert 20% over the panel) 9.70:1 */
+.ws-btn.ws-remove { --face: var(--tint-alert); --depth: none; --edge: var(--tint-alert-edge); }
+.ws-btn.ws-remove:hover:not(:disabled), .ws-btn.ws-remove:focus-visible {
+  --face: color-mix(in srgb, var(--alert) 20%, var(--bg-panel)); --edge: var(--alert); color: var(--fg);
+}
+.ws-btn.ws-remove:active:not(:disabled) {
+  background: var(--tint-alert); border-color: var(--tint-alert-edge); box-shadow: var(--press-depth); color: var(--fg);
+}
+.ws-btn:disabled, .ws-btn:disabled:hover { background: var(--bg-panel); box-shadow: none; }
+.ws-btn.ch-caret, .ws-btn.ch-chip-x, .ws-btn.ch-chip-add { background: none; box-shadow: none; min-height: 0; font-weight: var(--weight-regular); color: var(--fg-dim); }
+.ws-btn.ch-caret:active:not(:disabled), .ws-btn.ch-chip-x:active:not(:disabled), .ws-btn.ch-chip-add:active:not(:disabled) { background: none; padding-top: var(--space-2); }
+.ws-btn.ch-chip-x:active:not(:disabled) { padding-top: 0; }
+.ws-btn.ch-caret:hover:not(:disabled), .ws-btn.ch-chip-add:hover:not(:disabled) { background: none; color: var(--accent); --edge: var(--accent); }
+.ws-btn.ch-chip-x:hover:not(:disabled), .ws-btn.ch-chip-x:focus-visible { background: none; color: var(--alert); }
+/* Settings › Agents: built-in rows, variants indented */
+.sc-bind > .ag-list { flex: 1; min-width: 0; }
+.ag-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-12);
+  padding: var(--space-6) 0; min-height: 40px;
+}
+.ag-row + .ag-row { border-top: 1px solid var(--border); }
+.ag-row.ag-variant { padding-left: var(--space-20); }
+.ag-name { font-size: var(--font-13); color: var(--fg); min-width: 0; }
+.ag-variant .ag-name::before { content: "\2514"; color: var(--border); margin-right: var(--space-6); }
+.ag-row-off .ag-name { color: var(--fg-dim); }
+.ag-note { font-size: var(--font-11); color: var(--fg-dim); margin-left: var(--space-8); }
+.sc-input.ag-model { width: 180px; }
+.ag-readonly { flex: 1; min-width: 0; color: var(--fg-dim); font-size: var(--font-12); }
+.ag-readonly b { color: var(--fg); font-weight: 400; }
+.sc-input.ag-label { width: 130px; flex-shrink: 0; }
+.sc-input.ag-cmd { flex: 1; width: auto; min-width: 0; font-family: Consolas, "Cascadia Mono", monospace; }
+.ws-btn.ag-folder { width: 110px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-row.ag-draft { border: 1px dashed var(--border); border-radius: var(--radius-5); padding: var(--space-6); }
+.editor-presets { display: flex; align-items: center; gap: var(--space-6); }
+.editor-presets-label { font-size: var(--font-11); color: var(--fg-dim); margin-right: var(--space-2); }
+.rider-line { display: flex; align-items: center; gap: var(--space-8); font-size: var(--font-12); color: var(--fg-dim); }
+.rider-line code { font-family: Consolas, "Cascadia Mono", monospace; color: var(--fg); }
+/* Settings › Dependencies (C8 refresh, 2026-10-15): a status bar, then icon + name rows; spacing, not
+   divider lines. Required missing takes --alert (no fixed error signal exists), a warning the
+   "needs you" amber, found and optional misses stay dim. */
+.deps-page { display: flex; flex-direction: column; gap: var(--space-12); }
+/* The bar is a box whose edge takes the page's worst state (Variant B, 2026-10-16). The state fills
+   (--tint-ok/-warn/-alert) wait: the dim folder path reads under 4.5:1 on them. */
+.deps-bar {
+  display: flex; align-items: center; gap: var(--space-12);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.deps-bar.is-done { border-color: var(--tint-ok-edge); }
+.deps-bar.is-warning { border-color: var(--tint-warn-edge); }
+.deps-bar.is-missing { border-color: var(--tint-alert-edge); }
+.deps-summary {
+  display: inline-flex; align-items: center; gap: var(--space-8); flex-shrink: 0;
+  font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.deps-summary .icn { width: var(--space-16); height: var(--space-16); flex-shrink: 0; color: var(--fg-dim); }
+.deps-summary.is-done .icn { color: var(--ok-green); }
+.deps-summary.is-warning .icn { color: var(--approval-amber); }
+.deps-summary.is-missing .icn { color: var(--alert); }
+.deps-summary.is-checking { font-weight: var(--weight-regular); color: var(--fg-dim); }
+.deps-bar-fill { flex: 1; min-width: 0; }
+.ws-btn.deps-setup:disabled { opacity: 0.5; cursor: default; color: var(--fg-dim); border-color: var(--border); }
+.deps-blocker { font-family: var(--font-ui); font-size: var(--font-11); color: var(--fg-dim); }
+/* Icon-only buttons: Recheck, Setup Via Agent, Open Site, Trust Current; the name is the tooltip. */
+.ws-btn.deps-recheck, .ws-btn.deps-setup, .ws-btn.deps-site, .ws-btn.deps-trust, .ws-btn.deps-check-updates {
+  display: inline-flex; align-items: center; justify-content: center; padding: var(--space-4);
+}
+.ws-btn.deps-recheck .icn, .ws-btn.deps-setup .icn, .ws-btn.deps-site .icn, .ws-btn.deps-trust .icn, .ws-btn.deps-check-updates .icn { width: var(--space-16); height: var(--space-16); }
+.ws-btn.deps-check-updates:disabled { opacity: 0.5; cursor: default; color: var(--fg-dim); border-color: var(--border); }
+.deps-error { font-family: var(--font-ui); font-size: var(--font-12); color: var(--alert); }
+.deps-section + .deps-section { margin-top: var(--space-16); }
+.deps-section-title, .vs-section-title {
+  margin: 0 0 var(--space-4); font-size: var(--font-11); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-dim);
+}
+.deps-rows { display: flex; flex-direction: column; gap: var(--space-4); }
+.deps-row { display: flex; align-items: flex-start; gap: var(--space-8); padding: var(--space-2) 0; }
+/* Bare glyph, no box: one 20px line tall so it sits level with the label's line box. */
+.deps-mark {
+  width: var(--space-16); height: var(--line-20); flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--fg-dim);
+}
+.deps-mark .icn { width: var(--space-16); height: var(--space-16); }
+/* Colour art carries the state; a state that needs nothing (optional miss, unknown) is dimmed. */
+.deps-mark.is-dim .icn { opacity: 0.5; }
+.deps-body { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.deps-head { display: flex; align-items: center; min-height: var(--line-20); gap: var(--space-8); }
+.deps-label {
+  font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20);
+  font-weight: var(--weight-regular); color: var(--fg);
+}
+.deps-row.is-missing:not(.is-optional) .deps-label,
+.deps-row.is-warning .deps-label { font-weight: var(--weight-strong); }
+/* Variant B: the label takes the state colour; on the panel --alert reads 4.49:1 (onyx). */
+.deps-row.is-missing:not(.is-optional) .deps-label { color: var(--alert); }
+.deps-row.is-warning .deps-label { color: var(--approval-amber); }
+.deps-row.is-missing.is-optional .deps-label { color: var(--fg-dim); }
+.deps-where {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); font-variant-numeric: tabular-nums;
+}
+.deps-row.is-missing:not(.is-optional) .deps-where { color: var(--alert); }
+.deps-row.is-warning .deps-where { color: var(--approval-amber); }
+.deps-routes { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); padding-top: var(--space-4); }
+.deps-route { display: flex; align-items: center; gap: var(--space-8); max-width: 100%; }
+/* An optional miss keeps its install line, one step quieter than a required one. */
+.deps-row.is-optional .deps-cmd { color: var(--fg-dim); }
+.deps-cmd, .vs-cmd {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: Consolas, "Cascadia Mono", monospace; font-size: var(--font-11); color: var(--fg);
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-2) var(--space-6);
+}
+.deps-note { font-family: var(--font-ui); font-size: var(--font-11); color: var(--fg-dim); }
+/* Grouped by state (user pick, 2026-10-21): Needs You is a stack of confirm-style cards (.vs-confirm box,
+   .swap-confirm-head with a .title-tile, .swap-confirm-body); the detail line sits in the body on the
+   panel fill, because state-coloured text on the head's accent sheen reads under 4.5:1 (--alert 2.5:1).
+   Ready folds into two columns of one-line items. */
+.deps-cards { display: flex; flex-direction: column; gap: var(--space-8); }
+.deps-row.deps-card { display: block; padding: 0; }
+.deps-card-title { flex: 1; min-width: 0; font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); }
+.deps-card .deps-mark { height: var(--space-16); }
+.deps-card .deps-where { white-space: normal; overflow-wrap: anywhere; }
+.deps-card .deps-routes { padding-top: 0; }
+.deps-acts { display: flex; align-items: center; gap: var(--space-8); }
+.deps-ask { display: flex; align-items: center; gap: var(--space-8); }
+.deps-ask .vs-confirm-text { flex: 1; min-width: 0; }
+.deps-row.is-update .deps-where, .deps-row.is-update .deps-mark { color: var(--status-todo); }
+.deps-ready-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-16); }
+.deps-row.deps-item { align-items: center; min-height: var(--row-24); padding: 0 var(--space-4); border-radius: var(--radius-4); }
+.deps-row.deps-item:hover { background: var(--bg-hover); }
+.deps-item .deps-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deps-item .deps-mark { height: var(--space-16); }
+/* An optional miss that is fine reads dimmed, not badged (MCP rack rule). */
+.deps-row.deps-item.is-missing.is-optional .deps-label { color: var(--fg-dim); }
+.deps-item .ws-btn { padding: var(--space-2); }
+.deps-item .ws-btn .icn { width: var(--space-12); height: var(--space-12); }
+/* Settings › Characters: expandable pack rows */
+.ch-list { display: flex; flex-direction: column; gap: var(--space-4); }
+.ch-row { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) 0; }
+.ch-row.open { border-bottom: 1px solid var(--border); }
+.ch-row .ch-name { width: 160px; flex-shrink: 0; }
+.ch-name-static { font-size: var(--font-12); color: var(--fg-dim); }
+.ws-btn.ch-caret { border-color: transparent; width: 20px; padding: var(--space-2) 0; }
+.ch-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); flex: 1; min-width: 0; }
+.ch-chip {
+  display: inline-flex; align-items: center; gap: var(--space-4); white-space: nowrap;
+  font-size: var(--font-11); color: var(--fg-dim);
+  border: 1px solid var(--border); border-radius: var(--radius-full); padding: var(--space-2) var(--space-8);
+}
+.ch-chip.ch-chip-more { border-style: dashed; }
+.ch-chip.ch-chip-clash { color: var(--alert); border-color: var(--alert); }
+.ws-btn.ch-chip-x { border: none; padding: 0; font-size: var(--font-11); display: inline-flex; align-items: center; }
+.ch-chip-x .icn { width: 1em; height: 1em; vertical-align: 0; }
+.ws-btn.ch-chip-x:hover, .ws-btn.ch-chip-x:focus-visible { color: var(--alert); }
+.ws-btn.ch-chip-add { border-style: dashed; border-radius: var(--radius-full); font-size: var(--font-11); }
+.ch-add-claim { display: inline-flex; align-items: center; gap: var(--space-4); }
+.ch-add-claim .ch-key { width: 140px; }
+.ch-pin { font-size: var(--font-11); color: var(--fg-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ch-pin.bad { color: var(--alert); }
+.ch-det { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4) 0 var(--space-12) var(--space-24); }
+.ch-det-row { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) 0; }
+.ch-det-k { flex: 0 0 96px; font-size: var(--font-12); color: var(--fg-dim); }
+.ch-note { font-size: var(--font-11); color: var(--fg-dim); }
+.ch-alert {
+  border: 1px solid var(--alert); border-radius: var(--radius-4);
+  padding: var(--space-8) var(--space-10); font-size: var(--font-12); color: var(--fg);
+}
+.ch-alert-title { color: var(--alert); margin-bottom: var(--space-6); }
+.ch-actions { display: flex; gap: var(--space-6); margin-top: var(--space-8); }
+.sc-text { min-width: 0; }
+.sc-name { font-size: var(--font-13); }
+.sc-desc { font-size: var(--font-11); color: var(--fg-dim); margin-top: var(--space-2); }
+.sc-err { font-size: var(--font-11); color: var(--alert); margin-top: var(--space-2); min-height: 0; }
+.sc-err:empty { display: none; }
+.sc-bind { display: flex; align-items: center; gap: var(--space-6); flex-shrink: 0; }
+/* the bind itself: mono chip; recording swaps the border to accent so the
+   armed state is unmistakable while it waits for keys */
+.sc-key {
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: var(--font-12);
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-4) var(--space-10); min-width: 88px; cursor: pointer;
+}
+.sc-key:hover { border-color: var(--accent); }
+.sc-key.recording { border-color: var(--accent); color: var(--accent); }
+.sc-key.reject { animation: sc-reject 0.4s ease-out; }
+@keyframes sc-reject {
+  0% { border-color: var(--alert); box-shadow: 0 0 6px var(--alert); }
+  100% { border-color: var(--accent); box-shadow: none; }
+}
+/* reset arrow only exists while the bind is non-default (hidden attribute) */
+.sc-reset {
+  background: none; border: 1px solid transparent; border-radius: var(--radius-5);
+  color: var(--fg-dim); font-size: 15px; line-height: 1; width: 26px; height: 26px;
+  cursor: pointer;
+}
+.sc-reset:hover { color: var(--accent); border-color: var(--border); }
+.sc-reset[hidden] { display: none; }
+

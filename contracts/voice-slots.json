@@ -1,0 +1,64 @@
+{
+  "$comment": "Voice slot contract v1: docs/reference/voice-pipelines.md. Read by src-tauri/src/voice_slots (include_str!) and pinned by tests/voice-slots-contract.test.mjs. A new slot or token is additive in v2.",
+  "version": 2,
+  "slots": {
+    "stt": {
+      "required": true,
+      "tokens": ["wav", "out", "prompt", "model"],
+      "input": "16 kHz mono WAV at {wav}",
+      "output": "UTF-8 text at {out}.txt, exit 0",
+      "failure": "Non-zero exit, a missing .txt, an unresolved {model} or a pin mismatch is an Err naming the adapter id with the stderr tail."
+    },
+    "wake": {
+      "required": false,
+      "tokens": ["model", "threshold", "vadStart", "vadStop", "endSilenceMs", "heardTimeoutMs", "parentPid"],
+      "input": "stdio 1280-sample i16 LE blocks at 16 kHz",
+      "output": "JSONL events",
+      "events": ["ready", "wake", "speech_start", "speech_end", "error"],
+      "failure": "An error event or an exit shows in the Listen tooltip with the stderr tail; an unknown event is an Err. The adapter exits on stdin EOF or parent death."
+    },
+    "rewrite": {
+      "required": false,
+      "tokens": ["budget", "lmstudioOrigin", "model", "effort"],
+      "input": "UTF-8 on stdin",
+      "output": "UTF-8 on stdout, exit 0",
+      "empty": "strip_markdown",
+      "failure": "Non-zero exit or empty stdout fails Speak and names the adapter."
+    },
+    "tts": {
+      "required": true,
+      "tokens": ["text", "out", "voice", "speed", "owner"],
+      "input": "text file at {text}",
+      "output": "16-bit PCM WAV at {out}",
+      "failure": "Non-zero exit or no WAV fails Speak and names the chunk index; a missing {voice} is an Err."
+    }
+  },
+  "lifecycle": {
+    "commands": ["warm", "stop", "status"],
+    "tokens": ["owner"],
+    "owner": "vidar",
+    "rule": "No stop means no warm process: warm without stop is broken.",
+    "sttRule": "stt `warm` is a stdio server Vidar holds in a kill-on-close job; its stop is stdin EOF; no `stop` key."
+  },
+  "modelIds": {
+    "key": "modelIds",
+    "rule": "An adapter with \"modelIds\": true takes {model} as a server model id, passed verbatim in run and lifecycle args. The id must match contracts/modules.json voice.modelIdPattern, else the slot is broken; the adapter's models[] must be empty."
+  },
+  "efforts": {
+    "key": "efforts",
+    "rule": "A rewrite adapter with \"efforts\": [..] takes {effort}, one of the listed values (each matching contracts/modules.json voice.modelIdPattern), passed verbatim in run and lifecycle args. The pick's effort is then required and must be listed; an adapter without efforts takes none. suggestedModels is a picker hint only: it never validates a pick."
+  },
+  "roots": ["vidar", "pack", "home"],
+  "pathCommand": "path:",
+  "fillTokens": ["vidar", "pack", "model"],
+  "coreStages": ["hotkey", "capture", "dsp", "delivery", "speakSource", "chunking", "playback", "chimes"],
+  "limits": {
+    "manifestBytes": 65536,
+    "idChars": 64,
+    "labelChars": 96,
+    "args": 64,
+    "argChars": 1024,
+    "models": 64,
+    "files": 64
+  }
+}

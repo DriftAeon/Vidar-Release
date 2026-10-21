@@ -1,0 +1,358 @@
+/* ---- rendered body (panels/rendered.ts): headless agent drawn from events ---- */
+.term-container.rendered-host { display: flex; flex-direction: column; background: var(--bg); border-radius: var(--radius-3); } /* dark tab on the lighter sessions view, so the frame around it reads (2026-10-04) */
+.rendered { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: var(--font-13); }
+/* even 8px inset from the focus ring (inset box-shadow on .rendered-host) on every side;
+   the first block drops its own top margin so the top gap matches the left */
+/* Scroll anchoring off: since a streaming reply morphs its nodes in place instead of being
+   replaced wholesale (src\morph.ts), anchoring now has persistent nodes to hold and becomes
+   active mid-reply. Its adjustment mutates scrollTop, which fires the transcript's scroll
+   listener, which recomputes `stick` against a 24px threshold — so anchoring could silently
+   unstick the transcript while a reply was still arriving. The manual scrollTop = scrollHeight
+   in rendered.ts is the only thing that should move this scroller. */
+/* positioned wrapper so the Latest pill anchors to the transcript's bottom edge, above the composer stack */
+.rendered-scroll { flex: 1 1 0; min-height: 0; position: relative; display: flex; flex-direction: column; }
+/* being positioned, the wrapper paints after the host's focus outline (offset -1px), so the
+   transcript scrollbar drew over the ring; a border-width inset on the ring's sides keeps it inside (2026-10-05) */
+.rendered-scroll { margin: var(--border-w) var(--space-4) 0 var(--border-w); }
+/* the thumb stops short of the top and bottom edges instead of running into them (2026-10-05) */
+.rendered-transcript::-webkit-scrollbar-track { margin: var(--space-4) 0; }
+.rendered-latest {
+  position: absolute; inset-inline: 0; margin-inline: auto; width: fit-content; bottom: var(--space-8); z-index: 2;
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  height: var(--row-28); padding: 0 var(--space-12);
+  border: var(--border-w) solid transparent; border-radius: var(--radius-full);
+  background: var(--accent); color: var(--bg);
+  font: var(--weight-strong) var(--font-12) / 1 var(--font-ui);
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(var(--space-8));
+  transition: opacity 150ms, transform 150ms, visibility 150ms, background-color 100ms;
+}
+.rendered-latest.is-shown { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+.rendered-latest:hover { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+.rendered-latest:active { background: color-mix(in srgb, var(--accent) 85%, var(--bg)); }
+.rendered-latest:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.rendered-latest .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.rendered-transcript { flex: 1 1 0; min-height: 0; overflow: auto; overflow-anchor: none; padding: var(--space-8) var(--space-8) var(--space-12) var(--space-8); outline: none; }
+.rendered-transcript > .blk:first-child { margin-top: 0; }
+.rendered .blk { margin: var(--space-6) 0; max-width: 100%; }
+/* Type scale: prose 14px/1.55 at a reading width;
+   tool rows, notices and footers stay 12px so the conversation leads. */
+.blk-user {
+  white-space: pre-wrap; word-break: break-word; background: var(--bg-panel);
+  border-right: 3px solid var(--accent); border-radius: var(--radius-4) 0 0 var(--radius-4); /* bar on the right: trial for user vs reply clarity (2026-10-05) */ padding: var(--space-6) var(--space-10); margin-top: 18px;
+  font-size: var(--font-14); line-height: 1.55; max-width: 78ch;
+}
+/* the [Voice] marker drawn as the mic icon, one flat grey (user-block.ts; precedent #swap-btn:disabled .icn) */
+.blk-user .voice-mark { width: var(--space-16); height: var(--space-16); vertical-align: text-bottom; margin-right: var(--space-4); filter: grayscale(1); }
+/* Typed while a turn was running and not sent yet — the same block as a real
+   message, dimmed with a dashed edge so it reads as held, not sent. Click takes it
+   back into the composer; .dropped is one the agent died before it could send. */
+/* queued: the text dims, the Steer button on the right stays at full strength (queued-block.ts) */
+.blk-user.blk-queued { display: flex; align-items: flex-start; gap: var(--space-8); border-right-style: dashed; cursor: pointer; }
+.blk-user.blk-queued > :is(.queued-text, .ask-answer) { flex: 1 1 auto; min-width: 0; opacity: 0.5; }
+.blk-user.blk-queued:hover > :is(.queued-text, .ask-answer) { opacity: 0.75; }
+/* a Relay answer (relay-answer.ts): the pick over the comment, UI font like the answered Ask pill */
+.blk-user.blk-relay-answer { white-space: normal; font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20); }
+.blk-relay-answer .relay-answer-comment { white-space: pre-wrap; }
+/* green ? badge before the answer, top-aligned to the first 20px line */
+.blk-user.blk-relay-answer { display: flex; align-items: flex-start; gap: var(--space-8); }
+.blk-relay-answer > .tool-badge { --chain-tc: var(--ok-green); margin-top: var(--space-2); }
+.blk-relay-answer > .ask-answer { flex: 1 1 auto; min-width: 0; }
+/* a /catapult prompt (catapult-block.ts): the catapult icon and one word, path on hover */
+.blk-user.blk-catapult { display: flex; align-items: center; gap: var(--space-8); white-space: normal; font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20); }
+.blk-catapult > .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.blk-user > .queued-send { flex: none; align-self: center; } /* mid-height of the message (2026-10-05) */
+/* Steer: the wheel before the label (queued-block.ts; 2026-10-11) */
+.blk-user > .queued-send { display: inline-flex; align-items: center; gap: var(--space-6); } /* approved mock steer-marker-mock.html */
+.blk-user > .queued-send > .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.blk-user.blk-queued.dropped { border-right-color: var(--dead-red); border-right-style: solid; }
+/* A prompt that steered (cut short) the turn before it: a tinted strip with the wheel and
+   "Steer" over the message, in place of that turn's footer (markSteered; 2026-10-11,
+   variant C). After the queued and relay rules: it overrides their flex row. */
+.blk-user.blk-steered { display: block; padding: 0; overflow: hidden; }
+.blk-steered > .steer-head {
+  display: flex; align-items: center; gap: var(--space-6); /* approved mock steer-marker-mock.html */
+  padding: var(--space-3) var(--space-10); /* approved mock; 10 keeps the strip on the message's text edge */
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel)); color: var(--fg);
+  font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-20); white-space: nowrap;
+}
+.blk-steered > .steer-head > .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.blk-steered > .steer-body { display: block; padding: var(--space-6) var(--space-10); } /* the .blk-user padding it replaces */
+.blk-relay-answer > .steer-body { display: flex; align-items: flex-start; gap: var(--space-8); }
+.blk-relay-answer > .steer-body > .tool-badge { --chain-tc: var(--ok-green); margin-top: var(--space-2); }
+.blk-relay-answer > .steer-body > .ask-answer { flex: 1 1 auto; min-width: 0; }
+/* The type scale does not inherit into a reply: `.doc-md` (502) declares font-size/line-height on
+   the child element itself, and a declaration on the element always beats a value inherited from
+   the parent — so prose rendered 13/1.5, not the 14/1.55 above. The scale now sits on .blk-text
+   and `.doc-md` is reset to inherit it. Size and measure must live on the SAME element: `ch` is
+   the width of "0" at that element's font-size, so a 14px parent holding the max-width while a
+   15px child holds the text silently narrows the measure. */
+/* word-break lives on `.blk-text`, not `.streaming`: it used to drop when the class did at
+   turn end, so any reply holding a long path or URL re-wrapped the moment it settled. Holding
+   it on every reply is a deliberate behaviour change, not a neutral move — a finished block
+   carried no word-break before, so long unbroken tokens overflowed the 72ch measure and now
+   break inside it instead. */
+.blk-text {
+  padding: 0 var(--space-2); font-size: var(--font-14); line-height: 1.55; max-width: 72ch; /* trial at 14, spacing kept (2026-10-05; was 15px, 13 read as a wall) */
+  word-break: break-word;
+  color: var(--fg); color: color-mix(in oklab, var(--fg) 88%, black);
+}
+/* between blocks must exceed between paragraphs (11px below), or a reply's own paragraphs
+   separate as hard as the reply from the question. .blk-user already carries its own 18px. */
+.rendered .blk-text { margin: 14px 0; }
+/* interim text (a tool call followed it in the same turn): dim only. The "…" trailer went
+   (2026-10-06): as a block it landed on its own line and read poorly. */
+.blk-text.interim { opacity: 0.68; }
+.blk-text > .doc-md { font-size: inherit; line-height: inherit; }
+.blk-text strong, .blk-text b { font-weight: 600; }
+.blk-text > .doc-md p { margin: 11px 0; }
+.blk-text > .doc-md > :first-child { margin-top: 0; }
+.blk-text > .doc-md > :last-child { margin-bottom: 0; }
+/* .doc-md's headings are absolute px (504); at 15px prose an h3 would be smaller than the
+   paragraphs under it and h4-h6 would be bold body text. Relative, transcript-scoped. */
+.blk-text > .doc-md h1 { font-size: 1.45em; }
+.blk-text > .doc-md h2 { font-size: 1.25em; }
+.blk-text > .doc-md h3 { font-size: 1.1em; }
+.blk-text > .doc-md h4, .blk-text > .doc-md h5, .blk-text > .doc-md h6 { font-size: 1em; font-weight: 600; }
+/* relative, so inline code tracks the prose size instead of stepping down to an absolute 12px;
+   fenced blocks are pinned so they do not grow with it */
+/* Inline code carried no colour and no bounds, so in prose it differed from a sentence only by
+   font — a path, a symbol and a number all read as the same object. A faint
+   plate bounds every span; a location additionally takes the accent, so "where" is the one thing
+   that colours. Fenced blocks already have their own plate, so they opt out of both. */
+.blk-text > .doc-md code {
+  font-size: 0.92em; padding: 0 var(--space-3); border-radius: var(--radius-3);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--code-ink); /* non-path spans gold so symbols stand out (2026-10-04, on trial) */
+}
+.blk-text > .doc-md code.code-path { color: var(--accent); }
+.blk-text > .doc-md pre code { font-size: var(--font-13); padding: 0; background: none; color: inherit; }
+/* Copy button of a fenced block (rendered/code-copy.ts): top-right inside the block, shown on hover or focus inside it */
+/* The <code> scrolls, not the <pre>, so a wide block keeps its button pinned top-right */
+.blk-text > .doc-md pre { position: relative; overflow: visible; }
+.blk-text > .doc-md pre > code { display: block; overflow-x: auto; }
+.blk-text > .doc-md pre > button.code-copy {
+  position: absolute; top: var(--space-4); right: var(--space-4); display: inline-flex; align-items: center;
+  padding: var(--space-4); line-height: 1; cursor: pointer; opacity: 0;
+  background: var(--bg-panel); color: var(--fg-dim); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.blk-text > .doc-md pre > button.code-copy .icn { width: var(--font-12); height: var(--font-12); }
+.blk-text > .doc-md pre:hover > button.code-copy, .blk-text > .doc-md pre:focus-within > button.code-copy { opacity: 1; }
+.blk-text > .doc-md pre > button.code-copy:hover { color: var(--accent); border-color: var(--accent); background: var(--bg-hover); }
+.blk-text > .doc-md pre > button.code-copy:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; color: var(--accent); border-color: var(--accent); }
+.blk-text > .doc-md pre > button.code-copy:active { background: var(--bg-selected); }
+/* "working" is the state dot's job (composer chip). Dimming the prose as well double-dimmed
+   it once the softened colour moved onto .blk-text, and made the text lift when a turn settled. */
+/* `.streaming` now styles nothing — its one declaration moved onto .blk-text above. The class
+   is still written and cleared (rendered.ts textStart/textDone) as a state marker: unlike the
+   the removed `show-raw` hook, it tracks something real and a block mid-stream is
+   worth being able to select. */
+.blk-text-fallback { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: inherit; }
+.blk-notice { color: var(--fg-dim); font-size: var(--font-12); padding-left: var(--space-2); }
+/* History-replay card (clock + "2 Turns"): the Steer strip's tint and row, sized to its text */
+.blk-restored {
+  display: flex; align-items: center; gap: var(--space-6); width: fit-content; /* same as .steer-head */
+  padding: var(--space-3) var(--space-10); /* same as .steer-head */
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel)); color: var(--fg);
+  font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-20); white-space: nowrap;
+  border-radius: var(--radius-4); /* standard rounded box, not a square plate (2026-10-11) */
+}
+.blk-restored > .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.blk-notice.warn { color: var(--approval-amber); }
+.blk-notice.error { color: var(--dead-red); }
+/* start pill (empty-body legibility): one chip, present from body creation and
+   enriched in place once `session` lands — never a second one. Styled like the
+   tool pill's own summary chips, not a full .blk-tool box. */
+.blk-agent-pill {
+  --tab-run: 7px; /* slant: 7px across the tab's height (2026-10-13) */
+  position: relative; display: inline-flex; gap: var(--space-8); font-size: var(--font-12); line-height: var(--line-20); color: var(--fg-dim);
+  background: var(--bg-panel); border: 0; border-bottom: var(--border-w) solid var(--border);
+  border-radius: var(--radius-3) 0 0 0; /* the host's radius on the corner it sits in; the host stays overflow-visible for the composer menu */
+  padding: var(--space-2) var(--space-10); margin: var(--space-4) 0;
+}
+/* flush in the transcript's top-left corner: cancel its padding for this block only (beats the first-child rule above) */
+.rendered-transcript > .blk.blk-agent-pill:first-child {
+  margin: calc(-1 * var(--space-8)) 0 var(--space-4) calc(-1 * var(--space-8));
+}
+/* slanted right edge: ::before is the panel fill, ::after the 1px border stroke along the slant */
+.blk-agent-pill::before, .blk-agent-pill::after {
+  content: ""; position: absolute; top: 0; bottom: calc(-1 * var(--border-w)); left: 100%; width: var(--tab-run); pointer-events: none;
+}
+.blk-agent-pill::before { background: var(--bg-panel); clip-path: polygon(0 0, 100% 0, 0 100%); }
+.blk-agent-pill::after { background: var(--border); clip-path: polygon(100% 0, calc(100% - var(--border-w)) 0, 0 100%, 0 calc(100% - var(--border-w))); }
+/* hosted tab whose Falcon bundle pins an older Claude than the installed one (bundle-version.ts) */
+.agent-pill-bundle { color: var(--accent); cursor: help; }
+.blk-turn { color: var(--fg-dim); font-size: var(--font-11); padding-top: var(--space-2); }
+/* Interrupted: a neutral chip, the cancel icon in its own colours (2026-10-13) */
+.blk-turn-chip {
+  display: flex; align-items: center; gap: var(--space-4); width: fit-content;
+  padding: var(--space-2) var(--space-8) var(--space-2) var(--space-6); /* 6px icon side as in the approved mock (2026-10-13) */
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  color: var(--fg-dim); font-size: var(--font-12); line-height: var(--line-16);
+}
+.blk-turn-chip > .icn { flex: none; }
+
+/* activity groups: one container per run of tool calls,
+   a live "Read 3 · Bash 4 · thought" summary; pills inside lose their boxes */
+.blk-activity { border-left: 2px solid var(--border); padding-left: var(--space-8); font-size: var(--font-12); }
+.blk-activity > summary {
+  display: flex; align-items: baseline; gap: var(--space-8); cursor: pointer; list-style: none; color: var(--fg-dim);
+  white-space: nowrap; overflow: hidden; padding: var(--space-2) 0;
+}
+.blk-activity > summary::-webkit-details-marker { display: none; }
+.blk-activity.empty > summary { cursor: default; }
+/* one failed call marks the group's header, not the whole run: the errored pill carries the red */
+.blk-activity[data-state="running"] { border-left-color: var(--accent); }
+/* inline lucide glyphs (rendered/icons.ts svgEl): stroke is currentColor, so they take
+   the colour of whatever row they land in */
+.icn { width: 13px; height: 13px; vertical-align: -0.18em; }
+.blk-activity > .blk { margin: var(--space-2) 0; }
+.blk-turn.error { color: var(--dead-red); }
+.turn-error { white-space: pre-wrap; word-break: break-word; margin-top: var(--space-4); }
+.blk-exit { color: var(--fg-dim); font-size: var(--font-12); display: flex; align-items: center; gap: var(--space-8); }
+
+/* tool pills: one line collapsed, input/output when open */
+.blk-tool { border: 1px solid var(--border); border-radius: var(--radius-4); background: var(--bg-panel); font-size: var(--font-12); }
+.blk-tool > summary {
+  display: flex; align-items: baseline; gap: var(--space-8); padding: var(--space-3) var(--space-8); cursor: pointer; list-style: none;
+  white-space: nowrap; overflow: hidden;
+}
+.blk-tool > summary::-webkit-details-marker { display: none; }
+/* state glyphs (chevron, running, error, awaiting...) are the mark slot in rendered-disc.css; only the row text colours stay here */
+.blk-tool.stale > summary { color: var(--fg-dim); }
+.blk-tool.denied > summary { color: var(--fg-dim); }
+/* The tool's name is a label, not the content — down in weight and colour
+   toward .tool-summary so the summary leads the row. color-mix keeps it theme-aware;
+   the plain var(--fg-dim) above it is the fallback if color-mix is ever unavailable. */
+.tool-name { font-weight: 500; flex: 0 0 auto; color: var(--fg-dim); color: color-mix(in srgb, var(--fg) 40%, var(--fg-dim)); }
+.tool-summary { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+.tool-count { color: var(--fg-dim); flex: 0 0 auto; font-size: var(--font-11); }
+.tool-input, .tool-output, .blk-unknown pre, .tool-structured pre {
+  margin: 0; padding: var(--space-6) var(--space-8); border-top: 1px solid var(--border); white-space: pre-wrap; word-break: break-word;
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.5px; max-height: 40vh; overflow: auto;
+}
+.tool-output { background: var(--bg); }
+.blk-tool.error .tool-output { color: var(--dead-red); }
+.tool-children { border-top: 1px solid var(--border); padding: var(--space-4) var(--space-6) var(--space-4) 14px; }
+.tool-children .blk-tool { margin: var(--space-4) 0; }
+/* a subagent's final report, nested under its Agent pill: a report to read, not
+   the main assistant's prose — same muted/indented register as the pill's other children */
+.blk-sub-text { margin: var(--space-4) 0; padding-left: var(--space-2); color: var(--fg-dim); font-size: 12.5px; }
+.tool-structured > summary { padding: var(--space-2) var(--space-8); color: var(--fg-dim); cursor: pointer; font-size: var(--font-11); }
+
+/* unknown events: the drift alarm — collapsed, counted in the status bar */
+.blk-unknown { border: 1px dashed var(--approval-amber); border-radius: var(--radius-4); font-size: var(--font-12); }
+.blk-unknown > summary { padding: var(--space-3) var(--space-8); cursor: pointer; color: var(--approval-amber); }
+
+/* approval cards: decision first — title, plain summary,
+   Allow/Deny — then the exact command/diff. Once settled the card folds to its head row
+   (outcome glyph at the right end, rendered-cards.css); inside a pill that row is all that stays. */
+.blk-approval { background: var(--bg-panel); font-size: var(--font-13); } /* frame, edge and padding: rendered-cards.css */
+.blk-approval.in-pill { margin: 0; }
+.approval-head { display: flex; gap: var(--space-8); align-items: baseline; margin-bottom: var(--space-2); }
+.approval-title { color: var(--accent); font-weight: 700; }
+.approval-head .tool-name { color: var(--fg-dim); font-weight: 500; font-size: var(--font-12); }
+.approval-summary { color: var(--fg); margin-bottom: var(--space-6); word-break: break-word; }
+.approval-body { margin-top: var(--space-8); }
+.approval-path { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--fg-dim); margin-bottom: var(--space-4); word-break: break-all; }
+.blk-approval .tool-input { border: 1px solid var(--border); border-radius: var(--radius-3); background: var(--bg); }
+/* ExitPlanMode's plan is prose being approved, not a payload: .blk-text's type scale,
+   but bordered so it reads as the thing under review rather than a normal reply. */
+.approval-plan { border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-8) var(--space-10); background: var(--bg); }
+.approval-plan .doc-md { font-size: var(--font-14); line-height: 1.5; }
+.approval-plan .doc-md > :first-child { margin-top: 0; }
+.approval-plan .doc-md > :last-child { margin-bottom: 0; }
+/* the card is the record of what was approved: the pill's own raw-JSON input preview
+   (toolStart's pre.tool-input) would otherwise repeat the same payload underneath it. */
+details.has-card > pre.tool-input { display: none; }
+.approval-diff .diff-del { color: var(--dead-red); }
+.approval-diff .diff-add { color: var(--ok-green); }
+.approval-diff .diff-note { color: var(--fg-dim); }
+.approval-actions { display: flex; gap: var(--space-6); align-items: center; margin-top: var(--space-4); flex-wrap: wrap; }
+.approval-actions button, .rendered-resume, .q-opt, .palette-row {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); color: var(--fg);
+  font: inherit; font-size: var(--font-12); padding: var(--space-3) var(--space-10); cursor: pointer;
+}
+.approval-actions button { font-size: var(--font-13); padding: var(--space-4) 14px; }
+/* Allow/Answer and Deny take the decision-pair look (decision-pair.css, neutral grey plus glyph); only the disabled state lives here. */
+.approval-actions button:is(.approval-allow, .approval-deny):disabled { opacity: 0.45; cursor: default; }
+.approval-actions button:not(.approval-allow, .approval-deny):hover, .rendered-resume:hover, .q-opt:hover { border-color: var(--accent); }
+.approval-msg { flex: 1 1 160px; min-width: 120px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4); color: var(--fg); font: inherit; font-size: var(--font-12); padding: var(--space-3) var(--space-6); }
+.q { margin: var(--space-6) 0; }
+.q-text { margin-bottom: var(--space-4); }
+.q-options { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-4); }
+.q-other { width: 100%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4); color: var(--fg); font: inherit; font-size: var(--font-12); padding: var(--space-3) var(--space-6); }
+
+/* status bar */
+/* Claude Code's statusline look (statusline-command.ps1): cyan brackets, orange/red
+   context, green/yellow/red limits, dim " | " between. Values dim when the body is dead. */
+.rendered-status {
+  display: flex; gap: var(--space-10); align-items: center; height: 22px; margin: 0 var(--space-8); padding: 0; border-top: 1px solid var(--border);
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: var(--font-12); line-height: 22px; color: var(--fg-dim);
+  white-space: nowrap; overflow: hidden;
+}
+.sl-parts { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sl-cyan { color: #56c8d8; }
+.sl-dim { color: var(--fg-dim); }
+.sl-orange { color: #d78700; }
+.sl-ok { color: #5fb865; }
+.sl-warn { color: var(--approval-amber); }
+.sl-bad { color: #ff1a1a; }
+.rendered.dead .sl-parts span { color: var(--fg-dim); }
+.st-cell { flex: 0 0 auto; }
+.st-dim { color: var(--fg-dim); }
+/* the pill shape is rendered-status.css; the mode is a signal, not a theme accent: the same amber everywhere */
+.st-btn.st-mode { color: var(--approval-amber); }
+.sl-mode-slot { flex: 0 0 auto; }
+/* prompt-cache countdown: its own slot so a 1 Hz tick never redraws the model/mode buttons */
+.sl-cache { flex: 0 0 auto; font-variant-numeric: tabular-nums; } /* the bar's 8px gap on both sides centres it (2026-10-04) */
+.sl-cache:empty { display: none; }
+.sl-effort { color: #ff1a1a; } /* the raw statusline's DARKRED for the effort segment */
+/* the popup a status-bar control opens: menu styling shared with the launcher */
+.st-menu { position: fixed; z-index: 100; display: flex; flex-direction: column; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-8); padding: var(--space-4); gap: var(--space-2); max-height: 50vh; overflow: auto; }
+.st-menu button { background: none; border: none; color: var(--fg); text-align: left; padding: var(--space-6) var(--space-12); border-radius: var(--radius-5); font-size: var(--font-13); cursor: pointer; white-space: nowrap; }
+.st-menu button:hover, .st-menu button:focus { background: var(--bg); color: var(--accent); outline: none; }
+.st-menu button.current { color: var(--accent); }
+.st-menu button[hidden] { display: none; }
+/* the fold row of a grouped menu (model picker "Legacy"): label left, chevron right */
+.st-menu button.menu-group { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); color: var(--fg-dim); }
+.st-menu button.menu-group:hover, .st-menu button.menu-group:focus-visible, .st-menu button.menu-group[aria-expanded="true"] { background: var(--bg-hover); color: var(--fg); outline: none; }
+.st-menu button.menu-group:focus-visible { background: var(--bg-selected); }
+
+/* workspace review: coloured diff lines inside a ```diff block (document.ts colourDiffs) */
+.diff-add { color: var(--ok-green); }
+.diff-del { color: var(--dead-red); }
+.diff-hunk { color: #56c8d8; }
+.diff-meta { color: var(--fg-dim); }
+
+/* composer */
+/* same 8px inset as the transcript so the textarea clears the ring on the left and bottom.
+   A state row above the input names the one thing that matters —
+   Ready / Working / Waiting for approval / Stopped — and the input reads as the place to type. */
+/* no top padding: the status line's own 22px box carries the spacing on both sides of its text */
+.rendered-composer { position: relative; display: flex; flex-direction: column; gap: var(--space-4); padding: 0 var(--space-8) calc(var(--space-4) + var(--space-2)) var(--space-8); } /* 6px bottom (2026-10-04) */
+/* the chip is the status bar's right-hand cell, level with the statusline text.
+   Dot only — the state word is the tooltip. Signal colours are the fixed
+   :root set, so "ready" is the same green in every theme. */
+/* the agents block (above the status line, below the transcript scroller) is styled in rendered-agents.css */
+.rendered-state { flex: 0 0 auto; display: inline-flex; align-items: center; margin-right: var(--space-2); /* clears the rounded message box corner */ }
+.rendered-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok-green); }
+.rendered-state[data-state="working"]::before { background: var(--accent); animation: state-pulse 1.2s ease-in-out infinite; }
+.rendered-state[data-state="approval"]::before,
+.rendered-state[data-state="login"]::before { background: var(--approval-amber); }
+.rendered-state[data-state="dead"]::before { background: var(--dead-red); }
+@keyframes state-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.rendered-input-row { position: relative; display: flex; gap: var(--space-6); align-items: flex-end; }
+.rendered-input {
+  flex: 1 1 auto; min-width: 0; resize: vertical; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-4); color: var(--fg); font: inherit; font-size: var(--font-14); padding: 7px 9px; line-height: 1.45;
+}
+.rendered-input:focus { outline: none; border-color: var(--accent); }
+.rendered.dead .rendered-input { opacity: 0.5; pointer-events: none; }
+.rendered-palette {
+  position: absolute; left: 0; bottom: 100%; margin-bottom: var(--space-4); display: flex; flex-direction: column;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-3); z-index: 5; max-height: min(40vh, 320px); overflow: auto; /* about ten rows (user 2026-10-15); no size token fits */
+}
+.rendered-palette.hidden { display: none; }
+.palette-row { border-color: transparent; text-align: left; padding: var(--space-2) var(--space-8); }
+.palette-row.on { border-color: var(--accent); }
+

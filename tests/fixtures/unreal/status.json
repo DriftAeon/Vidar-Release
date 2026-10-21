@@ -1,0 +1,12 @@
+{
+  "project": { "name": "Acme", "root": "C:\\Projects\\Acme", "uproject": "Acme.uproject" },
+  "editor": "unclean",
+  "build": { "result": "succeeded", "at": 1790000000000 },
+  "liveCoding": { "result": "failed", "at": 1791096072900 },
+  "diags": [
+    { "file": null, "line": null, "severity": "error", "text": "Failed to load asset", "source": "log" },
+    { "file": null, "line": null, "severity": "warning", "text": "Config value missing", "source": "log" },
+    { "file": null, "line": null, "severity": "error", "text": "Compilation failed", "source": "log" },
+    { "file": "C:\\Projects\\Acme\\Source\\Acme\\Foo.cpp", "line": 42, "severity": "error", "text": "C2065: 'Bar': undeclared identifier", "source": "log" }
+  ]
+}

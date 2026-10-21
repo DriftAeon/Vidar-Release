@@ -1,0 +1,15 @@
+{
+  "id": "acme",
+  "version": 1,
+  "provides": [],
+  "module": {
+    "id": "acme", "label": "Acme", "level": "optional", "kind": "agent",
+    "dependsOn": ["claude"],
+    "when": { "deps": ["acme-key"] },
+    "deps": [{ "id": "acme-key", "label": "Acme API Key", "required": false, "usedBy": ["Acme Tabs"], "probe": { "kind": "env", "name": "ANTHROPIC_API_KEY" } }],
+    "agent": {
+      "gateway": { "runner": "claude", "baseUrl": "https://api.acme.example/anthropic", "keyVar": "ANTHROPIC_API_KEY", "model": "acme-large", "env": {} },
+      "rows": ["raw"]
+    }
+  }
+}

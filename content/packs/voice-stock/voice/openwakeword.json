@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "id": "openwakeword",
+  "slot": "wake",
+  "label": "openWakeWord + Silero VAD",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/listen.py", "--stdio", "--model", "{model}",
+      "--melspec", "{vidar}/content/local-voice/models/melspectrogram.onnx",
+      "--embedding", "{vidar}/content/local-voice/models/embedding_model.onnx",
+      "--vad-model", "{vidar}/content/local-voice/models/silero_vad.onnx",
+      "--threshold", "{threshold}", "--end-silence-ms", "{endSilenceMs}",
+      "--vad-threshold", "{vadStart}", "--vad-stop", "{vadStop}",
+      "--heard-timeout-ms", "{heardTimeoutMs}", "--parent-pid", "{parentPid}"]
+  },
+  "warm": null,
+  "stop": null,
+  "status": null,
+  "models": [
+    { "id": "hey_jarvis_v0.1", "file": "{vidar}/content/local-voice/models/hey_jarvis_v0.1.onnx", "bytes": 1271370,
+      "sha256": "94a13cfe60075b132f6a472e7e462e8123ee70861bc3fb58434a73712ee0d2cb", "label": "Hey Jarvis", "recommended": true },
+    { "id": "pico", "file": "{vidar}/content/local-voice/models/pico.onnx", "bytes": 415224,
+      "sha256": "f3b17a6768c4bf201059a898e9a077645d5f3adfdcb0b673a9a5c46298c398ae", "label": "Pico" },
+    { "id": "atlas", "file": "{vidar}/content/local-voice/models/atlas.onnx", "bytes": 415224,
+      "sha256": "9fdbdf71ec22d0ef5af4c0fd58e876b514bfbf7bb6cab92c2e709bcfad2f72db", "label": "Atlas" },
+    { "id": "hey_atlas", "file": "{vidar}/content/local-voice/models/hey_atlas.onnx", "bytes": 415224,
+      "sha256": "069229a6d70cc1ea155e609b54baaee29c1f9878715443a82fb331d99b3a8981", "label": "Hey Atlas" }
+  ],
+  "files": [
+    { "file": "{vidar}/content/local-voice/listen.py" },
+    { "file": "{vidar}/content/local-voice/models/melspectrogram.onnx", "bytes": 1087958,
+      "sha256": "ba2b0e0f8b7b875369a2c89cb13360ff53bac436f2895cced9f479fa65eb176f" },
+    { "file": "{vidar}/content/local-voice/models/embedding_model.onnx", "bytes": 1326578,
+      "sha256": "70d164290c1d095d1d4ee149bc5e00543250a7316b59f31d056cff7bd3075c1f" },
+    { "file": "{vidar}/content/local-voice/models/silero_vad.onnx", "bytes": 1807522,
+      "sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28" }
+  ],
+  "licence": "CC BY-NC-SA 4.0 (models); Apache-2.0 (code)",
+  "source": "https://github.com/dscripka/openWakeWord",
+  "fill": "pwsh -NoProfile -File {vidar}/tools/voice/wakeword-models.ps1"
+}

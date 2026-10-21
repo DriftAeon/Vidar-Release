@@ -1,0 +1,6 @@
+/* Existing Voice Slots confirmation card and Dependencies rows, positioned as a
+   nonmodal offer so checking/updating never prevents using the tab strip. */
+.startup-updates {
+  position: fixed; top: calc(var(--space-32) + var(--space-16)); right: var(--space-12); z-index: 140;
+  width: min(420px, 90vw); max-height: 70vh; overflow-y: auto;
+}

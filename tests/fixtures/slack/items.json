@@ -1,0 +1,45 @@
+{
+  "items": [
+    {
+      "id": "D0FIXTURE1:1792300300.000400",
+      "kind": "dm",
+      "place": "dm",
+      "sender": "Ada Example",
+      "channel": "DM",
+      "text": "lunch?",
+      "ts": "1792300300.000400",
+      "url": "https://example.slack.com/archives/D0FIXTURE1/p1792300300000400"
+    },
+    {
+      "id": "G0FIXTURE1:1792300200.000300",
+      "kind": "mention",
+      "place": "private",
+      "sender": "bo.example",
+      "channel": "#ops-private",
+      "text": "@here wait, @U0FIXTURE1 first & #general",
+      "ts": "1792300200.000300",
+      "url": "https://example.slack.com/archives/G0FIXTURE1/p1792300200000300"
+    },
+    {
+      "id": "G0FIXTURE2:1792300050.000500",
+      "kind": "dm",
+      "place": "group",
+      "sender": "bo.example",
+      "channel": "Group DM",
+      "text": "group plan: Friday",
+      "ts": "1792300050.000500",
+      "url": "https://example.slack.com/archives/G0FIXTURE2/p1792300050000500"
+    },
+    {
+      "id": "C0FIXTURE1:1792300000.000100",
+      "kind": "mention",
+      "place": "channel",
+      "sender": "Ada Example",
+      "channel": "#general",
+      "text": "@U0FIXTURE1 can you review the <deploy> notes? Notes",
+      "ts": "1792300000.000100",
+      "url": "https://example.slack.com/archives/C0FIXTURE1/p1792300000000100"
+    }
+  ],
+  "truncated": false
+}

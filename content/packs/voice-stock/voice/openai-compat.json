@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "id": "openai-compat",
+  "slot": "rewrite",
+  "label": "OpenAI-Compatible Server (LM Studio)",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/rewrite_openai.py", "--origin", "{lmstudioOrigin}", "--model", "{model}", "--budget", "{budget}"]
+  },
+  "warm": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/rewrite_openai.py", "--origin", "{lmstudioOrigin}", "--model", "{model}", "--warm"]
+  },
+  "stop": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/rewrite_openai.py", "--stop"]
+  },
+  "status": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/rewrite_openai.py", "--origin", "{lmstudioOrigin}", "--model", "{model}", "--status"]
+  },
+  "models": [],
+  "modelIds": true,
+  "files": [],
+  "source": "content/local-voice/rewrite_openai.py (this repo); the model runs in LM Studio"
+}

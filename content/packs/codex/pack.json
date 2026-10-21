@@ -1,0 +1,31 @@
+{
+  "id": "codex",
+  "version": 1,
+  "provides": [],
+  "slots": { "rewrite": ["voice/codex-exec.json"] },
+  "ui": { "label": "Codex" },
+  "module": {
+    "id": "codex",
+    "label": "Codex",
+    "level": "optional",
+    "kind": "agent",
+    "when": { "deps": ["codex"] },
+    "deps": [
+      {
+        "id": "codex",
+        "label": "Codex CLI",
+        "required": false,
+        "usedBy": ["Codex Tabs"],
+        "probe": { "kind": "exe", "names": ["codex.cmd", "codex.ps1", "codex.exe"] },
+        "update": { "package": "@openai/codex" },
+        "install": { "command": "npm install -g @openai/codex", "note": "Copy the command and run it in PowerShell; the copy button installs nothing. Then press Recheck to look for codex again. Log in from the Codex tab afterwards." }
+      }
+    ],
+    "agent": {
+      "setup": { "dep": "codex", "order": 1 }
+    },
+    "owns": [
+      "tools/codex-schema/"
+    ]
+  }
+}

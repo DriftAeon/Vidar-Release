@@ -1,0 +1,6 @@
+{
+  "id": "alpha",
+  "version": 1,
+  "provides": [],
+  "module": { "id": "alpha", "label": "Alpha", "level": "optional", "kind": "content", "dependsOn": ["beta"] }
+}

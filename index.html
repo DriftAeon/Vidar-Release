@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Vidar</title>
+    <script>
+      // Pre-paint theme restore — avoids a one-frame flash of the default
+      // theme before main.ts runs. CSP is null so inline script is permitted.
+      // The value is vidar-state.json's `theme`, injected by main.rs once at
+      // startup; after a webview reload it can be stale, and theme.ts
+      // corrects it from the state file.
+      try {
+        var t = window.__vidarPrepaintTheme;
+        // Ids from before the 2026-10-15 rename (map: src/theme-ids.ts).
+        t = { zero: "onyx", jager: "cobalt", schneider: "ember", panzer: "olive" }[t] || t;
+        // Nothing saved paints the default theme (theme.ts DEFAULT_MODE).
+        document.documentElement.dataset.theme = typeof t === "string" && t ? t : "cobalt";
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <nav id="leftbar">
+        <section id="character" data-off style="display: none">
+          <div class="character-body">
+            <div class="character-stage">
+              <p class="character-status" role="status" aria-live="polite">Loading Character…</p>
+            </div>
+            <select class="character-animation" aria-label="Animation" disabled></select>
+            <div class="character-controls"></div>
+          </div>
+        </section>
+        <button id="relay-btn" class="bar-btn iconed" title="Relay" aria-label="Relay"><span class="tab-face"></span><span class="tab-title">Relay</span><span class="tab-rc"><span class="tab-chip" hidden></span></span></button>
+        <div id="session-strip"></div>
+        <button id="new-session" class="bar-btn" title="New Session" aria-label="New Session"><span class="tab-face"></span></button>
+        <div class="bar-spacer"></div>
+        <div id="bar-dock">
+          <div id="bar-modules"></div>
+        </div>
+      </nav>
+      <main id="main">
+        <div id="view-sessions" class="view"></div>
+      </main>
+      <aside id="rightbar">
+        <div id="rightbar-grip" title="Resize"></div>
+        <section id="toolbench">
+          <div id="tool-grid"></div>
+        </section>
+        <div id="rail-stripe"></div>
+        <section id="modules">
+        </section>
+        <div id="rail-foot">
+          <button id="settings-btn" class="bar-btn iconed" title="Settings" aria-label="Settings"></button>
+        </div>
+      </aside>
+      <footer id="bottombar">
+        <div id="macro-strip"></div>
+        <div id="voice-pill" class="hidden" role="status" aria-live="polite"></div>
+        <button id="status-compact" title="Session Usage" aria-label="Session Usage"></button>
+        <div id="bar-toggles">
+          <span id="mic-group" style="display: none"><button id="listen-btn" title="Listen Off" aria-label="Listen for the wake word" data-state="off"></button><label id="auto-send" title="Auto-Send Off" class="hidden"></label></span>
+          <span id="speak-group" style="display: none"><button id="speak-btn" title="Speak Off" aria-label="Speak Latest Reply"></button><label id="auto-speak" title="Auto-Speak Off" style="display: none"></label></span>
+          <span id="lock-group"><label id="close-lock" title="Close Lock"></label><button id="swap-btn" title="Swap Vidar" aria-label="Swap Vidar"></button></span>
+        </div>
+        <span id="swap-status" class="hidden" role="status" aria-live="polite"></span>
+        <button id="inspect-btn" title="Copy Region Ref">⌖</button>
+        <button id="cas-dial" title="CAS: Liger Zero">
+          <span id="cas-ring"></span>
+          <img id="cas-icon" class="hidden" alt="" />
+          <span id="cas-glyph">0</span>
+        </button>
+      </footer>
+      <div id="status-expanded" class="hidden"></div>
+      <div id="tool-options"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

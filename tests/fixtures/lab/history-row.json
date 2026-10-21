@@ -1,0 +1,23 @@
+{
+  "runId": "RUN",
+  "itemKind": "rune",
+  "item": "lab-alpha",
+  "lib": "LIB",
+  "libCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "itemCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "armHash": { "with": "e1e97cc24d25", "without": "c7745a83848b" },
+  "cases": 2,
+  "repeats": 3,
+  "sessions": 8,
+  "costUsd": { "with": 0.04, "without": 0.54 },
+  "scores": { "with": 1, "without": 0.5, "delta": 0.5 },
+  "perCase": [
+    { "case": "control", "with": 1, "without": 1, "delta": 0, "runs": { "with": [1, 1, 1], "without": [1, 1, 1] } },
+    { "case": "greet", "with": 1, "without": 0, "delta": 1, "runs": { "with": [1], "without": [0] } }
+  ],
+  "partial": true,
+  "dry": false,
+  "isolation": "unverified",
+  "comparable": false,
+  "startedAt": "START"
+}

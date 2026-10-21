@@ -1,0 +1,32 @@
+/* Shared title bar for ask gates, Flow approval cards, Swap and Voice Trust confirms,
+   Settings and Close Notice (2026-10-11): a --bg-titlebar
+   strip over the card body. Gate icons use a 24px bordered tile. The strip takes the card's
+   top corners (border-radius inherit). Imported after ask-gate.css, flow.css and bar-switches.css, whose
+   head rules it overrides. */
+.title-tile {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: var(--row-24); height: var(--row-24); margin-right: var(--space-8);
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.title-tile > .icn { width: var(--space-16); height: var(--space-16); margin: 0; vertical-align: 0; flex: none; }
+.title-tile > .icn.title-q { color: var(--approval-amber); }
+.ask-head, .swap-confirm-head, .flow-approval-card-head,
+.sc-head, #acs-pop .acs-title {
+  display: flex; align-items: center;
+  background: var(--titlebar-grad); box-shadow: var(--titlebar-highlight); /* Sheen: tokens.css new-ui */
+  border-bottom: var(--border-w) solid var(--border);
+  border-radius: inherit; border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+}
+.ask-head { padding: 7px 14px 7px var(--space-10); /* off-scale 7 and 14, legacy 10: the gate's 14px side inset, the tile row 38px tall (mock B) */ }
+.swap-confirm-head { gap: 0; padding: var(--space-6) var(--space-12) var(--space-6) var(--space-8); /* legacy 6: a 36px row around the tile (mock B) */ }
+/* the Flow card has its own 8px inset: the strip pulls out to the card edge */
+.flow-approval-card-head {
+  gap: var(--space-6); /* legacy 6: flow.css's head gap, kept */
+  margin: calc(-1 * var(--space-8)) calc(-1 * var(--space-8)) 0; padding: var(--space-4) var(--space-8);
+}
+.flow-approval-card-head .title-tile { margin-right: var(--space-2); }
+/* Padded popovers pull the strip to the inner border, as the Flow card does above. */
+#acs-pop .acs-title {
+  margin: calc(-1 * var(--space-10)) calc(-1 * var(--space-12)) 0; /* legacy 10: cancels the existing box's top padding */
+  padding: var(--space-8) var(--space-12);
+}

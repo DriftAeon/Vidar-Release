@@ -1,0 +1,1 @@
+- The override replaces AGENTS.md while it exists.

@@ -1,0 +1,42 @@
+{
+  "fontSize": 14,
+  "defaultCwd": "",
+  "editor": {
+    "exe": "C:\\Users\\<you>\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+    "args": ["--goto", "{file}:{line}"]
+  },
+  "riderPath": "",
+  "ejectProfile": "",
+  "voice": {
+    "hotkey": "Ctrl+Shift+G",
+    "mode": "hold",
+    "device": "",
+    "prompt": "Coding in Vidar with Claude and Codex: git commits, PowerShell scripts, tabs, panes and the mic.",
+    "model": "base.en",
+    "transcriber": {
+      "command": "C:\\Apps\\Vidar\\content\\vendor\\whisper\\whisper-cli.exe",
+      "args": [
+        "-m",
+        "{model}",
+        "-l",
+        "en",
+        "-nt",
+        "-np",
+        "-otxt",
+        "--prompt",
+        "{prompt}",
+        "-f",
+        "{wav}",
+        "-of",
+        "{out}"
+      ]
+    }
+  },
+  "agents": [
+    { "key": "local", "id": "local", "label": "Local", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", "if (-not $env:VIDAR_ROOT) { throw 'VIDAR_ROOT is not set: this Vidar build predates Local tabs' }; & \"$env:VIDAR_ROOT/tools/local/local-tab.ps1\""] }
+  ],
+  "macros": [
+    { "label": "Claude", "command": "claude", "submit": false },
+    { "label": "Git Status", "command": "git status", "submit": true }
+  ]
+}

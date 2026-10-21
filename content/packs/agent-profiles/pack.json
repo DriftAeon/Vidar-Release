@@ -1,0 +1,14 @@
+{
+  "id": "agent-profiles",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Agent Profiles" },
+  "module": {
+    "id": "agent-profiles",
+    "label": "Agent Profiles",
+    "level": "optional",
+    "kind": "content",
+    "dependsOn": ["claude"],
+    "profiles": { "runner": "claude", "dir": "agents" }
+  }
+}

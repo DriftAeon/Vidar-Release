@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "deps": [
+    {
+      "id": "pwsh",
+      "label": "PowerShell 7",
+      "required": true,
+      "usedBy": ["Every Terminal Tab", "Desk And Voice Scripts"],
+      "probe": { "kind": "exe", "names": ["pwsh.exe"] },
+      "install": { "winget": "Microsoft.PowerShell", "url": "https://aka.ms/powershell" }
+    },
+    {
+      "id": "node",
+      "label": "Node.js",
+      "required": true,
+      "usedBy": [
+        { "label": "Rendered Codex", "module": "codex" },
+        { "label": "Claude Rendered Tabs", "module": "claude" }
+      ],
+      "probe": { "kind": "exe", "names": ["node.exe"], "minVersion": "22.0" },
+      "install": { "winget": "OpenJS.NodeJS.LTS", "url": "https://nodejs.org" }
+    },
+    {
+      "id": "git",
+      "label": "Git",
+      "required": false,
+      "usedBy": ["Git Review"],
+      "probe": { "kind": "exe", "names": ["git.exe"] },
+      "install": { "winget": "Git.Git", "url": "https://git-scm.com" }
+    },
+    {
+      "id": "wt",
+      "label": "Windows Terminal",
+      "required": false,
+      "usedBy": ["Jettison"],
+      "probe": { "kind": "exe", "names": ["wt.exe"] },
+      "install": { "winget": "Microsoft.WindowsTerminal" }
+    },
+    {
+      "id": "desks",
+      "label": "Desks Pack",
+      "required": false,
+      "usedBy": ["Astra"],
+      "probe": { "kind": "vidar", "files": ["tools\\desks\\hidden-run\\hidden-run.exe"] },
+      "install": { "note": "Follow tools\\desks\\README.md." }
+    },
+    {
+      "id": "gemini",
+      "label": "Gemini CLI",
+      "required": false,
+      "usedBy": ["Gemini Tabs"],
+      "probe": { "kind": "exe", "names": ["gemini.cmd", "gemini.ps1", "gemini.exe"] },
+      "update": { "package": "@google/gemini-cli" },
+      "install": { "command": "npm install -g @google/gemini-cli" }
+    },
+    {
+      "id": "pi",
+      "label": "Pi",
+      "required": false,
+      "usedBy": ["Pi Tabs"],
+      "probe": { "kind": "exe", "names": ["pi.cmd", "pi.ps1", "pi.exe"] },
+      "update": { "package": "@earendil-works/pi-coding-agent" },
+      "install": { "command": "npm install -g @earendil-works/pi-coding-agent" }
+    },
+    {
+      "id": "voice",
+      "label": "Local Voice (Python Venv)",
+      "required": false,
+      "usedBy": ["Speak", "Wake Word"],
+      "probe": { "kind": "vidar", "files": ["content\\local-voice\\.venv\\Scripts\\python.exe"] },
+      "install": { "command": "pwsh -File tools/voice/setup-voice.ps1" }
+    },
+    {
+      "id": "lmstudio",
+      "label": "LM Studio",
+      "required": false,
+      "usedBy": ["Speak Rewrite"],
+      "probe": { "kind": "exe", "names": ["lms.exe"], "candidates": ["%USERPROFILE%\\.lmstudio\\bin\\lms.exe"] },
+      "install": { "winget": "ElementLabs.LMStudio", "url": "https://lmstudio.ai" }
+    },
+    {
+      "id": "rider",
+      "label": "Editor",
+      "required": false,
+      "usedBy": ["Open In Editor"],
+      "probe": { "kind": "config", "key": "editor.exe", "fallback": "riderPath" },
+      "install": { "note": "Set editor.exe in vidar.json to your editor's own .exe (e.g. VS Code's Code.exe, not bin\\code.cmd); legacy riderPath (rider64.exe) is used when editor is unset." }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+/* Shared browser inline card (src/browser/card.ts, look B): attached under its open row, a field bar with the
+   actions, then the excerpt (three lines) and the newest comment line. Field boxes are shared with fullscreen. */
+.br-card { flex: none; margin-top: calc(var(--space-4) * -1); border: var(--border-w) solid var(--border); border-top: 0; border-radius: 0 0 var(--radius-4) var(--radius-4); background: var(--bg-panel); overflow: hidden; }
+.br-card-bar { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-4) var(--space-8); background: var(--bg); border-bottom: var(--border-w) solid var(--border); }
+.br-acts { flex: none; display: flex; gap: var(--space-4); }
+.br-fields { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.br-fm { display: inline-flex; height: var(--line-20); max-width: 100%; border: var(--border-w) solid var(--border); border-radius: var(--radius-2); overflow: hidden; font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-20); white-space: nowrap; }
+.br-fk { flex: none; padding: 0 var(--space-4); color: var(--fg-dim); background: var(--bg-hover); border-right: var(--border-w) solid var(--border); }
+.br-fv { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 var(--space-8); color: var(--fg); }
+.br-fv.dim { color: var(--fg-dim); }
+.br-card-body { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8) var(--space-12); }
+.br-card-body:empty { display: none; }
+.br-excerpt { line-height: var(--line-16); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.br-cline { display: flex; align-items: center; gap: var(--space-8); min-width: 0; color: var(--fg-dim); }
+.br-n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.br-who { flex: none; color: var(--fg); font-weight: var(--weight-strong); }
+.br-ctext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.br-err { color: var(--dead-red); overflow-wrap: anywhere; }

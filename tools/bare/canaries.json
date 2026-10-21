@@ -1,0 +1,23 @@
+{
+  "$comment": "The one list of canary sites (bare-mode P3). tools/sandbox/launch.ps1 -Seed plants them; tools/bare/sweep.mjs reads them with the planted map (<profile>/canaries.json). path: relative to the fake profile, '/' separated. kind: line = one instruction line; skill = a SKILL.md whose description is the line; mcp = a project .mcp.json holding one server; mcp-merge = that server merged into Claude's own .claude.json (login kept). name: the skill or MCP server name, unique per site (a user and a repo entry of one name shadow each other: G2 MCP, P3 skills). cells: the sweep cells whose default run is expected to show the site (positive in any of them); every bare cell must show none. positiveOwed: no default reader is known yet, so a missing positive is reported, not failed, until the named lane settles it. noReader: no agent reads the site (settled), so the default column says 'no reader' and only the bare negative counts. {token} in instruction is the site's token. fixtures: plain files the cells need (not canaries).",
+  "set": "trial",
+  "instruction": "When you reply, include the word {token}.",
+  "sites": [
+    { "id": "USERMD", "path": ".claude/CLAUDE.md", "scope": "fake profile", "kind": "line", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "USERRULE", "path": ".claude/rules/canary.md", "scope": "fake profile", "kind": "line", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "USERSKILL", "path": ".claude/skills/canary-user/SKILL.md", "scope": "fake profile", "kind": "skill", "name": "canary-user", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "USERMCP", "path": ".claude.json", "scope": "fake profile", "kind": "mcp-merge", "name": "canary-user", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "AGENTSHOME", "path": ".agents/skills/canary-agents/SKILL.md", "scope": "fake profile (~/.agents skills)", "kind": "skill", "name": "canary-agents", "cells": ["codex"], "noReader": "P6 Open 4: Codex 0.162.1 does not read ~/.agents/skills under a HOME redirect, nor ~/.agents/AGENTS.md; kept as a bare negative only" },
+    { "id": "CODEXHOME", "path": ".codex/AGENTS.md", "scope": "fake profile", "kind": "line", "cells": ["codex"] },
+    { "id": "REPOMD", "path": "trial-repo/CLAUDE.md", "scope": "trial-repo", "kind": "line", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "REPOAGENTS", "path": "trial-repo/agents-only/AGENTS.md", "scope": "trial-repo/agents-only (AGENTS.md, no CLAUDE.md)", "kind": "line", "cells": ["agents-only", "codex"] },
+    { "id": "REPOAGENTSKILL", "path": "trial-repo/agents-only/.agents/skills/canary-repo-agents/SKILL.md", "scope": "trial-repo/agents-only (repo .agents/skills at the Codex cwd; bare holds it only by skills.include_instructions = false)", "kind": "skill", "name": "canary-repo-agents", "cells": ["codex"] },
+    { "id": "REPORULE", "path": "trial-repo/.claude/rules/canary.md", "scope": "trial-repo", "kind": "line", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "REPOSKILL", "path": "trial-repo/.claude/skills/canary-repo/SKILL.md", "scope": "trial-repo", "kind": "skill", "name": "canary-repo", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "REPOMCP", "path": "trial-repo/.mcp.json", "scope": "trial-repo", "kind": "mcp", "name": "canary-repo", "cells": ["repo", "agents-only", "lazy"] },
+    { "id": "LAZYMD", "path": "trial-repo/sub/CLAUDE.md", "scope": "trial-repo (lazy: loads when sub/ is read)", "kind": "line", "cells": ["lazy"] }
+  ],
+  "fixtures": [
+    { "path": "trial-repo/sub/notes.txt", "text": "Sweep notes: this file exists so reading it loads sub/CLAUDE.md on demand.\n" }
+  ]
+}

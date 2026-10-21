@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "id": "kokoro-onnx-int8",
+  "slot": "tts",
+  "label": "Kokoro-82M int8 (ONNX Runtime)",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "onnx", "--port", "24243",
+             "--model-file", "{vidar}/content/local-voice/models/kokoro/kokoro-v1.0.int8.onnx",
+             "--voices-file", "{vidar}/content/local-voice/models/kokoro/voices-v1.0.bin",
+             "--text", "{text}", "--out", "{out}", "--voice", "{voice}", "--speed", "{speed}", "--owner", "{owner}"]
+  },
+  "warm": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "onnx", "--port", "24243",
+             "--model-file", "{vidar}/content/local-voice/models/kokoro/kokoro-v1.0.int8.onnx",
+             "--voices-file", "{vidar}/content/local-voice/models/kokoro/voices-v1.0.bin",
+             "--warm", "--voice", "{voice}", "--owner", "{owner}"]
+  },
+  "stop": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "onnx", "--port", "24243", "--stop", "--owner", "{owner}"]
+  },
+  "status": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "onnx", "--port", "24243", "--status", "--owner", "{owner}"]
+  },
+  "models": [
+    { "id": "af_heart", "file": "{vidar}/content/local-voice/models/kokoro/voices-v1.0.bin",
+      "label": "Heart (American English, Female)", "recommended": true },
+    { "id": "af_bella", "file": "{vidar}/content/local-voice/models/kokoro/voices-v1.0.bin",
+      "label": "Bella (American English, Female)" },
+    { "id": "am_michael", "file": "{vidar}/content/local-voice/models/kokoro/voices-v1.0.bin",
+      "label": "Michael (American English, Male)" },
+    { "id": "bf_emma", "file": "{vidar}/content/local-voice/models/kokoro/voices-v1.0.bin",
+      "label": "Emma (British English, Female)" }
+  ],
+  "files": [
+    "{vidar}/content/local-voice/models/kokoro/kokoro-v1.0.int8.onnx",
+    "{vidar}/content/local-voice/.venv/Lib/site-packages/kokoro_onnx/__init__.py"
+  ],
+  "licence": "Apache-2.0 (Kokoro-82M weights); MIT (kokoro-onnx)",
+  "source": "https://github.com/thewh1teagle/kokoro-onnx (release model-files-v1.0), through content/local-voice/tts_kokoro.py and kokoro_sidecar.py (this repo)",
+  "fill": "pwsh -File {vidar}/tools/voice/setup-voice.ps1"
+}

@@ -1,0 +1,25 @@
+/* Shared select look: tokens, a custom chevron
+   (native option list still OS-drawn — appearance: base-select or a custom dropdown component
+   are both out of scope), accent border on hover/focus. `.sc-select` (settings modal), the run selector and the inspector selects all join this selector list instead of
+   styling themselves; the class names stay so no caller needed to change. Chevron colour is a
+   fixed literal baked into the data URI (opaque to lint:ui's colour check, and to the token
+   scale) rather than one of the four theme's --fg-dim values. */
+.sc-select, .flow-run-select, .flow-model-select {
+  appearance: none; -webkit-appearance: none;
+  font-size: var(--font-12); background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5); cursor: pointer;
+  padding: var(--space-4) var(--space-20) var(--space-4) var(--space-6);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5l3.5 3.5 3.5-3.5' fill='none' stroke='%2383818b' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right var(--space-6) center; background-size: 10px;
+}
+.sc-select:hover, .flow-run-select:hover, .flow-model-select:hover,
+.sc-select:focus-visible, .flow-run-select:focus-visible, .flow-model-select:focus-visible {
+  border-color: var(--accent); outline: none;
+}
+.sc-select { max-width: 220px; }
+.flow-model-select {
+  width: 100%; min-width: 0; box-sizing: border-box;
+  padding: var(--space-8) var(--space-24) var(--space-8) var(--space-10);
+}
+.flow-model-select:disabled { cursor: default; }
+.flow-model-select.warn { border-color: var(--alert); }

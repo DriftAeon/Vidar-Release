@@ -1,0 +1,14 @@
+{
+  "id": "codex-profiles",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Codex Profiles" },
+  "module": {
+    "id": "codex-profiles",
+    "label": "Codex Profiles",
+    "level": "optional",
+    "kind": "content",
+    "dependsOn": ["codex"],
+    "profiles": { "runner": "codex", "dir": "agents" }
+  }
+}

@@ -1,0 +1,77 @@
+// Relay pending-item store: what is waiting on the user, merged from every source. No DOM, no invoke.
+// A source replaces its own slice; seen state is memory only.
+import type { NodeMatrix } from "../control/node-matrix";
+
+export type RelayKind ="display" | "ask" | "card";
+/** a pending ask as the source painted it; `sha256` is the content hash a claim/settle binds to */
+export interface RelayAsk {
+  id: string;
+  session: string;
+  question: string;
+  choices: string[];
+  /** `details[i]` describes `choices[i]`; absent on old records */
+  details?: string[];
+  askedAtMs: number;
+  /** optional line saying what the ask is for (replaces the tab title in the header) */
+  context?: string;
+  sha256: string;
+}
+type RelayView =
+  | { type: "display"; path: string; fileKind: "png" | "svg" | "html"; mtimeMs: number }
+  | { type: "doc"; path: string }
+  | { type: "ask"; ask: RelayAsk }
+  /** an approval card shown as label/value rows (the Run Flow card); Approve/Deny answer it */
+  | { type: "card"; rows: [string, string][]; matrix?: NodeMatrix };
+export interface RelayVerdict {
+  verdict: "approve" | "deny" | "dismiss";
+  comment: string;
+  choice?: string;
+  binding?: { path: string; sha256: string };
+}
+export interface RelayItem {
+  id: string;
+  kind: RelayKind;
+  source: string;
+  title: string;
+  sinceMs: number;
+  view: RelayView;
+  error?: string;
+  /** throws -> the strip shows the message */
+  resolve(v: RelayVerdict): Promise<void>;
+}
+
+/** the file a display/doc view shows; "" for an ask or a card */
+export function viewPath(item: RelayItem | null): string {
+  return !item || item.view.type === "ask" || item.view.type === "card" ? "" : item.view.path;
+}
+
+const slices = new Map<string, readonly RelayItem[]>();
+const seen = new Set<string>();
+const listeners = new Set<(items: readonly RelayItem[]) => void>();
+let merged: readonly RelayItem[] = [];
+
+export function setItems(source: string, next: RelayItem[]): void {
+  // ids in a source's first snapshot are seen: those were there before this launch;
+  // an ask or approval card is never auto-seen, so a restart keeps its unread dot
+  if (!slices.has(source)) for (const it of next) if (it.kind === "display") seen.add(it.id);
+  slices.set(source, next);
+  merged = [...slices.values()].flat().sort((a, b) => b.sinceMs - a.sinceMs);
+  for (const fn of [...listeners]) fn(merged);
+}
+
+export function items(): readonly RelayItem[] {
+  return merged;
+}
+
+export function subscribe(fn: (items: readonly RelayItem[]) => void): () => void {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}
+
+export function markSeen(id: string): void {
+  seen.add(id);
+}
+
+export function isUnread(id: string): boolean {
+  return !seen.has(id);
+}

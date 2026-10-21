@@ -1,0 +1,23 @@
+
+* { box-sizing: border-box; margin: 0; }
+html, body, #app { height: 100%; }
+body { background: var(--bg); color: var(--fg); overflow: hidden; }
+
+::selection { background: var(--accent); color: var(--bg); }
+/* House button under every rule: :where() has zero specificity, so any class or id rule wins,
+   and a button nobody styled still reads as ours instead of the browser's grey default
+   (Display's Copy/Copy Path shipped that way). */
+:where(button) {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer;
+  color: var(--fg-dim); font: inherit; font-size: var(--font-12); padding: var(--space-3) var(--space-6);
+}
+/* no line-height here: 1 clipped descenders in rows whose labels hide overflow (Loadout "Agents") */
+:where(button:hover:not(:disabled)) { color: var(--accent); border-color: var(--accent); }
+/* pressed: a faint accent wash on top of the hover look, so a press reads differently from a hover */
+:where(button:active:not(:disabled)) { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+:where(button:disabled) { opacity: 0.5; cursor: default; }
+button:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+

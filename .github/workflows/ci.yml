@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.repository == 'DriftAeon/Vidar-Release'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: |
+            src-tauri
+            src-falcon
+
+      - name: Install
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      # tauri-build in src-falcon needs its frontendDist folder; build.mjs step 1 does the same copy.
+      - name: Stage Falcon frontend
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist-falcon | Out-Null
+          Copy-Item dist/falcon.html dist-falcon/
+          Copy-Item dist/assets dist-falcon/assets -Recurse
+          Copy-Item dist/icons dist-falcon/icons -Recurse
+
+      - name: Node tests
+        run: npm test
+
+      - name: Cargo check (Vidar)
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Cargo check (Falcon)
+        run: cargo check --manifest-path src-falcon/Cargo.toml
+
+      - name: Cargo test (Vidar)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Cargo test (Falcon)
+        run: cargo test --manifest-path src-falcon/Cargo.toml

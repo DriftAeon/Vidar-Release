@@ -1,0 +1,201 @@
+/* ---- rendered body: tool chain (joined bar, segments, tool pills) ----
+   W1 lane 1B. New-ui tokens only; no host or theme selectors (tests/rendered-lockstep.test.mjs).
+   The old glyph and activity-marker rules are gone from rendered.css (W2). */
+
+/* class colour of a tool, one custom property read by the segment underline, the row gutter and the badge */
+.blk-tool, .chain-seg { --chain-tc: var(--border-strong); }
+:is(.blk-tool, .chain-seg)[data-tool-class="read"],
+:is(.blk-tool, .chain-seg)[data-tool-class="search"] { --chain-tc: var(--class-read); }
+:is(.blk-tool, .chain-seg)[data-tool-class="web"] { --chain-tc: var(--class-web); }
+:is(.blk-tool, .chain-seg)[data-tool-class="edit"] { --chain-tc: var(--approval-amber); }
+/* run, think and other: green, run and other red on failure (2026-10-04: grey read as dead;
+   other (MCP, TodoWrite, Skill, Monitor, SendMessage…) green too, user 2026-10-05) */
+:is(.blk-tool, .chain-seg)[data-tool-class="run"],
+:is(.blk-tool, .chain-seg)[data-tool-class="other"],
+:is(.blk-tool, .chain-seg)[data-tool-class="think"] { --chain-tc: var(--ok-green); }
+.blk-tool:is([data-tool-class="run"], [data-tool-class="other"]):is(.error, .denied),
+.chain-seg:is([data-tool-class="run"], [data-tool-class="other"])[data-outcome="error"] { --chain-tc: var(--dead-red); }
+:is(.blk-tool, .chain-seg)[data-tool-class="agent"] { --chain-tc: var(--accent); }
+/* ask: green once answered, red on failure, amber while open */
+:is(.blk-tool, .chain-seg)[data-tool-class="ask"] { --chain-tc: var(--ok-green); }
+.blk-tool[data-tool-class="ask"]:is(.error, .denied, .stale),
+.chain-seg[data-tool-class="ask"][data-outcome="error"] { --chain-tc: var(--dead-red); }
+.blk-tool[data-tool-class="ask"]:is(.pending, .running, .awaiting),
+.chain-seg[data-tool-class="ask"][data-outcome="open"] { --chain-tc: var(--approval-amber); }
+
+/* a group's bracket colour is its first row's --chain-tc (2026-10-10): the map above, read
+   through :has on the row right after the summary. Keep the two maps in step
+   (tests/rendered-chain-bracket.test.mjs). */
+.blk-activity { --group-tc: var(--border-strong); }
+.blk-activity:has(> summary + .blk-tool:is([data-tool-class="read"], [data-tool-class="search"])) { --group-tc: var(--class-read); }
+.blk-activity:has(> summary + .blk-tool[data-tool-class="web"]) { --group-tc: var(--class-web); }
+.blk-activity:has(> summary + .blk-tool[data-tool-class="edit"]) { --group-tc: var(--approval-amber); }
+.blk-activity:has(> summary + .blk-tool:is([data-tool-class="run"], [data-tool-class="other"], [data-tool-class="think"])) { --group-tc: var(--ok-green); }
+.blk-activity:has(> summary + .blk-tool:is([data-tool-class="run"], [data-tool-class="other"]):is(.error, .denied)) { --group-tc: var(--dead-red); }
+.blk-activity:has(> summary + .blk-tool[data-tool-class="agent"]) { --group-tc: var(--accent); }
+.blk-activity:has(> summary + .blk-tool[data-tool-class="ask"]) { --group-tc: var(--ok-green); }
+.blk-activity:has(> summary + .blk-tool[data-tool-class="ask"]:is(.error, .denied, .stale)) { --group-tc: var(--dead-red); }
+.blk-activity:has(> summary + .blk-tool[data-tool-class="ask"]:is(.pending, .running, .awaiting)) { --group-tc: var(--approval-amber); }
+
+/* ---- group summary: joined bar, total + group mark (no disc: the row itself toggles) ---- */
+.rendered .blk.blk-activity { border-left: none; padding-left: 0; }
+/* bracket (chain-bar R3, 2026-10-10): the header sits flush left open or collapsed (pill at
+   x = the 2px edge, as before R3), and the rows' gutter column is that same edge, so nothing shifts on
+   open (2026-10-10: the open indent read as a jump right) */
+.rendered .blk-activity > summary {
+  display: flex; align-items: center; gap: var(--space-8);
+  min-height: var(--row-32); padding: 0 var(--space-8) 0 0;
+  border-left: var(--space-2) solid transparent; border-radius: 0 var(--radius-6) var(--radius-6) 0;
+  transition: background 80ms ease; /* motion: hover feedback */
+}
+/* open: the pill sits on the bracket and its left edge becomes the line, in the first row's colour.
+   The header's own edge is drawn only from the pill's top down (border-image), so no stub shows above
+   the centred pill: 50% less half the pill's height (--row-24 segments + two --border-w). Its first
+   --border-w is the pill's grey top edge, so the colour starts under it (2026-10-10: 1px high);
+   the pill's left border is clear and unpainted, so this line shows through it. One rule for every
+   state, the running group included: the first-row colour replaces A's running accent. */
+.rendered .blk-activity[open]:not(.empty) > summary {
+  border-image: linear-gradient(to bottom,
+    transparent calc(50% - var(--row-24) / 2 - var(--border-w)),
+    var(--border-strong) 0 calc(50% - var(--row-24) / 2),
+    var(--group-tc) 0) 0 0 0 1;
+}
+.rendered .blk-activity[open]:not(.empty) > summary > .activity-label.chain-bar {
+  margin-left: calc(-1 * var(--space-2));
+  border-left: var(--space-2) solid transparent; border-radius: 0 var(--radius-6) var(--radius-6) 0;
+  background-clip: padding-box;
+}
+.rendered .blk-activity > summary:hover { background: var(--bg-hover); }
+.rendered .blk-activity > summary:active { background: var(--bg-selected); }
+.rendered .blk-activity > summary:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+
+.rendered .activity-label.chain-bar {
+  display: inline-flex; min-width: 0; overflow: hidden;
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-6);
+  background: var(--bg-panel);
+}
+.chain-seg {
+  position: relative; display: inline-flex; flex: none; align-items: center; gap: var(--space-4);
+  min-width: 0; height: var(--row-24); padding: 0 var(--space-8);
+  color: var(--fg); font-size: var(--font-12); white-space: nowrap;
+}
+/* no dividers between segments, and the class underline is 1px (2026-10-04: was 2px by pick 2B) */
+.chain-seg::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--border-w); background: var(--chain-tc); }
+.chain-seg > .icn { flex: none; width: var(--space-12); height: var(--space-12); color: var(--chain-tc); }
+.chain-seg-name { overflow: hidden; text-overflow: ellipsis; }
+.chain-seg-n { font-family: var(--font-mono); font-size: var(--font-11); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; }
+.chain-seg > .mark { min-width: var(--space-12); }
+
+.chain-rt {
+  display: inline-flex; flex: none; align-items: center; gap: var(--space-8); margin-left: auto;
+  color: var(--fg-dim); font-family: var(--font-mono); font-size: var(--font-12); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ---- rows of an expanded chain: class gutter, hover / open fills ---- */
+.rendered :is(.blk-activity, .tool-children) > .blk-tool {
+  margin: 0; padding: 0;
+  border: none; border-left: var(--space-2) solid var(--chain-tc); border-radius: 0; background: transparent;
+}
+.rendered .tool-children { border-top: none; padding: 0; }
+/* a live group (turn running, groups.ts data-live) shows only its newest pill, plus any held open
+   (a permission card, the user's) or failed; the first header click drops data-live (2026-10-05) */
+.rendered.in-turn .blk-activity[data-live] > .blk-tool:not(:last-child, [open], .error) { display: none; }
+/* a subagent's children paint their gutter over the parent row's (same column), depth shows as the text inset */
+.rendered .tool-children > .blk-tool { margin-left: calc(-1 * var(--space-2)); }
+.rendered .tool-children > .blk-tool > summary { padding-left: var(--space-24); }
+
+.rendered .blk-tool > summary {
+  display: flex; align-items: center; gap: var(--space-8);
+  height: var(--row-28); padding: 0 var(--space-8);
+  transition: background 80ms ease; /* motion: hover feedback */
+}
+.rendered .blk-tool > summary:hover { background: var(--bg-hover); }
+.rendered .blk-tool[open] > summary { background: var(--bg-selected); }
+.rendered .blk-tool > summary:active { background: var(--bg-selected); }
+.rendered .blk-tool > summary:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+
+.tool-badge {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: var(--space-16); height: var(--space-16); border-radius: var(--radius-4);
+  background: color-mix(in srgb, var(--chain-tc) 18%, var(--bg-panel));
+  color: var(--chain-tc); font-size: var(--font-11); font-weight: var(--weight-strong);
+}
+.tool-badge > .icn { width: var(--space-12); height: var(--space-12); }
+/* an MCP name with two icons (plug + unreal): the badge grows to fit */
+.tool-badge.multi { width: auto; gap: var(--space-2); padding: 0 var(--space-4); }
+/* count cells ("3 Ops", "3 Calls"): icon then number, sized like the chain segment icons */
+:is(.chain-ops, .tool-count, .agent-calls) > .icn { width: var(--space-12); height: var(--space-12); margin-right: var(--space-2); vertical-align: -0.1em; }
+.icn-flip-x { transform: scaleX(-1); }
+/* an armed Monitor or background shell (data-monitor, monitor-run.ts): a radial spinner in the icon's place until the watch ends */
+.chain-seg[data-monitor="armed"] > .icn, .blk-tool[data-monitor="armed"] > summary > .tool-badge > .icn { display: none; }
+.chain-seg[data-monitor="armed"]::before, .blk-tool[data-monitor="armed"] > summary > .tool-badge::before {
+  content: ""; box-sizing: border-box; flex: none; width: var(--space-12); height: var(--space-12);
+  /* blue ring (--class-read) whose tail fades out: a conic arc masked to a 1px ring; the old border ring is gone */
+  background: conic-gradient(from 0deg, transparent, var(--class-read));
+  /* ring is 2 x --border-w: a 1px ring is too thin to read at 12px with a fading tail */
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--border-w) * 2), currentColor calc(100% - var(--border-w) * 2 + 0.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--border-w) * 2), currentColor calc(100% - var(--border-w) * 2 + 0.5px));
+  border-radius: var(--radius-full);
+  animation: rendered-mark-spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */
+}
+@media (prefers-reduced-motion: reduce) {
+  .chain-seg[data-monitor="armed"]::before, .blk-tool[data-monitor="armed"] > summary > .tool-badge::before { animation: none; background: var(--class-read); }
+}
+.rendered .blk-tool > summary > .tool-name { color: var(--fg); font-weight: var(--weight-strong); }
+.rendered .blk-tool > summary > .tool-summary { font-family: var(--font-mono); color: var(--fg-dim); }
+/* Ask: "Ask" is UI font, the question is mono; their default line boxes differ, so centred rows sat off.
+   One shared line height puts both on the same centre line. */
+.rendered .blk-tool[data-tool-class="ask"] > summary > :is(.tool-name, .tool-summary) { line-height: var(--line-16); }
+.rendered .blk-tool > summary > .tool-count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.rendered .blk-tool > summary > .mark { margin-left: auto; }
+.rendered .blk-tool > summary > .tool-count + .mark { margin-left: 0; }
+/* Edit/Write pill (edit-pill.ts): "+a −b" counts, then the braces button (open pill only), then the mark */
+.rendered .blk-tool > summary > .edit-counts {
+  display: inline-flex; flex: none; gap: var(--space-4);
+  font-family: var(--font-mono); font-size: var(--font-11); font-variant-numeric: tabular-nums;
+}
+.rendered .blk-tool > summary > :is(.edit-counts, .tool-structured-btn) + .mark { margin-left: 0; }
+.rendered .blk-tool:not([open]) > summary > .tool-structured-btn { display: none; }
+.rendered .tool-structured-btn {
+  display: inline-flex; flex: none; align-items: center; justify-content: center;
+  width: var(--row-24); height: var(--row-24); padding: 0; border: none; border-radius: var(--radius-4);
+  background: none; color: var(--fg-dim); cursor: pointer;
+  transition: background 80ms ease, color 80ms ease; /* motion: hover feedback */
+}
+.rendered .tool-structured-btn > .icn { width: var(--space-12); height: var(--space-12); }
+.rendered .tool-structured-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.rendered .tool-structured-btn:active { background: var(--bg-selected); }
+.rendered .tool-structured-btn:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.rendered .tool-structured-btn.on { background: var(--bg-selected); color: var(--accent); }
+.rendered .tool-structured-btn:disabled { opacity: 0.45; cursor: default; }
+.rendered .tool-structured.via-icon > summary { display: none; }
+.rendered .tool-structured.via-icon > pre {
+  padding: var(--space-4) var(--space-8); background: var(--bg-panel); color: var(--fg-dim);
+  font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-16); white-space: pre;
+}
+/* the changed lines: mono 11, one line each, ellipsised; + green, − red (.diff-add / .diff-del) */
+.rendered .edit-diff {
+  padding: var(--space-4) 0; border-top: var(--border-w) solid var(--border); background: var(--bg);
+  font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-16);
+}
+.rendered .edit-diff .edit-line { display: block; padding: 0 var(--space-8); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.rendered .edit-more > summary {
+  list-style: none; cursor: pointer; padding: 0 var(--space-8);
+  color: var(--fg-dim); font-family: var(--font-ui); font-size: var(--font-11); line-height: var(--line-20);
+}
+.rendered .edit-more > summary::-webkit-details-marker { display: none; }
+.rendered .edit-more > summary:hover { color: var(--fg); }
+.rendered .edit-more > summary:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.rendered .edit-more[open] > summary { display: none; }
+/* a URL target: host lifted, scheme and path dim */
+.tool-summary .url-scheme, .tool-summary .url-path { color: var(--fg-dim); }
+.tool-summary .url-host { padding: 0 var(--space-4); border-radius: var(--radius-4); background: var(--bg-hover); color: var(--class-read); }
+/* Ask has no icon of its own: the status mark (? open, tick/cross settled) sits in the badge's left slot at
+   the badge's 16px, and the folded card drops its "Question" head, outcome glyph included (2026-10-05) */
+.rendered .blk-tool[data-tool-class="ask"] > summary > .tool-badge { display: none; }
+.rendered .blk-tool[data-tool-class="ask"] > summary > .mark { order: -1; margin-left: 0; width: var(--space-16); height: var(--space-16); }
+.chain-seg[data-tool-class="ask"] > .mark { order: -1; }
+.rendered .blk-tool[data-tool-class="ask"] .blk-question.settled > .approval-head { display: none; }
+/* the pill's class bar is the card's edge, every card (chain-bar R3; was Ask only): no second bar,
+   text on the summary's inset */
+.rendered :is(.blk-activity, .tool-children) > .blk-tool > .blk-approval.in-pill { border-left-width: 0; padding-left: var(--space-8); }

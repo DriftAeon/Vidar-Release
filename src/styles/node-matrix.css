@@ -1,0 +1,30 @@
+/* ---- node matrix ----
+   Shared body of the Run Flow ask, the Open Astra Tab ask and the Relay tool approval card
+   (src/control/node-matrix.ts). Facts are an icon grid; per-node fields are a table with nodes as
+   columns. The table is never narrower than the label column plus --nm-n node columns of --nm-col,
+   so four columns fit the 760px ask and the fifth makes .nm-scroll scroll sideways while the icon
+   column stays pinned. */
+.nm { --nm-col: 168px; /* node column floor: 4 fit the ask modal; no token for a column width */ display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; font-size: var(--font-12); }
+.nm-ico { display: inline-flex; align-items: center; justify-content: center; color: var(--fg-dim); cursor: default; }
+.nm-i { width: var(--font-16); height: var(--font-16); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nm-facts { display: grid; grid-template-columns: var(--row-24) minmax(0, 1fr); gap: var(--space-4) var(--space-4); align-items: center; }
+.nm-v { overflow-wrap: anywhere; white-space: pre-wrap; }
+.nm-strong { font-weight: var(--weight-strong); font-size: var(--font-13); }
+.nm-mono { font-family: var(--font-mono); }
+.nm-pre { font-family: var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; padding: var(--space-4) var(--space-8); background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); }
+
+.nm-scroll { overflow-x: auto; max-width: 100%; }
+.nm-table { width: 100%; min-width: calc(var(--row-28) + var(--nm-n) * var(--nm-col)); border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.nm-table th, .nm-table td { text-align: left; vertical-align: top; padding: var(--space-4) var(--space-8); overflow-wrap: anywhere; }
+.nm-table thead th { font-weight: var(--weight-strong); padding-bottom: var(--space-8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nm-table th:first-child, .nm-table td:first-child { width: var(--row-28); padding-left: 0; padding-right: 0; position: sticky; left: 0; z-index: 1; background: var(--bg-panel); }
+.nm-table td:first-child { text-align: center; }
+.nm-table tbody tr:nth-child(odd) td:not(:first-child) { background: var(--bg-hover); }
+.nm-table td.nm-span { text-align: left; }
+
+/* a long value: one ellipsised line, opens on click (no marker; the field icon is the head) */
+.nm-fold > summary { list-style: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: var(--radius-2); }
+.nm-fold > summary::-webkit-details-marker { display: none; }
+.nm-fold[open] > summary { white-space: pre-wrap; overflow: visible; }
+.nm-fold > summary:hover { color: var(--accent); }
+.nm-fold > summary:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }

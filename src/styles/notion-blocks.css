@@ -1,0 +1,57 @@
+/* Notion page body (src/notion/blocks.ts, rich-text.ts, walk.ts): classes only; the
+   styles.css import is N-V's. Notion colours map onto the signal colours and tints, never raw values. */
+.nb-doc { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; color: var(--fg); line-height: var(--line-20); overflow-wrap: anywhere; }
+.nb-doc p, .nb-doc h3, .nb-doc h4, .nb-doc h5, .nb-doc ul, .nb-doc ol, .nb-doc blockquote, .nb-doc pre { margin: 0; }
+.nb-h { color: var(--fg); font-weight: var(--weight-strong); }
+.nb-list { display: flex; flex-direction: column; gap: var(--space-4); padding-left: var(--space-16); }
+.nb-li > .nb-list { margin-top: var(--space-4); }
+.nb-kids { display: flex; flex-direction: column; gap: var(--space-8); padding-left: var(--space-16); }
+.nb-kids:empty { display: none; }
+
+.nb-todo { display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-8); }
+.nb-todo > .nb-kids { grid-column: 2; }
+.nb-check { color: var(--fg-dim); font-family: var(--font-mono); }
+.nb-todo-done > span:not(.nb-check) { color: var(--fg-dim); text-decoration: line-through; }
+
+.nb-quote { display: flex; flex-direction: column; gap: var(--space-8); padding-left: var(--space-12); border-left: var(--border-w) solid var(--border-strong); }
+.nb-callout { display: flex; gap: var(--space-8); padding: var(--space-8) var(--space-12); background: var(--bg-hover); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); }
+.nb-callout-icon { flex: none; }
+.nb-callout-body { display: flex; flex-direction: column; gap: var(--space-8); min-width: 0; }
+
+.nb-code { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.nb-code pre { padding: var(--space-8); overflow-x: auto; background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); }
+.nb-code-lang { color: var(--fg-dim); font-family: var(--font-mono); font-size: var(--font-11); }
+.nb-doc code { font-family: var(--font-mono); color: var(--code-ink); }
+.nb-equation { font-family: var(--font-mono); }
+.nb-caption { color: var(--fg-dim); font-size: var(--font-11); }
+.nb-hr { width: 100%; margin: 0; border: 0; border-top: var(--border-w) solid var(--border); }
+
+.nb-marker { color: var(--fg-dim); font-family: var(--font-mono); }
+.nb-media, .nb-bookmark, .nb-db, .nb-unsupported { display: flex; flex-direction: column; gap: var(--space-4); }
+.nb-db { flex-direction: row; gap: var(--space-8); }
+.nb-page { color: var(--fg); font-weight: var(--weight-strong); }
+.nb-error { color: var(--alert); }
+.nb-cut { color: var(--fg-dim); }
+
+.nb-toggle > .nb-summary { cursor: pointer; }
+.nb-toggle > .nb-summary > .nb-h { display: inline; }
+.nb-toggle > .nb-kids { margin-top: var(--space-8); }
+
+.nb-table { border-collapse: collapse; max-width: 100%; overflow-x: auto; display: block; }
+.nb-table th, .nb-table td { padding: var(--space-4) var(--space-8); border: var(--border-w) solid var(--border); text-align: left; vertical-align: top; }
+.nb-table th { font-weight: var(--weight-strong); }
+
+.nb-columns { display: flex; gap: var(--space-16); min-width: 0; }
+.nb-column { display: flex; flex: 1; flex-direction: column; gap: var(--space-8); min-width: 0; }
+.nb-synced { display: flex; flex-direction: column; gap: var(--space-8); }
+
+/* Notion colours */
+.nb-c-gray { color: var(--fg-dim); }
+.nb-c-red { color: var(--deny-red); }
+.nb-c-green { color: var(--ok-green); }
+.nb-c-brown, .nb-c-orange, .nb-c-yellow { color: var(--approval-amber); }
+.nb-c-blue, .nb-c-purple, .nb-c-pink { color: var(--accent); }
+.nb-bg-gray, .nb-bg-blue, .nb-bg-purple, .nb-bg-pink { background: var(--bg-selected); }
+.nb-bg-red { background: var(--tint-alert); }
+.nb-bg-green { background: var(--tint-ok); }
+.nb-bg-brown, .nb-bg-orange, .nb-bg-yellow { background: var(--tint-warn); }

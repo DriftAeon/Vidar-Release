@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Vidar",
+  "version": "0.1.0",
+  "identifier": "com.aeondrift.vidar",
+  "build": {
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Vidar",
+        "width": 1400,
+        "height": 860,
+        "visible": false,
+        "create": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob:",
+        "connect-src": "'self' ipc: http://ipc.localhost data: blob:",
+        "frame-src": "'self'",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "devCsp": {
+        "default-src": "'self' http://localhost:1420",
+        "script-src": "'self' http://localhost:1420 'unsafe-inline'",
+        "style-src": "'self' http://localhost:1420 'unsafe-inline'",
+        "connect-src": "'self' http://localhost:1420 ws://localhost:1420 ipc: http://ipc.localhost data: blob:",
+        "img-src": "'self' data: blob: http://localhost:1420",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

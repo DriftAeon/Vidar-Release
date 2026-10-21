@@ -1,0 +1,54 @@
+/* Settings > Build (src/settings/build/): the rows and switches are the Modules page's
+   (settings/modules.css, shared classes), Build and Cancel are the decision pair (decision-pair.css),
+   Open Folder / Copy Path / Done are the settings .ws-btn. This file holds only the page's own layout:
+   the set picker, the run status and log tail, the result lines, the dimmed dependant and the button
+   loading and error states. */
+.release-build .release-build__set { align-self: flex-start; margin-bottom: var(--space-12); }
+.release-build .release-build__set:active:not(:disabled) { border-color: var(--accent); }
+.release-build .release-build__set:disabled { opacity: .4; cursor: default; border-color: var(--border); }
+
+/* a dependant whose parent is off: dimmed, the switch keeps its state; the row tooltip names the parent */
+.release-build__row--dim .module-settings__name { opacity: .45; }
+.release-build .module-settings__switch:disabled { opacity: .4; }
+
+.release-build__status { margin-bottom: var(--space-16); }
+.release-build__phase {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-12);
+  margin-bottom: var(--space-4); font-size: var(--font-13); font-weight: var(--weight-strong);
+}
+.release-build__elapsed, .release-build__size, .release-build__gaps {
+  font-family: var(--font-mono); font-size: var(--font-12); font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums; color: var(--fg-dim);
+}
+.release-build__tail {
+  min-height: calc(var(--line-16) * 8); padding: var(--space-8);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4); background: var(--bg);
+  font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-16); color: var(--fg-dim);
+}
+.release-build__line { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+
+.release-build__result {
+  display: flex; align-items: baseline; gap: var(--space-16);
+  min-height: var(--row-24); font-size: var(--font-13);
+}
+.release-build__zip { font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg); overflow-wrap: anywhere; }
+.release-build__trace { font-weight: var(--weight-strong); }
+.release-build__trace[data-trace="pass"] { color: var(--ok-green); }
+.release-build__trace[data-trace="fail"] { color: var(--alert); }
+.release-build__dropped { font-size: var(--font-12); color: var(--fg-dim); }
+.release-build__error { margin-top: var(--space-12); margin-bottom: var(--space-12); font-size: var(--font-12); color: var(--alert); }
+
+.release-build__actions {
+  display: flex; justify-content: flex-end; align-items: center; gap: var(--space-8); margin-top: var(--space-16);
+}
+.release-build__actions .release-build__done { margin-left: auto; }
+.release-build :is(.release-build__go, .release-build__cancel) {
+  padding-inline: var(--space-16); border-style: solid; border-width: var(--border-w); cursor: pointer;
+}
+.release-build :is(.release-build__go, .release-build__cancel):disabled { opacity: .4; cursor: default; }
+/* loading: the invoke is in flight; the button stays readable, not dimmed like a refusal */
+.release-build button[aria-busy="true"]:disabled { opacity: .7; cursor: progress; }
+/* error: the last start, cancel or open was refused; the line above the buttons says why */
+.release-build .release-build__go[data-state="error"],
+.release-build .release-build__cancel[data-state="error"] { border-color: var(--alert); }
+.release-build .ws-btn[data-state="error"] { --edge: var(--alert); }

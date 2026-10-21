@@ -1,0 +1,81 @@
+{
+  "expectBareGuards": [
+    { "event": "PreToolUse", "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit", "run": ["C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs", "C:\\Users\\example-user\\.claude\\hooks\\guard-install.mjs"] },
+    { "event": "PreToolUse", "matcher": "Bash", "run": ["C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs", "C:\\Users\\example-user\\.claude\\hooks\\guard-bash-write.mjs"] },
+    { "event": "PreToolUse", "matcher": "Bash|PowerShell", "run": ["C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs", "C:\\Users\\example-user\\.claude\\hooks\\guard-crawl.mjs"] },
+    { "event": "PreToolUse", "matcher": "Bash|PowerShell", "run": ["C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs", "C:\\Users\\example-user\\.claude\\hooks\\guard-cwd.mjs"] },
+    { "event": "PreToolUse", "matcher": "Agent|Task", "run": ["C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs", "C:\\Users\\example-user\\.claude\\hooks\\guard-agent-brief.mjs"] },
+    { "event": "PreToolUse", "matcher": "mcp__blender__.*", "run": ["C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs", "C:\\Users\\example-user\\.claude\\hooks\\guard-blender.mjs"] }
+  ],
+  "permissions": { "allow": ["Read"], "deny": [] },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs\" \"C:\\Users\\example-user\\.claude\\hooks\\guard-install.mjs\"" }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs\" \"C:\\Users\\example-user\\.claude\\hooks\\guard-bash-write.mjs\"" }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs\" \"C:\\Users\\example-user\\.claude\\hooks\\guard-crawl.mjs\"" },
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs\" \"C:\\Users\\example-user\\.claude\\hooks\\guard-cwd.mjs\"" }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\guard-driver.mjs\"" }
+        ]
+      },
+      {
+        "matcher": "Read|Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\warn-read-size.mjs\"", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs\" \"C:\\Users\\example-user\\.claude\\hooks\\guard-agent-brief.mjs\"" }
+        ]
+      },
+      {
+        "matcher": "mcp__blender__.*",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\fail-closed.mjs\" \"C:\\Users\\example-user\\.claude\\hooks\\guard-blender.mjs\"" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\handoff-seal.mjs\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"C:\\Users\\example-user\\.claude\\hooks\\guard-bang-length.mjs\"", "timeout": 5 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          { "type": "command", "command": "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\example-user\\.claude\\context\\tools\\ctx-search.ps1\" -Session", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

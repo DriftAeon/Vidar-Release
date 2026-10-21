@@ -1,0 +1,10 @@
+/* Settings › Cards: the wire names it covers on the left, the sample segment right-aligned */
+.cards-kind { display: flex; align-items: center; gap: var(--space-12); flex: 1; min-width: 0; }
+/* the sample's frame: the same tokens as `.rendered .activity-label.chain-bar` (rendered-chain.css),
+   which is scoped to the Rendered tab; the segment itself draws only its class underline */
+.cards-kind > .chain-bar {
+  display: inline-flex; align-items: center; margin-left: auto; flex-shrink: 0; overflow: hidden;
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-6);
+  background: var(--bg-panel);
+}
+.cards-tools { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); }

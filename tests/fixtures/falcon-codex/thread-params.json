@@ -1,0 +1,27 @@
+{
+  "$comment": "thread/start params per mode, built from contracts/codex-policy.json. Checked by the TS threadParams (tests/falcon-codex-policy.test.mjs) and the Rust thread_params (src-falcon/src/codex/driver/policy.rs); a change here is a policy change for both runtimes.",
+  "cases": [
+    {
+      "cwd": "C:\\work",
+      "mode": "default",
+      "params": { "cwd": "C:\\work", "approvalPolicy": "on-request", "approvalsReviewer": "user", "sandbox": "workspace-write" }
+    },
+    {
+      "cwd": "C:\\work",
+      "mode": "acceptEdits",
+      "model": "gpt-5.1-codex",
+      "params": { "cwd": "C:\\work", "approvalPolicy": "on-request", "approvalsReviewer": "user", "sandbox": "workspace-write", "model": "gpt-5.1-codex" }
+    },
+    {
+      "cwd": "D:\\repo",
+      "mode": "plan",
+      "params": { "cwd": "D:\\repo", "approvalPolicy": "on-request", "approvalsReviewer": "user", "sandbox": "read-only" }
+    },
+    {
+      "cwd": "D:\\repo",
+      "mode": "auto",
+      "model": "gpt-5.1-codex",
+      "params": { "cwd": "D:\\repo", "approvalPolicy": "on-request", "approvalsReviewer": "auto_review", "sandbox": "workspace-write", "model": "gpt-5.1-codex" }
+    }
+  ]
+}

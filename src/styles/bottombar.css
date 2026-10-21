@@ -1,0 +1,74 @@
+/* ---- main views ---- */
+#main { min-width: 0; min-height: 0; grid-row: 1; grid-column: 2; }
+
+/* ---- bottom bar ---- */
+
+/* the right mini bar (2026-10-10). panels/sessions/bottombar-dock.ts moves the node: under #main in
+   its own grid row (single pane), the bottom of #workbench, or the bottom of the right pane in a split */
+#bottombar {
+  grid-row: 3; grid-column: 2; /* #main's column only: the left bar and the rail run to the window bottom */
+  height: var(--bottombar-h); flex: none; /* layout.css; fixed in every dock */
+  display: flex; align-items: center; gap: var(--space-10);
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 0 var(--space-10);
+  min-width: 0;
+}
+/* in the workbench: past its side and bottom padding and #view-sessions' right and bottom padding, so the bar
+   runs to the rail's border and flush on the window bottom; 30 tall like #rail-foot (rail.css) and the left
+   bar's foot (leftbar.css), so the three top lines sit level (on the 6 padding it left a 6px band under it;
+   a 36 bar read taller than the morning's, user 2026-10-11) */
+#workbench > #bottombar {
+  margin: 0 calc(-1 * (var(--space-10) + var(--space-6))) calc(-1 * (var(--space-8) + var(--space-6))) calc(-1 * var(--space-10)); /* legacy 10: #workbench's side padding (workbench.css); legacy 6: #view-sessions padding (below) */
+}
+/* in the right pane: the pane gives up the bar's height (fit() and the Rendered column size to what is
+   left) and the bar hangs in the freed strip, full pane width */
+.term-container.bar-host { height: calc(100% - var(--bottombar-h)); }
+.term-container > #bottombar { position: absolute; top: 100%; left: 0; right: 0; }
+/* focus on a docked bar control is the bar's, not its host's: the host's focus ring (term-host.css)
+   stays off; the split's focused-pane ring (dual-view.css) outranks these and stays */
+.term-container:has(#bottombar:focus-within) .xterm-screen,
+.term-container.rendered-host:has(#bottombar:focus-within),
+.term-container:has(#bottombar:focus-within) > .page-host { outline: none; }
+#macro-strip { display: flex; gap: var(--space-6); overflow-x: auto; flex: 1; min-width: 0; }
+.macro-btn {
+  background: var(--bg); color: var(--fg-dim);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-2) var(--space-10); font-size: var(--font-12); cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+.macro-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* the usage flyout's opener and nothing else — one chevron. The numbers it used
+   to carry are in every agent's own status line already; the
+   popover kept all of them. min-width/padding because a lone ▴ at 12px is under
+   10px of hit area. */
+#status-compact {
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-dim); font-size: var(--font-12);
+  display: flex; align-items: center; justify-content: center;
+  min-width: 24px; padding: 0 var(--space-6); white-space: nowrap; flex-shrink: 0;
+}
+/* stale = a session wrote this but hasn't refreshed in a while. The percentages
+   that used to lose their accent are gone, so the chevron carries it instead. */
+#status-compact[data-tier="stale"] { opacity: 0.5; }
+/* no session: an opener with nothing to open is not drawn */
+#status-compact[data-tier="idle"] { display: none; }
+
+#status-expanded {
+  /* right and bottom come from the bar's rect on open (panels/status.ts): above the bar's right end
+     wherever it is docked */
+  position: fixed; z-index: 80;
+  width: 300px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; font-size: var(--font-13); line-height: 1.5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.view { display: none; height: 100%; min-width: 0; min-height: 0; }
+.view.active { display: block; }
+
+/* even 6px all round: the terminal ring (outline-offset 2px on .xterm-screen) then sits
+   4px off every pane edge, bottom included — the row remainder alone read as "none"
+   when fit() left it near zero */
+#view-sessions { padding: var(--space-6); position: relative; background: var(--bg-panel); } /* the frame around the tabs reads a step lighter than the dark tab (2026-10-04) */
+

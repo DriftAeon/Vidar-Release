@@ -1,0 +1,186 @@
+{
+  "agentLog": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "autoSend": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "autoSpeak": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "bridge": {
+    "count": 3,
+    "reason": "call sites move in W2C/W2D; Rust part is lane A W2A"
+  },
+  "characters": {
+    "count": 11,
+    "reason": "call sites move in W2C/W2D; includes asset URLs and a common word"
+  },
+  "content": {
+    "count": 29,
+    "reason": "common word only: message and flow-node `content` keys (plus Codex request updatedInput), no layout call sites (seeded at B0); +1 voice_slots test include_str of the real claude-p manifest"
+  },
+  "clips": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "closeLock": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "config": {
+    "count": 10,
+    "reason": "vidar.json stays at root; readers move to the contract in W2C/W2D; +3 voice_slots/write.rs temp-root test fixtures"
+  },
+  "display": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D; partly a common word"
+  },
+  "displayArchive": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "docs": {
+    "count": 6,
+    "reason": "call sites move in W2C/W2D; partly a common word"
+  },
+  "falcon": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D; Rust part is lane A W2A"
+  },
+  "falconBuild": {
+    "count": 0,
+    "reason": "falcon-build.ps1, lane A W2A"
+  },
+  "falconBundles": {
+    "count": 1,
+    "reason": "falcon scripts and Rust, lane A W2A"
+  },
+  "falconFrontends": {
+    "count": 0,
+    "reason": "staged Falcon frontend, B2/B3 consume"
+  },
+  "falconFrontendPointer": {
+    "count": 0,
+    "reason": "staged Falcon frontend, B2/B3 consume"
+  },
+  "falconPointer": {
+    "count": 1,
+    "reason": "falcon scripts and Rust, lane A W2A"
+  },
+  "falconRegistry": {
+    "count": 4,
+    "reason": "falcon scripts and Rust, lane A W2A"
+  },
+  "falconStore": {
+    "count": 0,
+    "reason": "falcon scripts and Rust, lane A W2A"
+  },
+  "flowStore": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "inbox": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "localVoice": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "localVoicePython": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "open": {
+    "count": 1,
+    "reason": "mostly the common word 'open'; a whole-literal scan cannot tell"
+  },
+  "openDispatch": {
+    "count": 1,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "openStale": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "packs": {
+    "count": 10,
+    "reason": "call sites move in W2C/W2D; +4 voice_slots temp-root test fixtures; +1 voice_slots codex-exec manifest test"
+  },
+  "review": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D; partly a common word"
+  },
+  "reviewDispatch": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "reviewStale": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "runeCreateSkill": {
+    "count": 4,
+    "reason": "the skill path named in doc comments and a message of the generator's W1a files (src-tauri/src/rules/generate/{envelope,mod,validate}.rs); the runner reads it through paths::rune_create_skill"
+  },
+  "runeMergeSkill": {
+    "count": 1,
+    "reason": "the merge skill path named in the doc comment of src-tauri/src/rules/generate/merge.rs; the runner reads it through paths::rune_merge_skill"
+  },
+  "runes": {
+    "count": 10,
+    "reason": "`runes` is the paths-contract id: resolve(\"runes\") in tools/runes/repo.mjs, plus the same id in src-tauri/src/rules mod.rs and parity.rs tests and the temp-repo library copy in tools/runes/cook.test.mjs; the rest are the `runes` JSON key of the generator envelope (src-tauri/src/rules/generate/envelope.rs) and of the progress event (generate/progress_tests.rs), not a path"
+  },
+  "runs": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "sessions": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D; partly a common word"
+  },
+  "speakJournal": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "speakScript": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "state": {
+    "count": 48,
+    "reason": "common word and control-bus verb name (verbs.mjs, tools/mcp); `state` is a header key in tools/runes/header.mjs, src-tauri/src/rules/rune.rs and its KEYS twin in src-tauri/src/rules/generate/render.rs, not a path; only a few are the state dir"
+  },
+  "tools": {
+    "count": 13,
+    "reason": "call sites move in W2C/W2D; partly a common word"
+  },
+  "uiState": {
+    "count": 9,
+    "reason": "call sites move in W2C/W2D; Rust part is lane A W2A; +2 falcon/layout.rs Shape.ui_state (pinned to the contract by its test); +4 settings/state.rs history tests build temp state files (7fb5520)"
+  },
+  "vendor": {
+    "count": 3,
+    "reason": "call sites move in W2C/W2D; partly a common word"
+  },
+  "voice": {
+    "count": 0,
+    "reason": "call site moves in W2C/W2D"
+  },
+  "whisper": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D"
+  },
+  "windowState": {
+    "count": 0,
+    "reason": "call sites move in W2C/W2D; Rust part is lane A W2A"
+  },
+  "workbench": {
+    "count": 1,
+    "reason": "call sites move in W2C/W2D"
+  }
+}

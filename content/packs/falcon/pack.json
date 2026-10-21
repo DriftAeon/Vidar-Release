@@ -1,0 +1,25 @@
+{
+  "id": "falcon",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Falcon" },
+  "module": {
+    "id": "falcon",
+    "label": "Falcon",
+    "level": "optional",
+    "kind": "content",
+    "deps": [
+      {
+        "id": "falcon",
+        "label": "Falcon Session Host",
+        "required": false,
+        "usedBy": ["Claude Rendered Tabs", "Codex Bare Tabs"],
+        "probe": { "kind": "falcon" },
+        "install": { "note": "Ships with Vidar. Developer builds rebuild it with tools\\release\\falcon-refresh.ps1." }
+      }
+    ],
+    "owns": [
+      "tools/falcon/"
+    ]
+  }
+}

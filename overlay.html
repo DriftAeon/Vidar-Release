@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Vidar marquee</title>
+    <style>
+      /* Transparent window: the tint is what tells you the marquee is armed.
+         Everything else is the drag rectangle. */
+      html, body {
+        margin: 0; width: 100vw; height: 100vh; overflow: hidden;
+        background: rgba(0, 0, 0, 0.22);
+        cursor: crosshair; user-select: none;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      #box {
+        position: fixed; display: none; pointer-events: none;
+        border: 1px solid #ffffff;
+        outline: 1px solid rgba(0, 0, 0, 0.7);
+        background: rgba(255, 255, 255, 0.10);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.18);
+      }
+      #hint {
+        position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+        padding: 6px 12px; border-radius: 8px;
+        background: rgba(20, 20, 24, 0.85); color: #ddd; font-size: 13px;
+        pointer-events: none;
+      }
+      #size {
+        position: fixed; display: none; pointer-events: none;
+        padding: 2px 6px; border-radius: 4px;
+        background: rgba(20, 20, 24, 0.85); color: #ddd; font-size: 11px;
+        font-family: "Cascadia Mono", Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hint">Drag a rectangle to read its text · right-click or Esc to cancel</div>
+    <div id="box"></div>
+    <div id="size"></div>
+    <script type="module" src="/src/overlay.ts"></script>
+  </body>
+</html>

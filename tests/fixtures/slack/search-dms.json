@@ -1,0 +1,80 @@
+{
+  "ok": true,
+  "query": "after:2026-10-11",
+  "messages": {
+    "total": 3,
+    "pagination": {
+      "total_count": 3,
+      "page": 1,
+      "per_page": 100,
+      "page_count": 1,
+      "first": 1,
+      "last": 3
+    },
+    "paging": {
+      "count": 100,
+      "total": 3,
+      "page": 1,
+      "pages": 1
+    },
+    "matches": [
+      {
+        "iid": "00000000-0000-0000-0000-000000000011",
+        "team": "T0FIXTURE1",
+        "channel": {
+          "id": "D0FIXTURE1",
+          "is_channel": false,
+          "is_group": false,
+          "is_im": true,
+          "is_mpim": false,
+          "is_private": true,
+          "name": "U0FIXTURE2"
+        },
+        "type": "im",
+        "user": "U0FIXTURE2",
+        "username": "ada.example",
+        "ts": "1792300300.000400",
+        "text": "lunch?",
+        "permalink": "https://example.slack.com/archives/D0FIXTURE1/p1792300300000400"
+      },
+      {
+        "iid": "00000000-0000-0000-0000-000000000012",
+        "team": "T0FIXTURE1",
+        "channel": {
+          "id": "G0FIXTURE2",
+          "is_channel": false,
+          "is_group": false,
+          "is_im": false,
+          "is_mpim": true,
+          "is_private": true,
+          "name": "mpdm-ada.example--bo.example--fixture.user-1"
+        },
+        "type": "message",
+        "user": "U0FIXTURE3",
+        "username": "bo.example",
+        "ts": "1792300050.000500",
+        "text": "group plan: Friday",
+        "permalink": "https://example.slack.com/archives/G0FIXTURE2/p1792300050000500"
+      },
+      {
+        "iid": "00000000-0000-0000-0000-000000000013",
+        "team": "T0FIXTURE1",
+        "channel": {
+          "id": "C0FIXTURE2",
+          "is_channel": true,
+          "is_group": false,
+          "is_im": false,
+          "is_mpim": false,
+          "is_private": false,
+          "name": "random"
+        },
+        "type": "message",
+        "user": "U0FIXTURE2",
+        "username": "ada.example",
+        "ts": "1792300400.000600",
+        "text": "public chatter, not a DM",
+        "permalink": "https://example.slack.com/archives/C0FIXTURE2/p1792300400000600"
+      }
+    ]
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Falcon",
+  "version": "0.1.0",
+  "identifier": "com.aeondrift.falcon",
+  "build": {
+    "frontendDist": "../dist-falcon"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "falcon-proof",
+        "title": "Falcon",
+        "url": "falcon.html",
+        "width": 980,
+        "height": 700,
+        "minWidth": 680,
+        "minHeight": 420,
+        "visible": false,
+        "dragDropEnabled": false,
+        "create": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob:",
+        "connect-src": "'self' ipc: http://ipc.localhost data: blob:",
+        "frame-src": "'self'",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": [
+      "icons/falcon-build.ico"
+    ]
+  }
+}

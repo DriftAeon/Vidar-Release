@@ -1,0 +1,227 @@
+/* ---- CAS themes (Onyx, Cobalt, Ember, Olive) ----
+   All dark-first: unit identity = foreground + accent systems over tinted
+   near-black bases. :root carries onyx (default); [data-theme] blocks override.
+   --alert is deliberately decoupled from --accent2 (in cobalt accent2 is just
+   lighter blue, in ember vermilion-as-accent would invert alert semantics). */
+
+:root {
+  color-scheme: dark;
+  --bg: #0f0f13;
+  --bg-panel: #17171c;
+  --border: #2b2b33;
+  --fg: #e8e5dd;
+  --fg-dim: #83818b;
+  --accent: #d7b254;
+  --accent2: #d24a52;
+  --alert: #d6545c;
+  font-family: "Segoe UI", system-ui, sans-serif;
+
+  /* Signal colours: fixed across every theme, deliberately NOT in the
+     [data-theme] blocks below. These say "recording" / "ready" / "needs you" /
+     "dead" — meaning that must not shift when the armor colour does. They are the
+     single source for those four meanings: no rule below should carry the hex.
+     (The identical hexes in the ember/olive blocks are armor, not signal —
+     --accent/--accent2/--alert coinciding with a signal value is a coincidence,
+     and pointing them here would be the exact conflation this block prevents.) */
+  --rec-red: #d24a52;
+  /* --ok-green is .sl-ok's value, so the composer dot and the statusline's
+     "healthy" limit readouts are one green, not two near-misses. */
+  --ok-green: #5fb865;
+  --approval-amber: #d9a441;
+  --dead-red: #e0592f;
+  /* "this artefact was rejected" — a fifth meaning, and deliberately its own token: reusing
+     --dead-red would say a denied preview and a dead session are the same signal, and reusing
+     the themed --alert would let the verdict colour drift with the armor. */
+  --deny-red: #c8473f;
+  /* Rendered tool-class colours (read/search, web); non-themed, so a chain reads the same in every armor. */
+  --class-read: #7fa7d6;
+  --class-web: #c08ec9;
+  /* Rendered inline code that is not a path (symbols, keys, file types); gold on trial (2026-10-04):
+     --approval-amber #d9a441 with saturation cut 20% (HSL 39° 67%→53%, L 55%). */
+  --code-ink: #ca9f50;
+  /* Unreal Starship button (U1, user 2026-10-10): fixed greys, not themed, so the decision pair reads the same in every armor. */
+  --btn-fill: #383838;
+  --btn-fill-hover: #575757;
+  --btn-fill-press: #2f2f2f;
+  --btn-outline: #0f0f0f;
+  --fg-bright: #ffffff;
+  --btn-focus: #0070e0;
+  --deny-glyph: #ef3535;
+  /* Approve/Deny fills (user 2026-10-11): #278630 and #bf1912; the soft 3D stops built on them are in new-ui. */
+  --approve-fill: #278630;
+  --deny-fill: #bf1912;
+  /* Git status colours (Changes tab letters and +/- counts; 2026-10-15): their own tokens, not themed, seeded
+     from the signal values (modified --approval-amber, added --ok-green, deleted --deny-red, renamed --class-read,
+     untracked --class-web) so they can be tuned without moving those meanings. */
+  --git-modified: #d9a441;
+  --git-added: #5fb865;
+  --git-deleted: #c8473f;
+  --git-renamed: #7fa7d6;
+  --git-untracked: #c08ec9;
+  /* Browser status tones (shared browser bands and pills; Jira plan D5, picks Q2 and Q3, 2026-10-17): their own
+     tokens, not themed, seeded from --class-read, --approval-amber, --class-web and --ok-green; blocked is #e66a42,
+     lighter than --dead-red so its label reads 4.5:1 or better on its tint. */
+  --status-todo: #7fa7d6;
+  --status-progress: #d9a441;
+  --status-review: #c08ec9;
+  --status-blocked: #e66a42;
+  --status-done: #5fb865;
+
+  /* tokens:start */
+  --space-2: 2px;
+  --space-3: 3px;
+  --space-4: 4px;
+  --space-5: 5px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --radius-2: 2px;
+  --radius-3: 3px;
+  --radius-4: 4px;
+  --radius-5: 5px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --radius-full: 9999px;
+  --font-10: 10px;
+  --font-11: 11px;
+  --font-12: 12px;
+  --font-13: 13px;
+  --font-14: 14px;
+  --font-16: 16px;
+  --font-18: 18px;
+  /* tokens:end */
+
+  /* new-ui:start — the only tokens new components use (user-approved 2026-10-03), plus
+     --space-2 4 8 12 16 24 32, --radius-2 4 6 (and -full for dots), --font-11 12 13 16, --font-title (titles only),
+     the themed colours (--accent, never --accent2) and the signal colours above. The rest of
+     the tokens:start block is legacy: kept for existing rules, never picked for new ones.
+     The three colour steps derive from the theme, so no [data-theme] block repeats them. */
+  --font-ui: "Segoe UI", system-ui, sans-serif;
+  --font-title: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; /* titles use the Win11 display optical cut (2026-10-10) */
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --weight-regular: 400;
+  --weight-strong: 600;
+  --weight-bold: 700; /* Segoe UI Bold, where 600 at small sizes reads as regular (2026-10-18) */
+  --tracking-caps: 0.08em; /* uppercase divider and section labels */
+  --line-16: 16px;
+  --line-20: 20px;
+  --row-24: 24px;
+  --row-28: 28px;
+  --row-32: 32px;
+  --border-w: 1px;
+  --bg-hover: color-mix(in srgb, var(--fg) 5%, var(--bg-panel));
+  --bg-selected: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
+  --border-strong: color-mix(in srgb, var(--fg) 20%, var(--bg-panel));
+  /* Gate and confirm title bar strip (2026-10-11): a deep accent tint, blue in cobalt, set apart
+     from the card body; swap this one value to recolour every head (gold later, the user's call). */
+  --bg-titlebar: color-mix(in srgb, var(--accent) 16%, var(--bg-panel));
+  /* Sheen (2026-10-11): the strip lit from the top, --bg-titlebar at 55%, plus a 1px inner
+     top highlight. White title per stop: cobalt top #27405d 10.66:1, bottom #182536 15.46:1; default top
+     #4c422c 9.88:1, bottom #2a251d 15.18:1. */
+  --titlebar-top: color-mix(in srgb, var(--bg-titlebar), var(--accent) 14%);
+  --titlebar-bottom: color-mix(in srgb, var(--bg-titlebar), black 22%);
+  --titlebar-grad: linear-gradient(180deg, var(--titlebar-top) 0%, var(--bg-titlebar) 55%, var(--titlebar-bottom) 100%);
+  --titlebar-highlight: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 12%, transparent);
+  /* Decision pair soft 3D (2026-10-11): vertical gradient around each fill, a darker edge,
+     a top highlight, a drop shadow and a glow. White label per stop: green top +1% white 4.56:1 (the
+     mock's +12% read 3.74, +2% reads 4.49), fill 4.63, bottom 5.91, hover bottom 5.47, press top 6.58;
+     red top +12% 5.28, fill 6.24, bottom 7.78, hover top +16% 4.96, hover mid 6.02, press top 9.66.
+     Green hover cannot lighten its top half without dropping under 4.5:1, so it lifts the bottom only. */
+  --approve-top: color-mix(in srgb, var(--approve-fill), white 1%);
+  --approve-bottom: color-mix(in srgb, var(--approve-fill), black 14%);
+  --approve-edge: color-mix(in srgb, var(--approve-fill), black 20%);
+  --deny-top: color-mix(in srgb, var(--deny-fill), white 12%);
+  --deny-bottom: color-mix(in srgb, var(--deny-fill), black 14%);
+  --deny-edge: color-mix(in srgb, var(--deny-fill), black 28%);
+  --approve-grad: linear-gradient(180deg, var(--approve-top) 0%, var(--approve-fill) 50%, var(--approve-bottom) 100%);
+  --approve-grad-hover: linear-gradient(180deg, var(--approve-top) 0%, var(--approve-top) 50%, color-mix(in srgb, var(--approve-fill), black 10%) 100%);
+  --approve-grad-press: linear-gradient(180deg, var(--approve-edge) 0%, var(--approve-bottom) 60%, var(--approve-fill) 100%);
+  --deny-grad: linear-gradient(180deg, var(--deny-top) 0%, var(--deny-fill) 50%, var(--deny-bottom) 100%);
+  --deny-grad-hover: linear-gradient(180deg, color-mix(in srgb, var(--deny-fill), white 16%) 0%, color-mix(in srgb, var(--deny-fill), white 3%) 50%, color-mix(in srgb, var(--deny-fill), black 11%) 100%);
+  --deny-grad-press: linear-gradient(180deg, var(--deny-edge) 0%, var(--deny-bottom) 60%, var(--deny-fill) 100%);
+  --approve-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.5), 0 2px 12px color-mix(in srgb, var(--approve-fill) 24%, transparent);
+  --approve-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 3px 6px rgba(0, 0, 0, 0.5), 0 2px 16px color-mix(in srgb, var(--approve-fill) 34%, transparent);
+  --approve-shadow-press: inset 0 2px 3px rgba(0, 0, 0, 0.4), 0 0 6px color-mix(in srgb, var(--approve-fill) 16%, transparent);
+  --deny-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 4px rgba(0, 0, 0, 0.5), 0 2px 12px color-mix(in srgb, var(--deny-fill) 24%, transparent);
+  --deny-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 3px 6px rgba(0, 0, 0, 0.5), 0 2px 16px color-mix(in srgb, var(--deny-fill) 34%, transparent);
+  --deny-shadow-press: inset 0 2px 3px rgba(0, 0, 0, 0.4), 0 0 6px color-mix(in srgb, var(--deny-fill) 16%, transparent);
+  /* the neutral No/Cancel/Dismiss: the same lift in the panel greys, no glow */
+  --neutral-grad: linear-gradient(180deg, var(--bg-selected) 0%, var(--bg-panel) 50%, var(--bg) 100%);
+  --neutral-grad-press: linear-gradient(180deg, var(--bg) 0%, var(--bg-panel) 100%);
+  --neutral-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 2px 4px rgba(0, 0, 0, 0.5);
+  --neutral-shadow-press: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+  /* State tints (Dependencies bar, 2026-10-16): a signal colour at 12% over the panel
+     for a fill, 40% for its 1px edge. --fg on the fills reads 11.3:1 or better in every theme; --fg-dim
+     reads 3.80 to 4.47:1, under 4.5, so no dim text sits on a fill. */
+  --tint-ok: color-mix(in srgb, var(--ok-green) 12%, var(--bg-panel));
+  --tint-ok-edge: color-mix(in srgb, var(--ok-green) 40%, var(--bg-panel));
+  --tint-warn: color-mix(in srgb, var(--approval-amber) 12%, var(--bg-panel));
+  --tint-warn-edge: color-mix(in srgb, var(--approval-amber) 40%, var(--bg-panel));
+  --tint-alert: color-mix(in srgb, var(--alert) 12%, var(--bg-panel));
+  --tint-alert-edge: color-mix(in srgb, var(--alert) 40%, var(--bg-panel));
+  /* Status tints (browser bands and pills): the status tone at 12% over the panel; the tone itself is the label. */
+  --tint-status-todo: color-mix(in srgb, var(--status-todo) 12%, var(--bg-panel));
+  --tint-status-progress: color-mix(in srgb, var(--status-progress) 12%, var(--bg-panel));
+  --tint-status-review: color-mix(in srgb, var(--status-review) 12%, var(--bg-panel));
+  --tint-status-blocked: color-mix(in srgb, var(--status-blocked) 12%, var(--bg-panel));
+  --tint-status-done: color-mix(in srgb, var(--status-done) 12%, var(--bg-panel));
+  /* Kind colours (Runes Bare row edges, 2026-10-18) */
+  --kind-skill: #8cc496;
+  --kind-agent: #a495e8;
+  --kind-hook: #e3bd4f;
+  /* Generated rune libraries' set-head hue (2026-10-20) */
+  --hue-generated: #3fbfb0;
+  /* Module kind and place colours (Jira, Notion, Slack card edges, 2026-10-18); story and task are
+     retuned away from --status-done and --status-todo */
+  --kind-epic: #a495e8;
+  --kind-story: #2fb8a6;
+  --kind-task: #4f7df0;
+  --kind-bug: #e07a7a;
+  --kind-subtask: #9aa6c8;
+  --kind-source: #e3bd4f;
+  --kind-page: #8ea4bf;
+  --place-dm: #62b6e0;
+  --place-group: #a495e8;
+  --place-channel: #8cc496;
+  --place-private: #e3a15c;
+  /* new-ui:end */
+}
+
+html[data-theme="cobalt"] {
+  --bg: #0d1016;
+  --bg-panel: #131a24;
+  --border: #22304a;
+  --fg: #dce6f2;
+  --fg-dim: #7b8a9d;
+  --accent: #5aa2f0;
+  --accent2: #9fd0ff;
+  --alert: #d24a52;
+}
+
+html[data-theme="ember"] {
+  --bg: #131009;
+  --bg-panel: #1d150f;
+  --border: #3a2a1a;
+  --fg: #f0e7da;
+  --fg-dim: #8f8271;
+  --accent: #e0592f;
+  --accent2: #d7b254;
+  --alert: #f04c5d;
+}
+
+html[data-theme="olive"] {
+  --bg: #0e110d;
+  --bg-panel: #151a14;
+  --border: #283024;
+  --fg: #e2e8da;
+  --fg-dim: #7f8675;
+  --accent: #8aa15f;
+  --accent2: #d9a441;
+  --alert: #d9a441;
+}

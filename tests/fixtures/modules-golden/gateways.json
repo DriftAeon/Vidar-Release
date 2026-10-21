@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "gateways": [
+    {
+      "id": "acme",
+      "pack": "acme",
+      "packSha256": "ba7c362eace20511a281a9235db5301a3cf40ba7673d791afd03db8fd0263f59",
+      "baseUrl": "https://api.acme.example/anthropic",
+      "keyVar": "ACME_API_KEY",
+      "model": "acme-large",
+      "env": {
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "acme-small",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "acme-large",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "acme-large"
+      }
+    }
+  ]
+}

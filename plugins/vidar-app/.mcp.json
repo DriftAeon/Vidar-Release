@@ -1,0 +1,1 @@
+{"mcpServers":{"drive":{"type":"stdio","command":"node","args":["${CLAUDE_PLUGIN_ROOT}/../../tools/mcp/vidar-drive/server.mjs"],"timeout":3700000}}}

@@ -1,0 +1,103 @@
+/* ---- rendered body: status bar (model pill, effort segments, readouts, mode pill) ----
+   W1 lane 1A. New-ui tokens only; no host or theme selectors (tests/rendered-lockstep.test.mjs).
+   Colours of the dir, model, effort, context and window numbers stay on the existing .sl-* classes
+   (rendered.css); the rules here own the pill and segment shape. */
+
+/* same flex row, same children */
+.rendered .rendered-status { height: calc(var(--row-28) + var(--space-2) + var(--border-w)); gap: var(--space-8); line-height: var(--line-20); } /* 31px = 1px border-top (rendered.css) + 4px + 22px pills + 4px (2026-10-04; 30px split 3/4) */
+.rendered .sl-parts { display: flex; align-items: center; gap: var(--space-8); }
+.rendered .sl-parts > * { flex: none; }
+/* a status menu lives on body, so the tab loses :focus-within while it is open; same ring as workbench.css */
+.rendered.menu-open { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); border-radius: var(--radius-4); }
+.rendered .sl-parts > .sl-dir { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* truncates first */
+.rendered .sl-parts > .sl-readouts { margin-left: auto; }
+.rendered .sl-mode-slot { display: inline-flex; align-items: center; }
+
+/* ---- pills: model and mode ---- */
+.rendered .st-pill {
+  display: inline-flex; align-items: center; gap: var(--space-4); flex: none;
+  box-sizing: border-box; height: calc(var(--row-24) - 2 * var(--border-w)); padding: 0 var(--space-8); /* 22px (2026-10-04: 24 crowded the bar, 20 crowded the label) */
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-4); background: transparent;
+  font: inherit; font-size: var(--font-12); line-height: var(--line-16); white-space: nowrap;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.rendered .st-pill > .disc { margin-right: calc(-1 * var(--space-4)); }
+.rendered .st-pill > .icn { flex: none; width: var(--space-12); height: var(--space-12); vertical-align: 0; }
+.rendered .st-pill .pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rendered button.st-pill { cursor: pointer; }
+.rendered button.st-pill:hover:not(:disabled, [aria-disabled="true"]) { background: var(--bg-hover); border-color: var(--border-strong); }
+.rendered button.st-pill:active:not(:disabled, [aria-disabled="true"]) { background: var(--bg-selected); border-color: var(--border-strong); }
+.rendered button.st-pill:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); } /* no caret tile: the box is the cue (2026-10-04) */
+.rendered button.st-pill[aria-expanded="true"] { background: var(--bg-selected); }
+.rendered .st-pill:disabled { opacity: 0.5; }
+.rendered button.st-pill:disabled { cursor: default; }
+/* ---- effort: one segment per level, filled up to the current one ---- */
+.rendered .eff-group {
+  display: inline-flex; align-items: stretch; flex: none; box-sizing: border-box; height: calc(var(--row-24) - 2 * var(--border-w)); /* 22px, matches .st-pill */
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-4); overflow: hidden;
+}
+.rendered .eff-seg {
+  box-sizing: border-box; padding: 0 var(--space-8); margin: 0;
+  border: 0; border-right: var(--border-w) solid var(--border); border-radius: 0; background: transparent;
+  font: inherit; font-size: var(--font-12); line-height: var(--line-16);
+  cursor: pointer; transition: background 80ms ease, color 80ms ease;
+}
+.rendered .eff-seg:last-child { border-right: 0; }
+/* every other segment is dim, filled or not; the current one is white, not .sl-effort's red (2026-10-04) */
+.rendered .eff-seg:not(.cur) { color: var(--fg-dim); }
+.rendered .eff-seg:not(.cur) { background: var(--bg); } /* every segment but the current one sits dark (2026-10-04) */
+.rendered .eff-seg.cur { color: var(--fg); background: var(--bg-selected); }
+.rendered .eff-seg.cur { font-weight: var(--weight-strong); }
+.rendered .eff-seg:hover:not(:disabled) { outline: var(--border-w) solid var(--border-strong); outline-offset: calc(-1 * var(--border-w)); }
+.rendered .eff-seg:not(.cur):hover:not(:disabled) { background: var(--bg-hover); }
+.rendered .eff-seg:active:not(:disabled) { background: var(--border-strong); }
+.rendered .eff-seg:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--space-2)); }
+.rendered .eff-seg:disabled { cursor: default; opacity: 0.5; }
+
+/* ---- command cabinet: icon-only pill right of effort, grouped list on body (2026-10-12) ---- */
+.rendered button.cabinet-btn { width: var(--row-28); justify-content: center; padding: 0 var(--space-4); }
+.rendered button.cabinet-btn > .icn { width: var(--space-16); height: var(--space-16); }
+.cabinet-panel {
+  position: fixed; z-index: 100; display: flex; flex-direction: column; width: 294px; max-width: calc(100vw - 2 * var(--space-16));
+  background: var(--bg-panel); border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-6);
+}
+.cabinet-search {
+  margin: var(--space-8); padding: var(--space-4) var(--space-8); background: var(--bg); color: var(--fg);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4); font: inherit; font-size: var(--font-13);
+}
+.cabinet-search:focus { border-color: var(--accent); outline: none; }
+.cabinet-list { overflow: auto; min-height: 0; padding: 0 var(--space-8) var(--space-8); }
+.cabinet-group {
+  padding: var(--space-8); margin-bottom: var(--space-4); border-bottom: var(--border-w) solid var(--border);
+  color: var(--fg-dim); font-size: var(--font-11); font-weight: var(--weight-strong);
+}
+.cabinet-row {
+  display: block; width: 100%; box-sizing: border-box; margin-bottom: var(--space-4); padding: var(--space-8);
+  border: var(--border-w) solid transparent; border-radius: var(--radius-4); background: transparent; color: var(--fg);
+  font-family: var(--font-mono); font-size: var(--font-12); text-align: left; cursor: pointer;
+}
+.cabinet-row:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.cabinet-row:active { background: var(--bg-selected); }
+.cabinet-row:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.cabinet-empty { margin: 0; padding: var(--space-12); color: var(--fg-dim); font-size: var(--font-12); }
+
+/* ---- readouts: Con, 5H, 7D ---- */
+.rendered .sl-readouts { display: inline-flex; align-items: center; gap: var(--space-8); }
+.rendered .sl-rd {
+  display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-4);
+  border-radius: var(--radius-4); font-variant-numeric: tabular-nums;
+}
+.rendered .sl-rd > .icn { flex: none; width: var(--space-12); height: var(--space-12); vertical-align: 0; color: var(--fg-dim); }
+.rendered .sl-rd .rd-label { color: var(--fg-dim); font-family: var(--font-ui); font-weight: var(--weight-strong); font-size: var(--font-11); }
+.rendered .mini-bar { display: inline-block; width: var(--space-32); height: var(--space-4); border-radius: var(--radius-2); background: var(--border); overflow: hidden; }
+.rendered .mini-fill { display: block; height: 100%; background: currentColor; }
+.rendered .chunk-bar { display: inline-flex; align-items: center; gap: var(--space-2); }
+.rendered .chunk { display: block; height: var(--space-12); border-radius: var(--radius-2); background: var(--border); }
+.rendered .chunk { display: flex; flex-direction: column; justify-content: flex-end; width: var(--space-8); overflow: hidden; }
+.rendered .chunk-fill { display: block; width: 100%; background: currentColor; } /* fills bottom to top */
+/* solid fills read far brighter than the text red: the bars take the muted signal red (2026-10-12) */
+.rendered .sl-bad .chunk-fill { background: var(--deny-red); }
+
+/* ---- dead body: the new parts dim with the old ones ---- */
+.rendered.dead .st-pill, .rendered.dead .eff-seg, .rendered.dead .sl-rd { color: var(--fg-dim); }
+.rendered.dead .eff-seg.cur { color: var(--fg-dim); }

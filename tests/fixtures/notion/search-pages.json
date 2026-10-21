@@ -1,0 +1,64 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "00000000-0000-0000-0000-000000000001",
+      "created_time": "2026-09-01T09:00:00.000Z",
+      "last_edited_time": "2026-10-16T10:00:00.000Z",
+      "parent": { "type": "workspace", "workspace": true },
+      "in_trash": false,
+      "icon": { "type": "emoji", "emoji": "📘" },
+      "url": "https://www.notion.so/Example-Home-00000000000000000000000000000001",
+      "properties": {
+        "title": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "Example Home" }] }
+      }
+    },
+    {
+      "object": "page",
+      "id": "00000000000000000000000000000002",
+      "last_edited_time": "2026-10-15T10:00:00.000Z",
+      "parent": { "type": "page_id", "page_id": "00000000-0000-0000-0000-000000000001" },
+      "icon": { "type": "external", "external": { "url": "https://example.invalid/i.png" } },
+      "url": "https://app.notion.com/p/00000000000000000000000000000002",
+      "properties": {
+        "title": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "Example Notes" }] }
+      }
+    },
+    {
+      "object": "page",
+      "id": "00000000-0000-0000-0000-000000000003",
+      "last_edited_time": "2026-10-14T10:00:00.000Z",
+      "parent": { "type": "data_source_id", "data_source_id": "00000000-0000-0000-0000-000000000d01" },
+      "url": "https://www.notion.so/00000000000000000000000000000003",
+      "properties": {
+        "Name": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "Row Under A Data Source" }] }
+      }
+    },
+    {
+      "object": "page",
+      "id": "00000000-0000-0000-0000-000000000004",
+      "last_edited_time": "2026-10-13T10:00:00.000Z",
+      "parent": { "type": "database_id", "database_id": "00000000-0000-0000-0000-000000000c01" },
+      "url": "https://www.notion.so/00000000000000000000000000000004",
+      "properties": {
+        "Name": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "Row Under A Database" }] }
+      }
+    },
+    {
+      "object": "page",
+      "id": "00000000-0000-0000-0000-000000000005",
+      "last_edited_time": "2026-10-12T10:00:00.000Z",
+      "parent": { "type": "page_id", "page_id": "00000000-0000-0000-0000-000000000001" },
+      "url": "javascript:alert(1)",
+      "properties": {
+        "title": { "id": "title", "type": "title", "title": [] }
+      }
+    }
+  ],
+  "next_cursor": "00000000-0000-0000-0000-0000000000e1",
+  "has_more": true,
+  "type": "page_or_data_source",
+  "page_or_data_source": {},
+  "request_id": "00000000-0000-0000-0000-0000000000f2"
+}

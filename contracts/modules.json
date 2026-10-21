@@ -1,0 +1,117 @@
+{
+  "$comment": "Module contract v1: docs/reference/modules.md. Read by src-tauri/src/modules (include_str!) and pinned by tests/modules-contract.test.mjs; tests/fixtures/modules/ holds the accept and reject cases. core[] is the compiled declaration source; packs declare a module block in content/packs/<id>/pack.json.",
+  "version": 1,
+  "idPattern": "^[a-z][a-z0-9-]{0,31}$",
+  "limits": {
+    "manifestBytes": 8192,
+    "traceTerms": 16,
+    "flowModels": 8,
+    "nameChars": 24
+  },
+  "kinds": ["agent", "content", "surface", "capability"],
+  "surfacePlacements": ["workbench", "rail"],
+  "reservedKeys": ["cargo", "capabilities"],
+  "packLevels": ["required-hideable", "optional"],
+  "implicitPackModule": { "kind": "content", "level": "optional" },
+  "pack": {
+    "idMatchesFolder": true,
+    "uniqueIds": true,
+    "dependsOnAcyclic": true,
+    "profilesRunnerInDependsOn": true,
+    "noGatewayEnv": true,
+    "artIconIsPng": true
+  },
+  "gateway": {
+    "runner": "claude",
+    "baseUrlPrefix": "https://",
+    "keyVarTemplate": "<ID>_API_KEY",
+    "keyVarIdTransform": { "case": "upper", "replace": { "-": "_" } },
+    "keyVarForbiddenPrefixes": ["ANTHROPIC_", "CLAUDE_"],
+    "keyVarPattern": "^[A-Z][A-Z0-9_]{2,63}_API_KEY$",
+    "modelPattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$",
+    "keyVarUnclaimed": true,
+    "keyDepProbeIsKeyVar": true,
+    "envAllowlist": [
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL",
+      "API_TIMEOUT_MS"
+    ]
+  },
+  "launch": {
+    "executablePattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$",
+    "argumentPattern": "^[-A-Za-z0-9_./:=+,@]{1,128}$",
+    "maxArguments": 16
+  },
+  "flowCoreModelIds": ["claude-sonnet-5", "claude-opus-5-5", "claude-fable-5-1", "claude-haiku-4-5-20251001", "codex-default"],
+  "depText": {
+    "forbiddenChars": ["\"", "%"]
+  },
+  "trace": {
+    "boundary": "(?<![\\p{L}\\p{N}])(?:{term})(?![\\p{L}\\p{N}])",
+    "termToken": "{term}"
+  },
+  "voice": {
+    "modelIdPattern": "^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,95}$"
+  },
+  "core": [
+    { "id": "relay", "label": "Relay", "level": "core", "kind": "surface", "surface": { "placement": "workbench", "order": 0 } },
+    { "id": "tray", "label": "Tray", "level": "required-hideable", "kind": "surface", "surface": { "placement": "workbench", "order": 1 } },
+    { "id": "doc", "label": "Document", "level": "required-hideable", "kind": "surface", "surface": { "placement": "workbench", "order": 3 } },
+    { "id": "flow", "label": "Flow", "level": "required-hideable", "kind": "surface", "surface": { "placement": "workbench", "order": 4 } },
+    { "id": "runelib", "label": "Runes", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 5 } },
+    { "id": "lab", "label": "Lab", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 6 } },
+    { "id": "changes", "label": "Changes", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 7 } },
+    { "id": "unreal", "label": "Unreal", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 8 } },
+    { "id": "jira", "label": "Jira", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 9, "icon": "jira" } },
+    { "id": "notion", "label": "Notion", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 10, "icon": "notion" } },
+    { "id": "slack", "label": "Slack", "level": "optional", "kind": "surface", "surface": { "placement": "workbench", "order": 11, "icon": "slack" } },
+    { "id": "marquee", "label": "Marquee Read Text", "level": "optional", "kind": "surface", "surface": { "placement": "rail", "order": 0 } },
+    { "id": "eyedropper", "label": "Eyedropper", "level": "optional", "kind": "surface", "surface": { "placement": "rail", "order": 1 } },
+    {
+      "id": "speak",
+      "label": "Speak",
+      "level": "core",
+      "kind": "capability",
+      "when": { "deps": ["voice"] },
+      "dependsOn": [],
+      "capability": { "host": "speak-group" }
+    },
+    {
+      "id": "auto-speak",
+      "label": "Auto-Speak",
+      "level": "core",
+      "kind": "capability",
+      "when": {},
+      "dependsOn": ["speak"],
+      "capability": { "host": "auto-speak" }
+    },
+    {
+      "id": "character",
+      "label": "Character",
+      "level": "core",
+      "kind": "capability",
+      "when": { "facts": ["characters"] },
+      "dependsOn": [],
+      "capability": { "host": "character" }
+    },
+    {
+      "id": "dictation",
+      "label": "Dictation",
+      "level": "core",
+      "kind": "capability",
+      "when": {},
+      "dependsOn": [],
+      "capability": {}
+    },
+    {
+      "id": "listen",
+      "label": "Listen",
+      "level": "core",
+      "kind": "capability",
+      "when": { "deps": ["voice"] },
+      "dependsOn": [],
+      "capability": { "host": "mic-group" }
+    }
+  ]
+}

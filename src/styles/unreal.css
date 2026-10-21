@@ -1,0 +1,24 @@
+/* Unreal bench tab: the Changes pane's compact head, groups, rows and hover actions. */
+.unreal-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
+.unreal-pane [hidden] { display: none; }
+.unreal-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+
+.unreal-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
+.ux-project { min-width: 0; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-family: var(--font-mono); }
+.ux-status { display: inline-flex; align-items: center; gap: var(--space-4); flex: none; color: var(--fg-dim); }
+.ux-status .icn { width: var(--space-16); height: var(--space-16); }
+/* status dot after the icon, sized as .tab-agent-dot (leftbar.css) and round; signal colours as its states */
+.ux-dot { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--fg-dim); }
+.ux-dot[data-state="ok"] { background: var(--ok-green); }
+.ux-dot[data-state="warn"] { background: var(--approval-amber); }
+.ux-dot[data-state="alert"] { background: var(--alert); }
+.unreal-pane .cx-sec > .icn { margin-inline-end: var(--space-4); }
+.unreal-pane .cx-row { min-width: 0; }
+.unreal-pane .cx-row > .icn { color: var(--fg-dim); }
+.ux-file { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-family: var(--font-mono); }
+.ux-message { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); }
+.unreal-pane .cx-racts { margin-left: auto; }
+.ux-action { display: inline-flex; }
+.unreal-pane .ux-sec-action { margin-left: auto; }
+.unreal-pane .cx-ra { width: var(--row-24); height: var(--row-24); }
+.unreal-pane .cx-empty-icon { width: var(--row-28); height: var(--row-28); stroke-width: 1.5; }

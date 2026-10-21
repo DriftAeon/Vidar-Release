@@ -1,0 +1,30 @@
+/* Voice input box (voice.ts): home is the bottom bar, left of the status readout.
+   Rectangular, same height as the macro chips; state = colour. While recording
+   or transcribing it is reparented into the target pane as `.overlay` — see the
+   comment over paneHost() in voice.ts for which pane and why. */
+#voice-pill {
+  flex-shrink: 0; max-width: 360px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-3);
+  padding: var(--space-2) var(--space-10); font-size: var(--font-12); line-height: 1.5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#voice-pill.hidden { display: none; }
+/* mounted over a pane: bottom-right, clear of the 8px scrollbar, never intercepting
+   a click — the pane under it is the thing the user is actually working in */
+#voice-pill.overlay {
+  position: absolute; right: 14px; bottom: 8px; z-index: 4;
+  max-width: min(320px, calc(100% - 28px));
+  background: var(--bg-panel); pointer-events: none;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.45);
+}
+/* in a rendered composer the row is already tight, and 6px keeps the chip off the
+   textarea's resize grip */
+.rendered-input-row > #voice-pill.overlay { right: 6px; bottom: 6px; }
+#voice-pill.rec { color: var(--rec-red); border-color: var(--rec-red); animation: voice-pulse 1.2s ease-in-out infinite; }
+#voice-pill.busy { color: var(--accent); border-color: var(--accent); }
+#voice-pill.warn { color: var(--fg-dim); }
+#voice-pill.error { color: var(--alert); border-color: var(--alert); user-select: text; }
+#voice-pill.flash { animation: voice-flash 0.3s ease-out 1; }
+@keyframes voice-pulse { 50% { opacity: 0.55; } }
+@keyframes voice-flash { 0% { transform: scale(1.08); } 100% { transform: scale(1); } }

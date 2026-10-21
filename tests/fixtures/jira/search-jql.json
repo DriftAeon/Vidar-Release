@@ -1,0 +1,82 @@
+{
+  "issues": [
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10012",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10012",
+      "key": "DEMO-12",
+      "fields": {
+        "summary": "Login page shows a blank panel after sign-out",
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/3",
+          "name": "In Progress",
+          "id": "3",
+          "statusCategory": { "id": 4, "key": "indeterminate", "colorName": "yellow", "name": "In Progress" }
+        },
+        "issuetype": { "id": "10004", "name": "Bug", "subtask": false, "hierarchyLevel": 0 },
+        "parent": { "id": "10001", "key": "DEMO-1", "fields": { "summary": "Sign-in rework", "issuetype": { "name": "Epic" } } },
+        "priority": { "id": "2", "name": "High" },
+        "updated": "2026-10-15T09:12:33.000+0100"
+      }
+    },
+    {
+      "id": "10001",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10001",
+      "key": "DEMO-1",
+      "fields": {
+        "summary": "Sign-in rework",
+        "status": {
+          "name": "In Progress",
+          "statusCategory": { "id": 4, "key": "indeterminate", "name": "In Progress" }
+        },
+        "issuetype": { "id": "10000", "name": "Epic", "subtask": false, "hierarchyLevel": 1 },
+        "priority": { "id": "3", "name": "Medium" },
+        "updated": "2026-10-15T08:00:00.000+0100"
+      }
+    },
+    {
+      "id": "10013",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10013",
+      "key": "DEMO-13",
+      "fields": {
+        "summary": "Reproduce the blank panel",
+        "status": {
+          "name": "To Do",
+          "statusCategory": { "id": 2, "key": "new", "name": "To Do" }
+        },
+        "issuetype": { "id": "10005", "name": "Sub-task", "subtask": true },
+        "parent": { "id": "10012", "key": "DEMO-12", "fields": { "summary": "Login page shows a blank panel after sign-out" } },
+        "priority": { "id": "3", "name": "Medium" },
+        "updated": "2026-10-15T09:20:00.000+0100"
+      }
+    },
+    {
+      "id": "10009",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10009",
+      "key": "DEMO-9",
+      "fields": {
+        "summary": "Escape <b>markup</b> & \"quotes\" in titles",
+        "status": {
+          "name": "To Do",
+          "statusCategory": { "id": 2, "key": "new", "name": "To Do" }
+        },
+        "issuetype": { "id": "10001", "name": "Task" },
+        "priority": null,
+        "updated": "2026-10-14T17:40:02.000+0100"
+      }
+    },
+    {
+      "id": "10003",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10003",
+      "key": "demo-3/../../evil",
+      "fields": {
+        "summary": "Dropped: the key fails the key pattern",
+        "status": { "name": "Done", "statusCategory": { "key": "done" } },
+        "issuetype": { "name": "Task" },
+        "updated": "2026-10-01T08:00:00.000+0100"
+      }
+    }
+  ],
+  "nextPageToken": "Ch0jU3RyaW5nJlJFVk5QVEU9JTNEJTNE",
+  "isLast": false
+}

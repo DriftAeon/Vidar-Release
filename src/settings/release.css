@@ -1,0 +1,7 @@
+.release-settings {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8);
+  font-size: var(--font-12); color: var(--fg-dim);
+}
+.release-commit { font-family: var(--font-mono); }
+.release-status { flex-basis: 100%; }
+.release-status:empty { display: none; }

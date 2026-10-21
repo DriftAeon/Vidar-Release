@@ -1,0 +1,137 @@
+/* ---- rendered body: permission and question cards ----
+   W1 lane 1D. New-ui tokens only; no host or theme selectors (tests/rendered-lockstep.test.mjs).
+   Every rule is scoped under .blk-approval / .blk-question: approvalDetail's output is shared with
+   the Flow sidebar. Allow/Deny keep their filled green/red from rendered.css. */
+
+/* neutral frame, 2px amber left edge (--space-2) */
+.blk-approval {
+  border: var(--border-w) solid var(--border);
+  border-left: var(--space-2) solid var(--approval-amber);
+  border-radius: var(--radius-4);
+  padding: var(--space-8) var(--space-12);
+}
+.blk-approval.settled { border-color: var(--border); border-left-color: var(--border-strong); }
+.blk-approval.in-pill { border-width: 0 0 var(--border-w) var(--space-2); border-radius: 0; }
+
+.blk-approval .approval-head { align-items: center; gap: var(--space-8); margin-bottom: var(--space-4); }
+.blk-approval .approval-head .icn { width: var(--space-16); height: var(--space-16); flex: none; color: var(--approval-amber); }
+.blk-approval .approval-title { color: var(--fg); font-weight: var(--weight-strong); }
+.blk-approval .approval-head .tool-name {
+  font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-2); padding: 0 var(--space-4);
+}
+.blk-approval .approval-summary { font-size: var(--font-13); line-height: var(--line-20); margin-bottom: var(--space-4); }
+.blk-approval .approval-body { margin-top: var(--space-4); }
+.blk-approval .mcp-field { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-8); }
+.blk-approval .mcp-field-name { color: var(--fg); font-weight: var(--weight-strong); }
+.blk-approval .mcp-field-help { color: var(--fg-dim); }
+.blk-approval .mcp-field-input {
+  min-height: var(--row-28); padding: 0 var(--space-8); color: var(--fg);
+  background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.blk-approval .mcp-field-choice { display: flex; align-items: center; gap: var(--space-8); }
+
+/* actions: reason field fills the row, Allow then Deny sit right of it */
+/* one 28px strip: Notes and the pair are each exactly --row-28 tall (the shared decision row rule in
+   decision-pair.css sets height, line and block padding), stretched to the one row box (mock card-fixes, fix 2) */
+.blk-approval .approval-actions { flex-wrap: nowrap; align-items: stretch; height: var(--row-28); gap: var(--space-8); margin-top: var(--space-8); }
+.blk-approval .approval-actions button { flex: none; padding-left: var(--space-12); padding-right: var(--space-12); border-radius: var(--radius-4); }
+.blk-approval .approval-msg {
+  flex: 1 1 auto; min-width: var(--row-32); height: var(--row-28);
+  padding-left: var(--space-8); padding-right: var(--space-8); border-radius: var(--radius-4);
+}
+.blk-approval .approval-msg:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+/* answered: the card folds to its head row (one row in a pill), summary inline and dim, a denial's
+   reason before the outcome glyph; no fade, the glyph carries the outcome */
+.blk-approval.settled.in-pill:not(.blk-question) { padding: var(--space-4) var(--space-12); }
+.blk-approval.settled .approval-head { height: var(--row-24); margin-bottom: 0; min-width: 0; white-space: nowrap; }
+.blk-approval.settled .approval-head > :is(.approval-title, .tool-name) { flex: none; }
+.blk-approval .approval-inline {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  color: var(--fg-dim); font-size: var(--font-12);
+}
+.blk-approval .approval-why {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  color: var(--fg-dim); font-size: var(--font-12);
+}
+.blk-approval .approval-result { display: inline-flex; align-items: center; flex: none; }
+.blk-approval .approval-head .approval-result > .icn { color: inherit; stroke-width: 3; }
+.blk-approval .approval-result.ok { color: var(--ok-green); }
+.blk-approval .approval-result.no { color: var(--deny-red); }
+.blk-approval .approval-result.dim { color: var(--fg-dim); }
+
+/* connection lost (connection-lost.ts): the approval frame with a --dead-red left edge, no actions */
+.blk-lost {
+  border: var(--border-w) solid var(--border);
+  border-left: var(--space-2) solid var(--dead-red);
+  border-radius: var(--radius-4);
+  padding: var(--space-8) var(--space-12);
+}
+.blk-lost > .card-head { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-4); }
+.blk-lost .card-title { color: var(--fg); font-weight: var(--weight-strong); }
+.blk-lost .lost-line { font-size: var(--font-13); line-height: var(--line-20); }
+
+/* question card: stacked questions, radio/checkbox rows */
+.blk-question .q { margin: var(--space-8) 0; }
+.blk-question .q-text { margin: 0 0 var(--space-4); line-height: var(--line-20); }
+.blk-question .q-options { flex-direction: column; flex-wrap: nowrap; gap: var(--space-2); margin-bottom: var(--space-4); }
+/* marker | title over description: every title starts at one x and every description sits on its own
+   line under it, whatever the lengths (2026-10-05) */
+.blk-question :is(.q-opt, .q-other-row) {
+  display: grid; grid-template-columns: var(--space-12) minmax(0, 1fr); column-gap: var(--space-8); row-gap: var(--space-2);
+  align-items: start; width: 100%; box-sizing: border-box; text-align: left;
+  min-height: var(--row-28); padding: var(--space-4) var(--space-8);
+  border: var(--border-w) solid transparent; border-radius: var(--radius-4);
+  font-size: var(--font-12); line-height: var(--line-16);
+}
+.blk-question :is(.q-opt, .q-other-row):hover { background: var(--bg-hover); border-color: transparent; }
+.blk-question .q-opt:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; }
+.blk-question :is(.q-opt, .q-other-row):active { background: var(--bg-selected); }
+.blk-question :is(.q-opt, .q-other-row).on { background: var(--bg-selected); border-color: var(--border-strong); }
+.blk-question .q-opt b { font-weight: var(--weight-strong); }
+.blk-question .q-desc { grid-column: 2; color: var(--fg-dim); }
+/* bold label then the Recommended star trailing it, so the star never shifts where titles start */
+.blk-question .q-label { grid-column: 2; display: inline-flex; align-items: center; gap: var(--space-4); text-transform: capitalize; }
+.blk-question .q-label > .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+/* answered Ask pill: the picked answers in UI font, one row per question when several */
+.ask-answers { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; padding: var(--space-4) var(--space-8); font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-16); white-space: normal; }
+/* question over answer, like the open card's title over description: both start at one x and wrap
+   inside the pill, whatever the lengths (2026-10-05) */
+.ask-answer { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.ask-answer-q, .ask-answer-a { min-width: 0; overflow-wrap: anywhere; }
+.ask-answer-q { color: var(--fg-dim); }
+/* inline, so a long title wraps like text; Title Case as on the open card; the star trails the last word */
+.ask-answer-a .q-label { display: inline; text-transform: capitalize; }
+/* -0.15em centres the 12px star on the label's cap height (Title Case, so caps set the visual middle);
+   `middle` centred it on half the x-height and sat it low (2026-10-13) */
+.ask-answer-a .q-label > .icn { display: inline-block; vertical-align: -0.15em; width: var(--space-12); height: var(--space-12); margin-left: var(--space-4); }
+.ask-answer-a b { font-weight: var(--weight-strong); }
+/* inside a pill the summary already says Ask: no card head */
+.blk-question.in-pill > .approval-head { display: none; }
+/* the marker: a ring (radio) or square (checkbox), filled with the accent when picked.
+   The old ✓ glyph is gone from rendered.css. */
+.blk-question :is(.q-opt, .q-other-row)::before {
+  content: ""; grid-column: 1; grid-row: 1; box-sizing: border-box; margin: var(--space-2) 0 0; /* centred on the 16px title line */
+  width: var(--space-12); height: var(--space-12);
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-full); background: none;
+}
+.blk-question :is(.q-opt[role="checkbox"], .q-other-row.multi)::before { border-radius: var(--radius-2); }
+.blk-question :is(.q-opt, .q-other-row).on::before { border-color: var(--accent); background: var(--accent); }
+/* Other: the last option row, the ring marker then a 24px text box on one line (2026-10-11); picking
+   the marker or focusing the box selects Other, its text is the answer. The row carries hover and on, the
+   box shows them on its border. */
+.blk-question .q-other-row { align-items: center; padding-top: var(--space-2); padding-bottom: var(--space-2); cursor: text; }
+.blk-question .q-other-row::before { margin-top: 0; }
+.blk-question .q-other-row .q-other {
+  grid-column: 2; grid-row: 1; width: 100%; min-width: 0; box-sizing: border-box; margin: 0;
+  height: var(--row-24); padding: 0 var(--space-8);
+  background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); outline: 0; color: var(--fg);
+  font: inherit; font-size: var(--font-12); line-height: var(--line-16);
+}
+.blk-question .q-other-row .q-other::placeholder { color: var(--fg-dim); }
+.blk-question .q-other-row:hover .q-other { border-color: var(--border-strong); }
+.blk-question .q-other-row.on .q-other, .blk-question .q-other-row .q-other:focus-visible { border-color: var(--accent); }
+.blk-question .q-other-row .q-other:disabled { opacity: 0.4; cursor: default; }
+
+/* Answer then Deny, right-aligned like the permission card's pair (no reason field here to push them) */
+.blk-question .approval-allow { margin-left: auto; }

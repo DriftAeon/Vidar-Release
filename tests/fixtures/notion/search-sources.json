@@ -1,0 +1,40 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "data_source",
+      "id": "00000000-0000-0000-0000-000000000d01",
+      "created_time": "2026-09-01T09:00:00.000Z",
+      "last_edited_time": "2026-10-16T12:00:00.000Z",
+      "title": [
+        { "type": "text", "text": { "content": "Example ", "link": null }, "plain_text": "Example " },
+        { "type": "text", "text": { "content": "Tasks", "link": null }, "plain_text": "Tasks" }
+      ],
+      "parent": { "type": "database_id", "database_id": "00000000-0000-0000-0000-000000000c01" },
+      "database_parent": { "type": "page_id", "page_id": "00000000-0000-0000-0000-000000000001" },
+      "url": "https://www.notion.so/00000000000000000000000000000c01",
+      "in_trash": false,
+      "properties": {
+        "Name": { "id": "title", "name": "Name", "type": "title", "title": {} }
+      }
+    },
+    {
+      "object": "data_source",
+      "id": "00000000-0000-0000-0000-000000000d02",
+      "last_edited_time": "2026-10-15T08:00:00.000Z",
+      "title": [],
+      "parent": { "type": "database_id", "database_id": "00000000-0000-0000-0000-000000000c02" },
+      "url": "https://example.invalid/phish"
+    },
+    {
+      "object": "data_source",
+      "id": "not-a-valid-id",
+      "title": [{ "type": "text", "plain_text": "Dropped" }]
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false,
+  "type": "page_or_data_source",
+  "page_or_data_source": {},
+  "request_id": "00000000-0000-0000-0000-0000000000f1"
+}

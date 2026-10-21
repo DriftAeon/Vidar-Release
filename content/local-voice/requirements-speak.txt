@@ -1,0 +1,9 @@
+# KPipeline Speak voice extra (kokoro-kpipeline pack), installed after requirements.txt by
+# tools/voice/setup-voice.ps1 -Speak. Pins from the working venv (2026-10-21); pip
+# resolves the rest. torch from PyPI is the CPU build on Windows.
+kokoro==0.9.4
+misaki==0.9.4
+torch==2.14.0
+spacy==3.8.16
+# spaCy English model misaki loads; pinned here so it is not fetched at first speak
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85

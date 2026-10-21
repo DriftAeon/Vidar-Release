@@ -1,0 +1,60 @@
+{
+  "$comment": "Module-size gate: docs/reference/module-boundaries.md. Checked by tests/module-size.test.mjs; updated by node tools/size/module-size.mjs --write (lowers only). A ceiling rises only through --accept, main thread only.",
+  "lines": {
+    ".ts": 600,
+    ".tsx": 600,
+    ".mts": 600,
+    ".js": 600,
+    ".mjs": 600,
+    ".cjs": 600,
+    ".jsx": 600,
+    ".ps1": 600,
+    ".psm1": 600,
+    ".css": 600,
+    ".rs": 1200
+  },
+  "scan": [
+    "src",
+    "src-tauri/src",
+    "src-falcon/src",
+    "tools"
+  ],
+  "skip": {
+    "$comment": "dirs: by name at any depth, plus every dot dir; files: by exact name or *suffix (test files are exempt); paths: exact repo-relative directory paths",
+    "dirs": [
+      "node_modules",
+      "target"
+    ],
+    "files": [
+      "*.test.mjs",
+      "*.test.ts",
+      "tests.rs"
+    ],
+    "paths": [
+      {
+        "path": "src/character/vendor",
+        "reason": "vendored: upstream dsts-viewer, per-file sha256 in src/character/vendor/dsts/provenance.json, MIT LICENSE beside it"
+      }
+    ]
+  },
+  "exportIgnored": [
+    "tools/release",
+    "tools/measure"
+  ],
+  "entries": [
+    {
+      "path": "tools/bare/probe-claude.ps1",
+      "code": 839,
+      "status": "owed",
+      "seams": "",
+      "note": "P1 probe pack for the bare-mode run: one harness, one fixture per probe; test tooling, not app code (bare-mode 2026-10-13)"
+    },
+    {
+      "path": "tools/falcon/falcon-slice1.ps1",
+      "code": 762,
+      "status": "parked",
+      "seams": "",
+      "note": "churn nil"
+    }
+  ]
+}

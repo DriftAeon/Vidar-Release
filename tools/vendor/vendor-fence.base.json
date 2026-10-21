@@ -1,0 +1,22 @@
+{
+  "disableClaudeAiConnectors": true,
+  "permissions": {
+    "allow": [
+      "Read(~/.claude/vendor/**)", "Edit(~/.claude/vendor/**)"
+    ],
+    "deny": [
+      "Agent(Hound)", "Agent(Striker)", "Agent(Orion)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Edit(~/.claude/CLAUDE.md)",
+      "Edit(~/.claude/keybindings.json)",
+      "Edit(~/.claude/agents/**)",
+      "Edit(~/.claude/skills/**)",
+      "Edit(~/.claude/hooks/**)",
+      "Edit(~/.claude/context/**)",
+      "Edit(~/.claude/projects/**)",
+      "Edit(~/.claude/plugins/**)",
+      "PowerShell(Set-Content*)", "PowerShell(Out-File*)", "PowerShell(Add-Content*)"
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lighter file trace for tools/sandbox/traced-run.ps1 (default profile). Kernel keywords only:
+     FileIO (name events), FileIOInit (create, write, set-info, delete, rename and the other IRP events)
+     and ProcessThread (process and thread start/end for the PID tree). No stacks, no DiskIO, no
+     Loader, no event collector, no other providers. The kernel logger cannot filter by operation,
+     so reads and directory enumeration still arrive; what is gone is the stack capture and the extra
+     keywords of the built-in FileIO profile (27 GB in 7 minutes on 2026-10-13).
+     Use: wpr -start tools\sandbox\vidar-fileio.wprp!VidarFileIO -filemode -->
+<WindowsPerformanceRecorder Version="1.0">
+  <Profiles>
+    <SystemCollector Id="VidarFileIOCollector" Name="NT Kernel Logger">
+      <BufferSize Value="1024" />
+      <Buffers Value="20" />
+    </SystemCollector>
+    <SystemProvider Id="VidarFileIOProvider">
+      <Keywords>
+        <Keyword Value="FileIO" />
+        <Keyword Value="FileIOInit" />
+        <Keyword Value="ProcessThread" />
+      </Keywords>
+    </SystemProvider>
+    <Profile Id="VidarFileIO.Verbose.File" Name="VidarFileIO" Description="Vidar sandbox: file operations and process tree, no stacks" LoggingMode="File" DetailLevel="Verbose">
+      <Collectors>
+        <SystemCollectorId Value="VidarFileIOCollector">
+          <SystemProviderId Value="VidarFileIOProvider" />
+        </SystemCollectorId>
+      </Collectors>
+    </Profile>
+    <Profile Id="VidarFileIO.Light.File" Name="VidarFileIO" Description="Vidar sandbox: file operations and process tree, no stacks" Base="VidarFileIO.Verbose.File" LoggingMode="File" DetailLevel="Light" />
+    <Profile Id="VidarFileIO.Verbose.Memory" Name="VidarFileIO" Description="Vidar sandbox: file operations and process tree, no stacks" Base="VidarFileIO.Verbose.File" LoggingMode="Memory" DetailLevel="Verbose" />
+    <Profile Id="VidarFileIO.Light.Memory" Name="VidarFileIO" Description="Vidar sandbox: file operations and process tree, no stacks" Base="VidarFileIO.Verbose.File" LoggingMode="Memory" DetailLevel="Light" />
+  </Profiles>
+</WindowsPerformanceRecorder>

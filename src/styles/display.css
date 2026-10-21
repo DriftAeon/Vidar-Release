@@ -1,0 +1,55 @@
+/* (the Clipboard view is retired — the workbench tray does its job; this
+   button style used to be shared with its actions) */
+/* ---- display files, painted by display-render.ts in Relay and Document (the Display tab that
+   first held these rules folded into them, 2026-10-16) ---- */
+/* the file actions sit right (2026-10-10). Step 8 between actions */
+.display-actions { display: flex; align-items: center; gap: var(--space-8); margin-left: auto; }
+.hidden { display: none !important; }
+/* Flow's file picker: one dropdown in the head row, styled like #doc-open */
+.flow-pick {
+  display: flex; align-items: center; gap: var(--space-4);
+  flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap;
+} /* fill, border, padding, hover and focus: .pick-face (workbench.css) */
+.flow-pick .nm { overflow: hidden; text-overflow: ellipsis; }
+.flow-pick .car { flex-shrink: 0; margin-left: auto; padding-left: var(--space-8); color: var(--fg-dim); }
+/* rows (the class keeps its Display-era name: flow-picker.ts builds it) */
+#flow-pick-menu .display-pick-row { display: flex; align-items: center; gap: var(--space-12); overflow: hidden; }
+#flow-pick-menu .display-pick-row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+#flow-pick-menu .display-pick-row.active { color: var(--accent); }
+#flow-pick-menu .display-pick-row:focus-visible { background: var(--bg); color: var(--accent); outline: none; }
+#flow-pick-menu .display-pick-row:active { background: var(--bg-selected); }
+/* Flow picker names: the " → " in a name is the right-arrow icon, sized to the row's text */
+.flow-pick .nm, #flow-pick-menu .nm { display: block; white-space: nowrap; } /* the global .nm (node-matrix.css) is a flex column */
+.flow-pick .nm .icn, #flow-pick-menu .nm .icn { width: var(--font-13); height: var(--font-13); vertical-align: middle; margin: 0 var(--space-4); }
+.flow-pick { min-width: 160px; flex: 0 1 auto; }
+
+/* an HTML frame loading behind the render on screen, at its size, unpainted until loaded (display-render.ts
+   show()); the host anchors it (position: relative) */
+.display-render.display-staging { position: absolute; /* two classes: outranks .display-render's 100% below */ top: var(--space-10); left: var(--space-10); visibility: hidden; pointer-events: none;
+  width: calc(100% - 2 * var(--space-10)); height: calc(100% - 2 * var(--space-10)); }
+/* --bg, never #fff: the frame element's own background shows whenever its document has no painted
+   surface (the first frame after load, a re-show after the bench tab or panel was display:none), and
+   white there flashed. The document itself paints the same --bg (preview.ts baseCss). */
+/* block: an inline img/iframe at 100% height leaves a baseline gap that overflows its host by 4px */
+.display-render { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); border-radius: var(--radius-4); }
+img.display-render { object-fit: contain; background: transparent; }
+/* a png preview keeps its pixels: no upscaling past 4x. Behind alpha: the
+   wrapping border colour darkened 15%, not a checker, so a
+   transparent mark reads as the mark, on a tone that still says "canvas". */
+img.display-png {
+  height: auto; max-height: 100%; max-width: 100%; image-rendering: auto;
+  background: color-mix(in srgb, var(--border) 85%, #000); border-radius: var(--radius-4);
+}
+/* the dev fixture runner's button in the Document bar (preview-fixtures.ts) */
+#preview-fixtures, .ws-btn {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer;
+  color: var(--fg-dim); font-size: var(--font-12); line-height: 1;
+  padding: var(--space-3) 7px; /* pre-existing off-scale literal, grandfathered (lint:ui) */
+}
+#preview-fixtures:hover, .ws-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* colour icons (src/icon-img.ts) inside action buttons: em-sized so they track the button's font */
+.wb-actions button .icn, .icon-btn .icn { width: 1.4em; height: 1.4em; vertical-align: -0.3em; }
+.icon-btn { display: inline-flex; align-items: center; }
+.ws-btn:focus-visible { outline: none; color: var(--accent); border-color: var(--accent); }
+.ws-btn:active { background: var(--bg); }
+.ws-btn.ws-remove:hover, .ws-btn.ws-remove:focus-visible { color: var(--alert); border-color: var(--alert); }

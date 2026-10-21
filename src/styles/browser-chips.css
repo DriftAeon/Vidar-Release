@@ -1,0 +1,48 @@
+/* Shared browser filter row (src/browser/chips.ts, look 1a): Search field and pill chips. Idle chips are outline
+   only; an active or open chip goes accent with its value or count and a clear X. */
+.br-filters { flex: none; display: flex; align-items: center; gap: var(--space-4); min-width: 0; height: var(--row-24); }
+.br-chips { display: flex; align-items: center; gap: var(--space-4); min-width: 0; overflow: hidden; }
+
+.br-search {
+  box-sizing: border-box; flex: 0 1 calc(var(--space-32) * 6 + var(--space-8)); min-width: calc(var(--space-32) * 3);
+  display: flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8);
+  background: var(--bg); color: var(--fg-dim); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.br-search:hover { border-color: var(--border-strong); }
+.br-search:focus-within { border-color: var(--accent); }
+.br-search-q {
+  flex: 1; min-width: 0; height: 100%; padding: 0; background: transparent; border: 0; outline: none;
+  color: var(--fg); font-family: var(--font-mono); font-size: var(--font-12);
+}
+.br-search-q::placeholder { color: var(--fg-dim); font-family: var(--font-ui); }
+.br-search-q::-webkit-search-cancel-button { display: none; }
+.br-search-q:disabled { opacity: 0.5; }
+
+.br-chip {
+  box-sizing: border-box; flex: none; display: inline-flex; align-items: center; height: var(--row-24);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-full); color: var(--fg-dim);
+}
+.br-chip:hover { border-color: var(--border-strong); color: var(--fg); background: var(--bg-hover); }
+.br-chip.on, .br-chip.open { border-color: var(--accent); color: var(--accent); background: var(--bg-selected); }
+/* The More trigger is a button with the search field's shape, not a pill: the Sheen Cap face of `.wb-actions > button.wb-card-btn`. */
+.br-chip.br-chip-more {
+  --face: var(--titlebar-grad); --depth: var(--titlebar-highlight); --edge: var(--border-strong);
+  background: var(--face); box-shadow: var(--depth); border-color: var(--edge); border-radius: var(--radius-4); color: var(--fg);
+}
+.br-chip.br-chip-more:hover {
+  --face: linear-gradient(180deg, color-mix(in srgb, var(--titlebar-top), var(--fg) 8%), color-mix(in srgb, var(--bg-titlebar), var(--fg) 5%) 55%, var(--titlebar-bottom));
+  --depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 24%, transparent); --edge: var(--fg-dim); color: var(--fg);
+}
+.br-chip.br-chip-more.on, .br-chip.br-chip-more.open { --edge: var(--accent); color: var(--fg); }
+.br-chip-more .br-chip-btn { border-radius: var(--radius-4); font-weight: var(--weight-strong); }
+.br-chip-btn, .br-chip-x {
+  display: inline-flex; align-items: center; gap: var(--space-4); height: 100%; padding: 0 var(--space-8);
+  background: transparent; border: 0; border-radius: var(--radius-full); color: inherit; font: inherit; cursor: pointer; white-space: nowrap;
+}
+.br-chip-x { padding: 0 var(--space-8) 0 0; }
+.br-chip-btn:focus-visible, .br-chip-x:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.br-chip-btn:active, .br-chip-x:active { color: var(--fg); }
+.br-chip-btn:disabled, .br-chip-x:disabled { opacity: 0.5; cursor: default; }
+.br-chip .icn { width: var(--space-12); height: var(--space-12); }
+.br-chip-n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.br-chip-label { max-width: calc(var(--space-32) * 5); overflow: hidden; text-overflow: ellipsis; }

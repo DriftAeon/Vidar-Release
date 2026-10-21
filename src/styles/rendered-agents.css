@@ -1,0 +1,189 @@
+/* ---- rendered body: agents block and drawer ----
+   W1 lane 1C. New-ui tokens only; no host or theme selectors (tests/rendered-lockstep.test.mjs).
+   The old agents rules are gone from rendered.css (W2). */
+
+.rendered .rendered-agents {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-8); /* even 4px top and bottom (2026-10-05) */
+  border-top: var(--border-w) solid var(--border);
+  background: var(--bg);
+  font-family: var(--font-ui);
+  font-size: var(--font-12);
+  line-height: var(--line-16);
+}
+.rendered .rendered-agents[hidden] { display: none; }
+/* collapsed: the 0fr rows wrap is still a flex item, so drop the gap above it (2026-10-05) */
+.rendered .rendered-agents:has(.rendered-agents-wrap[data-open="false"]) { gap: 0; }
+
+/* summary row: toggle (chevron, icon, title, counts) and the Clear Done button */
+.agents-head { display: flex; align-items: center; gap: var(--space-8); min-height: var(--row-24); } /* was row-32: bar read tall (2026-10-05) */
+.agents-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  height: var(--row-24);
+  padding: 0 var(--space-4);
+  border: var(--border-w) solid transparent;
+  border-radius: var(--radius-4);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.agents-toggle:hover { background: var(--bg-hover); }
+.agents-toggle:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; }
+.agents-toggle:active { background: var(--bg-selected); }
+.agents-toggle .icn { flex: none; width: var(--space-16); height: var(--space-16); color: var(--fg-dim); }
+.agents-title { font-weight: var(--weight-strong); }
+/* counts sit right, icon and title stay left (2026-10-05) */
+.agents-chips { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); min-width: 0; flex-wrap: wrap; margin-left: auto; }
+.agents-chip {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--space-16) + var(--space-4)); /* fits the row-24 toggle inside its 1px border */
+  padding: 0 var(--space-8);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-panel);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.agents-chip[data-state="running"] { color: var(--accent); }
+.agents-chip[data-state="needs"] { color: var(--approval-amber); border-color: var(--approval-amber); }
+.agents-chip[data-state="done"] { color: var(--ok-green); }
+.agents-chip[data-state="failed"] { color: var(--dead-red); }
+
+/* buttons: Clear (icon only), Show In Chat, Dismiss, Close */
+.agent-btn.agents-clear-done { display: inline-flex; align-items: center; justify-content: center; width: var(--row-24); height: calc(var(--space-16) + var(--space-4)); padding: 0; } /* 2px above/below the icon, half the row-24 inset (2026-10-05) */
+.agent-btn.agents-clear-done[hidden] { display: none; }
+.agent-btn.agents-clear-done .icn { width: var(--space-16); height: var(--space-16); }
+.agent-btn {
+  flex: none;
+  height: var(--row-24);
+  padding: 0 var(--space-8);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-4);
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
+}
+.agent-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--fg); }
+.agent-btn:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; color: var(--fg); }
+.agent-btn:active { background: var(--border-strong); color: var(--fg); }
+.agent-btn:disabled { opacity: 0.4; cursor: default; background: transparent; border-color: var(--border); color: var(--fg-dim); }
+
+/* rows */
+/* collapse: the wrap animates grid-template-rows 1fr -> 0fr, the rows clip inside it */
+.rendered .rendered-agents-wrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 150ms ease-out; /* motion: collapse reveal */ }
+.rendered .rendered-agents-wrap[data-open="false"] { grid-template-rows: 0fr; }
+@media (prefers-reduced-motion: reduce) { .rendered .rendered-agents-wrap { transition: none; } }
+.rendered .rendered-agents-rows { display: flex; flex-direction: column; gap: var(--space-4); min-height: 0; overflow: hidden; }
+.rendered .agent-item { display: flex; flex-direction: column; } /* row plus its open body: one block, no gap */
+.rendered .rendered-agents-wrap[data-open="false"] .rendered-agents-rows { visibility: hidden; }
+.rendered .agent-row {
+  display: grid;
+  /* bar column parked at 0 (2026-10-05: bars hidden for now, kept for a later return;
+     was minmax(var(--space-32), 1fr)) */
+  /* no X column: rows leave only through Clear (2026-10-05) */
+  grid-template-columns: var(--space-16) calc(var(--space-8) * 9) minmax(0, 2fr) 0 auto auto;
+  align-items: center;
+  gap: var(--space-8);
+  height: var(--row-24); /* text-only row, no buttons: 4px over the 16px line (2026-10-05: was 32) */
+  padding: 0 var(--space-8);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-6);
+  background: var(--bg-panel);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  opacity: 1;
+  cursor: pointer;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.rendered .agent-row:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--fg); }
+.rendered .agent-row:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; }
+.rendered .agent-row:active { background: var(--border-strong); }
+.rendered .agent-row[aria-expanded="true"] { background: var(--bg-selected); border-color: var(--accent); }
+/* open: the row's bottom edge and the body's top edge join, so the pair reads as one block */
+.rendered .agent-row[aria-expanded="true"] { border-bottom-width: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.rendered .agent-row[aria-expanded="true"] + .agent-drawer { border-color: var(--accent); border-top-width: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+/* end of an open row: token total and Show In Chat (implicit grid columns, absent while hidden) */
+.rendered .agent-row .agent-row-tokens[hidden], .rendered .agent-row .agent-show[hidden] { display: none; }
+.rendered .agent-row .agent-show { height: calc(var(--space-16) + var(--space-4)); }
+.rendered .agent-row[data-state="needs"] { border-color: var(--approval-amber); }
+/* an open row waiting on the user keeps its amber edge round the whole row-and-drawer block */
+.rendered .agent-row[data-state="needs"][aria-expanded="true"] + .agent-drawer { border-color: var(--approval-amber); }
+.rendered .agent-row.done { opacity: 1; }
+.rendered .agent-row .agent-marker { display: inline-flex; align-items: center; justify-content: center; color: var(--fg-dim); }
+.rendered .agent-row .agent-marker[data-mark="running"] { color: var(--accent); }
+.rendered .agent-row .agent-marker[data-mark="awaiting"] { color: var(--approval-amber); }
+.rendered .agent-row .agent-marker[data-mark="done"] { color: var(--ok-green); }
+.rendered .agent-row .agent-marker[data-mark="error"] { color: var(--dead-red); }
+
+.agent-word, .agent-drawer .agent-word { font-weight: var(--weight-strong); white-space: nowrap; color: var(--fg-dim); }
+.agent-word[data-state="running"], .agent-row[data-state="running"] .agent-word { color: var(--accent); }
+.agent-word[data-state="needs"], .agent-row[data-state="needs"] .agent-word { color: var(--approval-amber); }
+.agent-word[data-state="done"], .agent-row[data-state="done"] .agent-word { color: var(--ok-green); }
+.agent-word[data-state="failed"], .agent-row[data-state="failed"] .agent-word { color: var(--dead-red); }
+.agent-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-strong); }
+.agent-desc { margin-left: var(--space-8); font-family: var(--font-mono); font-size: var(--font-11); font-weight: var(--weight-regular); color: var(--fg-dim); }
+.agent-calls, .agent-time { font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); text-align: right; white-space: nowrap; }
+/* digits have no descenders, so centring the line box leaves them high with an empty descender band
+   under them; trimming the box to cap height and baseline centres the ink itself (2026-10-05) */
+.agent-calls, .agent-time { text-box: trim-both cap alphabetic; }
+.agent-time { color: var(--fg); }
+
+/* bar: indeterminate while running, full on done, red on failure */
+.agent-bar { position: relative; display: block; height: var(--space-4); border-radius: var(--radius-2); background: var(--border); overflow: hidden; }
+.agent-bar > i { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: var(--accent); }
+.agent-bar[data-state="running"] > i { width: 40%; animation: agent-bar-slide 1400ms ease-in-out infinite; /* motion: indeterminate progress, continuous by definition */ }
+.agent-bar[data-state="needs"] > i { background: var(--approval-amber); }
+.agent-bar[data-state="done"] > i { background: var(--ok-green); }
+.agent-bar[data-state="failed"] > i { background: var(--dead-red); }
+/* parked: hidden, not removed; the element and its state rules stay for a later return */
+.rendered .agent-row .agent-bar { visibility: hidden; }
+.rendered .agent-row .agent-bar > i { animation: none; }
+@keyframes agent-bar-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .agent-bar[data-state="running"] > i { animation: none; } }
+
+
+/* drawer body, placed right under its open row */
+.agent-drawer { border: var(--border-w) solid var(--border); border-radius: var(--radius-6); background: var(--bg-panel); overflow: hidden; }
+.agent-drawer[hidden] { display: none; }
+.agent-drawer-body { max-height: calc(var(--row-32) * 5); overflow-y: auto; padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-8); }
+.agent-drawer-desc { color: var(--fg); font-size: var(--font-13); line-height: var(--line-20); overflow-wrap: anywhere; }
+.agent-drawer-needs { padding: var(--space-4) var(--space-8); border: var(--border-w) solid var(--approval-amber); border-radius: var(--radius-4); background: var(--bg); color: var(--approval-amber); }
+.agent-drawer-desc[hidden], .agent-drawer-needs[hidden] { display: none; }
+.agent-calls-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.agent-call { display: grid; grid-template-columns: var(--space-16) calc(var(--space-8) * 10) minmax(0, 1fr); align-items: center; gap: var(--space-8); min-height: var(--row-24); }
+.agent-call-tool { display: flex; align-items: center; gap: var(--space-4); min-width: 0; font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg); white-space: nowrap; overflow: hidden; }
+.agent-call-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.agent-call-tool .icn, .agent-call-tool svg { flex: none; width: var(--space-16); height: var(--space-16); }
+.agent-call-text { font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-calls-empty { color: var(--fg-dim); }
+
+/* finished drawer (variant B, user 2026-10-05): body = description, verdict,
+   then the report and the calls list each behind a collapsed fold */
+.agent-drawer[data-done="true"] .agent-drawer-body { max-height: calc(var(--row-32) * 9); }
+.agent-drawer-verdict { color: var(--fg); font-size: var(--font-13); line-height: var(--line-20); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.agent-drawer-verdict.is-empty { color: var(--fg-dim); font-weight: var(--weight-regular); }
+.agent-fold[hidden] { display: none; }
+.agent-fold > .agent-fold-sum { display: inline-flex; align-items: center; gap: var(--space-4); list-style: none; }
+.agent-fold > .agent-fold-sum::-webkit-details-marker { display: none; }
+.agent-fold[open] > .agent-fold-sum { background: var(--bg-selected); color: var(--fg); }
+.agent-fold-n { font-family: var(--font-mono); font-size: var(--font-11); }
+.agent-fold > .agent-report, .agent-fold > .agent-calls-list { margin-top: var(--space-8); }
+.agent-report { color: var(--fg); overflow-wrap: anywhere; }
+.agent-report > .doc-md { font-size: var(--font-13); line-height: var(--line-20); }
+.agent-report > .doc-md > :first-child { margin-top: 0; }
+.agent-report > .doc-md > :last-child { margin-bottom: 0; }

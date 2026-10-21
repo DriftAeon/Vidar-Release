@@ -1,0 +1,57 @@
+/* ---- voice map popup: RMB on mic/speaker/auto-speak ---- */
+#voice-map {
+  position: fixed; z-index: 100;
+  display: flex; flex-direction: column; gap: var(--space-8);
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-8); padding: var(--space-10) var(--space-12); width: 340px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+/* no global .hidden exists; every hidden-able panel carries its own rule (cf. #doc-margin.hidden) */
+#voice-map.hidden { display: none; }
+.vm-row { display: flex; align-items: center; gap: var(--space-4); }
+/* Sheen Cap cards (2026-10-18; mock voice-map-mock-737d4a0e): the .ws-btn face
+   (settings-modal.css), resting only, the cards are not interactive. Edge and label carry the state.
+   Contrast as picked: red and grey labels sit under 4.5:1 on the face (mock table), shipped as picked. */
+.vm-pill {
+  --face: var(--titlebar-grad); --depth: var(--titlebar-highlight); --edge: var(--border-strong);
+  flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  min-height: var(--row-28); padding: 0 var(--space-4);
+  font: var(--weight-strong) var(--font-12)/var(--line-16) var(--font-ui);
+  border: 1px solid var(--edge); border-radius: var(--radius-4); color: var(--fg-dim);
+  background: var(--face); box-shadow: var(--depth); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vm-pill.vm-icon { flex: 0 0 var(--row-32); padding: 0; }
+.vm-pill .icn { width: var(--font-16); height: var(--font-16); flex: 0 0 auto; }
+.vm-pill.vm-grey .icn { opacity: 0.45; }
+.vm-pill.vm-grey { color: var(--fg-dim); --edge: var(--border-strong); }
+.vm-pill.vm-green { color: var(--ok-green); --edge: var(--ok-green); }
+.vm-pill.vm-orange { color: var(--approval-amber); --edge: var(--approval-amber); animation: speak-pulse 1.2s ease-in-out infinite; }
+.vm-pill.vm-red { color: var(--alert); --edge: var(--alert); }
+.vm-arrow {
+  width: 8px; height: 0; border-top: 1px solid var(--border); position: relative; flex-shrink: 0;
+}
+.vm-arrow::after {
+  content: ""; position: absolute; right: -1px; top: -3px;
+  border: 3px solid transparent; border-left-color: var(--border);
+}
+.vm-actions { display: flex; gap: var(--space-6); }
+/* B1: Sheen Cap face, alert edge and label; hover, press and disabled follow .ws-btn */
+.vm-off {
+  --face: var(--titlebar-grad); --depth: var(--titlebar-highlight); --edge: var(--alert);
+  --hover-face: linear-gradient(180deg, color-mix(in srgb, var(--titlebar-top), var(--fg) 8%), color-mix(in srgb, var(--bg-titlebar), var(--fg) 5%) 55%, var(--titlebar-bottom));
+  --hover-depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 24%, transparent);
+  --press-face: linear-gradient(180deg, var(--bg), var(--titlebar-bottom));
+  --press-depth: inset 0 2px 2px color-mix(in srgb, black 35%, transparent);
+  flex: 1; display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  min-height: var(--row-28); padding: 0 var(--space-12); cursor: pointer;
+  font: var(--weight-strong) var(--font-12)/var(--line-16) var(--font-ui);
+  background: var(--face); box-shadow: var(--depth); border: 1px solid var(--edge); border-radius: var(--radius-4); color: var(--alert);
+}
+.vm-off:hover:not(:disabled) { --face: var(--hover-face); --depth: var(--hover-depth); }
+.vm-off:active:not(:disabled) { --face: var(--press-face); --depth: var(--press-depth); padding-top: var(--space-2); }
+.vm-off:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-2); }
+.vm-off:disabled { opacity: 0.5; cursor: default; color: var(--fg-dim); --edge: var(--border); }
+.vm-config { display: flex; flex-direction: column; gap: var(--space-2); border-top: 1px solid var(--border); padding-top: var(--space-6); }
+.vm-cfg-row { display: flex; justify-content: space-between; gap: var(--space-8); font-size: var(--font-11); color: var(--fg-dim); }
+.vm-cfg-row span:last-child { color: var(--fg); }
+

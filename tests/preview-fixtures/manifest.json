@@ -1,0 +1,556 @@
+{
+  "probe": "http://127.0.0.1:1447",
+  "cases": [
+    {
+      "id": "img-src",
+      "file": "img-src.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "img-srcset",
+      "file": "img-srcset.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "picture-source",
+      "file": "picture-source.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "link-stylesheet",
+      "file": "link-stylesheet.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "link-preload",
+      "file": "link-preload.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-import",
+      "file": "style-import.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-url",
+      "file": "style-url.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-url-escaped",
+      "file": "style-url-escaped.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-custom-prop-var",
+      "file": "style-custom-prop-var.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-var-fallback",
+      "file": "style-var-fallback.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-nested",
+      "file": "style-nested.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-keyframes",
+      "file": "style-keyframes.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "style-image-set",
+      "file": "style-image-set.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "inline-style-url",
+      "file": "inline-style-url.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "font-face",
+      "file": "font-face.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "cursor-url",
+      "file": "cursor-url.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "video-poster",
+      "file": "video-poster.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "object-data",
+      "file": "object-data.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "iframe-src",
+      "file": "iframe-src.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "base-relative-img",
+      "file": "base-relative-img.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "svg-image-href",
+      "file": "svg-image-href.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "svg-use-external",
+      "file": "svg-use-external.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "attempted-not-fetched",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "external <use> is same-origin-only in Chromium: the opaque-origin frame attempts it and the browser refuses before the network, even with no defence; reconstruction drops it anyway"
+    },
+    {
+      "id": "svg-fill-url",
+      "file": "svg-fill-url.txt",
+      "category": "fetch",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits",
+        "csp-only": "csp",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "link-dns-prefetch",
+      "file": "link-dns-prefetch.txt",
+      "category": "hint",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "no HTTP expected anywhere; allowlist drops link"
+    },
+    {
+      "id": "link-preconnect",
+      "file": "link-preconnect.txt",
+      "category": "hint",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "may open a TCP connection in control; CONNECT lines only"
+    },
+    {
+      "id": "meta-refresh",
+      "file": "meta-refresh.txt",
+      "category": "navigation",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "frame URL must stay about:srcdoc in every config"
+    },
+    {
+      "id": "base-anchor",
+      "file": "base-anchor.txt",
+      "category": "navigation",
+      "trigger": "activation",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "manual: click in control must not navigate the parent"
+    },
+    {
+      "id": "inline-script",
+      "file": "inline-script.txt",
+      "category": "script",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none",
+        "control-scripts": "fires"
+      }
+    },
+    {
+      "id": "on-handler",
+      "file": "on-handler.txt",
+      "category": "script",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none",
+        "control-scripts": "fires"
+      }
+    },
+    {
+      "id": "javascript-href",
+      "file": "javascript-href.txt",
+      "category": "script",
+      "trigger": "activation",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none",
+        "control-scripts": "fires-on-click"
+      },
+      "note": "manual activation; no script config can run it but control-scripts"
+    },
+    {
+      "id": "anchor-ping",
+      "file": "anchor-ping.txt",
+      "category": "activation",
+      "trigger": "activation",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "hits-on-click",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "manual: click in control should ping; link is inert elsewhere"
+    },
+    {
+      "id": "pos-data-png",
+      "file": "pos-data-png.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "pos-inline-svg",
+      "file": "pos-inline-svg.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "pos-head-style-table",
+      "file": "pos-head-style-table.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "pos-details",
+      "file": "pos-details.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "pos-url-in-prose",
+      "file": "pos-url-in-prose.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "structural check must pass: URLs in text and inert title are not resources"
+    },
+    {
+      "id": "pos-malformed-mixed",
+      "file": "pos-malformed-mixed.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "inert or fallback; never escapes into markup"
+    },
+    {
+      "id": "pos-style-frag-url",
+      "file": "pos-style-frag-url.txt",
+      "category": "positive",
+      "trigger": "automatic",
+      "deadline_ms": 1200,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      }
+    },
+    {
+      "id": "budget-2mib",
+      "file": "budget-2mib.txt",
+      "category": "budget",
+      "trigger": "automatic",
+      "deadline_ms": 600,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "fellBack: input over 2 MiB",
+      "deadline": 600
+    },
+    {
+      "id": "budget-deep",
+      "file": "budget-deep.txt",
+      "category": "budget",
+      "trigger": "automatic",
+      "deadline_ms": 600,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "fellBack: nesting",
+      "deadline": 600
+    },
+    {
+      "id": "budget-css-rules",
+      "file": "budget-css-rules.txt",
+      "category": "budget",
+      "trigger": "automatic",
+      "deadline_ms": 600,
+      "expect": {
+        "control": "none",
+        "csp-only": "none",
+        "recon-only": "none",
+        "full": "none"
+      },
+      "note": "rule cap: dropped counted, not necessarily fellBack",
+      "deadline": 600
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "object": "error",
+  "status": 429,
+  "code": "rate_limited",
+  "message": "You have been rated limited. Please try again in a few minutes.",
+  "additional_data": { "retry_after": 12, "rate_limit_reason": "integration" },
+  "request_id": "00000000-0000-0000-0000-0000000000f7"
+}

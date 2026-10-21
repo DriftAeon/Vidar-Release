@@ -1,0 +1,55 @@
+name: Bug Report
+description: Something in Vidar does not work as it should
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Vidar Version or Commit
+      description: From the About panel, or the commit of the checkout you built.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows Build
+      description: For example Windows 11 24H2 (26100).
+    validations:
+      required: true
+  - type: input
+    id: powershell
+    attributes:
+      label: PowerShell Version
+      description: Output of $PSVersionTable.PSVersion.
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent CLI
+      description: Which agent CLI the tab runs (Claude, Codex, other) and its version.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behaviour
+      description: Include error text or a screenshot. Remove personal paths and tokens first.
+    validations:
+      required: true

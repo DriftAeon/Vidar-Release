@@ -1,0 +1,5 @@
+{
+  "identifier": "ocr-overlay",
+  "windows": ["ocr-overlay"],
+  "permissions": ["core:default", "allow-ocr-cancel", "allow-ocr-capture"]
+}

@@ -1,0 +1,1 @@
+<!doctype html><html><head><meta charset="utf-8"><style>@keyframes k{from{background-image:url("{{URL}}")}to{opacity:1}}.a{animation:k 1s infinite}</style></head><body><p class="a">x</p></body></html>

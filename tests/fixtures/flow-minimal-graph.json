@@ -1,0 +1,17 @@
+{
+  "name": "Summarize",
+  "nodes": [
+    { "id": "input", "kind": "input", "title": "Input",
+      "fields": [{ "k": "shape", "v": "free-text" }, { "k": "content", "v": "Summarize the README." }],
+      "inputs": [], "outputs": ["out"] },
+    { "id": "summarize", "kind": "agent", "title": "Summarize", "model": "claude-sonnet-5",
+      "fields": [{ "k": "task", "v": "Summarize this in three bullets: {{input}}" }],
+      "inputs": ["in"], "outputs": ["out"] },
+    { "id": "output", "kind": "output", "title": "Output",
+      "fields": [], "inputs": ["in"], "outputs": [] }
+  ],
+  "edges": [
+    { "id": "e1", "from": { "node": "input", "port": "out" }, "to": { "node": "summarize", "port": "in" } },
+    { "id": "e2", "from": { "node": "summarize", "port": "out" }, "to": { "node": "output", "port": "in" } }
+  ]
+}

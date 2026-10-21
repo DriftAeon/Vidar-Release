@@ -1,0 +1,5 @@
+{"type":"user","message":{"role":"user","content":"hello"}}
+{"type":"attachment","attachment":{"type":"instructions","files":[{"path":"<home>/.claude/CLAUDE.md","type":"User"},{"path":"<repo>/CLAUDE.md","type":"Project"}]}}
+{"type":"assistant","message":{"role":"assistant","content":"The word instructions in prose is not an attachment."}}
+{"type":"attachment","attachment":{"type":"nested_memory","path":"<repo>/.claude/rules/ui-copy.md","content":{"type":"Project"}}}
+{"type":"attachment","attachment":{"type":"instructions","files":[{"path":"<REPO>/claude.md","type":"Project"}]}}

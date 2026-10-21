@@ -1,0 +1,11 @@
+/* ---- controls built by src/panels/controls/control.ts: state keyed on attributes ----
+   Blocked (turn, card) = [aria-disabled="true"][data-block], focusable; in flight = [aria-busy="true"];
+   can't act = :disabled. Mirrors only: each rule reproduces a look a class or :disabled gave before
+   the state moved to attributes (docs/shelf/controls-build-once.md); no new look lives here. */
+
+/* status pills (rendered-status.css): was `button.st-pill:disabled { cursor: default }` while blocked or in flight */
+.rendered button.st-pill[aria-disabled="true"] { cursor: default; }
+/* was `.st-pill.pending { opacity: 0.5 }` */
+.rendered .st-pill[aria-busy="true"] { opacity: 0.5; }
+/* was `button.st-pill.in-turn:disabled { opacity: 1 }`: blocked by a turn or card stays at full strength, in flight or not */
+.rendered button.st-pill[data-block] { opacity: 1; }

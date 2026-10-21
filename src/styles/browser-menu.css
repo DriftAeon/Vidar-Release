@@ -1,0 +1,32 @@
+/* Shared browser filter menus (src/browser/menu.ts): fixed on body, above the ask gate's 160, checkbox rows
+   with counts, More's facet rows with their value, and Clear Filters. */
+.br-menu {
+  position: fixed; z-index: 170; box-sizing: border-box; min-width: calc(var(--space-32) * 5 + var(--space-16));
+  max-height: calc(100vh - var(--space-16)); overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4);
+  background: var(--bg); border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-6);
+  font-family: var(--font-ui); font-size: var(--font-12); color: var(--fg);
+}
+.br-menu .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.br-mi {
+  display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); padding: 0 var(--space-8);
+  background: transparent; border: 0; border-radius: var(--radius-4); color: var(--fg); font: inherit;
+  text-align: left; white-space: nowrap; cursor: pointer;
+}
+.br-mi:hover { background: var(--bg-hover); }
+.br-mi:focus-visible { outline: none; background: var(--bg-hover); box-shadow: inset 0 0 0 var(--border-w) var(--accent); }
+.br-mi:active { background: var(--bg-selected); }
+.br-mi:disabled { color: var(--fg-dim); cursor: default; }
+.br-mi[aria-expanded="true"] { background: var(--bg-hover); }
+.br-mi-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.br-mi-n { margin-left: auto; font-family: var(--font-mono); color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.br-mi-v { margin-left: auto; color: var(--fg-dim); max-width: calc(var(--space-32) * 3); overflow: hidden; text-overflow: ellipsis; }
+.br-mi-v.on { color: var(--accent); }
+.br-mi-clear { color: var(--accent); }
+.br-box {
+  box-sizing: border-box; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--space-12); height: var(--space-12); border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-2);
+}
+.br-box.on { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+.br-box.on .icn { width: var(--space-8); height: var(--space-8); stroke-width: 3; }
+.br-sep { height: var(--border-w); margin: var(--space-2) var(--space-4); background: var(--border); }

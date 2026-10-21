@@ -1,0 +1,4 @@
+.launch-facts { margin: 0; font-size: var(--font-12); }
+.launch-facts > div { min-width: 0; display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: var(--space-8); padding: 7px 0; border-bottom: 1px solid var(--border); }
+.launch-facts dt { color: var(--fg-dim); font-size: var(--font-10); }
+.launch-facts dd { margin: 0; color: var(--fg); overflow-wrap: anywhere; }

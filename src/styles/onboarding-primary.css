@@ -1,0 +1,68 @@
+/* Onboarding Primary Agent step (mock primary-agent-variants C, The Seam, with B's door tints and scrim):
+   Claude and Codex halves press against a centre line; hovering a side leans the seam to 54 / 46 and a click
+   slides it to 70 / 30 with the chosen side's setup view on the wide side. The seam position is --ob-seam
+   (set from step-primary.ts; the shell's title label rides the same value). Door tint: the agent colour at 22%
+   over --bg (30% hot), edge at 50%. The seam line is --border-strong, as in the mock. */
+.ob-primary {
+  flex: 1; position: relative; display: grid; grid-template-columns: var(--ob-seam) 1fr; min-width: 0;
+  transition: grid-template-columns 0.15s ease-out;
+}
+.ob-primary[data-sides="1"] { grid-template-columns: 1fr; }
+.ob-seam-line {
+  position: absolute; top: 0; bottom: 0; left: var(--ob-seam); width: var(--space-2); transform: translateX(-50%);
+  background: var(--border-strong); pointer-events: none; transition: left 0.15s ease-out;
+}
+.ob-primary[data-sides="1"] .ob-seam-line { display: none; }
+.onboarding-shell .ob-label { transition: left 0.15s ease-out; }
+
+.ob-half {
+  --ob-agent: var(--fg-dim);
+  display: flex; flex-direction: column; justify-content: center; gap: var(--space-16);
+  min-width: 0; padding: 0 var(--space-32); margin: 0;
+  background: color-mix(in srgb, var(--ob-agent) 22%, var(--bg));
+  color: var(--fg-bright); font-family: inherit; border: 0; border-radius: 0;
+}
+.ob-half.claude { --ob-agent: var(--agent-claude); align-items: flex-end; text-align: right; }
+.ob-half.codex { --ob-agent: var(--agent-codex); align-items: flex-start; }
+.ob-primary[data-sides="1"] .ob-half { align-items: center; text-align: center; }
+button.ob-half:not(:disabled) { cursor: pointer; }
+button.ob-half:not(:disabled):hover { background: color-mix(in srgb, var(--ob-agent) 30%, var(--bg)); outline: var(--space-2) solid var(--ob-agent); outline-offset: calc(var(--space-2) * -1); }
+button.ob-half.picked { outline: var(--space-2) solid var(--ob-agent); outline-offset: calc(var(--space-2) * -1); }
+button.ob-half:focus-visible { outline: var(--space-2) solid var(--fg-bright); outline-offset: calc(var(--space-2) * -1); }
+button.ob-half:disabled { opacity: 0.45; cursor: default; }
+.ob-tile { width: calc(var(--row-32) * 4); height: calc(var(--row-32) * 4); border-radius: var(--radius-6); display: block; }
+.ob-name { font-family: var(--font-title); font-size: var(--font-16); font-weight: var(--weight-bold); }
+.ob-absent { font-size: var(--font-12); color: var(--fg); } /* the disabled side is already dimmed as a whole */
+
+/* setup view: the chosen side wide, the other narrow and dimmed */
+.ob-half.main { align-items: center; text-align: left; position: relative; }
+.ob-half.other { align-items: center; opacity: 0.5; }
+.ob-half.other .ob-tile { width: calc(var(--row-32) * 2); height: calc(var(--row-32) * 2); }
+.ob-half.other:disabled { opacity: 0.5; }
+.ob-row-head { display: flex; align-items: center; gap: var(--space-12); }
+.ob-setup {
+  width: min(100%, calc(var(--row-32) * 13));
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+}
+.ob-setup-row { display: flex; align-items: center; gap: var(--space-8); height: var(--row-32); padding: 0 var(--space-12); font-size: var(--font-13); }
+.ob-setup-row + .ob-setup-row { border-top: var(--border-w) solid var(--border); }
+.ob-setup-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-setup-val { color: var(--fg-dim); font-size: var(--font-12); }
+.ob-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ob-setup-text.ob-mono { font-size: var(--font-12); color: var(--fg-dim); }
+.ob-dot { flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--ok-green); }
+.ob-dot.warn { background: var(--approval-amber); }
+.ob-error { color: var(--alert); font-size: var(--font-12); }
+
+/* Use X outside the footer bar share its buttons (onboarding-shell.css styles .ob-bar .ob-btn only) */
+.ob-half .ob-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-8);
+  height: var(--row-32); padding: 0 var(--space-16);
+  font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg-bright); border-radius: var(--radius-6);
+}
+.ob-half .ob-btn:not(.ws-add) { background: var(--neutral-grad); box-shadow: var(--neutral-shadow); border-color: var(--border); }
+.ob-half .ob-btn:not(.ws-add):hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--fg-bright); }
+.ob-half .ob-btn:not(.ws-add):active { background: var(--neutral-grad-press); box-shadow: var(--neutral-shadow-press); }
+.ob-half .ob-btn:focus-visible { border-color: var(--fg-bright); }
+.ob-half .ob-btn:disabled { opacity: 0.4; cursor: default; }
+.ob-half .ob-big { height: calc(var(--row-32) + var(--space-8)); padding: 0 var(--space-24); font-size: var(--font-16); font-weight: var(--weight-bold); }

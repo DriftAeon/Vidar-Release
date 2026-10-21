@@ -1,0 +1,33 @@
+/* Speak: bottom-bar button left of the close lock. Off is a faded
+   muted glyph (nothing loaded); armed is the plain glyph; busy pulses in the
+   accent while arming, or while the script runs and the audio plays; err holds
+   the alert colour until the next click. The tooltip carries the outcome. */
+#speak-btn, #listen-btn {
+  background: none; border: none; cursor: pointer; display: flex; align-items: center;
+  color: var(--fg-dim); padding: 0 var(--space-2); flex-shrink: 0;
+}
+:is(#speak-btn, #listen-btn) .icn { width: 14px; height: 14px; }
+:is(#speak-btn, #listen-btn):hover { color: var(--accent); }
+#speak-btn.off { opacity: 0.45; }
+#speak-btn.off:hover { opacity: 1; }
+#speak-btn.busy { color: var(--accent); animation: speak-pulse 1.2s ease-in-out infinite; }
+#speak-btn.err { color: var(--alert); }
+@keyframes speak-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* Listen: wake word -> VAD -> whisper -> focused tab, bottom-bar button just
+   left of Speak. Rust's state machine (listen.rs) drives `data-state` directly —
+   there is no local off/arming/armed ladder to keep in sync with it. */
+#listen-btn[data-state="off"] { opacity: 0.45; }
+#listen-btn[data-state="off"]:hover { opacity: 1; }
+#listen-btn[data-state="starting"] { color: var(--accent); animation: listen-pulse 0.6s ease-in-out infinite; }
+#listen-btn[data-state="listening"] { color: var(--accent); }
+/* Red = the mic is taking your words (wake heard through end of utterance). There is no
+   stop sound, so the red going away is the "stopped" signal, including on a heard timeout. */
+#listen-btn[data-state="heard"],
+#listen-btn[data-state="recording"] { color: #e5484d; }
+#listen-btn[data-state="transcribing"],
+#listen-btn[data-state="delivering"] { color: var(--fg-dim); animation: listen-pulse 1.2s ease-in-out infinite; }
+#listen-btn[data-state="busy"] { color: var(--agent-falcon); animation: listen-busy-flash 0.4s ease-out; }
+@keyframes listen-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes listen-busy-flash { 0% { opacity: 0.2; } 100% { opacity: 1; } }
+

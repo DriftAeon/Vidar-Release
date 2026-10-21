@@ -1,0 +1,9 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{ "Name": "Acme", "Type": "Runtime", "LoadingPhase": "Default" }
+	]
+}

@@ -1,0 +1,82 @@
+/* Document tab Open ▾ menu, mock variant B (document-open-menu.ts). Fixed on body so it escapes
+   every overflow ancestor; positioned from the Open button in showOpenMenu. */
+#doc-om {
+  position: fixed; z-index: 100;
+  display: flex; flex-direction: column;
+  width: 420px; /* mock B width, off the space scale */
+  max-width: 90vw; box-sizing: border-box;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-8);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, transparent); /* mock B lift */
+  overflow: hidden;
+}
+
+.doc-om-search-wrap { position: relative; display: flex; padding: var(--space-8); border-bottom: 1px solid var(--border); }
+.doc-om-search-icn {
+  position: absolute; left: calc(var(--space-8) + var(--space-8)); top: 0; bottom: 0; margin: auto 0;
+  width: var(--font-13); height: var(--font-13); vertical-align: 0; pointer-events: none;
+}
+.doc-om-search {
+  font-size: var(--font-12); background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5); /* matches the Settings search field */
+  padding: var(--space-4) var(--space-8) var(--space-4) calc(var(--space-8) + var(--font-13) + var(--space-8));
+  flex: 1; min-width: 0; outline: none;
+}
+.doc-om-search::placeholder { color: var(--fg-dim); }
+.doc-om-search:focus-visible { border-color: var(--accent); }
+
+.doc-om-body { display: flex; height: min(520px, 60vh); /* mock B body height */ min-height: 0; }
+
+.doc-om-folders {
+  width: 148px; /* mock B folder column */
+  flex-shrink: 0; display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-4); border-right: 1px solid var(--border); overflow-y: auto;
+}
+.doc-om-rule { flex-shrink: 0; height: 1px; background: var(--border); margin: var(--space-4) var(--space-6); }
+
+.doc-om-files {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-4); overflow-y: auto;
+}
+.doc-om-title { display: flex; align-items: baseline; flex-shrink: 0; padding: var(--space-4) var(--space-8); }
+.doc-om-title .h { font-size: var(--font-12); font-weight: 600; color: var(--fg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-om-title .d { margin-left: auto; color: var(--fg-dim); font-size: var(--font-11); }
+
+/* folder and file rows: flat buttons, hover is a --bg wash with no accent */
+.doc-om-fold, .doc-om-file {
+  display: flex; align-items: center; gap: var(--space-8); flex-shrink: 0;
+  background: none; border: none; border-radius: var(--radius-5);
+  padding: var(--space-5) var(--space-8); color: var(--fg); font-size: var(--font-13);
+  text-align: left; cursor: pointer; white-space: nowrap;
+}
+.doc-om-fold .nm, .doc-om-file .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.doc-om-fold .nm { font-weight: var(--weight-strong); }
+/* group art slot, as on the Display picker rows (catalog-group-icon.ts) */
+.doc-om-fold .gi { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: var(--font-13); height: var(--font-13); }
+.doc-om-fold .gi .icn { width: 100%; height: 100%; vertical-align: 0; }
+.doc-om-fold .n { flex-shrink: 0; color: var(--fg-dim); font-size: var(--font-11); font-variant-numeric: tabular-nums; }
+.doc-om-file .t {
+  flex-shrink: 0; min-width: 48px; /* mock B time column */
+  text-align: right; color: var(--fg-dim); font-size: var(--font-11); font-variant-numeric: tabular-nums;
+}
+.doc-om-files.is-search .doc-om-file .t {
+  min-width: 0; max-width: 108px; overflow: hidden; text-overflow: ellipsis;
+}
+.doc-om-fold:hover, .doc-om-file:hover { background: var(--bg); color: var(--fg); }
+.doc-om-fold:active, .doc-om-file:active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+/* selected: the chosen folder and the open file's row */
+.doc-om-fold[aria-current="true"], .doc-om-file[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.doc-om-fold[aria-current="true"] .n { color: var(--accent); }
+.doc-om-fold:focus-visible, .doc-om-file:focus-visible, .doc-om-act:focus-visible { outline: 1px solid var(--fg-dim); outline-offset: -1px; }
+
+/* reorder.ts drag state, same look as Loadout's .rack-row.dragging (modules.css) */
+.doc-om-fold.dragging { opacity: 0.6; outline: 1px solid var(--accent); outline-offset: -1px; cursor: grabbing; }
+
+.doc-om-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-6); flex-shrink: 0;
+  padding: var(--space-6); border-top: 1px solid var(--border);
+}
+.doc-om-act {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-4) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-4);
+  color: var(--fg); font-size: var(--font-12); white-space: nowrap;
+}

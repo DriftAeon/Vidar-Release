@@ -1,0 +1,103 @@
+/* Shared browser shell (src/browser/shell.ts, list.ts): the frame, head count, status bands (look 2b), rows,
+   pills and the empty state. Bands and pills take --status-<tone> on --tint-status-<tone>; neutral is --fg on
+   --bg-hover with a --fg-dim strip. */
+.br-root { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
+.br-root [hidden], .br-root .br-off { display: none; }
+.br-root .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.br-head { flex: none; display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.br-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); }
+.br-note { flex: none; color: var(--fg-dim); font-size: var(--font-11); line-height: var(--line-16); }
+
+/* icon buttons: rows, card and fullscreen actions */
+.br-ib {
+  box-sizing: border-box; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--row-24); height: var(--row-24); padding: 0; color: var(--fg-dim); background: transparent;
+  border: var(--border-w) solid transparent; border-radius: var(--radius-4); cursor: pointer;
+}
+.br-ib:hover { color: var(--accent); background: var(--bg-selected); }
+.br-ib:focus-visible { outline: none; border-color: var(--accent); color: var(--accent); }
+.br-ib:active { background: var(--bg-hover); }
+.br-ib:disabled { opacity: 0.5; cursor: default; }
+
+/* bands */
+.br-band {
+  flex: none; display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); padding: 0 var(--space-8);
+  margin-top: var(--space-8); border-left: 2px solid var(--fg-dim); border-radius: 0 var(--radius-4) var(--radius-4) 0; /* 2px strip: the mock's band edge */
+  background: var(--bg-hover); color: var(--fg);
+  font-size: var(--font-11); font-weight: var(--weight-strong); letter-spacing: var(--tracking-caps); text-transform: uppercase;
+}
+.br-band:first-child { margin-top: 0; }
+.br-band-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-band-n { font-family: var(--font-mono); font-weight: var(--weight-regular); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.br-band.tone-todo { color: var(--status-todo); border-left-color: var(--status-todo); background: var(--tint-status-todo); }
+.br-band.tone-progress { color: var(--status-progress); border-left-color: var(--status-progress); background: var(--tint-status-progress); }
+.br-band.tone-review { color: var(--status-review); border-left-color: var(--status-review); background: var(--tint-status-review); }
+.br-band.tone-blocked { color: var(--status-blocked); border-left-color: var(--status-blocked); background: var(--tint-status-blocked); }
+.br-band.tone-done { color: var(--status-done); border-left-color: var(--status-done); background: var(--tint-status-done); }
+
+/* rows */
+.br-row {
+  flex: none; display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); padding: 0 var(--space-4);
+  min-width: 0; border-radius: var(--radius-4); color: var(--fg); cursor: pointer;
+}
+.br-row:hover { background: var(--bg-hover); }
+.br-row:focus-visible { outline: none; background: var(--bg-hover); box-shadow: inset 0 0 0 var(--border-w) var(--accent); }
+.br-row:active { background: var(--bg-selected); }
+.br-row.open { background: var(--bg-hover); border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-4) var(--radius-4) 0 0; }
+.br-row.open .br-key { color: var(--accent); }
+.br-row.open .br-title { font-weight: var(--weight-strong); }
+.br-key { flex: none; font-family: var(--font-mono); color: var(--fg); }
+.br-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-rel { flex: none; width: calc(var(--space-32) * 2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); }
+.br-row .br-send { visibility: hidden; }
+.br-row:hover .br-send, .br-row:focus-within .br-send { visibility: visible; }
+
+/* status pill */
+.br-pill {
+  flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0 var(--space-8); border-radius: var(--radius-full); line-height: var(--line-20);
+  font-size: var(--font-11); color: var(--fg); background: var(--bg-hover);
+}
+.br-pill.tone-todo { color: var(--status-todo); background: var(--tint-status-todo); }
+.br-pill.tone-progress { color: var(--status-progress); background: var(--tint-status-progress); }
+.br-pill.tone-review { color: var(--status-review); background: var(--tint-status-review); }
+.br-pill.tone-blocked { color: var(--status-blocked); background: var(--tint-status-blocked); }
+.br-pill.tone-done { color: var(--status-done); background: var(--tint-status-done); }
+
+/* row lead (page icon) and tag pills */
+.br-lead { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--space-16); height: var(--space-16); color: var(--fg-dim); line-height: 1; overflow: hidden; }
+.br-lead .icn { width: var(--space-16); height: var(--space-16); }
+.br-tags { flex: none; display: inline-flex; gap: var(--space-4); max-width: 45%; min-width: 0; overflow: hidden; }
+.br-tags .br-pill { flex: 0 1 auto; min-width: 0; max-width: none; }
+
+/* status strip: one segment per band, flexed by its count */
+.br-dist { flex: none; display: flex; gap: var(--space-2); height: var(--space-8); }
+.br-dist-seg {
+  flex: 0 1 0; min-width: var(--space-4); height: 100%; padding: 0; border: 0; border-radius: var(--radius-full);
+  background: var(--fg-dim); opacity: 0.7; cursor: pointer;
+}
+.br-dist-seg.tone-todo { background: var(--status-todo); }
+.br-dist-seg.tone-progress { background: var(--status-progress); }
+.br-dist-seg.tone-review { background: var(--status-review); }
+.br-dist-seg.tone-blocked { background: var(--status-blocked); }
+.br-dist-seg.tone-done { background: var(--status-done); }
+.br-dist-seg:hover { opacity: 1; }
+.br-dist-seg:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); opacity: 1; }
+.br-dist-seg:active { opacity: 0.5; }
+.br-dist-seg[aria-pressed="true"] { opacity: 1; }
+.br-dist:has([aria-pressed="true"]) .br-dist-seg[aria-pressed="false"] { opacity: 0.3; }
+.br-dist:has([aria-pressed="true"]) .br-dist-seg[aria-pressed="false"]:hover { opacity: 1; }
+.br-dist-seg:disabled { opacity: 0.3; cursor: default; }
+
+/* empty state and inline links */
+.br-empty { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-8); padding: var(--space-24) 0; }
+.br-empty-title { color: var(--fg); overflow-wrap: anywhere; }
+.br-link { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font: inherit; text-align: left; }
+.br-link:hover { text-decoration: underline; }
+.br-link:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.br-link:active { color: var(--fg); }
+.br-link:disabled { color: var(--fg-dim); cursor: progress; text-decoration: none; }
+
+.br-spin { animation: br-spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
+@keyframes br-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .br-spin { animation: none; } }

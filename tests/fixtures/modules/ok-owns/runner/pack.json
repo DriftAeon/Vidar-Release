@@ -1,0 +1,29 @@
+{
+  "id": "runner",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Runner" },
+  "module": {
+    "id": "runner",
+    "label": "Runner",
+    "level": "optional",
+    "kind": "agent",
+    "when": { "deps": ["runner-cli"] },
+    "deps": [
+      {
+        "id": "runner-cli",
+        "label": "Runner CLI",
+        "required": false,
+        "usedBy": ["Runner Tabs"],
+        "probe": { "kind": "exe", "names": ["runner.exe"] },
+        "install": { "note": "Install the Runner CLI." }
+      }
+    ],
+    "agent": {
+      "setup": { "dep": "runner-cli", "order": 0 },
+      "flow": { "script": "tools/runner-sidecar.mjs" }
+    },
+    "owns": ["tools/runner-sidecar.mjs", "tools/runner/", "profiles/runner/runner.json"],
+    "trace": ["runner-sidecar"]
+  }
+}

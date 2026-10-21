@@ -1,0 +1,5 @@
+{
+  "name": "vidar",
+  "version": "0.1.0",
+  "description": "Vidar app layer: drive MCP server, per-surface SessionStart context, vidar-control skill."
+}

@@ -1,0 +1,6 @@
+{
+  "id": "relay",
+  "version": 1,
+  "provides": [],
+  "module": { "id": "relay", "label": "Relay Copy", "level": "optional", "kind": "content" }
+}

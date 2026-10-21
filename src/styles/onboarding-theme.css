@@ -1,0 +1,19 @@
+/* Onboarding Theme step (mock primary-agent-variants A, frames 7 and 8): four mode buttons in a row. The
+   current mode carries the accent border (selection); --ob-theme-c is the mode's own plate colour, set
+   from theme.ts, and only tints the swatch dot. */
+.ob-theme {
+  flex: 1; display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+  gap: var(--space-16); min-width: 0; padding: 0 var(--space-32);
+}
+.ob-theme-btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-12);
+  width: calc(var(--row-32) * 4); height: calc(var(--row-32) * 3); padding: 0;
+  background: var(--neutral-grad); box-shadow: var(--neutral-shadow);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+  font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg-bright);
+}
+.ob-theme-btn i { width: var(--row-32); height: var(--row-32); border-radius: var(--radius-full); background: var(--ob-theme-c); }
+.ob-theme-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.ob-theme-btn:active { background: var(--neutral-grad-press); box-shadow: var(--neutral-shadow-press); }
+.ob-theme-btn:focus-visible { border-color: var(--fg-bright); }
+.ob-theme-btn.selected { border-color: var(--accent); }

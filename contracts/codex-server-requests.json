@@ -1,0 +1,42 @@
+{
+  "$comment": "Disposition of every Codex app-server server request (pinned from the 0.162.1 schema). card: drawn as an approval/question card; refusal is its deny answer (Falcon's unattended deny, and the answer when Vidar does not draw it). refuse: answered with refusal at once. error: answered with the unsupported error. A method not listed is unknown and gets the unsupported error too. Read by src/agents/codex-methods.ts and src-falcon codex/driver/requests.rs; tests/codex-schema-drift.test.mjs validates it against tools/codex-schema/manifest.json.",
+  "codexVersion": "0.163.0",
+  "unsupported": { "code": -32601, "message": "{method} is not supported by Vidar" },
+  "requests": {
+    "account/chatgptAuthTokens/refresh": { "disposition": "error" },
+    "applyPatchApproval": {
+      "disposition": "refuse",
+      "refusal": { "decision": { "denied": { "rejection": "Vidar does not support legacy approvals" } } }
+    },
+    "attestation/generate": { "disposition": "error" },
+    "currentTime/read": { "disposition": "error" },
+    "execCommandApproval": {
+      "disposition": "refuse",
+      "refusal": { "decision": { "denied": { "rejection": "Vidar does not support legacy approvals" } } }
+    },
+    "item/commandExecution/requestApproval": {
+      "disposition": "card",
+      "refusal": { "decision": "decline" }
+    },
+    "item/fileChange/requestApproval": {
+      "disposition": "card",
+      "refusal": { "decision": "decline" }
+    },
+    "item/permissions/requestApproval": {
+      "disposition": "card",
+      "refusal": { "permissions": {}, "scope": "turn" }
+    },
+    "item/tool/call": {
+      "disposition": "refuse",
+      "refusal": { "contentItems": [{ "type": "inputText", "text": "Vidar does not host dynamic tools" }], "success": false }
+    },
+    "item/tool/requestUserInput": {
+      "disposition": "card",
+      "refusal": { "answers": {} }
+    },
+    "mcpServer/elicitation/request": {
+      "disposition": "card",
+      "refusal": { "action": "decline" }
+    }
+  }
+}

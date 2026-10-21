@@ -1,0 +1,6 @@
+{
+  "id": "other",
+  "version": 1,
+  "provides": [],
+  "module": { "id": "other", "label": "Other", "level": "optional", "kind": "content" }
+}

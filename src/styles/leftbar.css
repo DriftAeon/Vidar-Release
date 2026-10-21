@@ -1,0 +1,277 @@
+/* ---- left bar ---- */
+#leftbar {
+  /* the mane: theme primary fills the whole tab panel, not a 4px edge strip (2026-10-10) */
+  background: var(--accent);
+  /* runs to the window bottom: Settings sits in its darker bottom section (#bar-dock), the CAS dial at the
+     rail's bottom (rail.css), the rest of the old bottom bar spans #main's column only (2026-10-10/11) */
+  grid-row: 1 / 4;
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: flex-start;
+  /* every item's side inset (2026-10-10: 6, was 12); legacy 6 on purpose.
+     No inline padding: the GATE observer (panels/character.ts) subtracts 2 x this from the bar's clientWidth */
+  --bar-inset: var(--space-6); /* legacy 6, set 2026-10-10; new-ui has 4 or 8 only */
+  padding: 0 0 var(--bar-inset); /* bottom matches the side inset (2026-10-10: was 10) */
+  /* 4 between the GATE, the Tools card, Relay and New Session (2026-10-10: 12 was too much) */
+  gap: var(--space-4);
+}
+/* the GATE spans the bar; everything else is inset to line up with it */
+#leftbar > :not(#character):not(#bar-dock) { margin-inline-start: var(--bar-inset); }
+/* the strip is excepted: at (1,1,0) this outranked #session-strip's own shrink (1,0,0), so the strip never
+   scrolled and an overflow crushed #bar-dock instead */
+#leftbar > :not(.bar-spacer):not(#session-strip) { flex-shrink: 0; }
+/* the tab strip scrolls when the tabs outgrow the bar (2026-10-09); rows carry no ring, so no padding */
+/* align-self: stretch, or #leftbar's flex-start shrinks the strip (and its rows) to the widest title (dropped in 7d02b6ce) */
+#session-strip { display: flex; flex-direction: column; gap: var(--space-2); flex-shrink: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; align-self: stretch; }
+/* the strip's gutter takes the place of the right inset, so rows keep their width with or without a scrollbar */
+#session-strip::-webkit-scrollbar { width: var(--bar-inset); }
+/* H2 rows run the strip's full width: the bar has no right inset, so the right margin mirrors the left */
+#relay-btn, #new-session, #close-notice { align-self: stretch; margin-inline-end: var(--bar-inset); }
+/* Relay heads the tab list, New Session ends it (2026-10-10): under tabs, the bar's
+   --space-4 gap shrinks to the list's --space-2 gap */
+#session-strip:not(:empty) + #new-session,
+#new-session + #close-notice:not([hidden]),
+#relay-btn + #session-strip:not(:empty) { margin-block-start: calc(var(--space-2) - var(--space-4)); }
+/* An empty strip still takes a flex slot, so the leftbar gap lands on both
+   sides of nothing and ＋ sits 8px lower than the first tab would. */
+#session-strip:empty { display: none; }
+.bar-spacer { flex: 1; }
+/* The bar's darker bottom section (2026-10-11): the old foot's fill and top line (same fill as
+   #bottombar, bottombar.css), full bar width and flush on the window bottom (the negative margin cancels
+   #leftbar's bottom padding), now grown upward to hold Loadout then MCP Servers (#bar-modules) over the
+   Settings row (#bar-foot). Bottom-anchored, so the spacer above gives way and an expanding row grows the
+   modules upward while rows still read top to bottom; past the cap they scroll and the Settings row stays. */
+/* No shrink: under its cap the section keeps its content height, so a tall tab list cannot clip the modules'
+   bottom (the likely eater of the Gear box's 8 bottom padding, 2026-10-11); the tab strip scrolls instead (#session-strip above) */
+#leftbar > #bar-dock {
+  align-self: stretch; margin-block-end: calc(-1 * var(--bar-inset));
+  flex-shrink: 0; min-height: 0; max-height: 40%;
+  display: flex; flex-direction: column;
+  background: var(--bg-panel);
+  border-top: var(--border-w) solid var(--border);
+}
+/* A module with no rows (or not yet mounted) is hidden, and so is the host and the whole section when none
+   has rows, so none leaves a gap or a stray top line. The side padding keeps the rows on the bar's inset,
+   level with Relay and the tabs. */
+#bar-dock > #bar-modules {
+  flex-shrink: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable;
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding-inline: var(--bar-inset) 0;
+  padding-block-end: var(--bar-inset); /* Settings moved to the bottom bar (2026-10-11): the space under the last box equals its side inset */
+}
+#bar-dock > #bar-modules::-webkit-scrollbar { width: var(--bar-inset); }
+#bar-dock:not(:has(.rack-list:not(:empty))),
+#bar-dock > #bar-modules:not(:has(.rack-list:not(:empty))),
+#bar-modules > :not(:has(.rack-list:not(:empty))) { display: none; }
+/* the section is the card: the module boxes drop their own border and fill (precedent: .rail-surface, rail.css)
+   and their side padding, which #bar-modules now gives. No bottom pad: #bar-modules gives the space under
+   the last box */
+#bar-dock .module-box { border: 0; background: transparent; padding-inline: 0; padding-block-end: 0; }
+.bar-btn {
+  width: 40px; height: 40px;
+  border: 1px solid var(--border); border-radius: var(--radius-8);
+  background: var(--bg); color: var(--fg-dim);
+  font-size: 15px; cursor: pointer;
+  position: relative;
+}
+/* thick offset ring — accent borders would vanish on the accent bar */
+.bar-btn.active { color: var(--accent); box-shadow: 0 0 0 3px var(--bg-panel); }
+/* Settings cog and CAS dial keep the old bottom bar's look (bar-switches.css joins them to the inspect/swap icon-button look) */
+.rail-btn:focus-visible { outline: var(--space-2) solid var(--fg); outline-offset: calc(-1 * var(--space-2)); }
+
+/* Icon faces. The art is full-colour (white/steel/orange), so unlike the
+   session wheel it is NOT accent-tinted — a multiply layer would muddy it.
+   Opacity carries the dim/active signal. Relay's art lives in its row face. */
+#settings-btn::before, #relay-btn .tab-face::before {
+  content: ""; position: absolute; inset: var(--space-4);
+  background: center / contain no-repeat;
+  opacity: 0.75; transition: opacity 0.12s ease-out;
+}
+#settings-btn:hover::before, #relay-btn:hover .tab-face::before,
+#relay-btn.active .tab-face::before { opacity: 1; }
+/* The Display rail button is gone: the panel is the workbench's
+   middle tab. The Clipboard view was retired earlier for the same reason. */
+#settings-btn::before { background-image: url("../assets/settings.png"); inset: 0 var(--space-2); } /* the 16px art inside the 20px box (bar-switches.css) */
+#relay-btn .tab-face::before { background-image: url("/icons/color/relay.svg"); }
+#relay-btn.alert .tab-face::before { background-image: url("/icons/color/relay-alert.svg"); }
+/* Relay: an accent-blue border, always; amber stays the needs-you colour on session tabs, and the ask count gets its own icons later (2026-10-10) */
+#relay-btn .tab-face { border-color: var(--accent); }
+
+/* ---- H2 two-line rows (2026-10-10): the button is the row. 36px face = title line + second line.
+   Notification visuals (pips, badge, amber tint) are off until their own mock round. ---- */
+#relay-btn, #new-session, #close-notice, .session-btn, .agent-subtab {
+  --tab-face-size: calc(var(--line-20) + var(--line-16));
+  display: grid; grid-template-columns: var(--tab-face-size) minmax(0, 1fr) auto; grid-template-rows: var(--line-20) var(--line-16);
+  column-gap: var(--space-8); align-content: center; text-align: left;
+  width: auto; height: calc(var(--line-20) + var(--line-16) + var(--space-8));
+  padding: 0 var(--space-4); border: 0;
+  border-radius: calc(var(--radius-6) + var(--space-4)); /* concentric: the face's radius + its 4px inset (2026-10-10) */
+  background: var(--bg-panel); color: var(--fg);
+  box-shadow: none; transition: background-color 0.12s ease-out;
+}
+#relay-btn:hover, #new-session:hover, #close-notice:hover, .session-btn:hover, .agent-subtab:hover { background: var(--bg-hover); }
+#close-notice:active { background: var(--bg-selected); }
+/* selected draws like unselected for now (a filled 10px box read squarer, a tinted face read badly;
+   user 2026-10-10: a selected cue comes back later) */
+#relay-btn.active, .session-btn.active { color: var(--fg); box-shadow: none; }
+#relay-btn:focus-visible, #new-session:focus-visible, #close-notice:focus-visible, .session-btn:focus-visible, .agent-subtab:focus-visible { outline: var(--space-2) solid var(--fg); outline-offset: calc(-1 * var(--space-2)); }
+.tab-face {
+  grid-row: 1 / 3; grid-column: 1; position: relative; box-sizing: border-box;
+  width: var(--tab-face-size); height: var(--tab-face-size);
+  border: 2px solid var(--tab-state, var(--border-strong)); /* 2px: 1px vanished against the accent bar */
+  border-radius: var(--radius-6); background: var(--bg);
+}
+/* New Session: icon-only row; the plus is two bars centred in the face, currentColor so hover lifts it */
+#new-session { color: var(--fg-dim); }
+#new-session:hover { color: var(--fg); }
+#new-session .tab-face::before, #new-session .tab-face::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  background: currentColor; transform: translate(-50%, -50%);
+}
+#new-session .tab-face::before { width: var(--space-16); height: var(--space-2); }
+#new-session .tab-face::after { width: var(--space-2); height: var(--space-16); }
+.tab-title {
+  grid-row: 1; grid-column: 2; min-width: 0; height: var(--line-20); line-height: var(--line-20);
+  font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); /* title type, always bold (2026-10-10) */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* viewed session's title in the theme accent (2026-10-13); hover lifts it to --fg because
+   ember's accent on --bg-hover reads 4.30:1 (resting --bg-panel: onyx 8.83, cobalt 6.55, ember 4.83, olive 6.17) */
+.session-btn.active .tab-title { color: var(--accent); }
+.session-btn.active:hover .tab-title { color: var(--fg); }
+.tab-sub {
+  grid-row: 2; grid-column: 2; min-width: 0; display: flex; height: var(--line-16); line-height: var(--line-16);
+  font-size: var(--font-11); color: var(--fg-dim); white-space: nowrap; overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.tab-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* N4 right column (2026-10-10): an amber need chip, or a dim Stopped; the text column yields width */
+.tab-rc {
+  grid-row: 1 / 3; grid-column: 3; display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+  min-width: 0; white-space: nowrap;
+  margin-right: var(--radius-6); /* + the tab's 4px pad = its corner radius: the chip ends where the straight top edge ends (2026-10-15) */
+}
+/* no visible slot: drop the column itself, or its 8px column-gap stays as a dead strip (layout-audit, 2026-10-10) */
+#relay-btn:not(:has(.tab-rc > :not([hidden]))), #close-notice, .session-btn:not(:has(.tab-rc > :not([hidden]))) {
+  grid-template-columns: var(--tab-face-size) minmax(0, 1fr);
+}
+.tab-rc:not(:has(> :not([hidden]))) { display: none; }
+.tab-stopped { font-size: var(--font-11); color: var(--fg-dim); }
+.tab-chip {
+  box-sizing: border-box; height: var(--line-20); min-width: var(--line-20); padding: 0 var(--space-4); border-radius: var(--radius-4);
+  background: var(--approval-amber); color: var(--bg); text-align: center; /* dark number: 8.5:1, --fg was 1.79:1 (2026-10-10) */
+  font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-20); font-weight: var(--weight-strong);
+}
+/* tab border carries the agent kind; the accent ring still carries focus.
+   Tints match LAUNCHER_ICONS in src/launcher/menu.ts (which now reads these vars) and sit
+   outside the [data-theme] blocks on purpose — a kind must not shift per CAS mode. */
+:root { --agent-claude: #f28866; --agent-codex: #5b9dff; --agent-gemini: #8e7dff; --agent-pi: #22b8f0; --agent-shell: #4ec26a; --agent-falcon: #f28c3a; --agent-page: #e6c14a; }
+:is(.session-btn, .agent-subtab)[data-agent="claude"] { --tab-kind: var(--agent-claude); }
+:is(.session-btn, .agent-subtab)[data-agent="codex"] { --tab-kind: var(--agent-codex); }
+.session-btn[data-agent="gemini"] { --tab-kind: var(--agent-gemini); }
+.session-btn[data-agent="pi"] { --tab-kind: var(--agent-pi); }
+.session-btn[data-agent="shell"] { --tab-kind: var(--agent-shell); }
+/* page tabs (openPageTab) keep data-agent="shell"; the extra attribute outranks the shell green */
+.session-btn[data-agent][data-body="page"] { --tab-kind: var(--agent-page); }
+/* the face border is the tab's state (data-phase, tab-row-paint.ts), so the list reads at a glance
+   (2026-10-10): working or ready green, needs-you amber, disconnected (lost) red, anything else
+   grey: stopped, PTY shells (they stay "unknown" after their first status), restoring and login tabs */
+:is(.session-btn, .agent-subtab)[data-phase="working"], .session-btn[data-phase="ready"] { --tab-state: var(--ok-green); }
+:is(.session-btn, .agent-subtab)[data-phase="needs"] { --tab-state: var(--approval-amber); }
+:is(.session-btn, .agent-subtab)[data-phase="lost"] { --tab-state: var(--alert); }
+.tab-model[hidden],.tab-chip[hidden], .tab-stopped[hidden] { display: none; }
+/* dead: dimmed art and title; the second line keeps its text */
+.session-btn.dead { color: var(--fg-dim); }
+/* hosted close in flight: the tab reads as busy while the host answers (unbounded read_frame) */
+.bar-btn.closing { opacity: .5; pointer-events: none; }
+/* ---- session tab art ----
+   Every tab carries its launcher mark (data-art = roster type id, sessions.ts),
+   the same PNGs the launcher menu uses (2026-10-03); the CAS 5-spoke wheel
+   is the fallback for an unknown id. --tab-art picks the PNG, shared by the
+   face and the tint mask below.
+   Selection never tints the art: the active tab is marked by the offset
+   ring, so a theme's accent can't be mistaken for a state on the icon. */
+.session-wheel {
+  --tab-art: url("../assets/session-wheel.png");
+  position: absolute; inset: var(--space-4);
+  background: var(--tab-art) center / contain no-repeat;
+}
+.session-btn[data-art="claude"] .session-wheel { --tab-art: url("../assets/claude.png"); }
+.session-btn[data-art="codex"] .session-wheel { --tab-art: url("../assets/openai.png"); }
+.agent-subtab[data-agent="claude"] .session-wheel { --tab-art: url("../assets/claude.png"); }
+.agent-subtab[data-agent="codex"] .session-wheel { --tab-art: url("../assets/openai.png"); }
+.session-btn[data-art="gemini"] .session-wheel { --tab-art: url("../assets/gemini.png"); }
+.session-btn[data-art="pi"] .session-wheel { --tab-art: url("../assets/pi.png"); }
+.session-btn[data-art="local"] .session-wheel { --tab-art: url("../assets/local.png"); }
+.session-btn[data-art="shell"] .session-wheel { --tab-art: url("../assets/terminal.png"); }
+/* Page tab: the settings cog, full colour like #settings-btn (no multiply layer,
+   which would muddy it — see Icon faces). The hue-rotate is the variance from
+   the settings button: its orange lands near --agent-page gold, steel stays steel. */
+.session-btn[data-agent][data-body="page"] .session-wheel {
+  --tab-art: url("../assets/settings.png");
+  filter: hue-rotate(25deg);
+}
+/* the face border is the selection cue (above); drag needs touch-action off */
+.session-btn { touch-action: none; }
+/* mid-drag: lifted above its siblings, no eased ring while it travels */
+.session-btn.dragging { z-index: 5; cursor: grabbing; transition: none; opacity: 0.9; }
+/* Armed as Astra: the art takes the agent kind's tint (blue for Codex, and
+   orange should a Claude tab ever arm). The art is light with real alpha, so
+   the tint is a layer MASKED by the same image and multiplied over it: white
+   -> pure tint, mid-greys -> shaded tint, dark stays dark. A filter/hue-rotate
+   can't hit an exact colour, and masking alone would flatten it to a disc. */
+.session-btn.armed .session-wheel::after {
+  content: ""; position: absolute; inset: 0;
+  background: var(--tab-kind, var(--accent));
+  mix-blend-mode: multiply;
+  -webkit-mask: var(--tab-art) center / contain no-repeat;
+  mask: var(--tab-art) center / contain no-repeat;
+}
+/* the dead marker was carried by the digit's colour — it needs its own cue now */
+.session-btn.dead .session-wheel { opacity: 0.4; }
+
+.session-close {
+  /* 12 from the row's right edge: 8 hugged it, 14 (8 + --bar-inset) was too much (2026-10-10) */
+  position: absolute; top: 50%; right: var(--space-12); transform: translateY(-50%);
+  width: var(--space-16); height: var(--space-16);
+  border-radius: var(--radius-4); /* rounded square (2026-10-10) */
+  background: var(--border); color: var(--fg);
+  display: none;
+}
+/* the X is drawn, not a glyph: a "×" sat off-centre on the font's baseline (lucide x.svg, ISC).
+   public/icons/x.svg is a tracked copy: public/icons/lucide/ is gitignored, so a build from any
+   other checkout shipped no X (B9, 2026-10-15). */
+.session-close::before {
+  content: ""; position: absolute; inset: var(--space-2);
+  background: currentColor;
+  -webkit-mask: url("/icons/x.svg") center / contain no-repeat;
+  mask: url("/icons/x.svg") center / contain no-repeat;
+}
+.session-close:hover { background: var(--border-strong); }
+/* the needs-you chip outranks the close box: no stacking, no unlucky close (2026-10-10) */
+.session-btn:hover:not([data-need]) .session-close, #close-notice:is(:hover, :focus-visible) .session-close { display: block; }
+/* question chip draws the Noto question icon; the "?" stays in the DOM for accessibility (2026-10-10) */
+.session-btn[data-need="question"] .tab-chip {
+  color: transparent;
+  background-image: url("/icons/color/question.svg");
+  background-size: var(--space-16); background-position: center; background-repeat: no-repeat;
+}
+
+/* S1 from child-agents-mock: children stay under their parent; they select the
+   existing agent drawer rather than creating a second process or terminal. */
+.tab-agents { display: flex; flex-direction: column; gap: var(--space-2); margin-inline-start: var(--space-16); flex-shrink: 0; }
+.tab-agents[hidden], .tab-agent-dots[hidden] { display: none; }
+/* parent row: one square per child (cap 8, tab-agents.ts), coloured by state; no figures */
+.tab-agent-dots { display: flex; gap: var(--space-2); padding-inline-end: calc(var(--space-12) + var(--space-16) - var(--space-4)); }
+.tab-agent-dot { width: var(--space-8); height: var(--space-8); background: var(--fg-dim); }
+.tab-agent-dot[data-state="running"] { background: var(--ok-green); }
+.tab-agent-dot[data-state="needs"] { background: var(--approval-amber); }
+.tab-agent-dot[data-state="failed"] { background: var(--alert); }
+.agent-subtab { grid-template-columns: var(--tab-face-size) minmax(0, 1fr); flex-shrink: 0; padding-inline-end: calc(var(--space-12) + var(--space-16)); }
+.agent-subtab:is(:hover, :focus-within) .session-close { display: block; }
+.agent-subtab .session-close:focus-visible { outline: var(--space-2) solid var(--fg); }
+.agent-subtab .session-close:active { background: var(--bg-selected); }
+/* cancel .bar-btn.active's accent text and 3px ring, as parent rows do */
+.agent-subtab.active { color: var(--fg); box-shadow: none; background: var(--bg-hover); }
+.agent-subtab.dead { color: var(--fg-dim); }
+.agent-subtab.dead .session-wheel { opacity: .4; }
+

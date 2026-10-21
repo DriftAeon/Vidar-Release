@@ -1,0 +1,155 @@
+/* Jira bench tab (panels/jira.ts, jira/view.ts): the Changes pane's frame (changes.css :5-7, :10-17),
+   head, rows, notes, empty state and text fields, reused by class; only the Jira parts are new. */
+.jira-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
+.jira-pane [hidden] { display: none; }
+.jira-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+
+/* bench compact buttons: the .wb-actions look at the bar size (workbench.css .wb-block .wb-actions button) */
+.jira-pane .wb-actions button {
+  box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); white-space: nowrap;
+  font-family: var(--font-ui);
+}
+.jira-pane .wb-actions button.cx-ico { width: var(--row-24); padding: 0; }
+/* Sheen Cap face (workbench.css .wb-actions > button.wb-card-btn) at the bar's 24px size; the face itself is not edited here */
+.jira-pane .cx-head .wb-actions > button.wb-card-btn, .jira-pane .jx-filters > button.wb-card-btn { min-height: var(--row-24); padding: 0 var(--space-8); }
+.jira-pane .cx-head .wb-actions > button.wb-card-btn.cx-ico { padding: 0; }
+.jira-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
+
+.jira-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
+.jx-site { color: var(--fg); font-family: var(--font-mono); }
+.jira-pane .cx-list { min-height: 0; overflow-y: auto; }
+.jira-pane .cx-row { min-width: 0; cursor: pointer; }
+
+/* Mine | All: one joined pair, the current scope carries the accent */
+.jira-pane .jx-scope { gap: 0; flex: none; }
+.jira-pane .jx-scope button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.jira-pane .jx-scope button + button { border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.jira-pane .jx-scope > button.wb-card-btn.on { --edge: var(--accent); color: var(--fg); }
+.jira-pane .jx-scope button.on + button, .jira-pane .jx-scope button + button.on { border-left: var(--border-w) solid var(--accent); }
+
+/* filter bar (jira/filters.ts): pickers share the bench's compact button look through .wb-actions; the popover is
+   the Changes pane's .cx-menu, fixed on body. Hover, focus and active come from .wb-actions button. */
+.jira-pane .jx-filters { flex-wrap: wrap; align-items: center; flex: none; min-width: 0; }
+.jira-pane .jx-filters [hidden] { display: none; }
+.jira-pane .jx-filters > button.jx-pick.wb-card-btn.set { --edge: var(--accent); color: var(--fg); }
+.jira-pane .jx-filters > button.jx-pick.wb-card-btn.open { --edge: var(--fg-dim); color: var(--fg); }
+.jira-pane .jx-pick .jx-n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.jira-pane .jx-pick[aria-busy="true"] { cursor: progress; }
+.jx-search {
+  box-sizing: border-box; flex: 1; min-width: calc(var(--space-32) * 4); height: var(--row-24); display: inline-flex; align-items: center;
+  gap: var(--space-8); padding: 0 var(--space-8); background: var(--bg); color: var(--fg-dim);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.jx-search .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.jx-search:hover { border-color: var(--border-strong); }
+.jx-search:focus-within { border-color: var(--accent); color: var(--accent); }
+.jx-search-in {
+  flex: 1; min-width: 0; padding: 0; background: none; border: 0; outline: none; color: var(--fg);
+  font-family: var(--font-mono); font-size: var(--font-12);
+}
+.jx-search-in::placeholder { color: var(--fg-dim); font-family: var(--font-ui); }
+.jira-pane .jx-filters button.jx-link {
+  height: auto; min-width: 0; padding: 0 var(--space-4); background: none; border: 0; color: var(--accent);
+}
+.jira-pane .jx-filters button.jx-link:hover:not(:disabled) { background: none; text-decoration: underline; }
+.jira-pane .jx-filters button.jx-link:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-2); }
+.jira-pane .jx-filters button.jx-link:active:not(:disabled) { background: none; opacity: 0.7; }
+.jira-pane .jx-filters button.jx-link:disabled { color: var(--fg-dim); }
+.jx-pop { max-height: calc(var(--row-32) * 8); overflow-y: auto; }
+.jx-pop .jx-opt { gap: var(--space-8); }
+.jx-pop .jx-opt:disabled { opacity: 0.5; cursor: default; }
+.jx-pop .jx-opt.on { color: var(--accent); }
+.jx-pop .ty { display: inline-flex; flex: none; color: var(--fg-dim); }
+.jx-pop .jx-opt:hover:not(:disabled) .ty, .jx-pop .jx-opt:focus-visible .ty { color: var(--accent); }
+.jx-pop .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.jx-pop .jx-opt-key { flex: none; font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); }
+.jx-pop .jx-opt-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jx-box {
+  box-sizing: border-box; width: var(--space-12); height: var(--space-12); flex: none; display: inline-flex; align-items: center;
+  justify-content: center; border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-4);
+}
+.jx-pop .jx-box .icn { width: var(--space-8); height: var(--space-8); }
+.jx-box.on { border-color: var(--accent); color: var(--accent); background: var(--bg-selected); }
+
+/* grouped sections: a card per type. The head is the shared browser band (browser-list.css .br-band) with a Sheen face
+   (8e55f7bc) and the type icon in its slot; clickable. Colour rule (2026-10-20, replacing the 3px left edge of
+   pick B): the head bar takes the type colour, 25% over the Sheen stops (white label 4.5:1 or better on every stop,
+   hovered included, in all four themes); the card keeps its plain border; status colour on the pills only. */
+.jira-pane .br-band { cursor: pointer; margin-top: 0; }
+.jira-pane .jx-sec > .br-band {
+  margin-bottom: var(--space-4); border-left: 0; border-radius: 0; border-bottom: var(--border-w) solid var(--border);
+  background: var(--sec-fill); box-shadow: var(--titlebar-highlight); color: var(--fg-bright);
+  font-size: var(--font-12); letter-spacing: 0; text-transform: none;
+}
+.jira-pane .jx-sec > .br-band .ty, .jira-pane .jx-sec > .br-band .br-band-n { color: var(--fg-bright); }
+.jira-pane .jx-sec > .br-band:hover, .jira-pane .jx-sec > .br-band:focus-visible { background: var(--sec-fill); filter: brightness(1.2); }
+.jira-pane .br-band:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.jira-pane .jx-sec > .br-band:active { background: var(--sec-fill); filter: brightness(0.9); }
+.jx-sec {
+  --sec-hue: var(--fg-dim);
+  --sec-fill: linear-gradient(180deg,
+    color-mix(in srgb, var(--sec-hue) 25%, var(--titlebar-top)) 0%,
+    color-mix(in srgb, var(--sec-hue) 25%, var(--bg-titlebar)) 55%,
+    color-mix(in srgb, var(--sec-hue) 25%, var(--titlebar-bottom)) 100%);
+  min-width: 0; display: flex; flex-direction: column; gap: 0; padding: 0 0 var(--space-4); overflow: hidden;
+  background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.jx-sec[data-kind="epic"] { --sec-hue: var(--kind-epic); }
+.jx-sec[data-kind="story"] { --sec-hue: var(--kind-story); }
+.jx-sec[data-kind="task"] { --sec-hue: var(--kind-task); }
+.jx-sec[data-kind="bug"] { --sec-hue: var(--kind-bug); }
+.jx-sec[data-kind="subtask"] { --sec-hue: var(--kind-subtask); }
+.jx-sec > .cx-rows { padding: 0 var(--space-4); }
+.jx-sec + .jx-sec { margin-top: var(--space-12); }
+.jira-pane .ty { display: inline-flex; flex: none; color: var(--fg-dim); }
+.jira-pane .jx-more { justify-content: center; color: var(--fg-dim); }
+.jira-pane .jx-more:hover, .jira-pane .jx-more:focus-visible { color: var(--accent); background: var(--bg-hover); outline: none; }
+.jira-pane .jx-more[aria-busy="true"] { cursor: progress; opacity: 0.5; }
+/* rows take focus (Enter opens): the hover look, and the Send action shows */
+.jira-pane .cx-row:focus-visible { background: var(--bg-hover); outline: none; }
+.jira-pane .cx-row:focus-visible .cx-racts { opacity: 1; }
+.jx-key { flex: none; color: var(--fg); font-family: var(--font-mono); }
+.jx-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.jx-parent { flex: none; color: var(--fg-dim); font-family: var(--font-mono); font-size: var(--font-11); }
+.jx-note { color: var(--fg-dim); }
+.jira-pane .cx-empty { min-width: 0; text-align: center; }
+.jira-pane .cx-empty-title { overflow-wrap: anywhere; }
+
+/* an issue open in the module (jira/detail.ts, the shared browser fullscreen): the pane shows only its note line
+   and the fullscreen host (browser-full.css) */
+.jira-pane.jx-detail-open > :not(.jx-note):not(.br-full-host) { display: none; }
+.jira-pane .br-full-host { flex: 1; }
+
+/* ADF body (jira/adf.ts): fixed ja-* classes on allowlisted tags only */
+.ja-doc { display: flex; flex-direction: column; gap: var(--space-8); }
+.ja-doc:empty { display: none; }
+.ja-p, .ja-ul, .ja-ol, .ja-blockquote, .ja-pre, .ja-h { margin: 0; }
+.ja-h { font-weight: var(--weight-strong); color: var(--fg); }
+.ja-ul, .ja-ol { padding-left: var(--space-16); }
+.ja-li > .ja-p + .ja-p { margin-top: var(--space-4); }
+.ja-blockquote { padding-left: var(--space-8); border-left: 2px solid var(--border-strong); color: var(--fg-dim); }
+.ja-pre { padding: var(--space-8); background: var(--bg-hover); border-radius: var(--radius-4); overflow-x: auto; }
+.ja-code { font-family: var(--font-mono); font-size: var(--font-11); }
+.ja-hr { border: 0; border-top: var(--border-w) solid var(--border); width: 100%; }
+.ja-table { border-collapse: collapse; max-width: 100%; }
+.ja-th, .ja-td { padding: var(--space-4) var(--space-8); border: var(--border-w) solid var(--border); text-align: left; vertical-align: top; }
+.ja-th { font-weight: var(--weight-strong); background: var(--bg-hover); }
+.ja-plain { white-space: pre-wrap; }
+
+/* notice and form */
+.jx-form { display: flex; flex-direction: column; gap: var(--space-8); flex: none; }
+.jx-form-title { color: var(--fg); font-weight: var(--weight-strong); }
+.jx-field { display: flex; flex-direction: column; gap: var(--space-4); color: var(--fg-dim); }
+.jx-input {
+  box-sizing: border-box; height: var(--row-28); min-width: 0; padding: 0 var(--space-8);
+  background: var(--bg); color: var(--fg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  font-family: var(--font-mono); font-size: var(--font-12);
+}
+.jx-input::placeholder { color: var(--fg-dim); font-family: var(--font-ui); }
+.jx-input:hover:not(:disabled) { border-color: var(--border-strong); }
+.jx-input:focus { outline: none; border-color: var(--accent); }
+.jx-input:disabled { opacity: 0.5; }
+.jx-form-acts { display: flex; gap: var(--space-8); align-items: center; }
+.jx-link { color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; font: inherit; text-align: left; }
+.jx-link:hover { text-decoration: underline; }

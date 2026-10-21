@@ -1,0 +1,13 @@
+{
+  "id": "alpha",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Alpha" },
+  "module": {
+    "id": "alpha",
+    "label": "Alpha",
+    "level": "optional",
+    "kind": "agent",
+    "owns": ["tools/shared/"]
+  }
+}

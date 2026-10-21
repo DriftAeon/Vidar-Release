@@ -1,0 +1,67 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "block",
+      "id": "00000000-0000-0000-0000-000000000301",
+      "type": "paragraph",
+      "has_children": false,
+      "paragraph": { "rich_text": [
+        { "type": "text", "text": { "content": "<img src=x onerror=alert(1)>", "link": null }, "plain_text": "<img src=x onerror=alert(1)>", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "red\" onclick=\"alert(1)" }, "href": null },
+        { "type": "text", "text": { "content": "click", "link": { "url": "javascript:alert(1)" } }, "plain_text": "click", "annotations": { "bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default" }, "href": "javascript:alert(1)" },
+        { "type": "mention", "mention": { "type": "link_preview", "link_preview": { "url": "data:text/html,<script>alert(1)</script>" } }, "plain_text": "preview", "href": "data:text/html,<script>alert(1)</script>" }
+      ], "color": "default" }
+    },
+    {
+      "object": "block",
+      "id": "00000000-0000-0000-0000-000000000302",
+      "type": "callout",
+      "has_children": false,
+      "callout": { "rich_text": [{ "type": "text", "plain_text": "Icon from elsewhere" }], "icon": { "type": "external", "external": { "url": "https://example.invalid/track.png" } }, "color": "url(javascript:alert(1))" }
+    },
+    {
+      "object": "block",
+      "id": "00000000-0000-0000-0000-000000000303",
+      "type": "embed",
+      "has_children": false,
+      "embed": { "url": "https://example.invalid/frame", "caption": [] }
+    },
+    {
+      "object": "block",
+      "id": "00000000-0000-0000-0000-000000000304",
+      "type": "code",
+      "has_children": false,
+      "code": { "rich_text": [{ "type": "text", "plain_text": "</pre><script>alert(1)</script>" }], "language": "<b>js</b>", "caption": [] }
+    },
+    {
+      "object": "block",
+      "id": "00000000-0000-0000-0000-000000000305",
+      "type": "brand_new_block",
+      "has_children": false,
+      "brand_new_block": { "anything": true }
+    },
+    {
+      "object": "page",
+      "id": "00000000-0000-0000-0000-000000000306",
+      "type": "paragraph",
+      "paragraph": { "rich_text": [{ "type": "text", "plain_text": "Not a block object" }] }
+    },
+    {
+      "object": "block",
+      "id": "../../v1/users/me",
+      "type": "paragraph",
+      "paragraph": { "rich_text": [{ "type": "text", "plain_text": "Bad id" }] }
+    },
+    {
+      "object": "block",
+      "type": "paragraph",
+      "paragraph": { "rich_text": [{ "type": "text", "plain_text": "No id" }] }
+    },
+    "a bare string"
+  ],
+  "next_cursor": null,
+  "has_more": false,
+  "type": "block",
+  "block": {},
+  "request_id": "00000000-0000-0000-0000-0000000000f6"
+}

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "codex-exec",
+  "slot": "rewrite",
+  "label": "Codex",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{pack}/voice/rewrite_codex.py", "--budget", "{budget}", "--model", "{model}", "--effort", "{effort}"]
+  },
+  "warm": null,
+  "stop": null,
+  "status": null,
+  "models": [],
+  "modelIds": true,
+  "efforts": ["low", "medium", "high", "xhigh"],
+  "suggestedModels": [
+    { "id": "gpt-6.1-sol", "label": "GPT-6.1-Sol" },
+    { "id": "gpt-6-astra", "label": "GPT-6-Astra" },
+    { "id": "gpt-6-sol", "label": "GPT-6-Sol" },
+    { "id": "gpt-6-luna", "label": "GPT-6-Luna" }
+  ],
+  "files": [],
+  "source": "content/packs/codex/voice/rewrite_codex.py (Codex pack); needs the Codex CLI on PATH",
+  "fill": "Codex CLI on PATH and local voice Python at {vidar}/content/local-voice/.venv/Scripts/python.exe"
+}

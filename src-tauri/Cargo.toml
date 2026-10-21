@@ -1,0 +1,100 @@
+[package]
+name = "vidar"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+# preserve_order: save_locations round-trips vidar.json as a generic tree and
+# must not reorder the author's keys.
+serde_json = { version = "1", features = ["preserve_order"] }
+portable-pty = "0.9"
+# The rack's tools/list call — Vidar's only HTTP client, loopback-only, blocking
+# (one small JSON-RPC round trip per expand). No TLS: it never leaves the machine.
+ureq = { version = "2", default-features = false }
+url = "2"
+base64 = "0.22"
+# Already in Cargo.lock via Tauri; modules/manifest.rs compiles the contract's gateway
+# keyVarPattern and modelPattern.
+regex = "1"
+# Already in Cargo.lock via Tauri; pty.rs mints VIDAR_CTL_TOKEN (control/policy.rs) from it.
+getrandom = "0.3"
+# Already in Cargo.lock via tauri-utils (1.1.4); codex_config.rs reads real Codex config.toml
+# files, whose quoted and dotted headers bare/home.rs's parse_toml_lite refuses.
+toml = "1"
+# Already in Cargo.lock via Tauri; characters\pin.rs pins each pack's model (size + sha256)
+# and bridge::read_character_model re-checks it on every load.
+sha2 = "=0.10.9"
+# voice.rs: global push-to-talk hotkey (RegisterHotKey + release polling) and WASAPI mic
+# capture. Transcription is an external whisper-cli process, deliberately not in-process.
+tauri-plugin-global-shortcut = "2"
+cpal = "0.18"
+# Already a transitive dep of tauri at this exact version — only the feature
+# flags are new. GDI for the screen grab, WinRT Media.Ocr for recognition.
+windows = { version = "0.61", features = [
+  "Foundation",
+  "Foundation_Collections",
+  "Graphics_Imaging",
+  "Media_Ocr",
+  "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_HiDpi", # colour_sample.rs: SetThreadDpiAwarenessContext / DPI_AWARENESS_CONTEXT for physical cursor/client coordinates
+  "Win32_System_WinRT",
+  # procs.rs: Toolhelp snapshot (parent chain) + OpenProcess/GetProcessTimes
+  # (liveness and pid-reuse guard) for pulling external Claude sessions in.
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+  "Win32_UI_WindowsAndMessaging",
+  # tray_native.rs: summon owns a separate HWND registration from voice's plugin.
+  "Win32_UI_Input_KeyboardAndMouse",
+  # agent.rs: Job Object with kill-on-close owns a Rendered tab's process tree
+  # (node sidecar → claude.exe → tools). Win32_Security gates CreateJobObjectW.
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_IO",
+  # falcon/host_identity.rs: GetNamedPipeServerProcessId binds the activation pipe to the
+  # registered host before Jettison sends `show` (mirrors src-falcon ipc.rs).
+  "Win32_System_Pipes",
+  # folder_pick.rs: the shell's IFileOpenDialog in pick-folders mode (Select Workspace, Browse).
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  # deps.rs: the env probe reads HKCU\Environment with RegGetValueW (no `reg query` spawn).
+  "Win32_System_Registry",
+  # runlog.rs: SetStdHandle points stderr at the release log; GetFileInformationByHandle
+  # compares file ids before a rotation renames anything.
+  "Win32_System_Console",
+  "Win32_Storage_FileSystem",
+  # jira/: WinHTTP for HTTPS to *.atlassian.net, Credential Manager for the API token.
+  "Win32_Networking_WinHttp",
+  "Win32_Security_Credentials",
+  # credman.rs: CryptProtectData/CryptUnprotectData wrap the stored tokens (DPAPI).
+  "Win32_Security_Cryptography",
+] }
+
+[dev-dependencies]
+# card.rs's #[test] needs tauri::test::mock_app() to build an AppHandle to
+# hand `card::request` without a real window; Cargo unifies this with the
+# plain `tauri` dependency above, so `test` is enabled for test/dev builds
+# only, never the shipped binary.
+tauri = { version = "2.11", features = ["test"] }
+
+[profile.dev]
+incremental = true
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+# Local iteration profile; release stays the shipping profile.
+[profile.fast]
+inherits = "release"
+incremental = true
+opt-level = 1
+codegen-units = 256

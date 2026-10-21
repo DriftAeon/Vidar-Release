@@ -1,0 +1,24 @@
+{
+  "key": "DEMO-12",
+  "fields": {
+    "summary": "Checkout total ignores the discount",
+    "status": { "name": "In Review", "statusCategory": { "key": "indeterminate", "name": "In Progress" } },
+    "issuetype": { "name": "Story", "hierarchyLevel": 0 },
+    "priority": { "name": "High" },
+    "assignee": { "displayName": "Ada Example" },
+    "updated": "2026-10-16T08:00:00.000+0000",
+    "description": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        { "type": "paragraph", "content": [{ "type": "text", "text": "The total shows the price before the " }, { "type": "text", "text": "discount", "marks": [{ "type": "strong" }] }, { "type": "text", "text": "." }] },
+        { "type": "bulletList", "content": [{ "type": "listItem", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Reproduce with code SAVE10" }] }] }] }
+      ]
+    },
+    "parent": { "key": "DEMO-1", "fields": { "summary": "Checkout rework", "status": { "name": "To Do", "statusCategory": { "key": "new" } } } },
+    "subtasks": [
+      { "key": "DEMO-13", "fields": { "summary": "Add a test", "status": { "name": "To Do", "statusCategory": { "key": "new" } } } },
+      { "key": "bad-key", "fields": { "summary": "Dropped", "status": { "name": "To Do", "statusCategory": { "key": "new" } } } }
+    ]
+  }
+}

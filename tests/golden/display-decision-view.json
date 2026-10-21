@@ -1,0 +1,11 @@
+{
+  "decision": {
+    "file": "latest-pill-bda4f498.html",
+    "sha256": "09cde7653c607f3f3df7faf55886bd8e694494d5a118a616e497b80f35d9095a",
+    "verdict": "approve",
+    "comment": "A. filled accent is good",
+    "atMs": 1791166180236,
+    "request": "bda4f498"
+  },
+  "current": true
+}

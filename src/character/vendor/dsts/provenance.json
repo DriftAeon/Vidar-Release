@@ -1,0 +1,59 @@
+{
+  "repository": "https://tangled.org/nuffle.me/dsts-viewer",
+  "commit": "2707c22b3d944dbed94ab814d5639feb4952f3f4",
+  "tag": "v0.9.1",
+  "changes": "Import aliases made relative. Eye-shine shader retains texture alpha; see local_patches. files[].sha256 records the original upstream source.",
+  "files": [
+    {
+      "file": "effects/chrCel.glsl.ts",
+      "sha256": "73483b860469a260fa4c67759394ed65a0d427838de93b2f5b3e8370514e7ff1"
+    },
+    {
+      "file": "effects/chrCel.math.ts",
+      "sha256": "58de6b4282c674bf599671c27f13b2c90162a395e68825c230120ce59df72534"
+    },
+    {
+      "file": "effects/eyeShine.glsl.ts",
+      "sha256": "6a0803f219b0a5e9de161c8cbbff618dcbf06174f3f68610dc9fcd6b029fee88"
+    },
+    {
+      "file": "modelViewer/eyeOverlayBake.ts",
+      "sha256": "b5ca51f8eaf99f77e54dfb5ce426d4957d5708890a12a3b001c7d7b9896d0712"
+    },
+    {
+      "file": "modelViewer/textureDecode.ts",
+      "sha256": "2a70986ab1eb2bc7d09c73b3275ddb1eed5438f47ec54e3a5dfeb0a2f1ee3c95"
+    },
+    {
+      "file": "modelViewer/pngDecode.ts",
+      "sha256": "1e1874f1c1172f273c027ca4c6430e6bfccb185b9e585dd57373f20fdb5ad70a"
+    },
+    {
+      "file": "modelViewer/shaderRegistry.ts",
+      "sha256": "6a5f4b4230d9ef7e60af9f4e598b8572a2ba6d069e673309458bb976e484af65"
+    },
+    {
+      "file": "modelViewer/lightingRig.ts",
+      "sha256": "00cfaacc1b83ac4a84ce285fe1195ae8005bdbc4ced5abe42973224d21963626"
+    },
+    {
+      "file": "modelViewer/celClut.ts",
+      "sha256": "7752d09131789918c4bf17abddd7f2298ca7d67d234b337d2ce631aefe25da78"
+    },
+    {
+      "file": "modelViewer/glbImages.ts",
+      "sha256": "4075a56a78f4b4bb69882e00250c868b0d9cadf5587d2eebac9b0e6540d1ca31"
+    }
+  ],
+  "local_patches": [
+    {
+      "file": "effects/eyeShine.glsl.ts",
+      "reason": "Honor matcap alpha in additive blending. The reviewed Terriermon chr701e01h PNG has RGB 254-255 but alpha 0-255; dropping alpha whitens the whole iris.",
+      "sha256": "b90c6cec9f7ab97a58fbb9f01a26f091e2091935152989ddd74a084522c5e83b"
+    },
+    {
+      "file": "modelViewer/textureDecode.ts",
+      "reason": "decodeUnpremultiplied reuses PNG pixels from the per-session model cache (src/character/model-cache.ts), so a repeat character skips the decode."
+    }
+  ]
+}

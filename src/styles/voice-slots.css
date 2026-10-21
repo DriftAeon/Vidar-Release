@@ -1,0 +1,37 @@
+/* Settings › Audio › Voice Slots page tab (voice slots V6). Own file: styles.css is at its ceiling.
+   Layout follows the Dependencies page and reuses its rules (settings-modal.css): .deps-bar and
+   .deps-summary for the one-line banner, .deps-recheck for Re-Detect, .deps-mark for the slot glyph
+   and state icon, .deps-where for the pick line, .deps-route for the Copy chip; .vs-section-title and
+   .vs-cmd share the .deps-* rules there. Rows are separated by spacing, not lines. */
+.vs-page { display: flex; flex-direction: column; gap: var(--space-12); }
+.vs-error { font-size: var(--font-12); color: var(--alert); }
+.vs-section + .vs-section { margin-top: var(--space-8); }
+.vs-rows { display: flex; flex-direction: column; gap: var(--space-12); }
+.vs-row { display: flex; align-items: flex-start; gap: var(--space-8); }
+.vs-body { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-4); flex: 1; min-width: 0; }
+.vs-head { display: flex; align-items: center; min-height: var(--line-20); gap: var(--space-8); }
+.vs-label { font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20); font-weight: var(--weight-strong); color: var(--fg); }
+/* A required slot that needs you takes the alert colour on its name; an empty optional one reads dimmed. */
+.vs-row.is-missing:not(.is-optional) .vs-label,
+.vs-row.is-broken .vs-label { color: var(--alert); }
+.vs-row.is-empty .vs-label { font-weight: var(--weight-regular); color: var(--fg-dim); }
+.vs-head .deps-mark { height: var(--space-16); }
+.vs-pick { display: block; max-width: 100%; }
+.vs-pick.is-current { color: var(--fg); }
+.vs-fill { max-width: 100%; }
+.vs-fill .deps-mark { height: var(--space-16); }
+/* An empty optional slot keeps its setup line, one step quieter. */
+.vs-row.is-empty .vs-cmd { color: var(--fg-dim); }
+/* An unverified pack fill shows whole: wrapped, newlines kept, no ellipsis. */
+.vs-fill.is-unverified { align-items: flex-start; }
+.vs-fill.is-unverified .vs-cmd { overflow: visible; text-overflow: clip; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Trust confirm: inline Swap Confirm look. Head, body, actions and the Yes/No pair come from the shared
+   .swap-confirm-* and .swap-yes/.swap-no rules (bar-switches.css, decision-pair.css); only the box is set here. */
+.vs-confirm {
+  display: flex; flex-direction: column; box-sizing: border-box; max-width: 100%;
+  background: var(--bg-panel); border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-8); /* legacy 8: matches #swap-confirm (menus.css) */
+}
+.vs-confirm-text { margin: 0; font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20); color: var(--fg); overflow-wrap: anywhere; }
+.ws-btn.vs-redetect:disabled,
+.ws-btn.vs-trust:disabled { opacity: 0.5; cursor: default; color: var(--fg-dim); border-color: var(--border); }

@@ -1,0 +1,185 @@
+/* ---- modules ---- */
+/* Each module is an inset card: --bg sits a shade under the panel's --bg-panel
+   in every CAS theme, so the card reads as nested under the tier label without
+   needing a second border colour. */
+.module {
+  display: flex; flex-direction: column; gap: var(--space-6);
+  background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius-6);
+  /* top 4, not 8: the heading sat twice as far from the card edge as from its own rule (2026-10-03) */
+  padding: var(--space-4) var(--space-8) var(--space-8);
+}
+.module-head {
+  font-size: var(--font-11);
+  color: var(--fg-dim);
+  border-bottom: 1px solid var(--border); padding-bottom: var(--space-3);
+}
+/* rows sit on --bg-panel so they lift off the darker card, inverting the
+   normal panel/row relationship */
+.module .rack-name { background: var(--bg-panel); }
+.rack-list { display: flex; flex-direction: column; gap: var(--space-6); }
+/* Loadout and MCP Servers: one box, no head, no dividers; rows separate by the list gap alone.
+   Border stays the panel's --border: --border-strong read white and the straight hairlines clashed
+   with the rounded row buttons (2026-10-05). An empty list draws no box at all. */
+.module-box { gap: 0; padding: var(--space-8); }
+.module-box:has(> .rack-list:empty), .module-box:has(> .loadout-wrap > .loadout-inner > .rack-list:empty) { display: none; }
+/* its host div (panels/index.ts) would stay as a 0-high #modules child and keep a 10px gap (layout-audit, 2026-10-10) */
+#modules > :empty, #modules > :has(> .module-box:only-child > .rack-list:empty), #modules > :has(> .module-box:only-child > .loadout-wrap .rack-list:empty) { display: none; }
+.rack-row { display: flex; flex-direction: column; gap: var(--space-3); }
+/* MCP Servers: like Gear (loadout.css), DOM order is title then detail but the detail draws above, so the
+   bar-modules stack (bottom-anchored, grows upward) leaves the title where it was on open */
+[aria-label="MCP Servers"] .rack-row, [aria-label="Loadout"] .rack-row { flex-direction: column-reverse; }
+/* Gear rows share it: the detail draws above its name and slides up like the Gear box (2026-10-20: the
+   box slid up, then a row opening popped down) */
+.rack-name {
+  display: flex; align-items: baseline; gap: var(--space-6); text-align: left;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-4) var(--space-8); cursor: pointer; font-size: var(--font-12);
+}
+.rack-name:hover { color: var(--accent); border-color: var(--accent); }
+.rack-chev {
+  flex-shrink: 0; color: var(--fg-dim); font-size: var(--font-13); line-height: 1;
+  display: inline-block; transition: transform 0.06s ease-out;
+}
+.rack-row.open .rack-chev { transform: rotate(90deg); }
+/* rows carry no chevron (2026-10-04): an open row reads by its selected fill */
+.rack-row.open > .rack-name { background: var(--bg-selected); }
+/* the row being dragged (reorder.ts) */
+.rack-row.dragging { opacity: 0.6; }
+.rack-row.dragging .rack-name { border-color: var(--accent); cursor: grabbing; }
+/* Loadout: a section with nothing to show keeps its border but does not open (rack-row.ts inert) */
+.rack-name[aria-disabled="true"] { cursor: default; }
+.rack-name[aria-disabled="true"]:hover { color: inherit; border-color: var(--border); }
+.rack-name .icn { width: var(--font-12); height: var(--font-12); align-self: center; flex-shrink: 0; margin-right: var(--space-4); } /* .rack-name text is --font-12 */
+.rack-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.rack-scope { font-size: var(--font-10); color: var(--fg-dim); flex-shrink: 0; }
+/* no value: the slot would still take the row's 6px gap (layout-audit, 2026-10-10) */
+.rack-scope:empty { display: none; }
+/* no left rule or inset: it cost width and added no grouping (2026-10-04) */
+.rack-detail { padding: 0 0 var(--space-4); font-size: var(--font-11); }
+/* first item sits 4px under the row button: the row gap alone (2026-10-04) */
+.rack-row:has(> .rack-detail:not(.collapsed)) { gap: var(--space-4); }
+/* Open/close slide: the detail stays in layout (.collapsed is the state flag; .hidden is display none !important, so it cannot animate) and its height runs
+   0 <-> auto. The rows pin to the end (next to the name) and the clip is the detail's top edge, so rows are
+   uncovered from the name outward; top-pinned they would leave a band, see .loadout-wrap in loadout.css. */
+.rack-row { transition: gap 180ms ease-out; } /* motion: Gear reveal */
+.rack-detail {
+  display: grid; align-content: end; overflow: hidden; interpolate-size: allow-keywords; height: auto;
+  transition: height 180ms ease-out, padding-bottom 180ms ease-out, visibility 0s; /* motion: Gear reveal */
+}
+.rack-detail.collapsed {
+  height: 0; padding-bottom: 0; visibility: hidden;
+  transition: height 180ms ease-out, padding-bottom 180ms ease-out, visibility 0s linear 180ms; /* motion: Gear reveal */
+}
+.rack-row:has(> .rack-detail.collapsed) { gap: 0; }
+@media (prefers-reduced-motion: reduce) { .rack-row, .rack-detail, .rack-detail.collapsed { transition: none; } }
+.rack-detail > :first-child { margin-top: 0; }
+/* MCP server tool list: no bottom pad, so the list gap under the last tool (6) reads like the 4 above the first */
+.rack-detail:has(> .rack-tools) { padding-bottom: 0; }
+/* vertical tool list under an expanded server; hairline between tools so the
+   block still scans as separate names — 1px --border, 3px+2px around it */
+.rack-tools { display: flex; flex-direction: column; gap: 0; margin-top: var(--space-6); }
+/* hairline between tools only, none above the first (2026-10-03) */
+.rack-tool { margin-top: var(--space-3); padding-top: var(--space-2); }
+.rack-tool + .rack-tool { border-top: 1px solid var(--border); }
+/* one line per tool: dot + name, no tooltip.
+   13px + 5px gap: smaller read as one block, not a list. */
+.rack-tool {
+  display: flex; align-items: baseline; min-width: 0;
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: var(--font-13);
+}
+/* fixed green (same hue as --ok-green), not a theme accent — the
+   dot means "advertised by a live server" in every CAS mode */
+.rack-tool-dot { color: #22c55e; flex-shrink: 0; white-space: pre; }
+.rack-tool-name {
+  color: var(--fg);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+
+/* Shared item button (Loadout skills, MCP rack tools): dot and name, no chevron (2026-10-04); description on hover.
+   No action yet, so the cursor stays default; the toggle lands later. */
+.item-btn-list { display: flex; flex-direction: column; gap: var(--space-4); }
+.item-btn {
+  display: flex; align-items: center; gap: var(--space-8); min-height: var(--row-28); /* was 12: dot read as a separate item (2026-10-05) */
+  padding: 0 var(--space-6); /* half of 12, user 2026-10-04 */
+  text-align: left; cursor: default;
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: var(--font-13);
+  font-weight: var(--weight-regular); line-height: var(--line-20);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+  transition: background-color 80ms, border-color 80ms;
+}
+.item-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.item-btn:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; }
+.item-btn:active { background: var(--bg-selected); }
+.item-btn:disabled { opacity: 0.6; }
+.item-btn:disabled:hover { background: var(--bg); border-color: var(--border); }
+.item-btn-dot {
+  flex-shrink: 0; width: var(--space-8); height: var(--space-8);
+  border-radius: var(--radius-full); background: var(--ok-green);
+}
+.item-btn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- observation modules (LM Studio, Ports, rack backends) ----
+   Dots are fixed hues like .rack-tool-dot: green = answered / loopback,
+   amber = reachable-but-not-usable / bound beyond loopback, dim = down. */
+.mod-head-row { display: flex; align-items: center; justify-content: space-between; }
+/* section headings centred; a head with a right-side control (Ports) keeps space-between */
+.module-head { text-align: center; }
+.mod-head-row:has(> :only-child) { justify-content: center; }
+/* centred title with its right-side control pinned to the edge (Loadout) */
+.mod-head-center { justify-content: center; position: relative; }
+.mod-head-center > .mod-refresh { position: absolute; right: 0; }
+/* the caps heading, kept as a named style for Loadout and MCP Servers;
+   source strings stay Title Case, the caps are display only */
+.mod-head-caps { text-transform: uppercase; letter-spacing: 0.06em; }
+.mod-head-count { font-size: var(--font-11); }
+.mod-refresh {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-4);
+  color: var(--fg-dim); font-size: var(--font-11); line-height: 1; padding: 1px var(--space-5); cursor: pointer;
+}
+.mod-refresh:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+/* refresh controls carry the lucide refresh-cw glyph (icons.ts), not a text arrow */
+.mod-refresh .icn { width: 11px; height: 11px; vertical-align: -0.1em; }
+/* Document bar: reload/source/location/comments are glyph-only; a label only appears
+   beside the glyph when it has something to say ("Updated", the "(n)" comment count) */
+#doc-reload .lbl:not(:empty), #doc-comments .lbl:not(:empty) { margin-left: var(--space-5); }
+#doc-source[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.mod-line { display: flex; align-items: baseline; min-width: 0; font-size: var(--font-12); }
+.mod-line.sub { font-size: var(--font-11); }
+.mod-dot { flex-shrink: 0; white-space: pre; }
+.mod-dot-ok, .rack-tool-dot.mod-dot-ok { color: #22c55e; }
+.mod-dot-warn, .rack-tool-dot.mod-dot-warn { color: #f59e0b; }
+.mod-dot-off { color: var(--fg-dim); }
+.mod-toggle {
+  align-self: flex-start; background: none; border: none; padding: 0; margin-top: var(--space-4);
+  color: var(--fg-dim); font-size: var(--font-11); cursor: pointer; text-decoration: underline dotted;
+}
+.mod-toggle:hover { color: var(--accent); }
+.rack-backends { display: flex; flex-direction: column; margin-top: var(--space-6); }
+/* no backends (every non-proxy server): the empty block's 6px margin sat under the last tool */
+.rack-backends:empty { display: none; }
+.rack-backend { border-top: 1px solid var(--border); margin-top: var(--space-3); padding-top: var(--space-2); }
+/* backend and tool icons: text height, centred on the text, --space-4 gap (same as the flow-pick rows) */
+/* brand icons sit on the far right of backend and tool rows: dot left, text middle (2026-10-05) */
+.rack-backend .icn { width: var(--font-11); height: var(--font-11); align-self: center; flex-shrink: 0; margin-left: auto; }
+.item-btn > .icn { width: var(--font-13); height: var(--font-13); flex-shrink: 0; }
+
+/* ---- status detail flyout ---- */
+#status-expanded h3 { font-size: var(--font-14); margin-bottom: var(--space-2); }
+#status-expanded h4 {
+  font-size: var(--font-11);
+  color: var(--fg-dim); margin: 14px 0 var(--space-6);
+  border-bottom: 1px solid var(--border); padding-bottom: var(--space-3);
+}
+.dim { color: var(--fg-dim); }
+.sub { font-size: var(--font-11); }
+.row { display: flex; justify-content: space-between; gap: var(--space-8); }
+.row span:last-child { color: var(--accent); }
+.stat { margin-bottom: var(--space-8); }
+.bar {
+  height: 5px; border-radius: var(--radius-3); background: var(--border);
+  overflow: hidden; margin-top: var(--space-3);
+}
+.bar-fill { height: 100%; background: var(--accent); border-radius: var(--radius-3); }
+

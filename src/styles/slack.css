@@ -1,0 +1,59 @@
+/* Slack bench tab (panels/slack.ts, slack/view.ts): the Jira tab's scoped frame rules (jira.css :3-15, :17,
+   :20-24, :29-30) under .slack-pane; the shared jx-form/cx- classes carry the rest. Row parts are sx-. */
+.slack-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
+.slack-pane [hidden] { display: none; }
+.slack-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+
+.slack-pane .wb-actions button {
+  box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); white-space: nowrap;
+  font-family: var(--font-ui);
+}
+.slack-pane .wb-actions button.cx-ico { width: var(--row-24); padding: 0; }
+.slack-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
+
+.slack-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
+.slack-pane .cx-list { min-height: 0; overflow-y: auto; }
+.slack-pane .cx-row { min-width: 0; cursor: pointer; }
+.slack-pane .cx-row:focus-visible { background: var(--bg-hover); outline: none; }
+.slack-pane .cx-row:focus-visible .cx-racts { opacity: 1; }
+.slack-pane .cx-empty { min-width: 0; text-align: center; }
+.slack-pane .cx-empty-title { overflow-wrap: anywhere; }
+
+.sx-from { flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-family: var(--font-ui); }
+.sx-from-new { font-weight: var(--weight-strong); }
+.sx-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.sx-time { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); }
+
+/* groups: a section head, then rows; channels add a quiet name line per channel */
+.slack-pane .cx-sec .icn { color: var(--fg-dim); }
+.sx-conv { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); padding: 0 var(--space-4); color: var(--fg-dim); font-family: var(--font-ui); min-width: 0; }
+
+/* group cards (2026-10-18): Direct Messages and Channels are cards with a Sheen head (8e55f7bc); the DM card
+   and each channel line carry a 3px place edge, and a channel's hash or lock takes its place colour */
+.slack-pane .sx-group {
+  flex: none; display: flex; flex-direction: column; padding: 0 0 var(--space-4); overflow: hidden;
+  background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.slack-pane .sx-group + .sx-group { margin-top: var(--space-4); }
+.slack-pane .sx-group > .cx-sec {
+  margin-bottom: var(--space-4); padding: 0 var(--space-8); border-bottom: var(--border-w) solid var(--border);
+  background: var(--titlebar-grad); box-shadow: var(--titlebar-highlight); color: var(--fg-bright);
+}
+.slack-pane .sx-group > .cx-sec .icn { color: var(--fg-bright); }
+.slack-pane .sx-group > .cx-sec .cx-sec-label { color: var(--fg-bright); font-size: var(--font-12); letter-spacing: 0; text-transform: none; }
+.slack-pane .sx-group > .cx-rows, .slack-pane .sx-group > .sx-conv { margin: 0 var(--space-4); }
+.slack-pane .sx-group[data-place="dm"] { border-left: 3px solid var(--place-dm); }
+.slack-pane .sx-conv + .cx-rows { margin-bottom: var(--space-4); }
+.sx-conv[data-place="channel"] { border-left: 3px solid var(--place-channel); }
+.sx-conv[data-place="private"] { border-left: 3px solid var(--place-private); }
+.sx-conv[data-place="channel"] .icn { color: var(--place-channel); }
+.sx-conv[data-place="private"] .icn { color: var(--place-private); }
+.sx-av[data-place="group"] { color: var(--place-group); }
+.sx-conv-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* New dot slot (kept on every row so the avatars line up) and the letter avatar */
+.sx-dot { flex: none; width: var(--space-4); height: var(--space-4); border-radius: var(--radius-full); background: transparent; }
+.sx-dot-new { background: var(--accent); }
+.sx-av { flex: none; box-sizing: border-box; width: var(--space-16); height: var(--space-16); display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-full); background: var(--bg-selected); color: var(--fg); font-family: var(--font-ui); font-size: var(--font-11); font-weight: var(--weight-strong); line-height: 1; }
+.slack-pane .sx-av .icn { width: var(--space-12); height: var(--space-12); }

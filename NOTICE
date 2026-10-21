@@ -1,0 +1,8 @@
+DriftCell Vidar
+Copyright 2026 DriftCell
+
+This product includes third-party software and artwork; see public/THIRD-PARTY-NOTICES.txt.
+
+Dependencies installed by npm and Cargo keep their own licences. One of them, @anthropic-ai/claude-agent-sdk (used by the Claude session sidecar), is proprietary to Anthropic PBC and is used under Anthropic's terms; it is not part of this repository and not covered by this project's licence.
+
+Product names, logos and marks of third parties (including Anthropic, OpenAI, Google, Atlassian, Slack, Notion, JetBrains, Element Labs (LM Studio), Epic Games, the Blender Foundation, DeepSeek, Zhipu AI (Z.ai) and Inflection AI) are trademarks of their respective owners. They appear only to identify the software Vidar works with, are not covered by this project's licence, and imply no affiliation with or endorsement by their owners. If you own one of these marks and want it changed or removed, open an issue and it will be.

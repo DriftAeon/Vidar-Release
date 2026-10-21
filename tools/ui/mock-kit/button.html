@@ -1,0 +1,109 @@
+<!-- mock-kit: Vidar's standard button. mock-new.mjs moves the style element into the page head and the
+     section into the body.
+     Source: src/styles/base.css :10-20 (the house button, :where(button) base plus the focus-visible rule)
+     and src/styles/layout.css :80-85 (the compact filled sibling, .character-controls button).
+     Markup is span.btn, not button: preview.ts HTML_KEEP has no button, so Display would replace a
+     button element with "[dropped: button]". The button selectors stay in the lists so the same
+     rules work in a browser-opened interactive mock.
+     States are classes because nothing hovers or focuses a preview: .is-hover, .is-focus,
+     .is-active, .is-disabled copy the pseudo-class rules. Active is the hover look plus a faint
+     accent wash (styles.css). -->
+<style>
+/* house button, src/styles/base.css :10-20 */
+:where(button), .btn {
+  display: inline-block; /* span stand-in; a real button is inline-block already */
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer;
+  color: var(--fg-dim); font: inherit; font-size: var(--font-12); padding: var(--space-3) var(--space-6);
+}
+:where(button:hover:not(:disabled)), .btn:hover:not(.is-disabled), .btn.is-hover, .btn.is-active {
+  color: var(--accent); border-color: var(--accent);
+}
+.btn.is-active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+:where(button:disabled), .btn.is-disabled { opacity: 0.5; cursor: default; }
+button:focus-visible, .btn.is-focus, .btn-fill.is-focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* compact filled sibling, src/styles/layout.css :80-85 */
+.character-controls button, .btn-fill {
+  display: inline-block;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border); cursor: pointer;
+  border-radius: var(--radius-3); padding: var(--space-4); font: inherit; font-size: var(--font-11);
+}
+.character-controls button:hover, .btn-fill:hover:not(.is-disabled), .btn-fill.is-hover, .btn-fill.is-active {
+  border-color: var(--accent);
+}
+.btn-fill.is-active { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+.character-controls button:disabled, .btn-fill.is-disabled { opacity: 0.5; cursor: default; }
+
+/* Decision pair (variant A, tinted): Approve/Deny are filled, never outline-then-fill.
+   Colour-washed fill, coloured label lifted 15% towards white for readability, soft border.
+   Not yet in styles.css, which still has the outline form at #display-*, .ask-*, .flow-approve-*. */
+.btn-approve, .btn-deny {
+  display: inline-block; border: 1px solid transparent; border-radius: var(--radius-4); cursor: pointer;
+  font: inherit; font-size: var(--font-12); font-weight: 500; padding: var(--space-3) var(--space-10);
+}
+.btn-approve.is-focus, .btn-deny.is-focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-approve.is-disabled, .btn-deny.is-disabled { opacity: 0.4; cursor: default; }
+/* 28% fill / 60% border, hover 38/80, press 46 (raised from 16/38 with the Rendered card's A1, 2026-10-05) */
+.btn-approve { background: color-mix(in srgb, var(--ok-green) 28%, var(--bg-panel));
+  color: color-mix(in srgb, color-mix(in srgb, var(--ok-green) 80%, var(--fg)) 85%, white);
+  border-color: color-mix(in srgb, var(--ok-green) 60%, var(--bg-panel)); }
+.btn-deny { background: color-mix(in srgb, var(--deny-red) 28%, var(--bg-panel));
+  color: color-mix(in srgb, color-mix(in srgb, var(--deny-red) 70%, var(--fg)) 85%, white);
+  border-color: color-mix(in srgb, var(--deny-red) 60%, var(--bg-panel)); }
+.btn-approve.is-hover { background: color-mix(in srgb, var(--ok-green) 38%, var(--bg-panel)); border-color: color-mix(in srgb, var(--ok-green) 80%, var(--bg-panel)); }
+.btn-deny.is-hover { background: color-mix(in srgb, var(--deny-red) 38%, var(--bg-panel)); border-color: color-mix(in srgb, var(--deny-red) 80%, var(--bg-panel)); }
+.btn-approve.is-active { background: color-mix(in srgb, var(--ok-green) 46%, var(--bg-panel)); }
+.btn-deny.is-active { background: color-mix(in srgb, var(--deny-red) 46%, var(--bg-panel)); }
+
+.kit-pair-row { display: inline-flex; gap: var(--space-6); margin-top: var(--space-16); padding: var(--space-10);
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-6); }
+/* kit layout */
+.kit-states {
+  display: grid; grid-template-columns: auto repeat(5, max-content);
+  gap: var(--space-10) var(--space-16); align-items: center; margin-top: var(--space-12);
+}
+.kit-col { color: var(--fg-dim); font-size: var(--font-11); }
+.kit-row { color: var(--fg-dim); font-size: var(--font-12); }
+</style>
+<section class="mock-panel">
+  <div class="mock-head">Button States</div>
+  <div class="mock-note">Standard Button And Compact Sibling, From styles.css</div>
+  <div class="kit-states">
+    <span></span>
+    <span class="kit-col">Default</span>
+    <span class="kit-col">Hover</span>
+    <span class="kit-col">Focus Visible</span>
+    <span class="kit-col">Active</span>
+    <span class="kit-col">Disabled</span>
+
+    <span class="kit-row">Standard</span>
+    <span class="btn">Approve</span>
+    <span class="btn is-hover">Approve</span>
+    <span class="btn is-focus">Approve</span>
+    <span class="btn is-active">Approve</span>
+    <span class="btn is-disabled">Approve</span>
+
+    <span class="kit-row">Compact</span>
+    <span class="btn-fill">Play</span>
+    <span class="btn-fill is-hover">Play</span>
+    <span class="btn-fill is-focus">Play</span>
+    <span class="btn-fill is-active">Play</span>
+    <span class="btn-fill is-disabled">Play</span>
+
+    <span class="kit-row">Approve</span>
+    <span class="btn-approve">Approve</span>
+    <span class="btn-approve is-hover">Approve</span>
+    <span class="btn-approve is-focus">Approve</span>
+    <span class="btn-approve is-active">Approve</span>
+    <span class="btn-approve is-disabled">Approve</span>
+
+    <span class="kit-row">Deny</span>
+    <span class="btn-deny">Deny</span>
+    <span class="btn-deny is-hover">Deny</span>
+    <span class="btn-deny is-focus">Deny</span>
+    <span class="btn-deny is-active">Deny</span>
+    <span class="btn-deny is-disabled">Deny</span>
+  </div>
+
+  <div class="kit-pair-row"><span class="btn-approve">Approve</span><span class="btn-deny">Deny</span></div>
+</section>

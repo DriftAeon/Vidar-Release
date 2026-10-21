@@ -1,0 +1,57 @@
+{
+  "libraries": [
+    { "key": "global", "root": "<missing>", "present": false, "sets": [], "runes": [] },
+    {
+      "key": "vidar",
+      "root": "<base>/lib",
+      "present": true,
+      "sets": [
+        {
+          "id": "app-core",
+          "target": "CLAUDE.md",
+          "targetAbs": "<base>/CLAUDE.md",
+          "activate": "none",
+          "paths": [],
+          "scope": ["global"],
+          "tier": 1,
+          "members": [
+            { "id": "alpha-rule", "recall": false },
+            { "id": "beta-fact", "recall": true }
+          ]
+        },
+        {
+          "id": "ui-paths",
+          "target": ".claude/rules/ui.md",
+          "targetAbs": "<base>/.claude/rules/ui.md",
+          "activate": "none",
+          "paths": ["src/ui/**", "src/styles/*.css"],
+          "scope": ["global"],
+          "tier": 2,
+          "members": [{ "id": "alpha-rule", "recall": false }]
+        }
+      ],
+      "runes": [
+        {
+          "id": "alpha-rule",
+          "kind": "rule",
+          "scope": ["global"],
+          "state": "active",
+          "activate": "always",
+          "description": "Alpha rule for the catalog fixture.",
+          "path": "<base>/lib/rules/alpha-rule.md",
+          "body": "Always do the alpha thing.\n"
+        },
+        {
+          "id": "beta-fact",
+          "kind": "fact",
+          "scope": ["global"],
+          "state": "active",
+          "activate": "recall",
+          "description": "Beta fact for the catalog fixture.",
+          "path": "<base>/lib/facts/beta-fact.md",
+          "body": "Beta is true.\n"
+        }
+      ]
+    }
+  ]
+}

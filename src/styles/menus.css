@@ -1,0 +1,118 @@
+/* ---- CAS selector menu: neon armor plates ---- */
+#cas-menu {
+  position: fixed; z-index: 100;
+  display: flex; flex-direction: column; gap: 7px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-8); padding: var(--space-8);
+}
+#cas-menu button {
+  --cas-c: var(--accent);
+  background: var(--bg);
+  border: 2px solid var(--cas-c); border-radius: var(--radius-4);
+  color: var(--cas-c);
+  font-weight: 700; font-size: var(--font-12); letter-spacing: 0.14em;
+  text-transform: uppercase; white-space: nowrap;
+  padding: var(--space-5) var(--space-16); cursor: pointer;
+  text-shadow: 0 0 3px var(--cas-c);
+  box-shadow: 0 0 3px var(--cas-c), inset 0 0 10px rgba(0, 0, 0, 0.65),
+    inset 0 0 2px var(--cas-c);
+}
+#cas-menu button:hover { filter: brightness(1.25); }
+#cas-menu button.current {
+  background: color-mix(in srgb, var(--cas-c) 20%, var(--bg));
+  color: var(--fg);
+}
+
+#launcher-menu, .launcher-col, #tab-menu, #character-view-menu, #flow-pick-menu,
+#swap-menu, #swap-confirm, #flow-delete-confirm {
+  position: fixed; z-index: 100;
+  display: flex; flex-direction: column;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-8); padding: var(--space-4); gap: var(--space-2); /* shared menu look, legacy radius kept for the whole list */
+}
+#flow-pick-menu { width: 400px; max-width: 90vw; max-height: 60vh; overflow-y: auto; box-sizing: border-box; }
+#flow-pick-menu > * { flex-shrink: 0; }
+#launcher-menu button, .launcher-col button, #tab-menu button,
+#character-view-menu button, #flow-pick-menu button, #swap-menu button {
+  background: none; border: none; color: var(--fg);
+  text-align: left; padding: var(--space-6) var(--space-12); border-radius: var(--radius-5); /* shared menu row look, legacy tokens kept for the whole list */
+  font-size: var(--font-13); cursor: pointer; white-space: nowrap;
+}
+#launcher-menu button:hover,
+.launcher-col button:hover,
+#tab-menu button:hover:not(:disabled),
+#character-view-menu button:hover,
+#flow-pick-menu button:hover, #swap-menu button:hover { background: var(--bg); color: var(--accent); }
+
+/* type rows: chevron marks the flyout; .open keeps the hovered row lit while
+   the pointer is over in the flyout */
+#launcher-menu button.has-sub, .launcher-col button.has-sub { display: flex; align-items: center; gap: var(--space-8); }
+#launcher-menu button.has-sub::after, .launcher-col button.has-sub::after {
+  content: "›"; margin-left: auto; padding-left: 14px; color: var(--fg-dim);
+}
+#launcher-menu button.open, .launcher-col button.open { background: var(--bg); }
+/* root rows (agent/company names) read bold; variant and workspace rows in the flyouts stay normal */
+#launcher-menu > button { font-weight: 600; }
+/* keyboard walk: focused row reads exactly like a hovered one. Plain :focus,
+   not :focus-visible — programmatic focus() after a shortcut is not reliably
+   "visible" by Chromium's heuristic. */
+#launcher-menu button:focus, .launcher-col button:focus {
+  background: var(--bg); color: var(--accent); outline: none;
+}
+/* Select Workspace… (no workspaces saved): dim, like the other non-workspace rows */
+.launcher-col button.launcher-pick { color: var(--fg-dim); }
+/* Active… sits below the workspaces, dim with a rule; Back heads the list */
+.launcher-col button.launcher-active {
+  color: var(--fg-dim); margin-top: var(--space-2);
+  border-top: 1px solid var(--border); border-radius: 0;
+}
+.launcher-col button.launcher-back { color: var(--fg-dim); }
+/* First variant row (Astra under Codex): a rule above the block, normal weight */
+.launcher-col button.launcher-variant { margin-top: var(--space-2); border-top: 1px solid var(--border); }
+/* session rows: name over a dim one-liner (cwd · host · age, or why it's inert) */
+.launcher-col button.launcher-session { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; position: relative; }
+/* a two-line row that opens a column (Resume ›): the chevron hangs at the right edge, mid-height */
+.launcher-col button.launcher-session.has-sub { padding-right: 28px; }
+.launcher-col button.launcher-session.has-sub::after { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); margin: 0; padding: 0; }
+.launcher-sub-line { font-size: var(--font-10); color: var(--fg-dim); white-space: nowrap; }
+.launcher-col button.inert { cursor: default; opacity: 0.55; }
+.launcher-col button.inert:hover { background: none; color: var(--fg); }
+.launcher-note { padding: var(--space-6) var(--space-12); font-size: var(--font-12); color: var(--fg-dim); white-space: nowrap; }
+.launcher-note.launcher-note-err { color: var(--alert); }
+
+/* icon + label menu row */
+.menu-icon-row { display: flex; align-items: center; gap: var(--space-8); }
+.menu-icon {
+  position: relative;
+  width: 18px; height: 18px; flex-shrink: 0;
+  background: var(--menu-icon) center / contain no-repeat;
+  opacity: 0.75;
+}
+.menu-icon-row:hover:not(:disabled) .menu-icon { opacity: 1; }
+
+/* Vendor tint: the LABEL only. The marks keep their own art — a colour overlay
+   on the Windows Terminal icon turned it into a green blob, and the vendor
+   hue on the text is enough to make a row scannable.
+   ID-qualified on purpose — `#launcher-menu button` sets color, and an ID
+   selector outranks .menu-icon-row[data-vendor], which silently reverted the
+   label to white. The hover rules need the same treatment. */
+#launcher-menu button[data-vendor],
+.launcher-col button[data-vendor],
+#tab-menu button[data-vendor] { color: var(--vendor); }
+#launcher-menu button[data-vendor]:hover:not(:disabled),
+.launcher-col button[data-vendor]:hover:not(:disabled),
+#tab-menu button[data-vendor]:hover:not(:disabled) {
+  color: var(--vendor);
+  background: var(--bg);
+  filter: brightness(1.2);
+}
+#tab-menu button:disabled { color: var(--fg-dim); cursor: default; }
+#tab-menu button:disabled .menu-icon { opacity: 0.3; }
+
+#rename-input {
+  position: fixed; z-index: 100; width: 160px;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--accent); border-radius: var(--radius-6);
+  padding: var(--space-5) var(--space-8); font-size: var(--font-13);
+}
+

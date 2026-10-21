@@ -1,0 +1,135 @@
+/* ---- toolbench: the tool buttons (a column in the right rail, rail.css) and the armed tool's options strip ---- */
+.tool-btn { width: 100%; aspect-ratio: 1; box-sizing: border-box; border-radius: var(--radius-4); }
+.tool-btn {
+  height: auto;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--fg-dim); font-size: var(--font-12); cursor: pointer;
+  padding: 0; position: relative;
+}
+/* same treatment as the left rail: full-colour art, dimmed until live */
+.tool-btn.iconed::before {
+  content: ""; position: absolute; inset: var(--space-2);
+  background: var(--tool-icon) center / contain no-repeat;
+  opacity: 0.75; transition: opacity 0.12s ease-out;
+}
+.tool-btn.iconed:hover:not(:disabled)::before,
+.tool-btn.iconed.active::before { opacity: 1; }
+/* armed reads as an amber ring (like the Relay tab), not the accent fill the glyph buttons use —
+   filling behind full-colour art would bury it; the accent ring vanished on the accent left bar (2026-10-10) */
+.tool-btn.iconed.active {
+  background: var(--bg); border-color: var(--approval-amber);
+  box-shadow: 0 0 0 1px var(--approval-amber), 0 0 9px -2px var(--approval-amber);
+}
+.tool-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.tool-btn.iconed:hover:not(:disabled) { border-color: var(--approval-amber); }
+/* armed reads as filled, not outlined — it must be obvious at a glance that a
+   click on the canvas now means something different */
+.tool-btn.active {
+  color: var(--bg); background: var(--accent); border-color: var(--accent);
+}
+/* off-canvas: the tool exists but its surface isn't showing */
+.tool-btn.offcanvas { opacity: 0.3; cursor: default; }
+
+/* floating panel left of the rail, a child of #app so it is never clipped by #rightbar's overflow;
+   top lines up with the tool column's top (rail.css: --space-8 down), hugs its content, scrolls past the cap.
+   The cap leaves a --row-32 for the bottom bar (30px) below. Surface look = .rail-surface. */
+#tool-options {
+  position: fixed; z-index: 80;
+  top: var(--space-8); right: var(--rail-stripe-w); /* layout.css */
+  box-sizing: border-box; width: calc(var(--space-32) * 7 + var(--space-16)); /* 240px */
+  max-height: calc(100vh - var(--space-8) - var(--row-32) - var(--space-8));
+  overflow-y: auto; scrollbar-width: thin;
+  padding: var(--space-8);
+  display: flex; flex-direction: column;
+  background: var(--bg-panel);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+}
+/* the full rail is back (a module in #modules): sit left of its resizable width instead */
+#app:has(#modules > *) #tool-options { right: var(--rightbar-w); }
+/* flex:1 + min-height:0 so .tool-preview inside can actually grow to fill the
+   strip instead of collapsing to its content height */
+.tool-options { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--space-6); }
+.tool-row { display: flex; align-items: center; gap: var(--space-5); }
+.tool-row label {
+  color: var(--fg-dim); font-size: var(--font-11); width: 30px; flex-shrink: 0;
+}
+.tool-input {
+  flex: 1; min-width: 0;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-3) var(--space-6); font-size: var(--font-12);
+}
+.tool-input.narrow { width: 0; }
+.tool-input:focus { border-color: var(--accent); outline: none; }
+.tool-readout {
+  font-size: var(--font-11); color: var(--accent);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  border-top: 1px solid var(--border); padding-top: var(--space-6);
+}
+.tool-err { color: var(--alert); }
+.tool-preview {
+  flex: 1; min-height: 80px; max-height: 220px; overflow: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-5) var(--space-6); margin: 0;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: var(--font-10); line-height: 1.35; color: var(--fg-dim);
+  white-space: pre; tab-size: 4;
+}
+.tool-send {
+  flex-shrink: 0;
+  background: var(--bg-panel); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: var(--radius-6);
+  padding: var(--space-5) var(--space-10); cursor: pointer; font-size: var(--font-12);
+}
+.tool-send:disabled { color: var(--fg-dim); border-color: var(--border); cursor: default; }
+/* icon-only Copy: the colour art is the label; hover/focus step the background, disabled dims the art */
+.tool-send.icon-btn { display: flex; align-items: center; justify-content: center; padding: var(--space-4) var(--space-8); }
+.tool-send.icon-btn:hover:not(:disabled), .tool-send.icon-btn:focus-visible { background: var(--bg-hover); outline: none; }
+.tool-send.icon-btn:disabled { opacity: 0.5; }
+.tool-send.subtle { color: var(--fg-dim); border-color: var(--border); }
+.tool-send.subtle:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+/* the readout doubles as a prompt before anything is selected */
+.tool-readout-idle { color: var(--fg-dim); }
+
+/* ---- marquee (OCR result box) ---- */
+.tool-text {
+  flex: 1; min-height: 90px; max-height: 240px; resize: none;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-6); font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: var(--font-11); line-height: 1.35;
+}
+.tool-text:focus { border-color: var(--accent); outline: none; }
+#mq-result.mq-copied { text-align: right; }
+
+/* ---- eyedropper ---- */
+body.eyedrop-mode, body.eyedrop-mode * { cursor: crosshair !important; }
+.eyedrop-capture { position: fixed; z-index: 1; background: transparent; }
+.eyedrop-readout { display: flex; flex-direction: column; gap: var(--space-4); }
+.eyedrop-label {
+  font-family: var(--font-mono); font-size: var(--font-11);
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.eyedrop-row { display: flex; align-items: center; gap: var(--space-6); }
+.eyedrop-swatch {
+  width: 22px; height: 22px; border-radius: var(--radius-4); flex-shrink: 0;
+  border: 1px solid var(--border);
+  /* checker under the swatch so a dark sample still reads as a sample */
+  background-image: linear-gradient(45deg, #444 25%, transparent 25%),
+    linear-gradient(-45deg, #444 25%, transparent 25%);
+  background-size: 8px 8px;
+}
+.eyedrop-hex {
+  flex: 1; min-width: 0; text-align: left;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-3) var(--space-6); cursor: pointer;
+  font-family: "Cascadia Mono", Consolas, monospace; font-size: var(--font-12);
+}
+.eyedrop-hex:hover { color: var(--accent); border-color: var(--accent); }
+.eyedrop-hist-row { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.eyedrop-hist {
+  width: 18px; height: 18px; border-radius: var(--radius-3);
+  border: 1px solid var(--border); cursor: pointer; padding: 0;
+}
+

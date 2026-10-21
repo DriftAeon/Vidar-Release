@@ -1,0 +1,31 @@
+# Fixture Codex home config for rules/import/codex_home.rs. Every SENTINEL value must never reach the
+# importer's output; only the two HOSTED urls may.
+model = "gpt-test"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+notify = ["node", "https://SENTINEL-NOTIFY.example/hook"]
+
+[projects.'C:\SENTINEL-TRUST-PATH\work']
+trust_level = "trusted"
+
+[mcp_servers.notion]
+url = "https://mcp.notion.com/mcp"
+enabled = false
+bearer_token_env_var = "SENTINEL-BEARER"
+http_headers = { Authorization = "SENTINEL-HEADER" }
+env_http_headers = { X_KEY = "SENTINEL-ENV-HEADER" }
+
+[mcp_servers.notion-work]
+url = "https://mcp.notion.com/mcp"
+
+[mcp_servers.atlassian]
+url = "https://mcp.atlassian.com/v2/mcp"
+enabled = false
+
+[mcp_servers.private-wiki]
+url = "https://SENTINEL-PRIVATE-URL.example/mcp"
+
+[mcp_servers.local-tools]
+command = "SENTINEL-STDIO-COMMAND"
+args = ["SENTINEL-STDIO-ARG"]
+env = { TOKEN = "SENTINEL-ENV-VALUE" }

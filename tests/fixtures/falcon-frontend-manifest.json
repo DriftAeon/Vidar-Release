@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "digest": "22eb4d0bb87bd80510aff02e726ce2d3e1c1be4a0f032cd4caba6bd3948a5553",
+  "shell_key": "8ffa27e1207a0acdd8840b11968e4221dce351a654a3cf331f41f4b6f7e5b909",
+  "files": [
+    {
+      "path": "assets/a.js",
+      "sha256": "0a286891c11c056e1ab5bfc25bf5d6b2f5b06d38eac10944f678fd8a2e70c393",
+      "bytes": 14
+    },
+    {
+      "path": "falcon.html",
+      "sha256": "9d49000e41860257d31d0ae9eb5b71081f3c6120d6fedffc056c349aa23ff017",
+      "bytes": 19
+    }
+  ]
+}

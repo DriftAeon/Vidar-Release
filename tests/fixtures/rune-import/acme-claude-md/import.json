@@ -1,0 +1,92 @@
+{
+  "source": "~/Acme/CLAUDE.md",
+  "sha256": "015078384fbe9b7819e9cfe7ce106ff4603a0b24c4af645fce6b0c88e1d7b08a",
+  "date": "2026-10-16",
+  "bricks": [
+    {
+      "id": "keep-every-change-small-1",
+      "sha256": "36201aabfec503cc31ef086996fe0888bb20bf171b9fa358ce12ba6208e95f0c",
+      "section": [
+        "Acme Rules"
+      ],
+      "line": 3
+    },
+    {
+      "id": "run-the-build-with-1",
+      "sha256": "0656eb43381ddc53c6fe77bf2822ca989f22f659d815060806f00727fbc7210e",
+      "section": [
+        "Acme Rules",
+        "Build"
+      ],
+      "line": 9
+    },
+    {
+      "id": "keep-build-output-in-1",
+      "sha256": "5c65bca93177fb8b46af35b941ad484e369db89539f8824032e9406c52bb0786",
+      "section": [
+        "Acme Rules",
+        "Build"
+      ],
+      "line": 11,
+      "prefix": "- "
+    },
+    {
+      "id": "tests-run-through-the-1",
+      "sha256": "80e95466c5f0606f683219d95f6b3d79b9a8e61f550923bdd7d99f98e99da35c",
+      "section": [
+        "Acme Rules",
+        "Build"
+      ],
+      "line": 13,
+      "prefix": "- "
+    },
+    {
+      "id": "sh-run-from-the-1",
+      "sha256": "0bfac5a005a0f02c207343d7d21e85b389f314bc8a9bb8bec8a1012b86ce6fb7",
+      "section": [
+        "Acme Rules",
+        "Build"
+      ],
+      "line": 14
+    },
+    {
+      "id": "use-sentence-case-in-1",
+      "sha256": "caa0e8531441a39900824b86fa8000110502615db474e62a11bedcdcc421d97b",
+      "section": [
+        "Acme Rules",
+        "Style"
+      ],
+      "line": 21,
+      "prefix": "- "
+    },
+    {
+      "id": "wrap-commit-bodies-at-1",
+      "sha256": "eb2e51fe783356c12ba46ead8aaa54e64fbdf5c8fa94d2a87fd6a6ee93b7580a",
+      "section": [
+        "Acme Rules",
+        "Style"
+      ],
+      "line": 22,
+      "prefix": "- "
+    },
+    {
+      "id": "tool-use-npm-builds-1",
+      "sha256": "e410b2ec4568a02c8fedee6e7dc2462a55ae24cdd8917f17ce24caec9186c1ce",
+      "section": [
+        "Acme Rules",
+        "Style"
+      ],
+      "line": 26
+    },
+    {
+      "id": "lint-too-1",
+      "sha256": "e6f6d4e53252d4e5f1e8b36e5a38cc3c3715adee5013c81693bbfacfd6e33193",
+      "section": [
+        "Acme Rules",
+        "Style"
+      ],
+      "line": 30,
+      "prefix": "- "
+    }
+  ]
+}

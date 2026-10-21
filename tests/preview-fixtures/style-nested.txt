@@ -1,0 +1,1 @@
+<!doctype html><html><head><meta charset="utf-8"><style>.o{color:red; & .i{background-image:url("{{URL}}")}}</style></head><body><div class="o"><p class="i">x</p></div></body></html>

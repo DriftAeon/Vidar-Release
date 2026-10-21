@@ -1,0 +1,212 @@
+/* ---- inspect mode ---- */
+/* close lock: colour lock image + a switch, global, off by default (panels/closelock.ts).
+   The image and the switch say the state; the colour rules below tint only the host. */
+#close-lock, #auto-speak, #auto-send {
+  display: flex; align-items: center; gap: var(--space-6); flex-shrink: 0; /* legacy 6: auto-send matches the auto-speak switch */
+  color: var(--fg-dim); cursor: pointer; user-select: none;
+}
+:is(#close-lock, #auto-speak, #auto-send):hover { color: var(--accent); }
+/* backplate as on the workbench tabs (.wb-tab, workbench.css) so the dark shackle reads (2026-10-03) */
+#close-lock .close-lock-icon {
+  width: 14px; height: 14px; vertical-align: 0; box-sizing: content-box; /* 14px icon art, pre-existing size */
+  background: var(--bg-hover); border-radius: var(--radius-4); padding: var(--space-4);
+}
+/* the one switch look: track, hit input, knob and focus ring for the hosts (close lock, auto-speak,
+   auto-send, swap menu row); :is() keeps each at its old (1,x,x) specificity */
+:is(#close-lock, #auto-speak, #auto-send, #swap-menu) .switch {
+  position: relative; width: 26px; height: 14px; border-radius: 7px; /* the bar switch's track size, shared by the swap menu row */
+  background: var(--bg); border: 1px solid var(--border);
+  transition: background 0.12s ease-out, border-color 0.12s ease-out;
+}
+:is(#close-lock, #auto-speak, #auto-send) .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+:is(#close-lock, #auto-speak, #auto-send, #swap-menu) .knob {
+  position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; /* the bar switch's knob size, shared by the swap menu row */
+  background: var(--fg-dim); transition: left 0.12s ease-out, background 0.12s ease-out;
+  pointer-events: none;
+}
+:is(#close-lock, #auto-speak, #auto-send) .switch:has(input:focus-visible) { outline: 1px solid var(--accent); outline-offset: 1px; }
+
+/* speak group: the Speak button and the auto-speak switch, gated
+   together by the capability registry (capabilities/registry.ts), which toggles an inline
+   display on this wrapper and on #auto-speak. Same flex gap the label gave the button, so
+   the pair sits where it did when the button was nested in the label.
+   Mic group: the Listen mic and the auto-send switch, the same shape; #auto-send shows only
+   while the mic is not off (.hidden, capabilities/mounts/listen.ts).
+   Lock group: swap sits right off the lock toggle inside the lock's one divider cell, not a cell of its own
+   (2026-10-07) */
+#mic-group, #speak-group, #lock-group { display: flex; align-items: center; gap: var(--space-6); flex-shrink: 0; } /* legacy 6: the lock group's gap is the same as the speak pair's */
+
+/* auto-speak: second switch beside the close lock (panels/autospeak.ts), same
+   shape. Off by default; on reads each completed reply in the focused Claude
+   tab aloud, so "on" reads as accent rather than close-lock's alert red. */
+#auto-speak.on, #auto-send.on { color: var(--accent); }
+#auto-speak .auto-speak-icon, #auto-send .auto-send-icon { width: 14px; height: 14px; vertical-align: 0; } /* legacy 14px: same icon size as auto-speak's */
+/* accent on state, one rule set for auto-speak, auto-send (right of the mic, panels/autosend.ts) and the swap menu row */
+:is(#auto-speak, #auto-send).on .switch, #swap-menu .on .switch { background: color-mix(in srgb, var(--accent) 25%, var(--bg)); border-color: var(--accent); }
+:is(#auto-speak, #auto-send).on .knob, #swap-menu .on .knob { left: 13px; background: var(--accent); }
+/* auto-send sits behind its own divider inside #mic-group (2026-10-18): the toggle run's soft inset line,
+   8 off the mic (group gap + margin) and 8 before the glyph; the colour send art is dimmed ~30% so it sits under the mic */
+#mic-group > #auto-send {
+  position: relative; box-sizing: border-box; min-height: var(--row-24);
+  margin-left: var(--space-2); padding-left: var(--space-8);
+}
+#mic-group > #auto-send::before {
+  content: ""; position: absolute; pointer-events: none; left: 0; top: var(--space-4); bottom: var(--space-4);
+  width: var(--border-w); background: var(--border); opacity: 0.5;
+}
+#auto-send .auto-send-icon { filter: saturate(0.7) brightness(0.7); }
+
+/* on state for the close lock (2026-10-03): alert host, track and
+   knob. After both hover rules so the on colour holds under the pointer. */
+#close-lock.locked { color: var(--alert); }
+#close-lock.locked .switch { background: color-mix(in srgb, var(--alert) 25%, var(--bg)); border-color: var(--alert); }
+#close-lock.locked .knob { left: 13px; background: var(--alert); }
+
+/* toggle run: speak, close lock + swap (#lock-group). Each visible item draws a left divider and the
+   last visible one also a right divider, so the run reads | a | b | and never doubles up. Hidden
+   means the registry's inline display:none (capabilities/registry.ts), which the attribute match sees,
+   or .hidden (swap goes away on an install without tools\release). */
+#bar-toggles { display: flex; align-items: center; flex-shrink: 0; }
+#bar-toggles > :not([style*="display: none"], .hidden) {
+  min-height: var(--row-24); box-sizing: border-box;
+  padding-inline: var(--space-8);
+  border-left: var(--border-w) solid var(--border);
+}
+#bar-toggles > :not([style*="display: none"], .hidden):not(:has(~ :not([style*="display: none"], .hidden))) {
+  border-right: var(--border-w) solid var(--border);
+}
+/* Softer dividers (2026-10-12; mock M4): the borders above only reserve the 1px, and a pseudo line
+   draws each divider inset 4px from the cell's top and bottom at 50% opacity. The left line covers every visible
+   toggle cell and the dial; the right line covers the last visible toggle cell. */
+#bar-toggles > :not([style*="display: none"], .hidden), #bottombar > #cas-dial { position: relative; border-left-color: transparent; }
+#bar-toggles > :not([style*="display: none"], .hidden):not(:has(~ :not([style*="display: none"], .hidden))) { border-right-color: transparent; }
+#bar-toggles > :not([style*="display: none"], .hidden)::after, #bottombar > #cas-dial::after,
+#bar-toggles > :not([style*="display: none"], .hidden):not(:has(~ :not([style*="display: none"], .hidden)))::before {
+  content: ""; position: absolute; pointer-events: none; top: var(--space-4); bottom: var(--space-4);
+  width: var(--border-w); background: var(--border); opacity: 0.5;
+}
+#bar-toggles > :not([style*="display: none"], .hidden)::after, #bottombar > #cas-dial::after { left: calc(-1 * var(--border-w)); }
+#bar-toggles > :not([style*="display: none"], .hidden):not(:has(~ :not([style*="display: none"], .hidden)))::before { right: calc(-1 * var(--border-w)); }
+
+/* inspect and swap share the icon-button look, and so do Settings (rail foot) and the CAS dial (right of inspect);
+   swap (panels/swap.ts) adds its pending ring below */
+#inspect-btn, #swap-btn, #settings-btn, #cas-dial {
+  background: none; border: none; cursor: pointer;
+  color: var(--fg-dim); font-size: var(--font-16); padding: 0 var(--space-2); flex-shrink: 0;
+}
+#inspect-btn, #swap-btn, #settings-btn, #cas-dial { display: flex; align-items: center; }
+/* settings and the dial are art boxes, not glyphs: the same 16px as swap's icon, in swap's 20px (16 + 2 x 2 padding) hit width */
+#settings-btn, #cas-dial { width: calc(var(--font-16) + 2 * var(--space-2)); height: var(--font-16); position: relative; border-radius: 0; }
+#settings-btn:hover, #cas-dial:hover { color: var(--accent); }
+#settings-btn:focus-visible, #cas-dial:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+#settings-btn:active, #cas-dial:active { opacity: 0.85; }
+/* Inspect: roughly halve the 10px bar gap before it, 10 → 6 (2026-10-04). The dial takes
+   the bar-padding half (below); both pieces of art sit 8 off their side of the divider. */
+#inspect-btn { margin-inline-start: calc(-1 * var(--space-4)); }
+/* Theme dial (2026-10-11): right of Inspect behind a toggle-run divider (left border, --row-24 min height,
+   as #bar-toggles above). Box = border 1 + 8 + 16 art + 2; the art sits in the padding box (8 off the divider);
+   the gap before it (10) less its -4 start margin leaves 6 + Inspect's 2 padding = 8 art to divider; the -4 end
+   margin takes the bar padding after it 10 → 6, so the art sits 8 from the bar's edge, as Inspect's did */
+#bottombar > #cas-dial {
+  box-sizing: border-box; min-height: var(--row-24);
+  width: calc(var(--border-w) + var(--space-8) + var(--font-16) + var(--space-2));
+  padding: 0 var(--space-2) 0 var(--space-8);
+  border-left: var(--border-w) solid var(--border);
+  margin-inline: calc(-1 * var(--space-4));
+  border-left-color: transparent; /* its divider is the inset ::after line (softer dividers, above) */
+}
+#inspect-btn .icn, #swap-btn .icn { width: var(--font-16); height: var(--font-16); } /* matches the 16px glyph it replaces */
+#inspect-btn:hover, #swap-btn:hover:not(:disabled) { color: var(--accent); }
+/* Swap reads like inspect: art dimmed at rest, full on hover; pending holds it full (no ring); the art stays full colour */
+#swap-btn:not(.pending):not(:hover) .icn { opacity: 0.7; }
+#swap-btn:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+#swap-btn:disabled { cursor: default; }
+#swap-btn:disabled .icn { filter: grayscale(1); }
+#swap-btn:active:not(:disabled) .icn { opacity: 1; filter: brightness(0.85); }
+#swap-btn.busy { cursor: progress; }
+/* busy: a red ring spinner replaces the icon, same 16px box so the bar never shifts. Fixed --deny-red,
+   not --accent (blue/gold per theme). Continuous linear spin: a progress indicator, not a state change,
+   so ui-look's motion limits for state changes do not apply. */
+#swap-btn .swap-spin {
+  display: block; width: var(--font-16); height: var(--font-16); box-sizing: border-box;
+  border: calc(2 * var(--border-w)) solid color-mix(in srgb, var(--deny-red) 25%, transparent);
+  border-top-color: var(--deny-red); border-radius: var(--radius-full);
+  animation: swap-spin 800ms linear infinite; /* motion: progress spinner, continuous, not a state change */
+}
+@keyframes swap-spin { to { transform: rotate(360deg); } }
+/* the Swap button's failure line (a failure's first line), right of the toggle run; hidden otherwise */
+#swap-status {
+  min-width: 0; flex-shrink: 1; max-width: 40ch;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-16); color: var(--fg-dim);
+}
+:is(#swap-status, #close-lock, #auto-speak, #auto-send).error { color: var(--alert); }
+/* Swap RMB menu (panels/swap.ts): the shared menu look (menus.css) with one toggle row, label left,
+   the auto-speak switch right */
+#swap-menu button { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+#swap-menu button:focus-visible { background: var(--bg); color: var(--accent); outline: none; }
+#swap-menu button:active:not(:disabled) { background: var(--bg-selected); }
+#swap-menu button:disabled { opacity: 0.4; cursor: default; }
+/* Swap confirm: shared menu box, a head row (the Ask Gate's .ask-head look: bar icon, title, bottom rule), then a sentence and the decision pair (Yes = decision-pair.css green, No = neutral) */
+#swap-confirm, #flow-delete-confirm { padding: 0; gap: 0; }
+.swap-confirm-head {
+  display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8) var(--space-12);
+  font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-strong); line-height: var(--line-20); color: var(--fg);
+  border-bottom: var(--border-w) solid var(--border);
+}
+.swap-confirm-head .icn { flex: 0 0 auto; width: var(--font-16); height: var(--font-16); }
+.swap-confirm-body { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-12); }
+#swap-confirm p, #flow-delete-confirm p {
+  margin: 0; font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20); color: var(--fg);
+  white-space: nowrap;
+}
+.swap-confirm-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8); }
+/* The Voice Slots trust confirm (.vs-confirm, settings/voice-slots-view.ts) and the Delete Flow confirm (#flow-delete-confirm, flow/delete-confirm.ts; its Yes is red, decision-pair.css) share the head, body, actions and Yes/No rules below: :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) keeps the id's specificity. */
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-yes, :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-no {
+  flex: 0 0 auto; padding: 0 var(--space-12); cursor: pointer; /* height, line and label size: decision-pair.css */
+  border-width: var(--border-w); border-style: solid; border-radius: var(--radius-4);
+  font-family: var(--font-ui); font-weight: var(--weight-strong);
+}
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-yes:disabled, :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-no:disabled { opacity: 0.4; cursor: default; }
+/* Yes and No colours, every state: decision-pair.css */
+#inspect-btn.active { color: var(--alert); }
+#inspect-btn:not(.active):not(:hover) .icn { opacity: 0.7; }
+#inspect-btn.active .icn { outline: var(--border-w) solid var(--alert); outline-offset: var(--space-2); border-radius: var(--radius-2); }
+body.inspect-mode, body.inspect-mode * { cursor: crosshair !important; }
+/* the sandboxed iframe swallows mouse events entirely — fall through so the
+   pane that hosts it (Relay, Document) is inspectable */
+body.inspect-mode iframe.display-render { pointer-events: none; }
+/* z-index 150: must beat the app ceiling of 100 (#launcher-menu, #config-error) */
+#inspect-box {
+  position: fixed; z-index: 150; pointer-events: none;
+  border: 2px solid var(--alert); border-radius: var(--radius-4);
+  box-shadow: 0 0 8px var(--alert);
+}
+/* spacing aids: margin band (amber), scrollbar gutter (neutral), padding band (green), flex/grid gaps (accent); 35% tints */
+#inspect-margin, #inspect-gutter, #inspect-pad {
+  position: fixed; z-index: 150; pointer-events: none; box-sizing: border-box;
+  border-style: solid; border-color: transparent;
+}
+#inspect-margin { border-color: color-mix(in srgb, var(--approval-amber) 35%, transparent); }
+#inspect-gutter { border-color: color-mix(in srgb, var(--fg) 35%, transparent); }
+#inspect-pad { border-color:color-mix(in srgb, var(--ok-green) 35%, transparent); }
+#inspect-gaps { position: fixed; inset: 0; z-index: 150; pointer-events: none; }
+#inspect-gaps .inspect-gap {
+  position: absolute; background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+/* Random Colour Layout (C key): per-element hue is random by design, so these colours are off the token set */
+body.inspect-layout [data-inspect-hue] {
+  outline: 1px solid oklch(0.7 0.15 var(--inspect-hue)); /* off-scale: random hue per element, inspect-only */
+  outline-offset: -1px;
+  background-image: linear-gradient(oklch(0.7 0.15 var(--inspect-hue) / 0.1), oklch(0.7 0.15 var(--inspect-hue) / 0.1)); /* off-scale: random hue tint layered over the real background */
+}
+#inspect-chip {
+  position: fixed; z-index: 150; pointer-events: none;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--accent); border-radius: var(--radius-5);
+  padding: var(--space-3) var(--space-8); font-size: var(--font-11);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  max-width: 70vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+
+

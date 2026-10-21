@@ -1,0 +1,13 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/project/search?maxResults=100&orderBy=key",
+  "maxResults": 100,
+  "startAt": 0,
+  "total": 4,
+  "isLast": true,
+  "values": [
+    { "id": "10010", "key": "DEMO", "name": "Demo Project", "projectTypeKey": "software", "simplified": true, "style": "next-gen" },
+    { "id": "10011", "key": "OPS", "name": "Operations", "projectTypeKey": "business", "simplified": false, "style": "classic" },
+    { "id": "10012", "key": "bad key", "name": "Dropped For Its Key", "projectTypeKey": "software" },
+    { "id": "10013", "key": "WEB_2", "name": "Website", "projectTypeKey": "software", "simplified": false, "style": "classic" }
+  ]
+}

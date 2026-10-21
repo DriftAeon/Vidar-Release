@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "kokoro-kpipeline",
+  "slot": "tts",
+  "label": "Kokoro-82M (KPipeline, PyTorch)",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "kpipeline", "--port", "24242",
+             "--text", "{text}", "--out", "{out}", "--voice", "{voice}", "--speed", "{speed}", "--owner", "{owner}"]
+  },
+  "warm": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "kpipeline", "--port", "24242", "--warm",
+             "--voice", "{voice}", "--owner", "{owner}"]
+  },
+  "stop": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "kpipeline", "--port", "24242", "--stop", "--owner", "{owner}"]
+  },
+  "status": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{vidar}/content/local-voice/tts_kokoro.py", "--engine", "kpipeline", "--port", "24242", "--status", "--owner", "{owner}"]
+  },
+  "models": [
+    { "id": "af_heart",
+      "file": "{vidar}/content/local-voice/.cache/huggingface/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff3571791e39611d31c381e3a41a3af07b4987/voices/af_heart.pt",
+      "label": "Heart (American English, Female)", "recommended": true }
+  ],
+  "files": [
+    "{vidar}/content/local-voice/.venv/Lib/site-packages/kokoro/__init__.py",
+    "{vidar}/content/local-voice/.cache/huggingface/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff3571791e39611d31c381e3a41a3af07b4987/kokoro-v1_0.pth",
+    "{vidar}/content/local-voice/.cache/huggingface/hub/models--hexgrad--Kokoro-82M/snapshots/f3ff3571791e39611d31c381e3a41a3af07b4987/config.json"
+  ],
+  "licence": "Apache-2.0 (Kokoro-82M weights and the kokoro package)",
+  "source": "https://huggingface.co/hexgrad/Kokoro-82M at revision f3ff3571791e39611d31c381e3a41a3af07b4987, through content/local-voice/tts_kokoro.py and kokoro_sidecar.py (this repo)",
+  "fill": "pwsh -File {vidar}/tools/voice/setup-voice.ps1 -Speak, then fetch hexgrad/Kokoro-82M revision f3ff3571791e39611d31c381e3a41a3af07b4987 (kokoro-v1_0.pth, config.json, voices/{model}.pt) into {vidar}/content/local-voice/.cache/huggingface. Vidar never downloads."
+}

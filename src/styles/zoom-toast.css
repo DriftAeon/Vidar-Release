@@ -1,0 +1,14 @@
+#zoom-toast, #flow-zoom-toast {
+  position: fixed; top: 46px; left: 0; right: 0;
+  margin-inline: auto; width: fit-content;
+  z-index: 150; pointer-events: none;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--accent); border-radius: var(--radius-8);
+  padding: var(--space-6) var(--space-16); font-size: var(--font-14);
+  opacity: 1; transition: opacity 0.3s ease-out;
+}
+#zoom-toast.fading, #flow-zoom-toast.fading { opacity: 0; }
+/* flow's toast lives inside .flow-canvas (position: relative), bottom-right
+   instead of the fixed top-centre the terminal's font-zoom toast uses */
+#flow-zoom-toast { position: absolute; top: auto; left: auto; bottom: 10px; right: 10px; margin: 0; }
+

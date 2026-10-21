@@ -1,0 +1,36 @@
+/* ---- rendered body: plan checklist card (panels/rendered/plan-card.ts; 2026-10-11) ----
+   Framed card: plan icon, "Plan", progress ring right; explanation indented under the title; one 24px
+   row per step. Status: completed = green check dot, in progress = spinning accent arc, pending = empty ring. */
+.plan-card {
+  max-width: 72ch; /* the reply measure (.blk-text) */
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+  padding: var(--space-8) var(--space-12) var(--space-10); /* legacy 10: the mock's bottom inset under the last row */
+  font-family: var(--font-ui); font-size: var(--font-13); color: var(--fg);
+}
+.plan-head { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); }
+.plan-title { flex: 1 1 auto; min-width: 0; font-weight: var(--weight-strong); }
+.plan-card :is(.plan-icon, .plan-progress, .plan-status) { flex: none; width: var(--space-16); height: var(--space-16); }
+.plan-card .plan-icon { color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.plan-progress circle { fill: none; stroke-width: 2.5; }
+.plan-progress .plan-progress-track { stroke: var(--border); }
+.plan-progress .plan-progress-fill { stroke: var(--ok-green); }
+.plan-exp {
+  font-size: var(--font-12); line-height: var(--line-16); color: var(--fg-dim);
+  margin: var(--space-2) 0 var(--space-6) var(--space-24); /* legacy 6: the mock's gap above the steps */
+}
+.plan-steps { display: flex; flex-direction: column; }
+.plan-step { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); font-size: var(--font-12); line-height: var(--line-16); min-width: 0; }
+.plan-step-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-step.done .plan-step-text { color: var(--fg-dim); }
+.plan-step.run .plan-step-text { color: var(--fg); font-weight: var(--weight-strong); }
+.plan-step.todo .plan-step-text { color: var(--fg); }
+.plan-status.done { color: var(--ok-green); }
+.plan-status.done .plan-dot { fill: currentColor; }
+.plan-status.done .plan-tick { fill: none; stroke: var(--bg); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.plan-status.run { color: var(--accent); animation: plan-spin 900ms linear infinite; /* motion: a loading spinner turns for as long as the step runs */ }
+.plan-status.run .plan-track { fill: none; stroke: var(--border); stroke-width: 2; }
+.plan-status.run .plan-arc { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.plan-status.todo { color: var(--border-strong); }
+.plan-status.todo .plan-ring-empty { fill: none; stroke: currentColor; stroke-width: 1.5; }
+@keyframes plan-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .plan-status.run { animation: none; } }

@@ -1,0 +1,6 @@
+{
+  "id": "plain",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Plain" }
+}

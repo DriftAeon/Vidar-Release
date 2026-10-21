@@ -1,0 +1,71 @@
+{
+  "autoMemoryEnabled": false,
+  "syncClaudeAiSkills": false,
+  "syncClaudeAiPlugins": false,
+  "disableClaudeAiConnectors": true,
+  "pluginConfigs": {
+    "cc-plugin-agents-md@builtin": {
+      "options": {
+        "instructionFiles": "managed-only"
+      }
+    }
+  },
+  "claudeMdExcludes": [
+    "**/CLAUDE.md",
+    "**/CLAUDE.local.md",
+    "**/AGENTS.md",
+    "**/.claude/rules/**"
+  ],
+  "permissions": {
+    "allow": [
+      "mcp__plugin_vidar_drive"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"{{root}}\\tools\\agent-layer\\statusline-bridge.mjs\" --root \"{{root}}\" --home \"{{home}}\""
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"{{root}}\\tools\\agent-layer\\guard-driver.mjs\" --root \"{{root}}\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"{{root}}\\tools\\agent-layer\\context-gate.mjs\" prompt --root \"{{root}}\" --home \"{{home}}\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"{{root}}\\tools\\agent-layer\\context-gate.mjs\" stop --root \"{{root}}\" --home \"{{home}}\""
+          }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"{{root}}\\tools\\agent-layer\\instructions-log.mjs\" --root \"{{root}}\" --home \"{{home}}\""
+          }
+        ]
+      }
+    ]
+  }
+}

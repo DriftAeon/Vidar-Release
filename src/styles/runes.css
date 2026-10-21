@@ -1,0 +1,147 @@
+/* ---- Runes tab (panels/runes.ts, runes/cards.ts): the signed-off sets view
+   (tools/runes/view/css.mjs) on tokens. Set hues map onto the nearest existing token; state is
+   dimming only (a set Not Loaded or On Touch, a rune no loaded set holds). */
+#runes-view { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; }
+/* min-height: an empty state (a tab with no messages yet) holds the card's row, so the body never shifts between tabs (2026-10-18) */
+.runes-head { gap: var(--space-8); font-size: var(--font-12); min-height: var(--row-24); }
+.runes-state { font-weight: var(--weight-strong); color: var(--fg); }
+/* Loaded-from-transcript strip: carded by .pane-head-card (workbench.css); gap and 16px icon as rendered.css .blk-restored */
+.runes-strip {
+  gap: var(--space-6); /* same as .blk-restored / .steer-head (2026-10-11) */ color: var(--fg);
+  font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-20);
+}
+.runes-strip-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.runes-mark { width: var(--space-16); height: var(--space-16); flex: none; background: url("../assets/terminal.png") center / contain no-repeat; }
+.runes-mark[data-art="claude"] { background-image: url("../assets/claude.png"); }
+.runes-mark[data-art="codex"] { background-image: url("../assets/openai.png"); }
+.runes-mark[data-art="gemini"] { background-image: url("../assets/gemini.png"); }
+.runes-mark[data-art="pi"] { background-image: url("../assets/pi.png"); }
+.runes-mark[data-art="local"] { background-image: url("../assets/local.png"); }
+.runes-err { color: var(--alert); overflow-wrap: anywhere; }
+.runes-body { display: flex; flex-direction: column; overflow: hidden; }
+.runes-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.runes-list { display: flex; flex-direction: column; gap: var(--space-16); }
+/* Key: one 24px strip pinned under the scrolling list, a Sheen label plus icon-only items per group; names in the tooltip (2026-10-18) */
+.runes-key { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); margin-top: var(--space-8); padding-top: var(--space-8); border-top: var(--border-w) solid var(--border); font-size: var(--font-11); color: var(--fg-dim); }
+.runes-key-group { display: inline-flex; align-items: center; height: var(--row-24); overflow: hidden; background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); }
+.runes-key-label { display: inline-flex; align-items: center; align-self: stretch; padding: 0 var(--space-8); color: var(--fg-bright); font-weight: var(--weight-strong); background: var(--titlebar-grad); box-shadow: var(--titlebar-highlight); border-right: var(--border-w) solid var(--border); }
+.runes-key-label + .runes-key-item { margin-left: var(--space-2); }
+.runes-key-item { display: inline-flex; align-items: center; justify-content: center; width: var(--line-20); height: var(--line-20); border-radius: var(--radius-2); }
+.runes-key-item:last-child { margin-right: var(--space-2); }
+.runes-key-item:hover { background: var(--bg-hover); }
+#runes-view:has([data-bare-view="agent"], [data-bare-view="generating"]) .runes-key { display: none; } /* nothing to read the key against during a run (2026-10-18) */
+.runes-key-item .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+
+/* Refresh, Edit and Open Folder: one button look */
+.runes-act {
+  display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8);
+  background: none; border: var(--border-w) solid var(--border); border-radius: var(--radius-4); cursor: pointer;
+  color: var(--fg); font-family: var(--font-ui); font-size: var(--font-11); font-weight: var(--weight-strong); white-space: nowrap;
+}
+.runes-act .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.runes-act:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--bg-hover); }
+.runes-act:focus-visible { outline: var(--border-w) solid var(--accent); color: var(--accent); border-color: var(--accent); }
+.runes-act:active:not(:disabled) { background: var(--bg-selected); }
+.runes-act:disabled { opacity: 0.5; cursor: default; }
+.runes-refresh { margin-left: auto; justify-content: center; min-width: var(--row-24); padding-inline: var(--space-4); box-sizing: border-box; }
+.runes-refresh[hidden] { display: none; }
+.runes-refresh[aria-busy="true"] { cursor: progress; }
+
+.runes-group { display: flex; flex-direction: column; gap: var(--space-4); }
+.runes-group-head {
+  margin: 0; padding-bottom: var(--space-2); border-bottom: var(--border-w) solid var(--border);
+  font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg);
+}
+.runes-missing { font-size: var(--font-12); color: var(--fg); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.runes-outside { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
+/* Loaded files no set targets: one dim-hued card row per file, name only, path in the tooltip */
+.runes-outside { --set-hue: var(--fg-dim); }
+.runes-outside-row { width: 100%; box-sizing: border-box; font: inherit; color: var(--fg); text-align: left; }
+.runes-outside-row .icn, .runes-group-head .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+.runes-group-head .icn { display: block; }
+/* Inherited Runes head: a toggle button with the entry shape, no underline (2026-10-20) */
+.runes-group-toggle {
+  display: flex; align-items: center; gap: var(--space-8); width: 100%; box-sizing: border-box;
+  height: var(--row-24); padding: 0 var(--space-8); text-align: left; cursor: pointer; font-family: var(--font-title);
+  background: color-mix(in srgb, var(--fg-dim) 26%, var(--bg-panel)); border: var(--border-w) solid color-mix(in srgb, var(--fg-dim) 55%, var(--border)); border-radius: var(--radius-4);
+}
+.runes-group-toggle:hover { background: color-mix(in srgb, var(--fg-dim) 34%, var(--bg-panel)); border-color: var(--fg-dim); }
+.runes-group-toggle:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); border-color: var(--accent); }
+.runes-group-body { display: flex; flex-direction: column; gap: var(--space-4); }
+.runes-group-body[hidden] { display: none; }
+.runes-outside-row:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+
+/* set hues (data.mjs) → tokens: CLAUDE.md, AGENTS.md, path-scoped, recall, not loaded */
+.runes-set.hue-claude { --set-hue: var(--approval-amber); }
+.runes-set.hue-agents { --set-hue: var(--ok-green); }
+.runes-set.hue-path { --set-hue: var(--class-read); }
+.runes-set.hue-recall { --set-hue: var(--class-web); }
+.runes-set.hue-none { --set-hue: var(--fg-dim); }
+.runes-set.hue-generated { --set-hue: var(--hue-generated); }
+.runes-set.hue-skill { --set-hue: var(--kind-skill); }
+.runes-set.hue-agent { --set-hue: var(--kind-agent); }
+.runes-set.hue-hook { --set-hue: var(--kind-hook); }
+
+/* the hue fills the head only: no side bar, bodies neutral (2026-10-20) */
+.runes-set { border-radius: var(--radius-4); background: var(--bg); overflow: hidden; }
+.runes-set.is-dim, .runes-rn.is-dim { opacity: 0.5; }
+.runes-set-head {
+  display: grid; grid-template-columns: var(--space-16) minmax(0, 1fr) auto auto; gap: var(--space-8); align-items: center;
+  padding: var(--space-4) var(--space-12); list-style: none; cursor: pointer;
+  background: color-mix(in srgb, var(--set-hue) 16%, var(--bg-panel));
+}
+.runes-set-head::-webkit-details-marker { display: none; }
+.runes-set-head:hover { background: color-mix(in srgb, var(--set-hue) 24%, var(--bg-panel)); }
+.runes-set-head:focus-visible, .runes-blk.card:focus-visible, button.runes-chip:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.runes-scp { display: flex; }
+.runes-cond { display: flex; align-items: center; }
+.runes-cond .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.runes-div { margin-top: var(--space-12); font-size: var(--font-11); font-weight: var(--weight-strong); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--fg-dim); border-bottom: var(--border-w) solid var(--border); padding-bottom: var(--space-2); }
+.runes-scp .icn, .runes-chip .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.runes-sn { font-family: var(--font-mono); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runes-cond { font-size: var(--font-11); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.runes-sc { min-width: 3ch; font-family: var(--font-mono); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* rune cards: Kind slot | name | +N, Scope, Activate */
+.runes-tray { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6) var(--space-12) var(--space-6) var(--space-4); } /* space-6: user asked top and bottom to meet between 4 and 8 (2026-10-11) */
+.runes-blk {
+  display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); padding: 0 var(--space-4);
+  border: var(--border-w) solid color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); border-radius: var(--radius-4);
+  background: color-mix(in srgb, var(--fg-dim) 26%, var(--bg-panel)); overflow: hidden;
+}
+.runes-blk.card { list-style: none; cursor: pointer; }
+.runes-blk.card::-webkit-details-marker { display: none; }
+.runes-blk.card:hover { background: color-mix(in srgb, var(--fg-dim) 34%, var(--bg-panel)); border-color: var(--set-hue, var(--fg-dim)); }
+.runes-blk.rc { background: transparent; border-style: dotted; border-color: var(--fg-dim); }
+.runes-blk.ps { background: transparent; border-color: var(--fg-dim); }
+.runes-blk.missing { background: transparent; border-style: dashed; border-color: var(--border-strong); }
+.runes-rn[open] > .runes-blk { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.runes-kslot { flex: none; display: flex; width: var(--row-24); }
+.runes-kslot .runes-chip { width: 100%; }
+.runes-rname { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-12); font-weight: var(--weight-strong); color: var(--fg); }
+.runes-chips { flex: none; display: flex; align-items: center; gap: var(--space-4); }
+.runes-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); height: var(--line-16); padding: 0 var(--space-4);
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-full); background: var(--bg-selected); color: var(--fg);
+  font-size: var(--font-11); line-height: var(--line-16); font-weight: var(--weight-strong); white-space: nowrap;
+}
+/* a chip that is a control (the Bare On/Off switch) */
+button.runes-chip { font-family: var(--font-ui); cursor: pointer; }
+button.runes-chip:hover:not(:disabled) { border-color: var(--accent); background: var(--bg-hover); }
+button.runes-chip:active:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel)); }
+button.runes-chip:disabled { cursor: default; border-color: var(--border); background: transparent; }
+.runes-chip.also { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: var(--weight-regular); }
+.runes-chip.a-recall, .runes-fm.a-recall .runes-fv { color: var(--class-web); }
+
+/* opened card: frontmatter bar (Edit, Open Folder) over the body */
+.runes-rb { margin-bottom: var(--space-4); background: var(--bg-panel); border: var(--border-w) solid var(--border); border-top: none; border-radius: 0 0 var(--radius-4) var(--radius-4); overflow: hidden; }
+.runes-fmbar { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-4) var(--space-8); background: var(--bg); border-bottom: var(--border-w) solid color-mix(in srgb, var(--fg-dim) 45%, var(--bg-panel)); }
+.runes-fms { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+.runes-fm { display: inline-flex; height: var(--line-20); border: var(--border-w) solid var(--border); border-radius: var(--radius-2); overflow: hidden; font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-20); white-space: nowrap; }
+.runes-fk { padding: 0 var(--space-4); color: var(--fg-dim); background: var(--bg-hover); border-right: var(--border-w) solid var(--border); }
+.runes-fv { display: inline-flex; align-items: center; padding: 0 var(--space-8); color: var(--fg); }
+.runes-fm.fname .runes-fv { font-weight: var(--weight-strong); }
+.runes-acts { flex: none; display: flex; align-items: center; gap: var(--space-4); }
+.runes-rbody { padding: var(--space-8) var(--space-12); }
+.runes-rd { margin-bottom: var(--space-4); font-size: var(--font-12); font-weight: var(--weight-strong); color: var(--fg); }
+.runes-rt { font-size: var(--font-12); line-height: var(--line-16); overflow-wrap: anywhere; }

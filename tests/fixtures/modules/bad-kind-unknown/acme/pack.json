@@ -1,0 +1,6 @@
+{
+  "id": "acme",
+  "version": 1,
+  "provides": [],
+  "module": { "id": "acme", "label": "Acme", "level": "optional", "kind": "widget" }
+}

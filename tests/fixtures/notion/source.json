@@ -1,0 +1,54 @@
+{
+  "object": "data_source",
+  "id": "00000000-0000-0000-0000-000000000d01",
+  "created_time": "2026-09-01T09:00:00.000Z",
+  "last_edited_time": "2026-10-16T12:00:00.000Z",
+  "title": [{ "type": "text", "text": { "content": "Example Tasks", "link": null }, "plain_text": "Example Tasks" }],
+  "parent": { "type": "database_id", "database_id": "00000000-0000-0000-0000-000000000c01" },
+  "database_parent": { "type": "page_id", "page_id": "00000000-0000-0000-0000-000000000001" },
+  "url": "https://www.notion.so/00000000000000000000000000000c01",
+  "in_trash": false,
+  "properties": {
+    "Name": { "id": "title", "name": "Name", "type": "title", "title": {} },
+    "Status": {
+      "id": "st%3Aa",
+      "name": "Status",
+      "type": "status",
+      "status": {
+        "options": [
+          { "id": "o1", "name": "Not started", "color": "default" },
+          { "id": "o2", "name": "In progress", "color": "blue" },
+          { "id": "o3", "name": "In review", "color": "purple" },
+          { "id": "o4", "name": "Done", "color": "green" }
+        ],
+        "groups": [
+          { "id": "g1", "name": "To-do", "color": "gray", "option_ids": ["o1"] },
+          { "id": "g2", "name": "In progress", "color": "blue", "option_ids": ["o2", "o3"] },
+          { "id": "g3", "name": "Complete", "color": "green", "option_ids": ["o4", "missing"] }
+        ]
+      }
+    },
+    "Type": {
+      "id": "ty~1",
+      "name": "Type",
+      "type": "select",
+      "select": { "options": [
+        { "id": "s1", "name": "Bug", "color": "red" },
+        { "id": "s2", "name": "Feature", "color": "yellow" }
+      ] }
+    },
+    "Tags": {
+      "id": "tg.2",
+      "name": "Tags",
+      "type": "multi_select",
+      "multi_select": { "options": [
+        { "id": "m1", "name": "ui", "color": "orange" },
+        { "id": "m2", "name": "rust", "color": "brown" }
+      ] }
+    },
+    "Owner": { "id": "ow_3", "name": "Owner", "type": "people", "people": {} },
+    "Done": { "id": "dn-4", "name": "Done", "type": "checkbox", "checkbox": {} },
+    "Due": { "id": "du5", "name": "Due", "type": "date", "date": {} },
+    "Points": { "id": "pt6", "name": "Points", "type": "number", "number": { "format": "number" } }
+  }
+}

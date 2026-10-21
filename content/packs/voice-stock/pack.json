@@ -1,0 +1,15 @@
+{
+  "id": "voice-stock",
+  "version": 1,
+  "provides": [],
+  "slots": {
+    "stt": ["voice/whisper-cli.json", "voice/whisper-cli-vad.json", "voice/parakeet-v2.json"],
+    "wake": ["voice/openwakeword.json"],
+    "rewrite": ["voice/openai-compat.json"],
+    "tts": ["voice/kokoro-onnx-int8.json", "voice/kokoro-kpipeline.json"]
+  },
+  "ui": {
+    "label": "Stock Voice",
+    "recommended": { "stt": "whisper-cli", "wake": "openwakeword", "tts": "kokoro-onnx-int8" }
+  }
+}

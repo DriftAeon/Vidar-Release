@@ -1,0 +1,57 @@
+<!doctype html>
+<!-- mock-kit template. Authored in Vidar tokens; tools/ui/mock-new.mjs resolves them to literals
+     (Display drops every custom property and every declaration that uses one). Head styles only:
+     Display drops any style element inside body. No script runs in Display. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{slug}}</title>
+<style>
+* { box-sizing: border-box; margin: 0; }
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  color-scheme: dark;
+  font-family: "Segoe UI", system-ui, sans-serif; font-size: var(--font-13);
+  padding: var(--space-16);
+}
+.mock-panel {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-6);
+  padding: var(--space-12) var(--space-16) var(--space-16);
+}
+.mock-panel + .mock-panel { margin-top: var(--space-16); }
+.mock-head { font-size: var(--font-14); font-weight: 600; color: var(--fg); }
+.mock-note { color: var(--fg-dim); font-size: var(--font-12); margin-top: var(--space-2); }
+.mock-variants { display: flex; flex-wrap: wrap; gap: var(--space-16); margin-top: var(--space-12); }
+.mock-variant {
+  flex: 1 1 0; min-width: 220px;
+  border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-10);
+}
+.mock-variant-label { color: var(--fg-dim); font-size: var(--font-11); margin-bottom: var(--space-8); }
+.mock-slot { color: var(--fg-dim); font-size: var(--font-12); font-variant-numeric: tabular-nums; }
+</style>
+<!-- kit:styles -->
+</head>
+<body class="mock">
+<section class="mock-panel">
+  <div class="mock-head">{{slug}}</div>
+  <div class="mock-note">What The Question Is, In One Line</div>
+  <div class="mock-variants">
+    <div class="mock-variant">
+      <div class="mock-variant-label">Variant A</div>
+      <!-- MOCK CONTENT: realistic data for variant A goes here (real names, real numbers with units) -->
+      <div class="mock-slot">Variant A Content</div>
+    </div>
+    <div class="mock-variant">
+      <div class="mock-variant-label">Variant B</div>
+      <!-- MOCK CONTENT: variant B, or delete this frame when the look is settled -->
+      <div class="mock-slot">Variant B Content</div>
+    </div>
+    <div class="mock-variant">
+      <div class="mock-variant-label">Variant C</div>
+      <!-- MOCK CONTENT: variant C, or delete this frame -->
+      <div class="mock-slot">Variant C Content</div>
+    </div>
+  </div>
+</section>
+</body>
+</html>

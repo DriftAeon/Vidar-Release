@@ -1,0 +1,133 @@
+:root {
+  /* the right rail's width in stripe mode (nothing in #modules); read by the bottom bar, the status flyout,
+     the rail drawers and the tool options strip, which live on body (2026-10-10: 40 -> 52; 2026-10-16:
+     52 -> 48, 8 a side). Plus #rightbar's 1px left border, so the inside stays 48: without it the buttons
+     sat on a half pixel from the sides against a whole one at the top (measured 2026-10-10) */
+  --rail-stripe-w: calc(var(--space-32) + var(--space-16) + var(--border-w));
+  /* the side gap around a 32px rail button, also the top and bottom gap of the end buttons (2026-10-10);
+     on :root because #toolbench is a sibling of #rail-stripe, not inside it */
+  --rail-btn-pad: calc((var(--rail-stripe-w) - var(--border-w) - var(--row-32)) / 2);
+  /* the two mini bars' row height: the old full-width bottom bar's 30, unchanged by the split (2026-10-10) */
+  --bottombar-h: 30px; /* legacy 30: the bar's height before the split; new-ui has 28 or 32 only */
+}
+#app {
+  /* --rightbar-w is the single source of truth for the right column; the grip
+     writes it (#status-expanded now measures the bar instead, panels/status.ts) */
+  --rightbar-w: 183px; /* matches DEFAULT_W in panels/resize.ts */
+  /* fixed, not persisted; 240 is the user's trial (2026-10-10), was 268 (the GATE's old
+     right-rail width, which kept its stage at 243px) */
+  --leftbar-w: 240px;
+  display: grid;
+  grid-template-columns: var(--leftbar-w) 1fr var(--rightbar-w);
+  /* row 3 holds #bottombar only while it sits under #main (single pane); docked in the workbench or the
+     right pane (panels/sessions/bottombar-dock.ts) it leaves #app and the row closes */
+  grid-template-rows: 1fr 0 0;
+  /* the grid starts under the 2px alert line (#app::after): it is fixed and overlaid, so without this it ate
+     2px of every column's top inset (GATE read 4 for 6, the rail 8 for 10; 2026-10-10) */
+  padding-top: var(--space-2);
+}
+#app:has(> #bottombar) { grid-template-rows: 1fr 0 var(--bottombar-h); }
+/* with nothing mounted in it (Loadout and MCP Servers moved to the left bar) the rail narrows to a
+   fixed 32px stripe that balances the left bar (2026-10-10; 24 → 32 for the #rail-stripe
+   buttons, rail.css), so no resize grip; a module mounted back into #modules brings the full rail back */
+#app:not(:has(> #rightbar > #modules > *)) {
+  grid-template-columns: var(--leftbar-w) 1fr var(--rail-stripe-w);
+}
+#app:not(:has(> #rightbar > #modules > *)) #rightbar-grip { display: none; }
+#app:not(:has(> #rightbar > #modules > *)) #modules { display: none; }
+
+/* right panel: modules fills the rail (Tools sit at its top). Width is
+   --rightbar-w on #app. Runs to the window bottom in both rail modes: the bottom bar only ever spans #main's column. */
+#rightbar {
+  grid-column: 3; grid-row: 1 / 4;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  position: relative;
+}
+/* Sits ON the border, hit area wider than the 1px line it straddles. Above the
+   panel content but under the app's floating layer (z 100+). */
+#rightbar-grip {
+  position: absolute; top: 0; bottom: 0; left: -3px; width: 7px;
+  z-index: 10; cursor: ew-resize;
+}
+#rightbar-grip:hover, body.rightbar-resizing #rightbar-grip {
+  background: var(--accent); opacity: 0.5;
+}
+/* while dragging, nothing else may take the pointer — the terminal in
+   particular would start a text selection under the cursor */
+body.rightbar-resizing { cursor: ew-resize; user-select: none; }
+body.rightbar-resizing #main { pointer-events: none; }
+/* min-height:0 is what actually lets the band scroll instead of the parent.
+   Modules takes everything left; Tools live in the rail's top (rail.css). */
+#modules {
+  min-height: 0; overflow-y: auto;
+  /* Reserve both gutters so headings centre on the sidebar and cards stay
+     steady when a band tips into overflow. */
+  scrollbar-gutter: stable both-edges;
+  /* Standard props, not ::-webkit-scrollbar: WebView2 154.0.4258.62 (2026-10-07) drew these
+     gutters at the default 17px, which took the band's content from 195 to 177px. Setting
+     scrollbar-width makes Chromium ignore the webkit pseudo here, so the gutter is always the
+     thin 10px (measured 2026-10-07). */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  /* sides: 2 + the 10px thin gutter = 12, so cards line up with the GATE's 12px inset (2026-10-04) */
+  padding: var(--space-12) var(--space-2); /* 12 minus the thin gutter */
+  display: flex; flex-direction: column; gap: var(--space-10); /* existing legacy 10, unchanged; the rule only lost #toolbench from its selector */
+}
+#modules { flex: 1 1 0; }
+/* no band rules above or below the tool row: trial without them (2026-10-07) */
+/* GATE leads the left bar; the tabs sit under it */
+#character {
+  --character-size: 196px;
+  flex: 0 0 auto;
+  align-self: stretch; /* #leftbar centres nothing now; the GATE spans the bar width */
+  padding: var(--bar-inset) var(--bar-inset) 0; /* top matches the sides (2026-10-10); no bottom pad, the 12 under it comes from the bar gap + Tools padding (2026-10-10) */
+}
+/* No Character panel (module hidden or not shipped): Relay would sit flush on the top bar, so it gets the same gap it has under the panel (the bar's --space-4) */
+#character[data-off] + #relay-btn { margin-block-start: var(--space-4); }
+#character select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* no top margin: #character's top pad alone matches the sides (2026-10-10) */
+.character-body { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); }
+.character-stage {
+  position: relative;
+  width: var(--character-size); height: var(--character-size);
+  max-width: 100%; overflow: hidden;
+  background: #0a1418; /* the DSTS viewer stage color */
+  border: 4px solid var(--border); /* square 4px frame so the viewer sits in the rail (2026-10-04) */
+}
+.character-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.character-status {
+  position: absolute; inset: 0; z-index: 1;
+  padding: var(--space-12); overflow-y: auto; overflow-wrap: anywhere;
+  color: var(--fg-dim); font-size: var(--font-11); text-align: center;
+}
+.character-status[hidden] { display: none; }
+.character-animation { width: 100%; min-width: 0; }
+.character-animation[hidden] { display: none; }
+.character-controls { display: flex; width: 100%; gap: var(--space-6); }
+/* nothing fills it today; empty, it still took a flex slot and a 6px gap under the select (2026-10-10).
+   :empty fails on whitespace, so index.html keeps the div with no text inside */
+.character-controls:empty { display: none; }
+.character-controls button { flex: 1; white-space: nowrap; cursor: pointer; }
+.character-animation, .character-controls button {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: var(--radius-3); padding: var(--space-4); font: inherit; font-size: var(--font-11);
+}
+.character-controls button:hover { border-color: var(--accent); }
+.character-controls button:active:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+.character-controls button:disabled, .character-animation:disabled { opacity: 0.5; cursor: default; }
+/* #tool-options always holds one (hidden) host per tool, so as a flex item it
+   would still cost a 10px gap under the button row with nothing armed. Drop it
+   entirely then: nothing sits under the button row then. */
+#tool-options:not(:has(.tool-options:not(.hidden))) { display: none; }
+
+/* sharp alert line under the tinted native title bar, with a tight glow */
+#app::after {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  pointer-events: none; z-index: 50;
+  background: var(--alert);
+  box-shadow: 0 1px 6px var(--alert);
+}
+

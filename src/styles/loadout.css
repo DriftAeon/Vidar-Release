@@ -1,0 +1,77 @@
+/* ---- loadout ---- */
+/* Gear header: the box's collapse control; shares .rack-name's look and states (hover, disabled above). */
+/* equal 8 on all four sides (today's left inset; was 4 top and bottom), the bottom of the left bar (2026-10-11) */
+.loadout-gear { align-items: center; min-height: var(--row-24); padding: var(--space-8); font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); box-sizing: border-box; } /* title type; the label's own 600 comes from .rack-label */
+.loadout-gear .icn { margin-right: 0; } /* keep the icon's visible edge and label spacing from reading as extra left inset */
+.loadout-gear .rack-label { line-height: var(--line-16); } /* the other rows' 12px text resolves to a 16px line box; 13px would give 17 and a 27px row */
+.loadout-gear:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(var(--border-w) * -1); }
+.loadout-gear:active { background: var(--bg-selected); }
+/* DOM order is header then list (tab order starts on Gear); column-reverse draws the list above the header,
+   so the header stays at the bottom and the box grows upward */
+[aria-label="Loadout"] { flex-direction: column-reverse; }
+/* collapsed: the list stays populated (leftbar.css hides a module whose list is empty); the wrap clips it */
+.loadout-wrap {
+  display: grid; grid-template-rows: 1fr; margin-bottom: var(--space-4);
+  transition: grid-template-rows 180ms ease-out, margin-bottom 180ms ease-out; /* motion: Gear reveal */
+}
+/* the list is pinned to the bottom of the growing track (next to Gear) and the wrap clips its top, so the
+   reveal uncovers rows from the top edge down; top-pinned, the rows nearest Gear sat under the clip until
+   the last frames (user saw a dark band over the final items, 2026-10-10) */
+/* align-content: mid-reveal an `f fr` track (f < 1) is only f × the wrap's height, so without it the
+   track sat at the wrap's top and the list rode up to 48px off Gear, then fell back (slingshot, rect
+   trace 2026-10-11); end keeps the track's bottom on the wrap's bottom */
+/* minmax(0, 1fr): the implicit auto column took the min-content of a nowrap Memory path, so every row grew
+   past the box and the clip cut their right borders (2026-10-18) */
+.loadout-wrap { overflow: hidden; align-content: end; grid-template-columns: minmax(0, 1fr); }
+.loadout-wrap > .loadout-inner { min-height: 0; align-self: end; } /* min-height 0 lets the 0fr track close */
+[aria-label="Loadout"][data-open="false"] > .loadout-wrap { grid-template-rows: 0fr; margin-bottom: 0; }
+[aria-label="Loadout"][data-open="false"] .loadout-inner { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .loadout-wrap { transition: none; } }
+/* no rows at all: modules.css .module-box:has(> .loadout-wrap > .rack-list:empty) keeps the box and its Gear header hidden */
+/* a section with nothing in it is `hidden`; .rack-row's display:flex would otherwise win over the UA rule */
+[aria-label="Loadout"] .rack-row[hidden] { display: none; }
+/* Unavailable Loadout rows stay visible but dimmed. */
+.rack-name:disabled { cursor: default; opacity: 0.7; }
+.rack-name:disabled:hover { color: var(--fg); border-color: var(--border); }
+/* expanded section body: a few px each side so items sit inside the rounded head's edges (2026-10-05) */
+[aria-label="Loadout"] .rack-detail { padding-left: var(--space-4); padding-right: var(--space-4); }
+/* Memory paths and grouped hook/permission values use the rack detail's spacing. */
+.loadout-info-line { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.loadout-info-line + .loadout-info-line, .loadout-group + .loadout-group { margin-top: var(--space-8); }
+.loadout-info-line .icn { width: var(--font-13); height: var(--font-13); flex-shrink: 0; }
+.loadout-ellipsis, .loadout-item-line {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.loadout-ellipsis { flex: 1; }
+.loadout-group-head { color: var(--fg-dim); }
+.loadout-item-line { display: block; margin: var(--space-4) 0 0 calc(var(--font-13) + var(--space-4)); }
+.loadout-source-line { display: flex; align-items: baseline; gap: var(--space-8); }
+.loadout-source-line > :last-child { flex-shrink: 0; }
+.loadout-mono { font-family: "Cascadia Mono", Consolas, monospace; }
+/* Instructions bar: full-width stacked segments, width proportional to KB */
+.loadout-bar {
+  display: flex; width: 100%; height: 6px; border-radius: var(--radius-3);
+  overflow: hidden; background: var(--bg); margin-bottom: var(--space-6);
+}
+.loadout-bar-seg { height: 100%; }
+.loadout-legend { display: flex; flex-direction: column; gap: var(--space-2); }
+.loadout-legend-row { display: flex; align-items: center; gap: var(--space-6); font-size: var(--font-11); min-width: 0; }
+.loadout-legend-swatch { width: 8px; height: 8px; border-radius: var(--radius-2); flex-shrink: 0; }
+.loadout-legend-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--fg-dim);
+}
+.loadout-legend-kb {
+  font-family: "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums;
+  color: var(--fg); flex-shrink: 0;
+}
+/* at-start files: alternating solid accent tints so neighbouring segments differ */
+.loadout-shade-a { background: var(--accent); }
+.loadout-shade-b { background: var(--accent2); }
+/* on-touch files: hatched and dimmed, regardless of shade parity */
+.loadout-touch {
+  opacity: 0.35;
+  background-image: repeating-linear-gradient(
+    45deg, var(--fg-dim) 0, var(--fg-dim) 2px, transparent 2px, transparent 5px
+  );
+}

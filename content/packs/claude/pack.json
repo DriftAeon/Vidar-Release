@@ -1,0 +1,54 @@
+{
+  "id": "claude",
+  "version": 1,
+  "provides": [],
+  "slots": { "rewrite": ["voice/claude-p.json"] },
+  "ui": { "label": "Claude" },
+  "module": {
+    "id": "claude",
+    "label": "Claude",
+    "level": "optional",
+    "kind": "agent",
+    "dependsOn": ["falcon"],
+    "when": { "deps": ["claude"] },
+    "deps": [
+      {
+        "id": "claude",
+        "label": "Claude Code",
+        "required": false,
+        "usedBy": ["Claude Tabs", "Gateway Tabs", "Setup Via Agent"],
+        "probe": { "kind": "exe", "names": ["claude.exe", "claude.cmd", "claude.ps1"], "candidates": ["%USERPROFILE%\\.local\\bin\\claude.exe"] },
+        "authCheck": "claude",
+        "update": { "package": "@anthropic-ai/claude-code", "native": true },
+        "install": {
+          "command": "irm https://claude.ai/install.ps1 | iex",
+          "url": "https://code.claude.com/docs/en/setup",
+          "note": "Run claude once in a terminal to log in.",
+          "login": "claude auth login"
+        }
+      }
+    ],
+    "agent": {
+      "setup": { "dep": "claude", "order": 0 },
+      "flow": { "script": "tools/claude-sidecar.mjs" }
+    },
+    "owns": [
+      "tools/claude-sidecar.mjs",
+      "tools/claude-sidecar-statusline.mjs",
+      "tools/claude-sidecar-shrink.mjs",
+      "tools/claude-sidecar-seed.mjs",
+      "tools/claude-sidecar-bare.mjs",
+      "tools/claude-sidecar-recover.mjs",
+      "tools/claude-sidecar-ledger.mjs",
+      "tools/claude-sidecar-trust.mjs",
+      "tools/claude-sidecar-mcp-wait.mjs",
+      "tools/vendor/",
+      "plugins/gate/",
+      "plugins/vidar-app/",
+      "profiles/bare/claude.json",
+      "profiles/bare/claude.settings.template.json",
+      "profiles/bare/payload.md"
+    ],
+    "trace": ["claude-agent-sdk", "@anthropic-ai", "claude-sidecar", "claude\\.exe"]
+  }
+}

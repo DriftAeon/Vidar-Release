@@ -1,0 +1,66 @@
+/* ---- ask gate ----
+   A tab asked to open something and is blocked until this is answered. Same
+   z-index band and chrome as the shortcuts modal, narrower and shorter: it is
+   a question, not a panel. The backdrop takes pointer events so a click outside
+   cannot dismiss it without a verdict — the asker would hang until its own
+   deadline. Approve/Deny carry the display gate's signal tokens. */
+#ask-backdrop {
+  position: fixed; inset: 0; z-index: 160;
+  background: var(--bg); opacity: 0.6;
+}
+/* Reads as a popup, not a panel: narrower, lifted well off
+   the surface, and it arrives with a short scale-in. Kept inside the window —
+   a real OS-level window was judged not worth the work. */
+#ask-modal {
+  position: fixed; inset: 0; margin: auto; z-index: 160;
+  width: min(760px, calc(100vw - 32px)); height: fit-content; max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: var(--bg-panel); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.66), 0 0 0 1px rgba(0, 0, 0, 0.35);
+  animation: ask-pop 110ms ease-out;
+}
+/* the dialog appears unannounced from a background poller: any longer and the
+   first click lands before it has settled */
+@keyframes ask-pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { #ask-modal { animation: none; } }
+#ask-backdrop.hidden, #ask-modal.hidden { display: none; }
+.ask-head {
+  padding: var(--space-10) 14px; font-size: var(--font-13); font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.ask-head .icn { width: var(--font-16); height: var(--font-16); vertical-align: -3px; margin-right: var(--space-8); } /* 3px: optical centring against the 13px title */
+.ask-body { padding: var(--space-12) 14px; display: flex; flex-direction: column; gap: var(--space-6); overflow-y: auto; min-height: 0; } /* a 30-line Text row scrolls; the buttons stay in the 70vh modal */
+.ask-row { display: flex; gap: var(--space-8); font-size: var(--font-12); }
+.ask-label { color: var(--fg-dim); font-weight: var(--weight-strong); flex-shrink: 0; min-width: 74px; } /* bold labels (2026-10-16) */
+.ask-value { color: var(--fg); word-break: break-word; white-space: pre-wrap; min-width: 0; max-height: 40vh; overflow-y: auto; } /* ctl card Text row: the whole text (up to 64 KiB) scrolls here */
+.ask-question { margin-top: var(--space-6); font-size: 12.5px; line-height: 1.45; }
+.ask-comment {
+  margin-top: var(--space-8); padding: var(--space-6) var(--space-8); font: inherit; font-size: var(--font-12);
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+}
+.ask-comment:focus { outline: none; border-color: var(--accent); }
+.ask-foot {
+  display: flex; justify-content: flex-end; gap: var(--space-8);
+  padding: var(--space-10) 14px;
+}
+.ask-btn {
+  padding: var(--space-5) 14px; font: inherit; font-size: var(--font-12); cursor: pointer;
+  background: none; border: 1px solid; border-radius: var(--radius-5);
+  transition: background-color 0.12s ease-out, color 0.12s ease-out;
+}
+/* the "(Recommended)" star trailing a choice label, sized as in the Rendered question form */
+.ask-choice { display: inline-flex; align-items: center; } /* centres the star on the label's text line */
+.ask-choice > .icn { display: inline-block; width: var(--space-12); height: var(--space-12); margin-left: var(--space-4); }
+/* Approve sits left; its colours are the "Decision pair" block at the end of the file. */
+/* Keyboard focus only: the ring never shows on the open-time programmatic focus (askgate.ts passes
+   focusVisible:false), but the modal's Tab trap calls focus() after a key press, so it matches there. */
+.ask-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ask-comment:focus { outline: none; border-color: var(--accent); }
+/* Agent-tab request card only (variant "ask-spawn"): no question line, note hint 30% fainter. */
+#ask-modal.ask-spawn .ask-question:empty { display: none; }
+#ask-modal.ask-spawn .ask-comment::placeholder { opacity: 0.7; }

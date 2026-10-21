@@ -1,0 +1,15 @@
+/* Settings › Agents › Launcher Order (launcher-order.ts), mock new-tab-order variant A. Rows reuse
+   Loadout's .rack-row/.rack-name look and its .dragging state (styles.css); this adds the drag
+   handle, the variant hint and the position number. */
+.lo-name { align-items: center; cursor: grab; user-select: none; }
+.lo-grip { flex-shrink: 0; color: var(--fg-dim); letter-spacing: -2px; }
+.lo-label { font-weight: 600; }
+.lo-sub {
+  flex: 1; min-width: 0; color: var(--fg-dim); font-size: var(--font-11);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lo-pos {
+  margin-left: auto; flex-shrink: 0; color: var(--fg-dim); font-size: var(--font-11);
+  font-variant-numeric: tabular-nums;
+}
+.lo-reset { align-self: flex-start; }

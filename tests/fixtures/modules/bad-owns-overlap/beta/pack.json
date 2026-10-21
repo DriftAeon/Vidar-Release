@@ -1,0 +1,13 @@
+{
+  "id": "beta",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Beta" },
+  "module": {
+    "id": "beta",
+    "label": "Beta",
+    "level": "optional",
+    "kind": "agent",
+    "owns": ["tools/shared/beta.mjs"]
+  }
+}

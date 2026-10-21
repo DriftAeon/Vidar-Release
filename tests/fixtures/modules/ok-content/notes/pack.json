@@ -1,0 +1,14 @@
+{
+  "id": "notes",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Notes" },
+  "module": {
+    "id": "notes",
+    "label": "Notes",
+    "level": "optional",
+    "kind": "content",
+    "dependsOn": ["claude"],
+    "profiles": { "runner": "claude", "dir": "agents" }
+  }
+}

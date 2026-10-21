@@ -1,0 +1,16 @@
+{
+  "id": "runner",
+  "version": 1,
+  "provides": [],
+  "ui": { "label": "Runner" },
+  "module": {
+    "id": "runner",
+    "label": "Runner",
+    "level": "optional",
+    "kind": "agent",
+    "agent": {
+      "flow": { "script": "tools/elsewhere.mjs" }
+    },
+    "owns": ["tools/runner-sidecar.mjs", "tools/runner/"]
+  }
+}

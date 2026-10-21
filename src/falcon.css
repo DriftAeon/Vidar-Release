@@ -1,0 +1,30 @@
+html, body, #falcon-app { height: 100%; }
+#falcon-app { display: grid; grid-template-rows: 42px auto minmax(0, 1fr); background: var(--bg); }
+.falcon-bar { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--border); background: var(--bg-panel); }
+.falcon-identity { display: flex; align-items: baseline; gap: var(--space-8); min-width: 0; margin-right: auto; }
+.falcon-identity strong { color: var(--accent); }
+.falcon-picker-label { color: var(--fg-dim); font-size: var(--font-12); }
+#falcon-picker { min-width: 190px; max-width: 34vw; border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-5) 7px; background: var(--bg); color: var(--fg); }
+.falcon-bar button { border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-5) 9px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.falcon-bar button:hover:not(:disabled) { border-color: var(--accent); }
+.falcon-bar button:disabled { color: var(--fg-dim); cursor: default; opacity: 0.65; }
+.falcon-bar button.danger:not(:disabled) { border-color: var(--dead-red); }
+#falcon-refresh { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; }
+#falcon-refresh svg { display: block; width: 16px; height: 16px; stroke: currentColor; }
+#falcon-status { display: none; padding: var(--space-6) var(--space-10); border-bottom: 1px solid var(--border); color: var(--fg-dim); font-size: var(--font-12); }
+#falcon-status.visible { display: block; }
+#falcon-status.error { color: var(--dead-red); }
+/* "Update Ready" row: the Reload button shares the .falcon-bar button look. */
+#falcon-status button { margin-left: var(--space-8); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); padding: var(--space-4) var(--space-8); background: var(--bg); color: var(--fg); font: inherit; cursor: pointer; }
+#falcon-status button:hover:not(:disabled) { border-color: var(--accent); }
+#falcon-status button:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--border-w); }
+#falcon-status button:disabled { color: var(--fg-dim); cursor: default; opacity: 0.65; }
+/* Pinned: a hidden #falcon-status generates no grid item, so auto-placement would
+   drop the body into the `auto` row and leave the 1fr row empty. */
+#falcon-status { grid-row: 2; }
+#falcon-body { grid-row: 3; min-height: 0; overflow: hidden; }
+.falcon-empty { display: grid; height: 100%; place-items: center; color: var(--fg-dim); font-size: var(--font-13); }
+@media (max-width: 760px) {
+  .falcon-picker-label, #falcon-refresh { display: none; }
+  #falcon-picker { min-width: 130px; max-width: 30vw; }
+}

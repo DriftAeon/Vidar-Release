@@ -1,0 +1,38 @@
+/* One bottom-right stack for the boot banners and the prefs-failure line (main.ts setBanner),
+   so two of them never draw on top of each other. */
+#config-banners {
+  position: fixed; bottom: 8px; right: 8px; z-index: 100;
+  max-width: 420px;
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+/* #prefs-error: vidar-state.json could not be read or written — a problem, so the alert look. */
+#config-error, #prefs-error {
+  background: var(--bg-panel); color: var(--alert);
+  border: 1px solid var(--alert); border-radius: var(--radius-6);
+  padding: var(--space-6) var(--space-10); font-size: var(--font-12);
+}
+/* Neutral sibling of #config-error: a real settings migration ran, not a
+   problem — same shape and position, --fg-dim/--border instead of --alert. */
+#config-notice {
+  background: var(--bg-panel); color: var(--fg-dim);
+  border: 1px solid var(--border); border-radius: var(--radius-6);
+  padding: var(--space-6) var(--space-10); font-size: var(--font-12);
+}
+
+/* Each banner: its text in .banner-text, an icon-only Dismiss button at the end (config-banners.ts). */
+#config-error, #config-notice, #prefs-error {
+  display: flex; align-items: flex-start; gap: var(--space-8);
+}
+.banner-text { flex: 1; min-width: 0; }
+#config-banners .banner-close {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--line-20); height: var(--line-20); padding: 0;
+  background: transparent; color: inherit;
+  border: var(--border-w) solid transparent; border-radius: var(--radius-4);
+  cursor: pointer;
+}
+#config-banners .banner-close:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+#config-banners .banner-close:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 1px; }
+#config-banners .banner-close:active { background: var(--bg-selected); }
+#config-banners .banner-close:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+#config-banners .banner-close .icn { width: var(--font-12); height: var(--font-12); }

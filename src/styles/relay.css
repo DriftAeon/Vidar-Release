@@ -1,0 +1,135 @@
+/* ---- relay (workbench tab): a stack of item cards; the left Relay pane shows one large.
+   panels/relay.ts wires src/relay/ ---- */
+/* display: flex comes from workbench.ts setTab; Approve/Deny colours live in decision-pair.css */
+#relay-view { flex: 1; min-height: 0; flex-direction: column; position: relative; }
+#relay-view.relay-empty > * { display: none; } /* empty renders nothing: no placeholder */
+
+/* the stack: newest first, scrolls on its own; the cards carry the frame */
+.relay-stack { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: var(--space-8); }
+.relay-card {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--space-8);
+  padding: var(--space-12); background: var(--bg-panel);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+  font-family: var(--font-ui); font-size: var(--font-13); color: var(--fg);
+}
+/* the item open large */
+.relay-card.current { border-color: var(--accent); background: var(--bg-selected); }
+.relay-card-head { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); }
+/* the title shrinks to its text so Open Large rides right after it; .relay-card-gap pushes the rest right */
+.relay-card-title { flex: 0 1 auto; min-width: 0; font-weight: var(--weight-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.relay-card-gap { flex: 1 1 auto; min-width: 0; }
+.relay-card-time, .relay-card-file, .relay-lg-file {
+  font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.relay-card-time { flex: 0 0 auto; }
+/* display card: file name left, time right on one line; file actions + Open Large ride the head's right end */
+.relay-card-fileline { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.relay-card-fileline .relay-card-file { flex: 1 1 auto; min-width: 0; }
+.relay-card-actions { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-4); }
+.relay-card-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8); }
+.relay-chip {
+  flex: 0 0 auto; font-size: var(--font-11); line-height: var(--line-16); color: var(--fg-dim);
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-2); padding: 0 var(--space-4);
+}
+.relay-dot { flex: 0 0 auto; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); }
+.relay-dot.unread { background: var(--accent); }
+/* positioned and clipped: the staging frame is absolute (display.css), and an HTML capture is laid
+   out at its fixed width and scaled down (relay/thumb.ts) */
+.relay-thumb {
+  position: relative; overflow: hidden;
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4); background: var(--bg);
+}
+/* never above 100%: overrides display.css's 100% width and height */
+.relay-thumb img.display-render { width: auto; height: auto; max-width: 100%; }
+/* the frame never takes the wheel, so the stack scrolls over it */
+.relay-thumb iframe.display-render { pointer-events: none; }
+.relay-thumb iframe.display-render:not(.display-staging) { position: absolute; top: 0; left: 0; transform-origin: 0 0; border-radius: 0; }
+/* an HTML capture is cut at a fixed height: the dashed bottom edge says the page may go on below */
+.relay-thumb.relay-thumb-frame { border-bottom-style: dashed; }
+
+/* Open Large: the ghost button (Copy Answer's look) */
+.relay-open-large {
+  flex: 0 0 auto; display: inline-flex; align-items: center; height: var(--row-24); padding: 0 var(--space-8);
+  background: none; color: var(--fg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  font-size: var(--font-12); font-weight: var(--weight-regular); line-height: var(--line-16); white-space: nowrap; cursor: pointer;
+}
+.relay-open-large { margin-left: auto; }
+.relay-open-large:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); }
+.relay-open-large:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.relay-open-large:active:not(:disabled) { background: var(--bg-selected); }
+.relay-open-large:disabled { opacity: 0.4; cursor: default; }
+/* lit while its item is open large */
+.relay-open-large.on { background: var(--bg-selected); border-color: var(--accent); color: var(--accent); }
+
+/* Open Large: the bar over the view pane, on a wrapper (sessions.ts sets the pane's display inline) */
+.relay-large { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--bg); }
+.relay-lg-bar {
+  flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-8);
+  min-height: var(--row-32); padding: var(--space-4) var(--space-8);
+  background: var(--bg-panel); border-bottom: var(--border-w) solid var(--border);
+  font-family: var(--font-ui); font-size: var(--font-13); color: var(--fg);
+}
+.relay-lg-sep { flex: 0 0 auto; width: var(--border-w); align-self: stretch; background: var(--border); margin: 0 var(--space-4); }
+.relay-lg-title { flex: 0 1 auto; min-width: 0; font-weight: var(--weight-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.relay-lg-bar .relay-strip { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+
+/* the action row: one per card and one in the Large bar; keeps the class decision-pair.css scopes on */
+/* flex-end: the comment grows upward past one line and the buttons stay on its bottom edge */
+.relay-strip { display: flex; align-items: flex-end; gap: var(--space-8); }
+/* sizing only: background and border-color come from the decision pair, so no border shorthand here */
+/* shared with the pending-ask form's actions and its Copy button */
+:is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny, .relay-dismiss), .relay-ask-copy {
+  flex: 0 0 auto; padding: 0 var(--space-12); /* height, line and label size: decision-pair.css, one decision row */
+  border-width: var(--border-w); border-style: solid; border-radius: var(--radius-4);
+  font-weight: var(--weight-strong);
+}
+:is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny, .relay-dismiss):disabled, .relay-ask-copy:disabled { opacity: 0.4; cursor: default; }
+/* Dismiss (display strip and ask form): the neutral grey of the decision pair, every state in decision-pair.css */
+.relay-comment {
+  flex: 1 1 auto; min-width: 0; resize: none;
+  font: inherit; font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-16);
+  background: var(--bg); color: var(--fg);
+  /* one line is --row-28, flush with Approve/Deny/Dismiss: block padding and height in decision-pair.css */
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  padding-left: var(--space-8); padding-right: var(--space-8);
+  margin: 0;
+}
+.relay-comment:hover { border-color: var(--border-strong); }
+.relay-comment:focus { border-color: var(--accent); }
+.relay-state {
+  flex: 0 1 auto; min-width: 0; max-width: 40%;
+  font-size: var(--font-11); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.relay-state:empty { display: none; }
+/* inline file actions: the old info button's look; the extra class outranks file-actions.css */
+:is(.relay-strip, .relay-card-actions, .relay-lg-bar) .relay-act.file-action {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  height: var(--row-24); padding: 0 var(--space-4);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+:is(.relay-strip, .relay-card-actions, .relay-lg-bar) .relay-act.file-action .icn { width: var(--space-16); height: var(--space-16); }
+:is(.relay-strip, .relay-card-actions, .relay-lg-bar) .relay-act.file-action:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); }
+:is(.relay-strip, .relay-card-actions, .relay-lg-bar) .relay-act.file-action:active:not(:disabled) { background: var(--bg-selected); }
+:is(.relay-strip, .relay-card-actions, .relay-lg-bar) .relay-act.file-action:disabled { opacity: 0.4; cursor: default; }
+/* Open Large (icon): lit while its item is open large */
+.relay-card-actions .relay-act.file-action.on:not(:disabled) { background: var(--bg-selected); border-color: var(--accent); }
+.relay-pane { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--space-12); position: relative; /* anchors .display-staging */ }
+
+/* pending-ask form: the Ask card's rows (rendered-cards.css .blk-question), no card frame */
+.relay-ask-form { display: flex; flex-direction: column; gap: var(--space-8); max-width: 640px; /* readable measure, no token */ font-size: var(--font-13); }
+.relay-ask-for { font-family: var(--font-ui); font-size: var(--font-12); color: var(--fg-dim); }
+.relay-ask-comment { display: block; width: 100%; resize: vertical; font: inherit; font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-16); padding: var(--space-4) var(--space-8); }
+.relay-ask-comment:hover:not(:disabled) { border-color: var(--border-strong); }
+.relay-ask-comment:disabled { opacity: 0.4; }
+.relay-ask-form .q-opt:disabled { opacity: 0.4; cursor: default; }
+/* flush left with the question and the buttons: the option rows pull out by their own padding (the hover
+   fill overhangs, the dot lines up), and the comment drops the in-pill card's side margin (2026-10-05) */
+.relay-ask-form .q-options { margin-inline: calc(-1 * var(--space-8)); }
+.relay-ask-form .relay-ask-comment { margin: 0; width: 100%; box-sizing: border-box; }
+.relay-ask-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-8); }
+.relay-ask-actions .relay-approve:focus-visible { outline: var(--border-w) solid var(--ok-green); outline-offset: var(--space-2); }.relay-ask-copy { background: none; border-color: var(--border); color: var(--fg); font-weight: var(--weight-regular); }
+.relay-ask-copy:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); }
+.relay-ask-copy:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.relay-ask-copy:active:not(:disabled) { background: var(--bg-selected); }
+.relay-ask-state { font-size: var(--font-11); white-space: nowrap; }

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "id": "claude-p",
+  "slot": "rewrite",
+  "label": "claude -p",
+  "run": {
+    "command": "{vidar}/content/local-voice/.venv/Scripts/python.exe",
+    "args": ["{pack}/voice/rewrite_claude.py", "--budget", "{budget}", "--model", "{model}", "--effort", "{effort}"]
+  },
+  "warm": null,
+  "stop": null,
+  "status": null,
+  "models": [],
+  "modelIds": true,
+  "efforts": ["low", "medium", "high"],
+  "suggestedModels": [
+    { "id": "claude-opus-5-5", "label": "Opus 5.5" },
+    { "id": "claude-sonnet-5-5", "label": "Sonnet 5.5" },
+    { "id": "claude-haiku-5-5", "label": "Haiku 5.5" }
+  ],
+  "files": [],
+  "source": "content/packs/claude/voice/rewrite_claude.py (Claude pack); needs the Claude Code CLI on PATH",
+  "fill": "Claude Code CLI on PATH and local voice Python at {vidar}/content/local-voice/.venv/Scripts/python.exe"
+}

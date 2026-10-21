@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "whisper-cli",
+  "slot": "stt",
+  "label": "whisper.cpp (CPU)",
+  "run": {
+    "command": "{vidar}/content/vendor/whisper/whisper-cli.exe",
+    "args": ["-m", "{model}", "-l", "en", "-nt", "-np", "-otxt", "--prompt", "{prompt}", "-f", "{wav}", "-of", "{out}"]
+  },
+  "warm": null,
+  "stop": null,
+  "status": null,
+  "models": [
+    { "id": "tiny.en-q8_0", "file": "{vidar}/content/vendor/whisper/ggml-tiny.en-q8_0.bin",
+      "bytes": 43550795, "sha256": "5bc2b3860aa151a4c6e7bb095e1fcce7cf12c7b020ca08dcec0c6d018bb7dd94",
+      "label": "Tiny (English, q8)", "recommended": true },
+    { "id": "base.en", "file": "{vidar}/content/vendor/whisper/ggml-base.en.bin",
+      "bytes": 147964211, "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
+      "label": "Base (English)" },
+    { "id": "small.en", "file": "{vidar}/content/vendor/whisper/ggml-small.en.bin",
+      "bytes": null, "sha256": null, "label": "Small (English)" }
+  ],
+  "files": ["{vidar}/content/vendor/whisper/whisper.dll", "{vidar}/content/vendor/whisper/ggml*.dll"],
+  "licence": "MIT",
+  "source": "https://github.com/ggml-org/whisper.cpp",
+  "fill": "pwsh -File {vidar}/tools/voice/fetch-whisper.ps1 -Model {model}"
+}

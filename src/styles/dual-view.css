@@ -1,0 +1,25 @@
+/* ---- dual-view: two panes, one focused ---- */
+#view-sessions.dual.active { display: flex; }
+#view-sessions.dual .term-container { flex: 1 1 0; min-width: 0; position: relative; }
+/* Left pane takes the dragged width (panels/split.ts writes --split); the right
+   pane or workbench fills the rest. Default is an even split minus half the grip. */
+#view-sessions.dual .term-container.pane-left { flex: 0 0 var(--split, calc(50% - 2px)); }
+/* Divider: a real 4px flex item between the panes (order 1) so it can take the
+   pointer — the old pseudo-element couldn't. Hit area widened via ::before. */
+#split-grip {
+  display: none; order: 1; flex: 0 0 4px; position: relative;
+  background: var(--border); cursor: ew-resize;
+}
+#view-sessions.dual #split-grip { display: block; }
+#split-grip::before { content: ""; position: absolute; inset: 0 -3px; }
+#split-grip:hover, body.split-resizing #split-grip { background: var(--accent); }
+body.split-resizing { cursor: ew-resize; user-select: none; }
+/* Which pane owns focus has to be visible — it's what tools act on. Only
+   marked while split; a lone pane is trivially the focused one.
+   The ring goes on .xterm-screen, i.e. the cols×rows text area, not the
+   container: fit() leaves a sub-cell remainder plus the 8px scrollbar gutter
+   at the container's right, so a ring on the container hugged the text on
+   the left and floated on the right ("gap in the backing"). */
+#view-sessions.dual .term-container.focused .xterm-screen {
+  outline: 1px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-3);
+}

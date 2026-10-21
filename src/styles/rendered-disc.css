@@ -1,0 +1,99 @@
+/* ---- rendered body: chevron tile (panels/rendered/disc.ts) and status marks (marks.ts) ----
+   New-ui tokens only; non-themed. No host or theme selectors (tests/rendered-lockstep.test.mjs). */
+
+.disc {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--space-16);
+  height: var(--space-16);
+  padding: var(--space-2);
+  border-radius: var(--radius-4);
+  background: transparent;
+  color: var(--fg-dim);
+  transition: background 80ms ease, color 80ms ease;
+}
+.disc > svg { display: block; width: 100%; height: 100%; }
+.disc > svg { transition: transform 150ms ease; }
+
+/* hover: the tile itself, or the control it sits in */
+.disc:hover,
+summary:hover > .disc,
+button:hover > .disc,
+[aria-expanded]:hover > .disc { background: var(--bg-hover); color: var(--fg); }
+
+/* focus-visible: on the owning control, drawn on the tile */
+summary:focus-visible > .disc,
+button:focus-visible > .disc,
+[aria-expanded]:focus-visible > .disc { outline: var(--border-w) solid var(--accent); outline-offset: 0; color: var(--fg); }
+
+/* active (pressed) */
+.disc:active,
+summary:active > .disc,
+button:active > .disc,
+[aria-expanded]:active > .disc { background: var(--border-strong); color: var(--fg); }
+
+/* disabled */
+button:disabled > .disc,
+[aria-disabled="true"] > .disc,
+.disc[aria-disabled="true"] { background: transparent; color: var(--fg-dim); opacity: 0.4; pointer-events: none; }
+
+/* open: tile on --bg-selected, chevron in the accent; disclosure chevron (right-pointing) turns down */
+details[open] > summary .disc,
+[aria-expanded="true"] .disc,
+[aria-expanded="true"] > .disc-caret { background: var(--bg-selected); color: var(--accent); }
+details[open] > summary .disc > svg,
+[aria-expanded="true"] .disc:not(.disc-caret) > svg { transform: rotate(90deg); }
+/* a caret is already a down chevron: open changes colour only */
+[aria-expanded="true"] > .disc-caret > svg,
+details[open] > summary .disc-caret > svg { transform: none; }
+
+/* ---- status marks: .mark[data-mark] (marks.ts markSlot) ---- */
+.mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-12);
+  color: var(--fg-dim);
+  font-family: var(--font-mono);
+  font-size: var(--font-12);
+  line-height: var(--line-16);
+}
+.mark[data-mark="pending"], .mark[data-mark="idle"], .mark[data-mark="stale"] { color: var(--fg-dim); }
+.mark[data-mark="awaiting"] { color: var(--approval-amber); }
+.mark[data-mark="done"], .mark[data-mark="answered"] { color: var(--ok-green); }
+.mark[data-mark="error"] { color: var(--dead-red); }
+.mark[data-mark="denied"] { color: var(--deny-red); }
+.mark[data-mark="running"] { color: var(--accent); }
+
+/* running: the glyph is hidden and a ring spins in its place */
+.mark[data-mark="running"] { font-size: 0; }
+.mark[data-mark="running"]::before { content: ""; box-sizing: border-box; width: var(--space-8); height: var(--space-8); border: var(--border-w) solid currentColor; border-top-color: transparent; border-radius: var(--radius-full); animation: rendered-mark-spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */ }
+@keyframes rendered-mark-spin { to { transform: rotate(360deg); } }
+
+/* the pill's mark slot takes its state from the parent row's data-mark (marks.ts stays as is) */
+.blk-tool[data-mark="pending"] > summary .mark,
+.blk-tool[data-mark="stale"] > summary .mark { color: var(--fg-dim); }
+.blk-tool[data-mark="awaiting"] > summary .mark { color: var(--approval-amber); }
+.blk-tool[data-mark="done"] > summary .mark,
+.blk-tool[data-mark="answered"] > summary .mark { color: var(--ok-green); }
+.blk-tool[data-mark="error"] > summary .mark { color: var(--dead-red); }
+.blk-tool[data-mark="denied"] > summary .mark { color: var(--deny-red); }
+.blk-tool[data-mark="running"] > summary .mark { color: var(--accent); font-size: 0; }
+.blk-tool[data-mark="running"] > summary .mark::before { content: ""; box-sizing: border-box; width: var(--space-8); height: var(--space-8); border: var(--border-w) solid currentColor; border-top-color: transparent; border-radius: var(--radius-full); animation: rendered-mark-spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */ }
+/* an empty slot still shows the state glyph */
+.blk-tool[data-mark="pending"] > summary .mark:empty::before { content: "\00b7"; }
+.blk-tool[data-mark="awaiting"] > summary .mark:empty::before { content: "?"; }
+.blk-tool[data-mark="done"] > summary .mark:empty::before,
+.blk-tool[data-mark="answered"] > summary .mark:empty::before { content: "\2713"; }
+.blk-tool[data-mark="error"] > summary .mark:empty::before,
+.blk-tool[data-mark="denied"][data-tool-class="ask"] > summary .mark:empty::before { content: "\2715"; }
+/* a denied tool row says so once, at the right end of its summary line: "Denied" then the deny glyph */
+.blk-tool[data-mark="denied"]:not([data-tool-class="ask"]) > summary .mark:empty::before {
+  content: "Denied"; color: var(--fg-dim); font-family: var(--font-ui); margin-right: var(--space-4);
+}
+.blk-tool[data-mark="denied"]:not([data-tool-class="ask"]) > summary .mark:empty::after { content: "\2715"; color: var(--deny-glyph); }
+.blk-tool[data-mark="stale"] > summary .mark:empty::before { content: "\2013"; }

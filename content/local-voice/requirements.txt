@@ -1,0 +1,13 @@
+# Local voice venv, lean ONNX set (Python 3.11, Windows x64). Installed by
+# tools/voice/setup-voice.ps1. Direct packages only, pinned to the working venv's versions
+# (2026-10-21; kokoro-onnx at PyPI latest, 2026-08-19); pip resolves the rest.
+# The KPipeline Speak voice (kokoro, torch, spaCy) is the opt-in extra in
+# requirements-speak.txt (setup-voice.ps1 -Speak).
+kokoro-onnx==0.6.1
+numpy==2.4.6
+onnx-asr==0.12.0
+onnxruntime==1.30.0
+openwakeword==0.6.0
+requests==2.34.2
+scipy==1.17.1
+soundfile==0.13.1

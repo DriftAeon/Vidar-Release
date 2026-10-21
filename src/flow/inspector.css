@@ -1,0 +1,126 @@
+/* Anchored node-details popover. Positioned by popover-position.ts in the same screen-space coordinate
+   system pan/zoom/drag already use, converted to viewport coordinates (the card sits on
+   `document.body`, outside `.flow-canvas`/`S.rootEl`; selection.ts's
+   keyboardAllowed() treats focus in this card like focus in `S.rootEl`); `--k` (the kind colour)
+   is set inline per render by popover.ts, off the node's own `--kind` custom property. */
+/* Fixed on document.body (popover.ts), not absolute inside
+   .flow-canvas — its own `overflow: hidden` used to clip the card outright. overflow: auto keeps a
+   tall card scrollable; max-height is set per position pass in JS (popover-position.ts), not
+   here, since a fixed `calc(100vh - 24px)` ran a card flipped up near the canvas's own top edge
+   past the canvas even when it still fit the window. */
+.flow-pop {
+  position: fixed; width: 300px; overflow: auto;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-8); z-index: 5; text-align: left; cursor: default;
+  font-size: var(--font-12); line-height: 1.5;
+  /* --bg-tinted drop shadow, not a literal, so it still reads as "dark" in either theme. */
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--bg) 85%, transparent);
+}
+/* round-4 variant-3 connector: a 2px line in the kind colour, no arrowhead. */
+.flow-pop-connector { position: fixed; height: 2px; background: var(--k); z-index: 4; pointer-events: none; }
+
+.flow-pop-header {
+  background: var(--k); color: var(--bg); padding: var(--space-8) var(--space-10);
+  border-radius: calc(var(--radius-8) - 1px) calc(var(--radius-8) - 1px) 0 0; /* -1px: the card's own border, so the header's corners follow the card's radius */
+}
+.flow-pop-header-row1 { display: flex; align-items: center; gap: var(--space-6); }
+.flow-pop-title { font-size: var(--font-16); font-weight: 600; cursor: text; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+/* A bigger status mark than the canvas card's own (mock's "sq lg") — same status classes
+   (styles.css's .flow-run-badge.flow-run-mark.flow-run-*), just larger in the header context. */
+.flow-pop-mark.flow-run-mark { margin-left: auto; width: 18px; height: 18px; }
+.flow-pop-close {
+  background: transparent; border: 0; color: var(--bg); opacity: 0.7; font-size: var(--font-16);
+  line-height: 1; cursor: pointer; padding: 0 0 0 var(--space-4);
+}
+.flow-pop-close:hover, .flow-pop-close:focus-visible { opacity: 1; }
+.flow-pop-sub { display: block; font-weight: 600; opacity: 0.75; font-size: var(--font-11); margin-top: var(--space-2); }
+
+.flow-pop-body { padding: var(--space-10) var(--space-12); display: flex; flex-direction: column; gap: var(--space-10); }
+.flow-pop-cap {
+  font-size: var(--font-10); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-dim);
+  margin-bottom: var(--space-4); display: flex; justify-content: space-between; gap: var(--space-8);
+}
+
+/* Run stats: time, cost, attempt — no token count (FlowRunNodeState has none; see inspector.ts). */
+.flow-pop-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
+.flow-pop-stat { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-4) var(--space-8); }
+.flow-pop-stat b { display: block; font-size: var(--font-16); }
+.flow-pop-stat span { color: var(--fg-dim); font-size: var(--font-11); }
+
+.flow-pop-controls { display: flex; flex-direction: column; gap: var(--space-10); }
+/* Controls lock (dimmed) while the node runs — round-3 addition. */
+.flow-pop-controls.locked { opacity: 0.5; pointer-events: none; }
+
+/* Segmented Shape pick — --m per control, the mock's own categorical colour. */
+.flow-pop-seg { display: flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: var(--radius-4); overflow: hidden; }
+.flow-pop-seg button {
+  flex: 1 1 auto; min-width: 0; text-align: center; padding: var(--space-4) var(--space-6);
+  font-size: var(--font-12); color: var(--fg-dim); background: var(--bg); border: 0;
+  border-right: 1px solid var(--border); cursor: pointer;
+}
+.flow-pop-seg button:last-child { border-right: 0; }
+.flow-pop-seg button:disabled { cursor: default; }
+.flow-pop-seg button.on { background: var(--m); color: var(--bg); font-weight: 600; }
+.flow-pop-seg.warn { border-color: var(--alert); }
+
+/* Task / Content text card — always editable, no click-to-edit swap (the box itself is the
+   editor, per the mock). */
+.flow-pop-task {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4);
+  padding: var(--space-6) var(--space-8); min-width: 0; width: 100%; box-sizing: border-box;
+  font: inherit; color: var(--fg); resize: vertical;
+}
+.flow-pop-task:focus-visible { border-color: var(--accent); }
+.flow-pop-task.warn { border: 1px solid var(--alert); }
+.flow-pop-task:disabled { opacity: 0.7; }
+
+/* Modifier chips — colour-coded per addon kind, the brief's "old .flow-addon-* colours"
+   (--m set inline per chip by inspector.ts's CHIP_COLOR). */
+.flow-pop-chips { display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: center; }
+.flow-pop-chip {
+  display: inline-flex; align-items: center; gap: var(--space-4); border: 1px solid var(--m);
+  color: var(--m); background: color-mix(in srgb, var(--m) 12%, transparent); border-radius: var(--radius-4);
+  padding: var(--space-2) var(--space-6); font-size: var(--font-12); white-space: nowrap; max-width: 190px;
+}
+.flow-pop-chip > span:first-child { cursor: text; overflow: hidden; text-overflow: ellipsis; }
+/* N1 fold: a real <button> now (was a span role="button") — reset it back to the plain × look. */
+.flow-pop-chip-x {
+  background: transparent; border: 0; color: inherit; font: inherit; padding: 0; line-height: 1;
+  opacity: 0.6; cursor: pointer;
+}
+.flow-pop-chip-x:hover, .flow-pop-chip-x:focus-visible { opacity: 1; }
+.flow-pop-chip-select { background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.flow-pop-chip-add-wrap { position: relative; }
+.flow-pop-chip-add {
+  background: var(--ok-green); border: 1px solid var(--ok-green); color: var(--bg); font-weight: 700;
+  letter-spacing: 0.03em; padding: var(--space-2) var(--space-8); border-radius: var(--radius-4); font-size: var(--font-11);
+  cursor: pointer;
+}
+.flow-pop-chip-add:hover:not(:disabled) { background: color-mix(in srgb, var(--ok-green) 85%, white); }
+.flow-pop-chip-add:disabled { opacity: 0.5; cursor: default; }
+
+/* Result / Live output / error boxes. */
+.flow-pop-result {
+  background: var(--bg); border: 1px solid color-mix(in srgb, var(--ok-green) 40%, var(--border));
+  border-radius: var(--radius-4); padding: var(--space-6) var(--space-8); color: var(--ok-green);
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto;
+}
+.flow-pop-result-error { border-color: color-mix(in srgb, var(--alert) 40%, var(--border)); color: var(--alert); }
+.flow-pop-live {
+  background: var(--bg); border: 1px solid color-mix(in srgb, var(--approval-amber) 40%, var(--border));
+  border-radius: var(--radius-4); padding: var(--space-6) var(--space-8); color: var(--approval-amber);
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto;
+}
+.flow-pop-output-text { font-size: var(--font-14); min-height: 70px; }
+.flow-pop-actions { display: flex; gap: var(--space-6); }
+
+/* Read-only Preset caption on agent cards, plain (not a form control). */
+.flow-pop-caption { color: var(--fg); }
+
+/* Shared with the old docked panel's click-to-edit affordances — kept as-is (title, chip text). */
+.flow-inspector-req { color: var(--alert); margin-right: var(--space-3); }
+.flow-inspector-input {
+  min-width: 0; width: 100%; box-sizing: border-box; font: inherit;
+  background: var(--bg); border: 1px solid var(--accent); border-radius: var(--radius-3);
+  color: var(--fg); padding: var(--space-2) var(--space-4);
+}

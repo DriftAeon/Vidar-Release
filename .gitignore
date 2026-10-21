@@ -1,0 +1,64 @@
+node_modules/
+dist/
+dist-falcon/
+src-tauri/permissions/
+src-tauri/target/
+/bridge/
+# runtime\ holds bridge\, state\ and the two window/ui state files since the C1 layout move.
+/runtime/
+/content/vendor/
+# content\vendor\ is runtime data; anchored, so src/character/vendor and tools/vendor stay tracked.
+# Legacy root copies until the launch migration moves them under content\ (drop with the W5 legacy removal).
+/vendor/
+/characters/
+/local-voice/
+window-state.json
+vidar.json
+vidar-state.json
+# Flow's graphs, templates and runs (state\flow\<key>.json): the user's data.
+/state/
+# ...and at runtime\state\flow after the C1 move (covered by /runtime/ above).
+.codex/
+src-tauri/target-staging/
+src-tauri/target-zip/
+src-tauri/target-bare/
+# Any other cargo --target-dir under src-tauri: an unignored target-wt/ marked every zip -dirty (2026-10-18).
+src-tauri/target-*/
+# A staged release build invoked from the repo root rather than src-tauri lands here instead:
+# 1.4 GB of Rust build output that the rule above does not reach.
+target-staging/
+# Character packs (content\characters\<id>\character.json) are the user's own local assets — names,
+# absolute paths and hashes of copyrighted models. Never committed; each user adds their own
+# from Settings › Characters. The old compiled-in catalogue stays ignored too.
+# Anchored: unanchored, it also hid src-tauri/src/characters/ (the Rust pack store).
+/content/characters/
+src/character/catalog.json
+# Lucide picking library stays local; an icon is tracked only once copied to public/icons/<name>.svg in use.
+public/icons/lucide/
+
+# Run folders are working state, not history. The archive holds swept runs
+# and display artefacts (raw working state); only its index is tracked.
+docs/runs/
+docs/shelf/desks/atlas/runs/
+docs/changes.md
+docs/archive/
+!docs/archive/INDEX.md
+# Academy lessons: the raw material (transcripts, exports) is private session content; only the
+# lesson READMEs are tracked.
+docs/archive/academy/**
+!docs/archive/academy/**/
+!docs/archive/academy/**/README.md
+
+# content/local-voice: the venv, model caches and generated audio are machine state; the scripts are tracked
+content/local-voice/.venv/
+content/local-voice/.cache/
+content/local-voice/.tmp/
+content/local-voice/*.wav
+content/local-voice/__pycache__/
+# wake-word models are fetched by hand (tools/voice/wakeword-models.ps1); only the hash file is tracked
+content/local-voice/models/*.onnx
+# STT model folders (tools/voice/fetch-parakeet.ps1)
+content/local-voice/models/*/
+content/local-voice/fixtures/
+
+tools/desks/hidden-run/hidden-run.exe

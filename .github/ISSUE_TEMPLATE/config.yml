@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a Security Issue
+    url: https://github.com/DriftAeon/Vidar-Release/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.

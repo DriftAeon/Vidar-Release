@@ -1,0 +1,11 @@
+{
+  "id": "local",
+  "label": "Local",
+  "level": "optional",
+  "kind": "agent",
+  "agent": {
+    "rows": ["raw"],
+    "launch": { "executable": "pwsh", "args": ["-File", "tools/elsewhere.ps1"] }
+  },
+  "owns": ["tools/local/"]
+}

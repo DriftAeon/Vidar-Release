@@ -1,0 +1,380 @@
+/* ---- flow (panels/flow.ts) ---- */
+/* #flow-view stacks the toolbar over .flow-body. .flow-body holds no
+   docked Details panel beside .flow-canvas —
+   node details are an anchored popover, a child of .flow-canvas itself (flow/inspector.css). */
+#flow-view { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; }
+.flow-body { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: row; }
+.flow-canvas { flex: 1; min-width: 0; min-height: 0; position: relative; overflow: hidden; cursor: default; background: var(--bg); }
+.flow-canvas:active { cursor: grabbing; }
+.flow-world { position: absolute; top: 0; left: 0; }
+.flow-edges { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.flow-edge { fill: none; stroke-width: 2; opacity: 0.55; pointer-events: stroke; cursor: pointer; }
+.flow-edge.lit { stroke-width: 3; opacity: 1; }
+.flow-edge.selected { stroke-width: 3; opacity: 1; }
+/* invisible wider twin under each visible edge, painted first, so a click
+   near a thin stroke still lands on the edge */
+.flow-edge-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+/* temporary path while dragging from an out-port toward a drop target */
+.flow-edge-draft { fill: none; stroke: var(--fg-dim); stroke-width: 2; stroke-dasharray: 4 3; pointer-events: none; }
+/* stroke per source-node kind, same hexes as the node kinds below; no arrowhead: the edge ends
+   vertical-down into the in-port triangle, which reads as the arrow */
+.flow-edge-input { stroke: #6aa6d6; }
+.flow-edge-agent { stroke: #d7b254; }
+.flow-edge-output { stroke: #c97a4a; }
+/* overflow stays visible so the out port can hang below the card */
+.flow-node {
+  position: absolute; display: flex; flex-direction: column; border: 1px solid var(--border);
+  border-radius: var(--radius-6); background: var(--bg-panel); cursor: grab; user-select: none;
+}
+.flow-node:active { cursor: grabbing; }
+.flow-node.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* one hue per kind: header band, card tint and ports all read from --kind */
+.flow-node-input { --kind: #6aa6d6; }
+.flow-node-agent { --kind: #d7b254; }
+.flow-node-output { --kind: #c97a4a; }
+.flow-node {
+  border-color: color-mix(in srgb, var(--kind) 45%, var(--border));
+  background: color-mix(in srgb, var(--kind) 14%, var(--bg-panel));
+}
+/* Header-band card (mock round 2, flow-details-mockups.html §00 / flow-mockups.html v06):
+   kind colour fills the header instead of a left bar; 5px = --radius-6 minus the 1px border,
+   so the header's top corners follow the card's own curve. */
+.flow-node-header {
+  display: flex; align-items: center; gap: var(--space-4); min-width: 0;
+  background: var(--kind); border-radius: var(--radius-5) var(--radius-5) 0 0; padding: var(--space-4) var(--space-10);
+}
+.flow-kind-trigger { background: #6aa6d6; }
+.flow-kind-agent { background: #d7b254; }
+.flow-kind-tool { background: #8aa15f; }
+.flow-kind-review { background: #b07fd1; }
+.flow-kind-output { background: #c97a4a; }
+.flow-node-body { flex: 1; min-width: 0; padding: var(--space-6) var(--space-10); display: flex; flex-direction: column; gap: var(--space-2); }
+/* title/subtitle keep their pre-existing (body-scoped) rule as a fallback; these header-scoped
+   overrides read against the solid --kind band, same trick as the mock's `.n .hd{color:#0b0f0a}`
+   but off the existing --bg token instead of a hardcoded hex. */
+.flow-node-header .flow-node-title {
+  flex: 1 1 auto; min-width: 0; color: var(--bg); font-size: var(--font-12); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.flow-node-header .flow-node-subtitle {
+  color: var(--bg); opacity: 0.72; font-size: var(--font-11); font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto;
+}
+.flow-node-header .flow-node-subtitle::before { content: "\00b7\0020"; }
+.flow-node-title { font-size: var(--font-12); font-weight: 600; color: color-mix(in srgb, var(--kind) 70%, var(--fg)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-node-subtitle { font-size: var(--font-11); color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-node-field { font-size: var(--font-11); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: var(--space-4); }
+.flow-node-field-k { color: var(--fg-dim); flex-shrink: 0; }
+.flow-node-field-v { color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
+/* addon chips: a distinct muted hue per kind, deliberately off the five
+   node-kind hues above so the two colour scales never read as the same axis */
+.flow-node-addons { display: flex; flex-wrap: wrap; gap: var(--space-4); padding-top: var(--space-4); }
+/* Run facts footer (time, cost) — hidden until run-view.ts's paintNodeStatus has something to
+   show; no per-node token count exists in FlowRunNodeState today (see report), so cost stands in
+   for "tokens" in the brief's "time, tokens" footer. */
+.flow-node-footer {
+  border-top: 1px solid var(--border); padding: var(--space-3) var(--space-10);
+  color: var(--fg-dim); font-size: var(--font-11); display: flex; gap: var(--space-10);
+}
+.flow-node-footer[hidden] { display: none; }
+.flow-addon { font-size: var(--font-10); border: 1px solid; border-radius: var(--radius-3); padding: 1px var(--space-5); background: transparent; white-space: nowrap; }
+.flow-addon-k { opacity: 0.6; margin-right: var(--space-2); }
+.flow-addon-rule { border-color: #6f8fae; color: #6f8fae; }
+.flow-addon-skill { border-color: #a97fc9; color: #a97fc9; }
+.flow-addon-effort { border-color: #cf9b4e; color: #cf9b4e; }
+.flow-addon-model { border-color: #4fae94; color: #4fae94; }
+.flow-addon-hook { border-color: #c65f74; color: #c65f74; }
+.flow-addon-permission { border-color: #8f96a3; color: #8f96a3; }
+/* Addon ADD menu, uniquely prefixed — the row/select/textarea rules for the popover
+   live in flow/inspector.css's popover classes (the required-field marker is
+   `.flow-inspector-req`, kept there too). */
+/* Fixed on document.body so it escapes the popover
+   card's own overflow:auto (modifiers.ts sets left/top from the ADD button's own rect). */
+.flow-addon-menu {
+  position: fixed; width: 200px; z-index: 20;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-6);
+  padding: var(--space-4); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.flow-addon-menu-item { padding: var(--space-6) var(--space-8); border-radius: var(--radius-4); font-size: var(--font-12); cursor: pointer; }
+.flow-addon-menu-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* shift+drag-on-empty-canvas selection rectangle, in canvas (screen) space */
+.flow-marquee { position: absolute; border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
+/* Ports: a flattened downward triangle, 14x5 px (approved mock flow-edges-mock.html), in a 22x10
+   hit box. The span's box is the single source for where an edge meets the port (edges.ts's
+   portCenter reads its offsets), so the triangle must stay centred in it: span width even (22),
+   svg at left 4px, width 14 -> both centred on the span's midpoint, which with the card's
+   border-box width lands exactly on the card's centre. top -1px / calc(100% + 1px) put the base
+   on the card's outer edge (covering the 1px border); height 5px = PORT_H in edges.ts. */
+.flow-port { position: absolute; width: 22px; height: 10px; left: calc(50% - 11px); }
+.flow-port-in { top: -1px; }
+.flow-port-out { top: calc(100% + 1px); cursor: crosshair; }
+.flow-port svg {
+  position: absolute; left: 4px; top: 0; width: 14px; height: 5px; overflow: visible;
+  transform-origin: 50% 0; transition: transform 120ms ease-out, filter 120ms ease-out;
+}
+/* Out ports are always filled; an in port fills only once an edge lands on it (`.connected`,
+   toggled by edges.ts's redrawEdges). */
+.flow-port polygon { fill: var(--kind); stroke: var(--kind); stroke-width: 1; stroke-linejoin: round; }
+.flow-port-in:not(.connected) polygon { fill: var(--bg); }
+.flow-port:hover svg { transform: scale(1.35); filter: brightness(1.4); }
+.flow-reset, .flow-add-btn, .flow-run-cancel, .flow-tidy-btn, .flow-save-btn {
+  font-size: var(--font-11); padding: var(--space-2) var(--space-6); /* grandfathered toolbar look; Save joined the list (2026-10-05), values unchanged */
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-3); /* grandfathered toolbar look, as above */
+  color: var(--fg-dim); cursor: pointer;
+}
+/* Bottom-right corner of the canvas. */
+.flow-reset { position: absolute; bottom: 8px; right: 8px; }
+.flow-reset:hover, .flow-add-btn:hover, .flow-run-cancel:hover, .flow-tidy-btn:hover, .flow-save-btn:hover { color: var(--fg); border-color: var(--accent); }
+/* Icon-only like Tidy (the .icon-btn class sizes the icon); the disc reads 20% darker (2026-10-11) */
+.flow-save-btn .icn { filter: brightness(0.8); }
+/* Save is disabled while the canvas shows a User graph, Tidy while no flow is open: no hover lift
+   then (base.css dims it) */
+.flow-save-btn:disabled:hover, .flow-tidy-btn:disabled:hover { color: var(--fg-dim); border-color: var(--border); }
+/* No flow open (the open one was deleted): the Changes pane's empty-state look (.cx-empty,
+   changes.css) centred over the canvas; [hidden] has to win over its display:flex. */
+.flow-canvas .flow-empty { position: absolute; inset: 0; justify-content: center; padding: 0; pointer-events: none; }
+.flow-canvas .flow-empty[hidden] { display: none; }
+
+/* ---- flow toolbar:
+   flow picker + New, the run selector, Run · Cancel, a spacer, then ADD (filled green). No Pause
+   (shelved — engine.ts has cancel only, not a real hold) and no Tidy: neither appears in the
+   approved mock's toolbar row. Reset Layout lives on the canvas itself, not this row (above).
+   `.flow-node.invalid` marks a node validate.ts rejects. */
+.flow-toolbar {
+  display: flex; align-items: center; gap: var(--space-8); position: relative; /* no padding, fill or rule: the pane shell (.wb-pane-head) owns the head; #workbench insets 10px so the picker lines up with the tab icons (2026-10-04) */
+}
+.flow-toolbar-spacer { flex: 1; }
+/* one height for every toolbar button: New, Create, Run, Cancel, Tidy, Add (2026-10-03) */
+.flow-toolbar button {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  height: var(--row-24); padding-block: 0;
+}
+.flow-toolbar button[hidden] { display: none; } /* New swaps out for the name form */
+.flow-run-btn { color: var(--ok-green); border-color: var(--ok-green); font-weight: 600; }
+.flow-run-btn:hover:not(:disabled) {
+  color: var(--ok-green); border-color: var(--ok-green);
+  background: color-mix(in srgb, var(--ok-green) 14%, transparent);
+}
+.flow-run-btn:disabled { color: var(--fg-dim); border-color: var(--border); }
+/* Add (the `+` palette button): a colour icon button; the art carries the colour, so no fill. */
+.flow-plus-btn { position: relative; }
+.flow-plus-btn:hover:not(:disabled) { border-color: var(--accent); }
+.flow-node.invalid { border-color: var(--alert); }
+.flow-node.invalid .flow-node-header { background: var(--alert); }
+
+/* ---- flow roster + palette ----
+   `.flow-palette` positions relative to whatever anchor
+   panels/flow.ts mounts the `+` button as, so it must be a positioned element. */
+.flow-palette {
+  position: absolute; top: calc(100% + var(--space-6)); right: 0; width: 220px;
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); padding: var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-2); z-index: 5;
+}
+.flow-palette-label { font-size: var(--font-10); color: var(--fg-dim); padding: var(--space-4) var(--space-8) var(--space-2); }
+.flow-palette-item {
+  display: flex; align-items: center; gap: var(--space-8); padding: var(--space-6) var(--space-8);
+  border-radius: var(--radius-4); cursor: pointer; font-size: var(--font-12);
+}
+.flow-palette-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.flow-palette-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.flow-palette-sep { height: 1px; background: var(--border); margin: var(--space-4) 0; }
+/* Flow picker (mock state 1's `<select>` + New button): New is a plain house button — the mock
+   has no dedicated class or override for it (`<button>New</button>`), so `.flow-picker-new` joins
+   no sibling selector here; it reads correctly off the `:where(button)` floor above as-is. New's
+   inline name field (instead of window.prompt) swaps in for New: the field plus Create,
+   which shares New's look off the same floor. */
+/* the flow picker and the run selector (.flow-pick, #flow-pick-menu) share the Display file picker's rules in display.css */
+.flow-picker-new-wrap, .flow-picker-name-form { display: inline-flex; align-items: center; gap: var(--space-6); }
+/* Toolbar sections by spacing: New hugs the flow picker, a wider gap opens before the run group. */
+.flow-picker-new-wrap { margin-left: calc(var(--space-4) - var(--space-8)); }
+.flow-toolbar .flow-run-pick { margin-left: var(--space-16); }
+.flow-picker-name-form[hidden] { display: none; }
+.flow-picker-name {
+  width: 160px; box-sizing: border-box; font: inherit; font-size: var(--font-12);
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4);
+  color: var(--fg); padding: var(--space-3) var(--space-6);
+}
+.flow-picker-name:focus { outline: none; border-color: var(--accent); }
+/* Flow picker menu sections (2026-10-05): Templates label, then the User header row that
+   collapses its list; both dim and small, the header lifts to the row hover/focus look. */
+#flow-pick-menu .flow-pick-head { color: var(--fg-dim); font-size: var(--font-11); }
+#flow-pick-menu div.flow-pick-head { padding: var(--space-4) var(--space-12); }
+#flow-pick-menu .flow-pick-user:not(:first-child) { margin-top: var(--space-4); }
+#flow-pick-menu .flow-pick-user .car { flex-shrink: 0; color: var(--fg-dim); }
+/* User rows (flow-picker.ts addUserRow): the menu row plus a Delete icon beside it, shown on row
+   hover or focus like the Changes section actions; hover is the shared menu row look (menus.css). */
+#flow-pick-menu .flow-pick-item { display: flex; align-items: center; gap: var(--space-2); }
+#flow-pick-menu .flow-pick-item > .display-pick-row { flex: 1 1 auto; min-width: 0; }
+#flow-pick-menu .flow-pick-del { flex: 0 0 auto; display: flex; align-items: center; padding: var(--space-6); opacity: 0; } /* legacy 6: the menu row's own block padding (menus.css), so the icon box matches the row */
+#flow-pick-menu .flow-pick-del .icn { width: var(--font-13); height: var(--font-13); }
+#flow-pick-menu .flow-pick-item:is(:hover, :focus-within) .flow-pick-del { opacity: 1; }
+#flow-pick-menu .flow-pick-del:focus-visible { background: var(--bg); outline: none; }
+#flow-pick-menu .flow-pick-del:active { background: var(--bg-selected); }
+#flow-pick-menu .flow-pick-item:is(:hover, :focus-within) .flow-pick-del:disabled { opacity: 0.4; cursor: default; }
+/* the Delete Flow confirm (flow/delete-confirm.ts) is the Swap Confirm card; it rides above the menu (100) */
+#flow-delete-confirm { z-index: 110; }
+
+/* ---- flow snapping ---- */
+/* Grid-snap background: applied to .flow-world itself (nodes.ts's loadGraph), drawn on a
+   ::before pseudo-element rather than on .flow-world's own background so .flow-world stays
+   0x0 (an absolute div, all children absolute — giving it a size moves its default
+   transform-origin off 0,0 and desyncs pan/zoom/edge-drag/marquee math that assumes that
+   origin). The pseudo-element is offset -4096/-4096 at 12288x12288,
+   both multiples of 16 (S.GRID) so grid lines stay on world 16px multiples; z-index:-1 stays
+   under the nodes because .flow-world's transform already creates the stacking context. */
+.flow-snap-grid {
+  position: relative;
+  transform-origin: 0 0;
+}
+.flow-snap-grid::before {
+  content: "";
+  position: absolute;
+  left: -4096px;
+  top: -4096px;
+  width: 12288px;
+  height: 12288px;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--border) var(--flow-grid-opacity, 55%), transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--border) var(--flow-grid-opacity, 55%), transparent) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+/* Magnetic port highlight: lit while an in-flight edge drag is within ~20px (edges.ts's
+   SLACK) of this port, before drop. The tint sits on the triangle's fill/stroke; the selector
+   (0,3,1) outranks `.flow-port-in:not(.connected) polygon` (0,2,1) so a hollow port still lights. */
+.flow-node .flow-port.flow-snap-port-near polygon {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+.flow-node .flow-port.flow-snap-port-near svg {
+  transform: scale(1.35);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+
+/* ---- flow run status ---- */
+/* Run-state badge: an ordinary flex sibling appended into .flow-node-header (run-view.ts), never
+   an absolutely-positioned overlay — ("run-state badges must not overlap the node
+   body"). Text-pill look, for the statuses that still keep a text pill (queued, awaiting-approval,
+   error, canceled, denied); idle/running/ok use the
+   square mark below. */
+.flow-run-badge {
+  flex: 0 0 auto; align-self: center; margin: 0 var(--space-4);
+  font-size: var(--font-10); font-weight: 600;
+  /* 1px, not --space-2: the badge sits inline in the header row and the smallest scale step
+     already reads visibly taller than the label text beside it. */
+  padding: 1px var(--space-4); border-radius: var(--radius-3); border: 1px solid var(--border);
+  background: var(--bg); white-space: nowrap; color: var(--fg-dim);
+}
+/* Node-level status recolors the border only (scoped to .flow-node so it never bleeds into
+   inherited text elsewhere in the subtree); the badge (below) owns the status text colour. */
+.flow-node.flow-run-running { border-color: var(--accent); }
+.flow-node.flow-run-awaiting-approval { border-color: var(--approval-amber); }
+.flow-node.flow-run-ok { border-color: var(--ok-green); }
+.flow-node.flow-run-error { border-color: var(--alert); }
+.flow-node.flow-run-canceled { border-color: var(--fg-dim); }
+.flow-node.flow-run-denied { border-color: var(--deny-red); }
+.flow-run-badge.flow-run-awaiting-approval { color: var(--approval-amber); border-color: var(--approval-amber); }
+.flow-run-badge.flow-run-error { color: var(--alert); border-color: var(--alert); }
+.flow-run-badge.flow-run-canceled { color: var(--fg-dim); }
+/* Denied is the Deny button's red, outlined like its siblings. */
+.flow-run-badge.flow-run-denied { color: var(--deny-red); border-color: var(--deny-red); }
+/* Status mark (idle/running/ok): a rounded square, replacing the text pill for these three
+   statuses only (mock round 2, flow-details-mockups.html §00 — check in a rounded square, idle
+   unfilled, running a pulsing amber square; brief item 1). `.flow-run-mark` overrides the pill's
+   sizing; the status class on top of it (below) sets the fill/border per state. */
+.flow-run-badge.flow-run-mark {
+  width: 14px; height: 14px; padding: 0; border-radius: var(--radius-3);
+  display: inline-grid; place-items: center;
+}
+.flow-run-badge.flow-run-mark.flow-run-idle { background: transparent; border: 2px solid var(--fg-dim); }
+.flow-run-badge.flow-run-mark.flow-run-running {
+  background: transparent; border: 2px solid var(--approval-amber);
+  animation: flow-mark-pulse 1s ease-in-out infinite alternate; /* motion: live running state, not a transition */
+}
+.flow-run-badge.flow-run-mark.flow-run-ok { background: var(--ok-green); border-color: var(--ok-green); }
+.flow-run-badge.flow-run-mark.flow-run-ok::after {
+  content: ""; width: 3px; height: 7px; border: solid var(--bg); border-width: 0 2px 2px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+@keyframes flow-mark-pulse { to { background: color-mix(in srgb, var(--approval-amber) 40%, transparent); } }
+/* Edge status (item 2): green once the node it feeds is ok, amber marching dashes while that node
+   is running, grey for every other status (queued, awaiting-approval, error, canceled, denied) —
+   replaces the old per-status hue set, which gave error/canceled/denied their own edge colours. */
+.flow-edges path.flow-run-ok { stroke: var(--ok-green); }
+.flow-edges path.flow-run-running {
+  stroke: var(--approval-amber); stroke-dasharray: 5 4;
+  animation: flow-edge-march 0.6s linear infinite; /* motion: live running state, not a transition */
+}
+.flow-edges path.flow-run-idle,
+.flow-edges path.flow-run-queued,
+.flow-edges path.flow-run-awaiting-approval,
+.flow-edges path.flow-run-error,
+.flow-edges path.flow-run-canceled,
+.flow-edges path.flow-run-denied { stroke: var(--fg-dim); }
+@keyframes flow-edge-march { to { stroke-dashoffset: -18; } }
+
+/* ---- flow approvals ---- */
+/* The node's pending chip: a badge-sized pill at the right of the title bar, so the node never
+   grows with its queue (edges read offsetHeight). Clicking it opens the sidebar below. It reuses
+   .flow-run-badge for size and margin; the plain status badge hides while the chip shows. */
+.flow-node-header:has(.flow-approval-block) > .flow-run-badge:not(.flow-approval-block) { display: none; }
+.flow-approval-block {
+  flex: 0 0 auto; padding: 1px var(--space-4); /* 1px: matches .flow-run-badge so the chip is the same height */
+  font-size: var(--font-10); /* matches .flow-run-badge, the pill it replaces */
+  font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+  color: var(--approval-amber); background: color-mix(in srgb, var(--approval-amber) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--approval-amber) 45%, var(--bg)); border-radius: var(--radius-3);
+  cursor: pointer; transition: background 100ms ease;
+}
+.flow-approval-block:hover { background: color-mix(in srgb, var(--approval-amber) 18%, var(--bg)); }
+.flow-approval-block:active { background: color-mix(in srgb, var(--approval-amber) 26%, var(--bg)); }
+.flow-approval-block:focus-visible { outline: 1px solid var(--approval-amber); outline-offset: 1px; }
+
+/* Sidebar: docked right of .flow-canvas inside .flow-body, shown while the shown run has a pending
+   approval. One card per request; Approve is always the left button, Deny the right — never
+   reorder these two. */
+.flow-approvals {
+  width: 340px; /* off-scale: wide enough for a command block without crowding the canvas */
+  flex-shrink: 0; min-height: 0; display: flex; flex-direction: column;
+  border-left: 1px solid var(--border); background: var(--bg-panel);
+}
+.flow-approvals[hidden] { display: none; }
+.flow-approvals-head {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-6) var(--space-10); border-bottom: 1px solid var(--border); font-size: var(--font-12);
+}
+.flow-approvals-title { font-weight: 600; }
+.flow-approvals-count { color: var(--approval-amber); font-variant-numeric: tabular-nums; flex: 1; }
+.flow-approvals-hide {
+  font-size: var(--font-11); padding: var(--space-2) var(--space-6);
+  border: 1px solid var(--border); border-radius: var(--radius-3); background: transparent; color: var(--fg-dim); cursor: pointer;
+  transition: color 100ms ease, border-color 100ms ease;
+}
+.flow-approvals-hide:hover { color: var(--fg); border-color: var(--fg-dim); }
+.flow-approvals-hide:active { background: var(--bg); }
+.flow-approvals-hide:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.flow-approvals-list {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8) var(--space-10);
+}
+.flow-approval-card {
+  display: flex; flex-direction: column; gap: var(--space-6);
+  padding: var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-4); background: var(--bg);
+  transition: border-color 200ms ease;
+}
+.flow-approval-card.flow-approval-focus { border-color: var(--approval-amber); }
+.flow-approval-card-head .icn { width: var(--font-16); height: var(--font-16); flex: none; align-self: center; }
+.flow-approval-card-head { display: flex; align-items: baseline; gap: var(--space-6); min-width: 0; font-size: var(--font-12); }
+.flow-approval-node { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-approval-tool { color: var(--fg-dim); flex-shrink: 0; }
+.flow-approval-detail { min-width: 0; }
+.flow-approval-detail .tool-input { border: 1px solid var(--border); border-radius: var(--radius-3); background: var(--bg-panel); max-height: 240px; }
+.flow-approve-buttons { display: flex; gap: var(--space-4); flex-shrink: 0; }
+.flow-approve-btn {
+  font-size: var(--font-11); padding: var(--space-2) var(--space-6);
+  border: 1px solid var(--border); border-radius: var(--radius-3); background: var(--bg-panel); cursor: pointer;
+}
+.flow-approve-btn:disabled { opacity: 0.5; cursor: default; }
+

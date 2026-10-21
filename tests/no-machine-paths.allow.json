@@ -1,0 +1,10 @@
+{
+  "entries": [
+    { "path": "runes/rules/app/workbench/agent-tabs-pointer.md", "count": 1, "reason": "recall description carries an absolute doc path by design (b81e280)" },
+    { "path": "runes/rules/app/workbench/tray-blocks-bridge.md", "count": 1, "reason": "recall description carries an absolute doc path by design (b81e280)" },
+    { "path": "runes/rules/app/workbench/voice-readme-pointer.md", "count": 1, "reason": "recall description carries an absolute doc path by design (b81e280)" },
+    { "path": "runes/rules/code/design/design-runtime-paths-exe-root.md", "count": 1, "reason": "AGENTS.md:65 rule text names the forbidden literal" },
+    { "path": "src-tauri/src/settings/commands.rs", "count": 1, "reason": "rust test module (#[cfg(test)] mod tests): settings fixture" },
+    { "path": "src/ipc-mock.ts", "count": 6, "reason": "ipc-mock.ts browser-preview mock (mockInvoke data, IS_TAURI false only)" },
+    { "path": "tests/no-machine-paths.test.mjs", "count": 8, "reason": "the test that hunts machine paths names the shapes it hunts" }  ]
+}

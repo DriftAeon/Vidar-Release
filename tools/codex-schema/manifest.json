@@ -1,0 +1,2242 @@
+{
+  "format": 1,
+  "codexVersion": "0.163.0",
+  "experimental": true,
+  "clientRequests": [
+    {
+      "method": "account/bedrock/checkGovCloudRequirements",
+      "paramsType": "BedrockCheckGovCloudRequirementsParams",
+      "paramsSha256": "c63564a03b19aac17b195fbbaf6b7edee12ceb1cd6ca8787b2f048aebc47acd8"
+    },
+    {
+      "method": "account/bedrock/discover",
+      "paramsType": "BedrockDiscoverParams",
+      "paramsSha256": "401fc341f9d279a88ff1d11ef96ea7b7b1898642be7b3106332ff7e5702a68cd"
+    },
+    {
+      "method": "account/bedrock/setup",
+      "paramsType": "BedrockSetupParams",
+      "paramsSha256": "763e48b109c5f8b7c471769b0edb868f1dc354207e050089b299afa7ea354863"
+    },
+    {
+      "method": "account/gatewayOAuth/cancel",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "account/gatewayOAuth/login",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "account/gatewayOAuth/read",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "account/login/cancel",
+      "paramsType": "CancelLoginAccountParams",
+      "paramsSha256": "a249c8e7a55b0d5abaae30357aa9bae1538c4358333c41dfb887ce208b7240cf"
+    },
+    {
+      "method": "account/login/start",
+      "paramsType": "LoginAccountParams",
+      "paramsSha256": "5830feb6add14130c9f56ff0e7eb46d57a9381421669f7191760292aadc23b10"
+    },
+    {
+      "method": "account/logout",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "account/rateLimitResetCredit/consume",
+      "paramsType": "ConsumeAccountRateLimitResetCreditParams",
+      "paramsSha256": "39af8b05fdc0169796dbcbc07db4c5225596e03846cea9f65f47c9cdf5bad493"
+    },
+    {
+      "method": "account/rateLimits/read",
+      "paramsType": "GetAccountRateLimitsParams",
+      "paramsSha256": "8d64b8c83998cc9dc78846637a821841a73b336333d41ea655427140edfa6c2a"
+    },
+    {
+      "method": "account/read",
+      "paramsType": "GetAccountParams",
+      "paramsSha256": "2eb9e53065d18bc43f4850d5a6a4be148c05ac8a41c26d6a0cba92b4049246a5"
+    },
+    {
+      "method": "account/sendAddCreditsNudgeEmail",
+      "paramsType": "SendAddCreditsNudgeEmailParams",
+      "paramsSha256": "f98722e33ae2010106e5ce1ba8f97b6dc297903b3e5972b7b623e44158fca9eb"
+    },
+    {
+      "method": "account/usage/read",
+      "paramsType": "GetAccountTokenUsageParams",
+      "paramsSha256": "8a830455f6e2969c45dc1ee13e4cfa6760382712af960f1742ad54369229ffff"
+    },
+    {
+      "method": "account/workspaceMessages/read",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "app/installed",
+      "paramsType": "AppsInstalledParams",
+      "paramsSha256": "bbbf50cbde89fd4c6799e53ff801e4930c909752d9f1822192157b516c75e1e2"
+    },
+    {
+      "method": "app/list",
+      "paramsType": "AppsListParams",
+      "paramsSha256": "42964166a84fd751e209cca39a5df772b56aa5145d1359844cd4b0a2cef5dd08"
+    },
+    {
+      "method": "app/read",
+      "paramsType": "AppsReadParams",
+      "paramsSha256": "0f560b26e70de00479d78eacb10d176a36006cdb97187d6ce4cafdccf7db1475"
+    },
+    {
+      "method": "collaborationMode/list",
+      "paramsType": "CollaborationModeListParams",
+      "paramsSha256": "ca146a9868bd452284ea07657a62c3663f5a18418060538ef27954e4fad00bcd"
+    },
+    {
+      "method": "command/exec",
+      "paramsType": "CommandExecParams",
+      "paramsSha256": "e6886e5ae462e4c0db66d583685f331f161724418f288a2409dc69fb7548deec"
+    },
+    {
+      "method": "command/exec/resize",
+      "paramsType": "CommandExecResizeParams",
+      "paramsSha256": "68f8a981b395d689c4062c2f63f1b4646c79067b8b15f63b814924e003da1f91"
+    },
+    {
+      "method": "command/exec/terminate",
+      "paramsType": "CommandExecTerminateParams",
+      "paramsSha256": "b91ccfc19fff4ceb2841932b17b65b48ab5fa5cb5529bca843f9fd0775f5bbbc"
+    },
+    {
+      "method": "command/exec/write",
+      "paramsType": "CommandExecWriteParams",
+      "paramsSha256": "d6c71a079524ff38cfddc4a30cd1f954e58313034baeac6915440759879dccf3"
+    },
+    {
+      "method": "config/batchWrite",
+      "paramsType": "ConfigBatchWriteParams",
+      "paramsSha256": "7ad2355fc6bd0795f72ab17ec74af24b0e2db10dc5bbc6149c6f8bc17f6f1551"
+    },
+    {
+      "method": "config/mcpServer/reload",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "config/read",
+      "paramsType": "ConfigReadParams",
+      "paramsSha256": "5e947a5d8029d298c7508967cdf15725f9a910b0f13c59373b60b83028f28d6a"
+    },
+    {
+      "method": "config/value/write",
+      "paramsType": "ConfigValueWriteParams",
+      "paramsSha256": "2cf3ffd41fe5a10ae30a8157cca9f593a2318e4d7400c68aa791cfac2be0e379"
+    },
+    {
+      "method": "configRequirements/read",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "environment/add",
+      "paramsType": "EnvironmentAddParams",
+      "paramsSha256": "29f922ec7aa8cca49e6076180f8ba7e179bc60799a5e963d5a429485336fbd18"
+    },
+    {
+      "method": "environment/info",
+      "paramsType": "EnvironmentInfoParams",
+      "paramsSha256": "8977675df2809875c7b2509ae28a29ba4b5a93fbe2c974bceb77286554028270"
+    },
+    {
+      "method": "environment/status",
+      "paramsType": "EnvironmentStatusParams",
+      "paramsSha256": "c8d3018b1d86b7f12c5bf90f54f73d93553bf666d196040f13ea5bb104cae2b0"
+    },
+    {
+      "method": "experimentalFeature/enablement/set",
+      "paramsType": "ExperimentalFeatureEnablementSetParams",
+      "paramsSha256": "a9e0dad96afd5fdc3d50b9cdf9a8fc5328dd26a317e0ebc9ec617881a27dd5e1"
+    },
+    {
+      "method": "experimentalFeature/list",
+      "paramsType": "ExperimentalFeatureListParams",
+      "paramsSha256": "89f3504d28f929ab89662149e5df1df40f001008d3df88bc2a55c23e88c347f8"
+    },
+    {
+      "method": "externalAgentConfig/detect",
+      "paramsType": "ExternalAgentConfigDetectParams",
+      "paramsSha256": "6bf12009b9d40b67e1ac159101b6d9064020d645a9aedda9a40f408a6fb0ff5d"
+    },
+    {
+      "method": "externalAgentConfig/import",
+      "paramsType": "ExternalAgentConfigImportParams",
+      "paramsSha256": "182f020ecd2979bea997604a27150e8a7344904da6fbbf728528c81454c68e5f"
+    },
+    {
+      "method": "externalAgentConfig/import/readHistories",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "externalAgentConfig/import/recordHistory",
+      "paramsType": "ExternalAgentConfigImportHistoryRecordParams",
+      "paramsSha256": "8b37123116a7b6c0e49ede26bad2c03e7ac587611261e5443e7e30390daae61f"
+    },
+    {
+      "method": "feedback/upload",
+      "paramsType": "FeedbackUploadParams",
+      "paramsSha256": "c52c7aa8132424db680f71de21afb2bdab7e21618ac8e44d7c7c1ea9ce1f3d09"
+    },
+    {
+      "method": "fs/copy",
+      "paramsType": "FsCopyParams",
+      "paramsSha256": "12cd547c8c2ddf26cd1c57b5a4d2fa82c248abc76878955eba9b3033902d7946"
+    },
+    {
+      "method": "fs/createDirectory",
+      "paramsType": "FsCreateDirectoryParams",
+      "paramsSha256": "e0b42a45f898768f46b5c81a1e2601e3c1596d24c74f1f090601555233303762"
+    },
+    {
+      "method": "fs/getMetadata",
+      "paramsType": "FsGetMetadataParams",
+      "paramsSha256": "7f5d91510611e7e456a97b2996e0e6802920e9e9361307fabb739c04174a23ad"
+    },
+    {
+      "method": "fs/readDirectory",
+      "paramsType": "FsReadDirectoryParams",
+      "paramsSha256": "0ce5defea8520395a3d724bcb73c9279291e91b515a5ae2793bf7196b9f8f464"
+    },
+    {
+      "method": "fs/readFile",
+      "paramsType": "FsReadFileParams",
+      "paramsSha256": "b85d3094017b3a6b9f3e1a095f1dc3f658817c5d25ee4dd8fd2ac66fcac0e257"
+    },
+    {
+      "method": "fs/remove",
+      "paramsType": "FsRemoveParams",
+      "paramsSha256": "4f3727f7926e4a46ee1cacc5a3210f673b6cf41f3170f8c0db85842a44ea0cc9"
+    },
+    {
+      "method": "fs/unwatch",
+      "paramsType": "FsUnwatchParams",
+      "paramsSha256": "6eebf6352ff24414c67e68127ba3b8683ca3bf45d196dd74599a99aeece469c9"
+    },
+    {
+      "method": "fs/watch",
+      "paramsType": "FsWatchParams",
+      "paramsSha256": "bf53cd323532e9e3bafe0247ccdc2ea1dfee740887571ea4c8ae7bd760de5485"
+    },
+    {
+      "method": "fs/writeFile",
+      "paramsType": "FsWriteFileParams",
+      "paramsSha256": "00c68086407cf988a7226221fe73e3772e1e769b099213da8bd004c597b729ca"
+    },
+    {
+      "method": "fuzzyFileSearch",
+      "paramsType": "FuzzyFileSearchParams",
+      "paramsSha256": "152980d0b145a5a8e03f483e42ce91e0346526bb9655fb39efc4b3c13d9f4c6a"
+    },
+    {
+      "method": "fuzzyFileSearch/sessionStart",
+      "paramsType": "FuzzyFileSearchSessionStartParams",
+      "paramsSha256": "54e7fa7a5ab2e02d948a5e927743cbc4991225964969e97ef07667a4501400c8"
+    },
+    {
+      "method": "fuzzyFileSearch/sessionStop",
+      "paramsType": "FuzzyFileSearchSessionStopParams",
+      "paramsSha256": "1400cd9768f3a4d9aaf195c7da534ca4ac539f155d1a49a05602897a224a831d"
+    },
+    {
+      "method": "fuzzyFileSearch/sessionUpdate",
+      "paramsType": "FuzzyFileSearchSessionUpdateParams",
+      "paramsSha256": "eb72dba64c0c2940994df32b60b099f67c211c9a9d547769cd7769651a396d50"
+    },
+    {
+      "method": "hooks/list",
+      "paramsType": "HooksListParams",
+      "paramsSha256": "c57cdf2cadf5b1afd4432be17563cf19eee00d979e906d4eb663eae730a32e8f"
+    },
+    {
+      "method": "initialize",
+      "paramsType": "InitializeParams",
+      "paramsSha256": "a91767c2bceda26b07f227acf1eb8f021d038b18dd06bc7dc4a6cf907fbfafad"
+    },
+    {
+      "method": "marketplace/add",
+      "paramsType": "MarketplaceAddParams",
+      "paramsSha256": "3bc43ea1636a5c8d5c17b488ce5c5297b412e6e83c0ed5f64967227efce582ae"
+    },
+    {
+      "method": "marketplace/remove",
+      "paramsType": "MarketplaceRemoveParams",
+      "paramsSha256": "385953c4246dfe9fb8d783803c0e65f4e07411c4a1fbb59537445f321d147d29"
+    },
+    {
+      "method": "marketplace/upgrade",
+      "paramsType": "MarketplaceUpgradeParams",
+      "paramsSha256": "5f276d0339866fed27304a4fd04acbc1b51934af6cd013774fd592fe74788346"
+    },
+    {
+      "method": "mcpServer/event/stream/start",
+      "paramsType": "McpServerEventStreamStartParams",
+      "paramsSha256": "684d677fb99b8af12cbb065cf49adf8587baa5cbd70180adf7ff4e7d127e7723"
+    },
+    {
+      "method": "mcpServer/event/stream/stop",
+      "paramsType": "McpServerEventStreamStopParams",
+      "paramsSha256": "4aaff05ad2dec75e3f93ca924f8c275acd18df33995d34198f54bbc93b0325b0"
+    },
+    {
+      "method": "mcpServer/oauth/login",
+      "paramsType": "McpServerOauthLoginParams",
+      "paramsSha256": "0d1a56eff26b3b44751bdfd26f9fed4d2394b5f227ca36f3216f458965af0751"
+    },
+    {
+      "method": "mcpServer/resource/read",
+      "paramsType": "McpResourceReadParams",
+      "paramsSha256": "024ed506e8cfdad2fc7a1a91e886d7d4a3277ac452792b918615b65f84109a21"
+    },
+    {
+      "method": "mcpServer/tool/call",
+      "paramsType": "McpServerToolCallParams",
+      "paramsSha256": "ec36b9c00ddf60392647b0f29f996582504fc60b94a18b253fd3a6b49f99456c"
+    },
+    {
+      "method": "mcpServerStatus/list",
+      "paramsType": "ListMcpServerStatusParams",
+      "paramsSha256": "8df47364ad74cf31881964b527c475b1e344c9ceffab47d0ca2ee2a81098074b"
+    },
+    {
+      "method": "memory/reset",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "memory/status",
+      "paramsType": "MemoryStatusParams",
+      "paramsSha256": "54a13513616e2998447c9a6f64bd0e5eb2af234c75ddf6d620b04584e1526848"
+    },
+    {
+      "method": "mock/experimentalMethod",
+      "paramsType": "MockExperimentalMethodParams",
+      "paramsSha256": "3074df94da0ded5fbb3898354a1a4f4ec83805b1515848bd516a16ad5b63537b"
+    },
+    {
+      "method": "model/list",
+      "paramsType": "ModelListParams",
+      "paramsSha256": "f0fe01d29db92dd8c7b546461f02fb2e3206d73d5b3e54e9cc954bc117f356ee"
+    },
+    {
+      "method": "modelProvider/capabilities/read",
+      "paramsType": "ModelProviderCapabilitiesReadParams",
+      "paramsSha256": "8b9deb1bb4b9cd08dd97e2c8bfaedfbc1cfe42e102d7a30e7526d8b531656a41"
+    },
+    {
+      "method": "permissionProfile/list",
+      "paramsType": "PermissionProfileListParams",
+      "paramsSha256": "53f6ec8da4f60607f09000144f102bc36798571ae4f840f04d95d41aeffd0b33"
+    },
+    {
+      "method": "plugin/install",
+      "paramsType": "PluginInstallParams",
+      "paramsSha256": "ef9847f453d8a6ad84ec17057d4a49f72a1cc12fc54fad489e902c836ab93eba"
+    },
+    {
+      "method": "plugin/installed",
+      "paramsType": "PluginInstalledParams",
+      "paramsSha256": "6e8fbea0e375643c4077b3978b9435d9f2e3ce093f710b0ef830e1c9a4ba2bc2"
+    },
+    {
+      "method": "plugin/list",
+      "paramsType": "PluginListParams",
+      "paramsSha256": "52ad677c3ddc1b5a358e6eed4811613e127dc5b1cd289d1c50a1b9d95261a8bd"
+    },
+    {
+      "method": "plugin/read",
+      "paramsType": "PluginReadParams",
+      "paramsSha256": "f55b85f65ba77e14bfcbd127e99504ce63ade986dd7dc99adac6d4e85f94533a"
+    },
+    {
+      "method": "plugin/reconcile",
+      "paramsType": "PluginReconcileParams",
+      "paramsSha256": "20d003faad1cdbf797bf545ee7b4e5985e69ae23c6d246344b38cc393ecb59a8"
+    },
+    {
+      "method": "plugin/search",
+      "paramsType": "PluginSearchParams",
+      "paramsSha256": "d470be4b2633a202c622f283db86d236e129526a3903ca60541d5de56bf952aa"
+    },
+    {
+      "method": "plugin/share/checkout",
+      "paramsType": "PluginShareCheckoutParams",
+      "paramsSha256": "1799cdb6c4a355249a7629e8e8e0e8001552e004612859fd9a99b55a4e545ca1"
+    },
+    {
+      "method": "plugin/share/delete",
+      "paramsType": "PluginShareDeleteParams",
+      "paramsSha256": "37bdee9ba4b5a246f1da7e13830a52d896bba0c84c5f2f6f2768a4a26c60bf40"
+    },
+    {
+      "method": "plugin/share/list",
+      "paramsType": "PluginShareListParams",
+      "paramsSha256": "d7e0e271b2f51232d515951958645e7b69048ef4a4207b47f0ffbfc062a2bc7c"
+    },
+    {
+      "method": "plugin/share/save",
+      "paramsType": "PluginShareSaveParams",
+      "paramsSha256": "9ce65644463058ca40f6eea18445a87332a5e9b42439599214a6053271929fc6"
+    },
+    {
+      "method": "plugin/share/updateTargets",
+      "paramsType": "PluginShareUpdateTargetsParams",
+      "paramsSha256": "62f4aca287881f002dfcbda5f469ba58e1a97eadb92d7eb715cdd7fc0c00ba34"
+    },
+    {
+      "method": "plugin/skill/read",
+      "paramsType": "PluginSkillReadParams",
+      "paramsSha256": "0712b3af3188f6530d2fdb83e494540d357e9efbe5dd8d0b9488815338e097ed"
+    },
+    {
+      "method": "plugin/uninstall",
+      "paramsType": "PluginUninstallParams",
+      "paramsSha256": "10388fe0fdfaea27ceb9c65d6c92e21c1ec3d136ad63c568f8275cf7a706b0c9"
+    },
+    {
+      "method": "process/kill",
+      "paramsType": "ProcessKillParams",
+      "paramsSha256": "00f03d2dd1c334e49325423f10d56109e017c08e413236ed550187641f8e65ac"
+    },
+    {
+      "method": "process/resizePty",
+      "paramsType": "ProcessResizePtyParams",
+      "paramsSha256": "b3a8849ccdfa13d5e397b43487bab5869e2147849773ce25c7d5fdaa93b78d6b"
+    },
+    {
+      "method": "process/spawn",
+      "paramsType": "ProcessSpawnParams",
+      "paramsSha256": "d3a8bea6ca7869a6c73f5c13a7baeda0ce2b610af6c84ecc6133f85ee3241cb9"
+    },
+    {
+      "method": "process/writeStdin",
+      "paramsType": "ProcessWriteStdinParams",
+      "paramsSha256": "cb9f8fd780a2a597113aee3e86bec24eb7f29e609a3d4497577e6da0a060d13c"
+    },
+    {
+      "method": "project/create",
+      "paramsType": "ProjectCreateParams",
+      "paramsSha256": "df27c0636fddb75c15859247ab2ac1cffc988e0135eb7e535a7f16cc7eb6e6b6"
+    },
+    {
+      "method": "project/delete",
+      "paramsType": "ProjectDeleteParams",
+      "paramsSha256": "d314e1968c6b96b7d8c9456d07d3b95c516b85543782c932f1f0dfd6c29ee0a5"
+    },
+    {
+      "method": "project/import",
+      "paramsType": "ProjectImportParams",
+      "paramsSha256": "b8f01628355221aca97d060b9e5ad557b4ec50999b7c7d019d88c6ce8ae8f381"
+    },
+    {
+      "method": "project/list",
+      "paramsType": "ProjectListParams",
+      "paramsSha256": "9baa40c293f6515f675c05305ea7a0695899aa914f2ac7a24c03215d90d028b8"
+    },
+    {
+      "method": "project/move",
+      "paramsType": "ProjectMoveParams",
+      "paramsSha256": "d0b2745364789f053cc673df0488794d3e5f8fdfb89a4277e316aefd53d30cbd"
+    },
+    {
+      "method": "project/read",
+      "paramsType": "ProjectReadParams",
+      "paramsSha256": "731d1cc6d3e0b8accc7a44ee06277da283757ae9446fdb2d28d1fcd93f3e036b"
+    },
+    {
+      "method": "project/update",
+      "paramsType": "ProjectUpdateParams",
+      "paramsSha256": "f6570436eb4fb6efa05bfb8b55394f0a353ba3beeb2d91608575cd9f71361e2d"
+    },
+    {
+      "method": "remoteControl/client/list",
+      "paramsType": "RemoteControlClientsListParams",
+      "paramsSha256": "6e8b1577f8917b78bf45b8542a617c4d626565d9c40a1cfc15abc4166a514f44"
+    },
+    {
+      "method": "remoteControl/client/revoke",
+      "paramsType": "RemoteControlClientsRevokeParams",
+      "paramsSha256": "7e76134180d7f91ece4d756d52f866ff9f7dd258cd5aad4acd6d7b6705dd81c6"
+    },
+    {
+      "method": "remoteControl/disable",
+      "paramsType": "RemoteControlDisableParams",
+      "paramsSha256": "fa1df337011c6d9cc1c9373ae9b0ce08d3649e076b9da71880dcdd3690918ad5"
+    },
+    {
+      "method": "remoteControl/enable",
+      "paramsType": "RemoteControlEnableParams",
+      "paramsSha256": "dcc11710e463d13c4eea7d89f4121c22f17eb0a60a9cff6817233b4138bcae1e"
+    },
+    {
+      "method": "remoteControl/pairing/start",
+      "paramsType": "RemoteControlPairingStartParams",
+      "paramsSha256": "b6aa9e9aba92b015846b131d71a4f38bdbf52595f097fca1b2bd966fdf3be61a"
+    },
+    {
+      "method": "remoteControl/pairing/status",
+      "paramsType": "RemoteControlPairingStatusParams",
+      "paramsSha256": "addbfdf44c8ea9a069aad394cfb427e849c7007ee8d404369d8da9f19b177181"
+    },
+    {
+      "method": "remoteControl/status/read",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "review/start",
+      "paramsType": "ReviewStartParams",
+      "paramsSha256": "0cec983efe76f7691bdc98bd676aa261ac256bedb92ec78aa634a70dcdc5bcc2"
+    },
+    {
+      "method": "rollout/compress",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "server/diagnostics",
+      "paramsType": "ServerDiagnosticsParams",
+      "paramsSha256": "31b76d0aaa210028587f9503cfbee3125721fc35b296b5c70824e38545479ada"
+    },
+    {
+      "method": "skills/config/write",
+      "paramsType": "SkillsConfigWriteParams",
+      "paramsSha256": "b86af860be01df3fd37db8c17de754bc0131468003e383e63c4db8bb7f5cf162"
+    },
+    {
+      "method": "skills/extraRoots/set",
+      "paramsType": "SkillsExtraRootsSetParams",
+      "paramsSha256": "148125a2018290ff748afe2d70f07d6eb74007c560535d1154b65a0fe32757a7"
+    },
+    {
+      "method": "skills/list",
+      "paramsType": "SkillsListParams",
+      "paramsSha256": "edb5c09d34da11ea31d51fd26ff62a5799d591b0663aac3eb57ef5c5948a39a8"
+    },
+    {
+      "method": "thread/approveGuardianDeniedAction",
+      "paramsType": "ThreadApproveGuardianDeniedActionParams",
+      "paramsSha256": "8a4486e4a3823be8bd8f90d61f4f98ce64b149d6e30ff411f0a3b66dbcf09e13"
+    },
+    {
+      "method": "thread/archive",
+      "paramsType": "ThreadArchiveParams",
+      "paramsSha256": "0b28a41386a4d171072375b3e1b62c1183ef58a4ff0a84cf89629caaacab7b0f"
+    },
+    {
+      "method": "thread/attachment/add",
+      "paramsType": "ThreadAttachmentAddParams",
+      "paramsSha256": "a4678143519c9da2ac8e5c8216418b78450c4babed9f9f738d2700837f432b22"
+    },
+    {
+      "method": "thread/attachment/list",
+      "paramsType": "ThreadAttachmentListParams",
+      "paramsSha256": "39f2f93dffcdcb93aebe0c7c80205bd315dcf814ab4c286ac7ac78a8b7cd6c63"
+    },
+    {
+      "method": "thread/attachment/remove",
+      "paramsType": "ThreadAttachmentRemoveParams",
+      "paramsSha256": "364a19a85fcf975be4f2d26fd0ed63ee9104c87f907f0b47fcdba19acf4fa81e"
+    },
+    {
+      "method": "thread/attachmentOwner/list",
+      "paramsType": "ThreadAttachmentOwnerListParams",
+      "paramsSha256": "bb116e1955f4975c48ace54e10e25ffaf7106f3f642037ab1b53b56327e80311"
+    },
+    {
+      "method": "thread/backgroundTerminals/clean",
+      "paramsType": "ThreadBackgroundTerminalsCleanParams",
+      "paramsSha256": "447c45985bdafae856d49d79d50819cdf30c0f56549a15eae6f5b3e7bfd05ba9"
+    },
+    {
+      "method": "thread/backgroundTerminals/list",
+      "paramsType": "ThreadBackgroundTerminalsListParams",
+      "paramsSha256": "932a18c32a3f04c58a3ccac24a1449929e8a7f1fdd4613bfa6bdd0973c52066c"
+    },
+    {
+      "method": "thread/backgroundTerminals/terminate",
+      "paramsType": "ThreadBackgroundTerminalsTerminateParams",
+      "paramsSha256": "d82b77e372b852556f7a8bfdf8846d26fb651ad91161ccc027335aee480b91a4"
+    },
+    {
+      "method": "thread/compact/start",
+      "paramsType": "ThreadCompactStartParams",
+      "paramsSha256": "5c6e303752ee075442595fefbc4480c670eaa7c22fb00c0b7fd62cf5e0189d01"
+    },
+    {
+      "method": "thread/decrement_elicitation",
+      "paramsType": "ThreadDecrementElicitationParams",
+      "paramsSha256": "53c5616e334e59c8a415f153d5349c612440e9efcd1fb6f509073710873d1244"
+    },
+    {
+      "method": "thread/delete",
+      "paramsType": "ThreadDeleteParams",
+      "paramsSha256": "ad4de39d369727299035492dd50c0343f3e256430690fba55440e1a2578ca9f3"
+    },
+    {
+      "method": "thread/fork",
+      "paramsType": "ThreadForkParams",
+      "paramsSha256": "3162610bba0cc4602ea4309ccf8cdfa9fec89d6936821d5dfa1b68c9e4c297ca"
+    },
+    {
+      "method": "thread/goal/clear",
+      "paramsType": "ThreadGoalClearParams",
+      "paramsSha256": "b9453d6692af781e1cb0fbb4cfc4439a32ba86c77becf13976df2131b6db22c6"
+    },
+    {
+      "method": "thread/goal/get",
+      "paramsType": "ThreadGoalGetParams",
+      "paramsSha256": "884f461ef072fd0f52e2feddab61ba56fe6bc134025d04cbd9ceccb849667382"
+    },
+    {
+      "method": "thread/goal/set",
+      "paramsType": "ThreadGoalSetParams",
+      "paramsSha256": "675ff954873c7055dcc5f7236b5994bdc4fefe91f02e8d92bab580d0da8b66d5"
+    },
+    {
+      "method": "thread/increment_elicitation",
+      "paramsType": "ThreadIncrementElicitationParams",
+      "paramsSha256": "b0d139646af890fc8fe7f85d7bca0bf9660d72149547bf9496d025aac961e2ad"
+    },
+    {
+      "method": "thread/inject_items",
+      "paramsType": "ThreadInjectItemsParams",
+      "paramsSha256": "397c40b3feffbbbcabe0577ed0d8c39f0112d5c6646c704d099113dc43c72d5f"
+    },
+    {
+      "method": "thread/items/list",
+      "paramsType": "ThreadItemsListParams",
+      "paramsSha256": "08e39b7f2bdb43522bfc5a1e35b8c1b0d3ee82e1fa1796e868396e62bf2420c3"
+    },
+    {
+      "method": "thread/items/read",
+      "paramsType": "ThreadItemsReadParams",
+      "paramsSha256": "42e43712c6f10876c115de2ee54ce75adcb586f4a8ca0ea666a0faef6bad0eef"
+    },
+    {
+      "method": "thread/list",
+      "paramsType": "ThreadListParams",
+      "paramsSha256": "fb368f90e5e5ba27982595e50b578179622f9a726780d123e9b3fcaf26cf020d"
+    },
+    {
+      "method": "thread/loaded/list",
+      "paramsType": "ThreadLoadedListParams",
+      "paramsSha256": "cb532d5bce244048c7037f1a5616fb7678bcaa03488ba423145800df9c1f402d"
+    },
+    {
+      "method": "thread/memoryMode/set",
+      "paramsType": "ThreadMemoryModeSetParams",
+      "paramsSha256": "1722f2f0931490f33b50f511893ff527fc18acf10b9af6536bac4a69c2091a19"
+    },
+    {
+      "method": "thread/metadata/update",
+      "paramsType": "ThreadMetadataUpdateParams",
+      "paramsSha256": "b5ad003dd63633f5ac958fa2cfad41a5077417a75a110cb22d1c4ad85cd959f9"
+    },
+    {
+      "method": "thread/name/set",
+      "paramsType": "ThreadSetNameParams",
+      "paramsSha256": "34dabe3fba97a84b9dc25b23f88625493549ebd45b024c3c7166dab1cc595fdd"
+    },
+    {
+      "method": "thread/prediction/request",
+      "paramsType": "ThreadPredictionRequestParams",
+      "paramsSha256": "a9613673b859733140ef9f963b0c6e2e74d968e199b5868f47c4a53c06cfe65f"
+    },
+    {
+      "method": "thread/queue/add",
+      "paramsType": "ThreadQueueAddParams",
+      "paramsSha256": "4032b894791fd323840ca6c4de5d52bac9c40bdc97317b32c1ec2b75a8794962"
+    },
+    {
+      "method": "thread/queue/delete",
+      "paramsType": "ThreadQueueDeleteParams",
+      "paramsSha256": "2014f664379de19b73d52d5e71eea76c95cbf1a75adf3d2cb7f92872bc2a10b1"
+    },
+    {
+      "method": "thread/queue/list",
+      "paramsType": "ThreadQueueListParams",
+      "paramsSha256": "15433c59de8a34e9682cdccd644e4ae24b31a3e0657bfcdd20970f0d1b98ed75"
+    },
+    {
+      "method": "thread/queue/reorder",
+      "paramsType": "ThreadQueueReorderParams",
+      "paramsSha256": "f3c4eaa61e12afc3cdad33f1252ac2ab1a4b2184aaaf017e79966d16b44b9eca"
+    },
+    {
+      "method": "thread/queue/start",
+      "paramsType": "ThreadQueueStartParams",
+      "paramsSha256": "a6f0eb07a15484cdaa74bc08ca694d80d911bcd55916ef54e4117adc5c3a0752"
+    },
+    {
+      "method": "thread/queue/update",
+      "paramsType": "ThreadQueueUpdateParams",
+      "paramsSha256": "20db0d7d6d35e4995a6b7ef6af1311531483b05a008dd18eb881d50765f88423"
+    },
+    {
+      "method": "thread/read",
+      "paramsType": "ThreadReadParams",
+      "paramsSha256": "46d4765d40e6495a4e47af8f1274b6f9c934644a29ebe633a7963da814c25ecd"
+    },
+    {
+      "method": "thread/readState/update",
+      "paramsType": "ThreadReadStateUpdateParams",
+      "paramsSha256": "7bd1b3874583f59d7a21af21af6a31a442ac39e908ebab72a5f8c1df86eb5517"
+    },
+    {
+      "method": "thread/realtime/appendAudio",
+      "paramsType": "ThreadRealtimeAppendAudioParams",
+      "paramsSha256": "48bf7d6cc128c5e9c4a1f08790d5fe806d251fd85896bb29bd79b5ea04c5c0e2"
+    },
+    {
+      "method": "thread/realtime/appendSpeech",
+      "paramsType": "ThreadRealtimeAppendSpeechParams",
+      "paramsSha256": "6ffc3aa6d44a3d14d7a807f87e5a10ab8d93d1e02e2839e3ecf8d404f4016759"
+    },
+    {
+      "method": "thread/realtime/appendText",
+      "paramsType": "ThreadRealtimeAppendTextParams",
+      "paramsSha256": "517bc2788b126f86b6ed50f2cdc62e33013fa04fe19c1911c5f35e339dcecdc1"
+    },
+    {
+      "method": "thread/realtime/listVoices",
+      "paramsType": "ThreadRealtimeListVoicesParams",
+      "paramsSha256": "832c42c34839a3d023e0fb1a1e82bcd266a23d58ceda2def6327e73216d42c5c"
+    },
+    {
+      "method": "thread/realtime/start",
+      "paramsType": "ThreadRealtimeStartParams",
+      "paramsSha256": "03e9f764b89fc366dda60084cb7eb85bab52ed9a3d3f2ef0eb35b15f941f81f5"
+    },
+    {
+      "method": "thread/realtime/stop",
+      "paramsType": "ThreadRealtimeStopParams",
+      "paramsSha256": "b930b85cb0796b3feee6214c7024406a2199c975e1bbf24b774ae85b62fa3a33"
+    },
+    {
+      "method": "thread/resume",
+      "paramsType": "ThreadResumeParams",
+      "paramsSha256": "338d7d9be139b3d0c38e85692ec760492fc92a8b63a1d09dce42708ac176ef2c"
+    },
+    {
+      "method": "thread/revert",
+      "paramsType": "ThreadRevertParams",
+      "paramsSha256": "7ab9c67056c18b648b6026cc9f606e5079f3b6393b5d70328a2cb5e6c9c41fd6"
+    },
+    {
+      "method": "thread/search",
+      "paramsType": "ThreadSearchParams",
+      "paramsSha256": "7b370e14ad61d13b608cdfb10cfd4ab432339d7512887b2624664b93a8093459"
+    },
+    {
+      "method": "thread/searchOccurrences",
+      "paramsType": "ThreadSearchOccurrencesParams",
+      "paramsSha256": "298929ac7ad57a8c72889186ca03543e70153f58ff545809bb7a243355e2b7bb"
+    },
+    {
+      "method": "thread/section/move",
+      "paramsType": "ThreadSectionMoveParams",
+      "paramsSha256": "07819ae6e8a5e7a570c15fe24d272cfec7fca8895d5124ddb2d67f0915b6babf"
+    },
+    {
+      "method": "thread/settings/update",
+      "paramsType": "ThreadSettingsUpdateParams",
+      "paramsSha256": "424df61565d5617b7279f08094c681da10b77421dea893e54297a73c6850a8c7"
+    },
+    {
+      "method": "thread/shellCommand",
+      "paramsType": "ThreadShellCommandParams",
+      "paramsSha256": "42a79488dac462356659442934158b4b47282f0d1160aeea9a0c5dba50f2421c"
+    },
+    {
+      "method": "thread/start",
+      "paramsType": "ThreadStartParams",
+      "paramsSha256": "aa1aad71d5e6d84c767314cabdf7e52dfa4e35d4dca96e107e8f3c30379316a8"
+    },
+    {
+      "method": "thread/timeline/list",
+      "paramsType": "ThreadTimelineListParams",
+      "paramsSha256": "fdc7f7259c1ecde5925021dae6344dbeb9217cc350c44c9dd0d975147e579a05"
+    },
+    {
+      "method": "thread/turns/list",
+      "paramsType": "ThreadTurnsListParams",
+      "paramsSha256": "2fedd173197a3b6ff0096f6c73c914839ab811f077f71ae51081b76e76e41ad6"
+    },
+    {
+      "method": "thread/unarchive",
+      "paramsType": "ThreadUnarchiveParams",
+      "paramsSha256": "972046b2743753c0baba9cee919dc2a7e7d7ea29fa63e74a15ed4c45640ed378"
+    },
+    {
+      "method": "thread/unsubscribe",
+      "paramsType": "ThreadUnsubscribeParams",
+      "paramsSha256": "108dcd3375066b101c7a0ed6f771ea283c4c87b2b1e7f7c15cb9a780971efa85"
+    },
+    {
+      "method": "threadSection/create",
+      "paramsType": "ThreadSectionCreateParams",
+      "paramsSha256": "1c82b62b90820bed7d4c74190834c29b8890967b5a1ecabc7ecfaf4f323721cc"
+    },
+    {
+      "method": "threadSection/delete",
+      "paramsType": "ThreadSectionDeleteParams",
+      "paramsSha256": "5745068e076f68344e4b7b0c135fb2376052acdf2d84ebdb2af19c2443b70de9"
+    },
+    {
+      "method": "threadSection/list",
+      "paramsType": "ThreadSectionListParams",
+      "paramsSha256": "100e7b5be535ffa610cfce55695059c06a85b495d8e2a17a024f0ffbb9432fa9"
+    },
+    {
+      "method": "threadSection/update",
+      "paramsType": "ThreadSectionUpdateParams",
+      "paramsSha256": "d62423791024786b7abbe4f789f943f775097ce3ce7445617a93cf3e91b336a2"
+    },
+    {
+      "method": "turn/interrupt",
+      "paramsType": "TurnInterruptParams",
+      "paramsSha256": "f4a7a964177cbcfab8406f24a06ed5e33236397fb4b4c9fcee72643b0dfdcba8"
+    },
+    {
+      "method": "turn/settings/update",
+      "paramsType": "TurnSettingsUpdateParams",
+      "paramsSha256": "e36c23f1d63d68c30b292a70620014c5a15adbe94d88967401f01b98d48042aa"
+    },
+    {
+      "method": "turn/start",
+      "paramsType": "TurnStartParams",
+      "paramsSha256": "9c64152a0b5a8d916743ac9b701a9c2bc4c10d23afbca174dcc70f8e72bb45c0"
+    },
+    {
+      "method": "turn/steer",
+      "paramsType": "TurnSteerParams",
+      "paramsSha256": "f85544af7ee775f7c76a6ba508b6ecaaef04c2badb4a703424312bebc5d2ff6a"
+    },
+    {
+      "method": "userVerification/cancel",
+      "paramsType": "UserVerificationCancelParams",
+      "paramsSha256": "48e15fc3e639a64b59352201225da9a00b04aac8635979c8a7e858fc61c6d730"
+    },
+    {
+      "method": "userVerification/delete",
+      "paramsType": "UserVerificationDeleteParams",
+      "paramsSha256": "f6e439e508a176f031c0aa130a963d1b5c3f006918dc68a695e88eac71e5ff26"
+    },
+    {
+      "method": "userVerification/enroll",
+      "paramsType": "UserVerificationEnrollParams",
+      "paramsSha256": "d5a5df19cc0b5e2bee1f75ef68c7c8037b0c4d8f644f9d8580bf45b19d6ef73e"
+    },
+    {
+      "method": "userVerification/status",
+      "paramsType": "UserVerificationStatusParams",
+      "paramsSha256": "81901a0dd8a73321c32a6d5ba69543996b170b614e7458cb7d1bc0af45aef79c"
+    },
+    {
+      "method": "userVerification/verify",
+      "paramsType": "UserVerificationVerifyParams",
+      "paramsSha256": "82023c069033aed8b6900ff08e1ce8234efc823a138ebbd9f06c2e232351d454"
+    },
+    {
+      "method": "windowsSandbox/readiness",
+      "paramsType": null,
+      "paramsSha256": "bcde375ebd4cbacf651311181173836b169d5a360c6ac158c6a2cdaf49be3f61"
+    },
+    {
+      "method": "windowsSandbox/setupStart",
+      "paramsType": "WindowsSandboxSetupStartParams",
+      "paramsSha256": "5417bd35c3edc5aa153061eb124e43a3b0881d4e3e4fddf6222a7edb5dc8685e"
+    }
+  ],
+  "serverRequests": [
+    {
+      "method": "account/chatgptAuthTokens/refresh",
+      "paramsType": "ChatgptAuthTokensRefreshParams",
+      "paramsSha256": "1ef6b562263633fea41ca1f97ef0ba816096dc09ad8749c6a59b0f781edaf8f1",
+      "response": {
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "chatgptAccountId": {
+            "type": "string"
+          },
+          "chatgptPlanType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "accessToken",
+          "chatgptAccountId"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "applyPatchApproval",
+      "paramsType": "ApplyPatchApprovalParams",
+      "paramsSha256": "d875e9863870bad63fd4255145af4bd4082c155f9643a5db64049cb5823d5726",
+      "response": {
+        "definitions": {
+          "NetworkPolicyAmendment": {
+            "properties": {
+              "action": {
+                "$ref": "#/definitions/NetworkPolicyRuleAction"
+              },
+              "host": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "host"
+            ],
+            "type": "object"
+          },
+          "NetworkPolicyRuleAction": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "ReviewDecision": {
+            "oneOf": [
+              {
+                "enum": [
+                  "approved"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "approved_execpolicy_amendment": {
+                    "properties": {
+                      "proposed_execpolicy_amendment": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "proposed_execpolicy_amendment"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "approved_execpolicy_amendment"
+                ],
+                "type": "object"
+              },
+              {
+                "enum": [
+                  "approved_for_session"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "approved_mcp_policy_amendment"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "network_policy_amendment": {
+                    "properties": {
+                      "network_policy_amendment": {
+                        "$ref": "#/definitions/NetworkPolicyAmendment"
+                      }
+                    },
+                    "required": [
+                      "network_policy_amendment"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "network_policy_amendment"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "denied": {
+                    "properties": {
+                      "rejection": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "rejection"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "denied"
+                ],
+                "type": "object"
+              },
+              {
+                "enum": [
+                  "timed_out"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "abort"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "properties": {
+          "decision": {
+            "$ref": "#/definitions/ReviewDecision"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "attestation/generate",
+      "paramsType": "AttestationGenerateParams",
+      "paramsSha256": "4fa9c5566aef0a1803fa4e9d1e6f952edce51f40ce9eb25a8edbe29c2160710d",
+      "response": {
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "currentTime/read",
+      "paramsType": "CurrentTimeReadParams",
+      "paramsSha256": "cceba23cbdaf408d49285d0b9d5aeba6032c44c4ae73a99a5f3f2f3e3905dad6",
+      "response": {
+        "properties": {
+          "currentTimeAt": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currentTimeAt"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "execCommandApproval",
+      "paramsType": "ExecCommandApprovalParams",
+      "paramsSha256": "9f0cde7acff1d1224dcc95ea618da5c81ca282c31f07146006db6a84b61f2715",
+      "response": {
+        "definitions": {
+          "NetworkPolicyAmendment": {
+            "properties": {
+              "action": {
+                "$ref": "#/definitions/NetworkPolicyRuleAction"
+              },
+              "host": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "host"
+            ],
+            "type": "object"
+          },
+          "NetworkPolicyRuleAction": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "ReviewDecision": {
+            "oneOf": [
+              {
+                "enum": [
+                  "approved"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "approved_execpolicy_amendment": {
+                    "properties": {
+                      "proposed_execpolicy_amendment": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "proposed_execpolicy_amendment"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "approved_execpolicy_amendment"
+                ],
+                "type": "object"
+              },
+              {
+                "enum": [
+                  "approved_for_session"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "approved_mcp_policy_amendment"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "network_policy_amendment": {
+                    "properties": {
+                      "network_policy_amendment": {
+                        "$ref": "#/definitions/NetworkPolicyAmendment"
+                      }
+                    },
+                    "required": [
+                      "network_policy_amendment"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "network_policy_amendment"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "denied": {
+                    "properties": {
+                      "rejection": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "rejection"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "denied"
+                ],
+                "type": "object"
+              },
+              {
+                "enum": [
+                  "timed_out"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "abort"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "properties": {
+          "decision": {
+            "$ref": "#/definitions/ReviewDecision"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "item/commandExecution/requestApproval",
+      "paramsType": "CommandExecutionRequestApprovalParams",
+      "paramsSha256": "7ec451e2f749d34f63c1633e3ad8f879ef1f444251342f7935a4da90ebe1b90c",
+      "response": {
+        "definitions": {
+          "CommandExecutionApprovalDecision": {
+            "oneOf": [
+              {
+                "enum": [
+                  "accept"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "acceptForSession"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "acceptWithExecpolicyAmendment": {
+                    "properties": {
+                      "execpolicy_amendment": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "execpolicy_amendment"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "acceptWithExecpolicyAmendment"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "applyNetworkPolicyAmendment": {
+                    "properties": {
+                      "network_policy_amendment": {
+                        "$ref": "#/definitions/NetworkPolicyAmendment"
+                      }
+                    },
+                    "required": [
+                      "network_policy_amendment"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "applyNetworkPolicyAmendment"
+                ],
+                "type": "object"
+              },
+              {
+                "enum": [
+                  "decline"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "cancel"
+                ],
+                "type": "string"
+              }
+            ]
+          },
+          "NetworkPolicyAmendment": {
+            "properties": {
+              "action": {
+                "$ref": "#/definitions/NetworkPolicyRuleAction"
+              },
+              "host": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "host"
+            ],
+            "type": "object"
+          },
+          "NetworkPolicyRuleAction": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          }
+        },
+        "properties": {
+          "decision": {
+            "$ref": "#/definitions/CommandExecutionApprovalDecision"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "item/fileChange/requestApproval",
+      "paramsType": "FileChangeRequestApprovalParams",
+      "paramsSha256": "08d6a3571f03edbb2a2b66a85ea8b9225936c21259791e1e9fff2b94e188a2b6",
+      "response": {
+        "definitions": {
+          "FileChangeApprovalDecision": {
+            "oneOf": [
+              {
+                "enum": [
+                  "accept"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "acceptForSession"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "decline"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "cancel"
+                ],
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "properties": {
+          "decision": {
+            "$ref": "#/definitions/FileChangeApprovalDecision"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "item/permissions/requestApproval",
+      "paramsType": "PermissionsRequestApprovalParams",
+      "paramsSha256": "91c3a5b00965ce42a46a78ead213e71789790f12c43d5d3ce6b8957cfbb7c630",
+      "response": {
+        "definitions": {
+          "AdditionalFileSystemPermissions": {
+            "properties": {
+              "entries": {
+                "items": {
+                  "$ref": "#/definitions/FileSystemSandboxEntry"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "globScanMaxDepth": {
+                "format": "uint",
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "read": {
+                "items": {
+                  "$ref": "#/definitions/LegacyAppPathString"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "write": {
+                "items": {
+                  "$ref": "#/definitions/LegacyAppPathString"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "AdditionalNetworkPermissions": {
+            "properties": {
+              "enabled": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "FileSystemAccessMode": {
+            "enum": [
+              "read",
+              "write",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "FileSystemPath": {
+            "oneOf": [
+              {
+                "properties": {
+                  "path": {
+                    "$ref": "#/definitions/LegacyAppPathString"
+                  },
+                  "type": {
+                    "enum": [
+                      "path"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "pattern": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "glob_pattern"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "pattern",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "special"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "$ref": "#/definitions/FileSystemSpecialPath"
+                  }
+                },
+                "required": [
+                  "type",
+                  "value"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "FileSystemSandboxEntry": {
+            "properties": {
+              "access": {
+                "$ref": "#/definitions/FileSystemAccessMode"
+              },
+              "path": {
+                "$ref": "#/definitions/FileSystemPath"
+              }
+            },
+            "required": [
+              "access",
+              "path"
+            ],
+            "type": "object"
+          },
+          "FileSystemSpecialPath": {
+            "oneOf": [
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "root"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "minimal"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "project_roots"
+                    ],
+                    "type": "string"
+                  },
+                  "subpath": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/definitions/LegacyAppPathString"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "tmpdir"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "slash_tmp"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "subpath": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/definitions/LegacyAppPathString"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "path"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "GrantedPermissionProfile": {
+            "properties": {
+              "fileSystem": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/AdditionalFileSystemPermissions"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "network": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/AdditionalNetworkPermissions"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "LegacyAppPathString": {
+            "type": "string"
+          },
+          "PermissionGrantScope": {
+            "enum": [
+              "turn",
+              "session"
+            ],
+            "type": "string"
+          }
+        },
+        "properties": {
+          "permissions": {
+            "$ref": "#/definitions/GrantedPermissionProfile"
+          },
+          "scope": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/PermissionGrantScope"
+              }
+            ]
+          },
+          "strictAutoReview": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "item/tool/call",
+      "paramsType": "DynamicToolCallParams",
+      "paramsSha256": "c8099786cc80bcff7fa875b0947afa58610e4d6db038abf0146281160d013303",
+      "response": {
+        "definitions": {
+          "DynamicToolCallOutputContentItem": {
+            "oneOf": [
+              {
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "inputText"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "imageUrl": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "inputImage"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "imageUrl",
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "audioUrl": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "enum": [
+                      "inputAudio"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "audioUrl",
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "properties": {
+          "contentItems": {
+            "items": {
+              "$ref": "#/definitions/DynamicToolCallOutputContentItem"
+            },
+            "type": "array"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "contentItems",
+          "success"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "item/tool/requestUserInput",
+      "paramsType": "ToolRequestUserInputParams",
+      "paramsSha256": "d611c3d0df8a45e7dda748a4fbf286a67bb95eebf914eab90212869f16358e43",
+      "response": {
+        "definitions": {
+          "ToolRequestUserInputAnswer": {
+            "properties": {
+              "answers": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "answers"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "$ref": "#/definitions/ToolRequestUserInputAnswer"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "answers"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "method": "mcpServer/elicitation/request",
+      "paramsType": "McpServerElicitationRequestParams",
+      "paramsSha256": "b8bffad872a41f9cf912c508ed91d6f5edcd9e0967e3d6caafaa1f136b3fb241",
+      "response": {
+        "definitions": {
+          "McpServerElicitationAction": {
+            "enum": [
+              "accept",
+              "decline",
+              "cancel"
+            ],
+            "type": "string"
+          }
+        },
+        "properties": {
+          "_meta": {},
+          "action": {
+            "$ref": "#/definitions/McpServerElicitationAction"
+          },
+          "content": {}
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      }
+    }
+  ],
+  "notifications": [
+    {
+      "method": "account/gatewayOAuth/changed",
+      "paramsType": "GatewayOAuthChangedNotification",
+      "paramsSha256": "ee591e52f422934517b8f1d0ea6021fecaad09a9fdbe729dadfde2ff340bdbef"
+    },
+    {
+      "method": "account/login/completed",
+      "paramsType": "AccountLoginCompletedNotification",
+      "paramsSha256": "18f657393a8ad1949c74f45293633486ba8d361e1b8c8a087d7e00e3892fa492"
+    },
+    {
+      "method": "account/rateLimits/updated",
+      "paramsType": "AccountRateLimitsUpdatedNotification",
+      "paramsSha256": "be5f424cdc4363436295fb852e975551d61f07b686e894f9b717af32e0b99d37"
+    },
+    {
+      "method": "account/updated",
+      "paramsType": "AccountUpdatedNotification",
+      "paramsSha256": "2d9ab119a9a5f9f8210c4494465592299ebee3e4144937fb89c04f67d830b748"
+    },
+    {
+      "method": "app/list/updated",
+      "paramsType": "AppListUpdatedNotification",
+      "paramsSha256": "2bded4601bac9fb30365ba4f3d6f4c647d292fbf44f9047d4e47ce15fc1935ac"
+    },
+    {
+      "method": "autoApprovalReview/strictReviewRequired",
+      "paramsType": "StrictReviewRequiredNotification",
+      "paramsSha256": "a4745268e14d6846b1913b4bcfc56601841585b546f85d657d22b1dfa71aac02"
+    },
+    {
+      "method": "command/exec/outputDelta",
+      "paramsType": "CommandExecOutputDeltaNotification",
+      "paramsSha256": "13189f255680c1990a120cfca47f6af5e6a9d2fb58be3700c806174714f6456c"
+    },
+    {
+      "method": "configWarning",
+      "paramsType": "ConfigWarningNotification",
+      "paramsSha256": "de220a94d276163a8ab29d4b190d7f9c34fa6d71fca89703d8c0b70e7fb5b7bf"
+    },
+    {
+      "method": "deprecationNotice",
+      "paramsType": "DeprecationNoticeNotification",
+      "paramsSha256": "4166695f813ad9f31272afea7c88df16b6264a438d99f688eec46d6f9a3c3e2a"
+    },
+    {
+      "method": "error",
+      "paramsType": "ErrorNotification",
+      "paramsSha256": "a8c12c87f1e8175683cfc3d11cae0594db2ade530049b597f716fa73a07ad7a9"
+    },
+    {
+      "method": "externalAgentConfig/import/completed",
+      "paramsType": "ExternalAgentConfigImportCompletedNotification",
+      "paramsSha256": "742c030f15ac4021e4ce510b923d3be2fa6f0ff0520b83f55df768eb92bd3b77"
+    },
+    {
+      "method": "externalAgentConfig/import/progress",
+      "paramsType": "ExternalAgentConfigImportProgressNotification",
+      "paramsSha256": "ded7296d9f930d6ef331a90c7aa04bdd314da84ef6fa4d0fe3fcf222bcc13a4c"
+    },
+    {
+      "method": "fs/changed",
+      "paramsType": "FsChangedNotification",
+      "paramsSha256": "3ed164ffc7cf4384901f0e4a28794fe3b4ec28a70fd1fffb9798a8012e0cf812"
+    },
+    {
+      "method": "fuzzyFileSearch/sessionCompleted",
+      "paramsType": "FuzzyFileSearchSessionCompletedNotification",
+      "paramsSha256": "f52eed026598763093be262dbdd52af4ec6e4686e2e41d85c5a19975d08f2fdc"
+    },
+    {
+      "method": "fuzzyFileSearch/sessionUpdated",
+      "paramsType": "FuzzyFileSearchSessionUpdatedNotification",
+      "paramsSha256": "07ed13dc2a12f5387478f2aaaf86db7404aaa23c937f2a937a63b8a79d9b2b70"
+    },
+    {
+      "method": "guardianWarning",
+      "paramsType": "GuardianWarningNotification",
+      "paramsSha256": "5becb4b7861c140cc45d3b3c2fe3c18e6f8f404ab57dc00094f036dab58cca34"
+    },
+    {
+      "method": "hook/completed",
+      "paramsType": "HookCompletedNotification",
+      "paramsSha256": "898c4fbabdf0bd5948f013581052cdac9deddfb061b210d794bb040819c774df"
+    },
+    {
+      "method": "hook/started",
+      "paramsType": "HookStartedNotification",
+      "paramsSha256": "202ec7479913eef97970ff63145e526d10b093f5a0bcd4f74670c6d19c859a8f"
+    },
+    {
+      "method": "item/agentMessage/delta",
+      "paramsType": "AgentMessageDeltaNotification",
+      "paramsSha256": "2a69da81ca11a5e9f1ba5e4214955146eafb297f2b3003286e5adf21825a075a"
+    },
+    {
+      "method": "item/autoApprovalReview/completed",
+      "paramsType": "ItemGuardianApprovalReviewCompletedNotification",
+      "paramsSha256": "03ce315e504a80be04c7f99419bb0b4ec5ec389b610df0b194c60add5642039e"
+    },
+    {
+      "method": "item/autoApprovalReview/started",
+      "paramsType": "ItemGuardianApprovalReviewStartedNotification",
+      "paramsSha256": "1e77ac6c9fe4f386edb29e4da9aad1cbb8870ac17a1af98f7473ace89d093798"
+    },
+    {
+      "method": "item/commandExecution/outputDelta",
+      "paramsType": "CommandExecutionOutputDeltaNotification",
+      "paramsSha256": "001019d9416f656d3e98445a9215653700465def045445eb581bbf440bafbc88"
+    },
+    {
+      "method": "item/commandExecution/terminalInteraction",
+      "paramsType": "TerminalInteractionNotification",
+      "paramsSha256": "3136861a00fd65117ad95a5a84e118fc11e4243c7c10eb99658a93cbb7e49572"
+    },
+    {
+      "method": "item/completed",
+      "paramsType": "ItemCompletedNotification",
+      "paramsSha256": "8a4ef7c2987f3a96603f326b8153ae98a15b6b59cfb31d2d0974b523a6dfe20b"
+    },
+    {
+      "method": "item/fileChange/outputDelta",
+      "paramsType": "FileChangeOutputDeltaNotification",
+      "paramsSha256": "18d3c364d32ac3a8491fd96d071c7d3d050d2fca35a665ed695e825008bcc090"
+    },
+    {
+      "method": "item/fileChange/patchUpdated",
+      "paramsType": "FileChangePatchUpdatedNotification",
+      "paramsSha256": "12209908f369751d17e4f9a8ebb0e127e00e40b8a5bdcaed4788a5a020986374"
+    },
+    {
+      "method": "item/mcpToolCall/progress",
+      "paramsType": "McpToolCallProgressNotification",
+      "paramsSha256": "e261ea1da0a3d772f846feb7017cd5fe6da4ff7c057a67ab11663e6ee6968ebc"
+    },
+    {
+      "method": "item/plan/delta",
+      "paramsType": "PlanDeltaNotification",
+      "paramsSha256": "e0b9d46653b7f39f0bd7b26c36a334a6d068f5beeb2acce910bb505bc2cc328d"
+    },
+    {
+      "method": "item/reasoning/summaryPartAdded",
+      "paramsType": "ReasoningSummaryPartAddedNotification",
+      "paramsSha256": "4ce13aa77216b8925cedfbc67054af1d2820cc126e0087f0261c94fbc7f38c1b"
+    },
+    {
+      "method": "item/reasoning/summaryTextDelta",
+      "paramsType": "ReasoningSummaryTextDeltaNotification",
+      "paramsSha256": "1482fa0c5ed9e5d28b3587eba775be64d1c6e2b5fe2664055f459ce29b96ef86"
+    },
+    {
+      "method": "item/reasoning/textDelta",
+      "paramsType": "ReasoningTextDeltaNotification",
+      "paramsSha256": "9edb9a4edabf6fb73815d5d08a1e1b3bd27674f34c96513bdfc8d29c6d0701c4"
+    },
+    {
+      "method": "item/started",
+      "paramsType": "ItemStartedNotification",
+      "paramsSha256": "aa96d2931d9bc0e7d5f3cf426915ae6e11c7ee9802f4c910f63c94efb8a7b3ab"
+    },
+    {
+      "method": "mcpServer/event/stream/notification",
+      "paramsType": "McpServerEventStreamNotification",
+      "paramsSha256": "e184ab7b3faef4279045c68bbfffcc8bbfe2e6b0d2c047d6fdd6b04b45b1b774"
+    },
+    {
+      "method": "mcpServer/oauthLogin/completed",
+      "paramsType": "McpServerOauthLoginCompletedNotification",
+      "paramsSha256": "b57161f689a4544ea520bddd2fe51b4092fd8dbae3ad5aef820713aae21f33b1"
+    },
+    {
+      "method": "mcpServer/startupStatus/updated",
+      "paramsType": "McpServerStatusUpdatedNotification",
+      "paramsSha256": "0f2083525db4a8cbf1d46f737b7bcb9e944d5d744c8a41e8b9810dbfb98e7849"
+    },
+    {
+      "method": "model/rerouted",
+      "paramsType": "ModelReroutedNotification",
+      "paramsSha256": "a5ef1da8e0f57e2ed56fb60506e027a4f25ae5b2cfa705baf10ff4a8436dd796"
+    },
+    {
+      "method": "model/safetyBuffering/updated",
+      "paramsType": "ModelSafetyBufferingUpdatedNotification",
+      "paramsSha256": "85aec574e19ca74859478a98cd74038ded41471e16348cdb759cb59476ba2af2"
+    },
+    {
+      "method": "model/verification",
+      "paramsType": "ModelVerificationNotification",
+      "paramsSha256": "4f065ac9d659731637476779205e0bbff477c7aba6419841467686b6fc3efb7e"
+    },
+    {
+      "method": "modelProvider/authRecoveryCompleted",
+      "paramsType": "AuthRecoveryNotification",
+      "paramsSha256": "0eff1c5ff8c3fc1c2a2e873a29b8cbcd67f45a03b9aec6305645c5e8aa5ff238"
+    },
+    {
+      "method": "modelProvider/authRecoveryStarted",
+      "paramsType": "AuthRecoveryNotification",
+      "paramsSha256": "0eff1c5ff8c3fc1c2a2e873a29b8cbcd67f45a03b9aec6305645c5e8aa5ff238"
+    },
+    {
+      "method": "process/exited",
+      "paramsType": "ProcessExitedNotification",
+      "paramsSha256": "223aaf883ad5a55cfb78bd9ea1f54858d7a14cc1681f11be6e42248716ada2ff"
+    },
+    {
+      "method": "process/outputDelta",
+      "paramsType": "ProcessOutputDeltaNotification",
+      "paramsSha256": "3ec873716d6837e9c6cd417acbdcc02b4a839f18ac74be8fdd3801881d9d2580"
+    },
+    {
+      "method": "project/changed",
+      "paramsType": "ProjectChangedNotification",
+      "paramsSha256": "e4236da89010bb9fd210d8af79f76f2d90d0e7ca8cda52fdec98496d378c9df7"
+    },
+    {
+      "method": "remoteControl/status/changed",
+      "paramsType": "RemoteControlStatusChangedNotification",
+      "paramsSha256": "47d3899e82392746a4f707150a22d02df444f47f4c83a27483497838937977f0"
+    },
+    {
+      "method": "serverRequest/resolved",
+      "paramsType": "ServerRequestResolvedNotification",
+      "paramsSha256": "a385ac11035009ddc6a95b96ab862b06d60a0c4453e6952269777bdcf72c0650"
+    },
+    {
+      "method": "skills/changed",
+      "paramsType": "SkillsChangedNotification",
+      "paramsSha256": "da1c1a23832c0e74890e467e6c82434e091cc3aafd8bbec4a442799ac85922d9"
+    },
+    {
+      "method": "thread/archived",
+      "paramsType": "ThreadArchivedNotification",
+      "paramsSha256": "a8864bff4e92a338864fb725800313c92b45ddfbe470ccb70014d252878310dc"
+    },
+    {
+      "method": "thread/attachment/updated",
+      "paramsType": "ThreadAttachmentUpdatedNotification",
+      "paramsSha256": "7782fd73163822b0e19d6ef793d66c498a393478094066c800fe57485a84d1c4"
+    },
+    {
+      "method": "thread/closed",
+      "paramsType": "ThreadClosedNotification",
+      "paramsSha256": "3db7e693d2f29edc19948e154c4c8225d4fa96a8b97c57792bf2b801adb58214"
+    },
+    {
+      "method": "thread/compacted",
+      "paramsType": "ContextCompactedNotification",
+      "paramsSha256": "06e20f20d39220df188191f0e076a95468df8585d66cb977c71095ac705e82e0"
+    },
+    {
+      "method": "thread/deleted",
+      "paramsType": "ThreadDeletedNotification",
+      "paramsSha256": "b430988b910c58787fc5170aaef7333cee79ce5f158ac2a2abca689141e73240"
+    },
+    {
+      "method": "thread/environment/connected",
+      "paramsType": "EnvironmentConnectionNotification",
+      "paramsSha256": "41b3accc99cd3135c45f6e5e16f693d3c0958a4caf11f669e2ad5c9e3c77eeac"
+    },
+    {
+      "method": "thread/environment/disconnected",
+      "paramsType": "EnvironmentConnectionNotification",
+      "paramsSha256": "41b3accc99cd3135c45f6e5e16f693d3c0958a4caf11f669e2ad5c9e3c77eeac"
+    },
+    {
+      "method": "thread/goal/cleared",
+      "paramsType": "ThreadGoalClearedNotification",
+      "paramsSha256": "90f9d904fbfe8750471cc93c9b884edce9c8b11b6c5066caca2c6c279ea22b23"
+    },
+    {
+      "method": "thread/goal/updated",
+      "paramsType": "ThreadGoalUpdatedNotification",
+      "paramsSha256": "aec374a1fdb55322b95112761ed646b71099eb2702e477eb3d80e289fc850d03"
+    },
+    {
+      "method": "thread/name/updated",
+      "paramsType": "ThreadNameUpdatedNotification",
+      "paramsSha256": "fca9b51502b4dbc360447582c22804f1f780515e576c97ab901a2d6f2cd618b7"
+    },
+    {
+      "method": "thread/prediction/updated",
+      "paramsType": "ThreadPredictionUpdatedNotification",
+      "paramsSha256": "6c0f89eeb807d648136d80306a70cfd4986f86fa2b80857278e50d966ce216d5"
+    },
+    {
+      "method": "thread/project/updated",
+      "paramsType": "ThreadProjectUpdatedNotification",
+      "paramsSha256": "9b95a0c7767d4e66f6cac38f6663cbc387e5aeffca0c1038adfecd192bd65925"
+    },
+    {
+      "method": "thread/queue/changed",
+      "paramsType": "ThreadQueueChangedNotification",
+      "paramsSha256": "7e365344b18b9da29607a3d693f98492a23e02e53d9902ef6834b03ce0f7badb"
+    },
+    {
+      "method": "thread/readState/changed",
+      "paramsType": "ThreadReadStateChangedNotification",
+      "paramsSha256": "6eb285f21a0166f24a5e6d9a548a29c9334f3b49058e22a254977fc1234c2093"
+    },
+    {
+      "method": "thread/realtime/closed",
+      "paramsType": "ThreadRealtimeClosedNotification",
+      "paramsSha256": "d3339a2baa6f2978ed791ff63a0b1446f3b433a3072d8ba820372909c92cf0ca"
+    },
+    {
+      "method": "thread/realtime/error",
+      "paramsType": "ThreadRealtimeErrorNotification",
+      "paramsSha256": "8ec3315777945a138906f718323d75f1aa68cd6585d5c7b67708ad7a8bacb221"
+    },
+    {
+      "method": "thread/realtime/item/completed",
+      "paramsType": "ThreadRealtimeItemCompletedNotification",
+      "paramsSha256": "b7727618b85fd54bec53289810cd092cdeb1108063d4d6a679af8e1a448c66a5"
+    },
+    {
+      "method": "thread/realtime/item/started",
+      "paramsType": "ThreadRealtimeItemStartedNotification",
+      "paramsSha256": "7f9a1aa1137bfc7bb05a9f845d491a618d13d6c652681bf190bbceb4e183cbc0"
+    },
+    {
+      "method": "thread/realtime/item/transcript/delta",
+      "paramsType": "ThreadRealtimeItemTranscriptDeltaNotification",
+      "paramsSha256": "398ef402964d5872ba67292f8dd28520a94036b9892def9e4e1902dc44d96bda"
+    },
+    {
+      "method": "thread/realtime/itemAdded",
+      "paramsType": "ThreadRealtimeItemAddedNotification",
+      "paramsSha256": "de0f6f5428cb317a554efa8dbef0491c5f079cf9d3f4aa99cbae9595ecd8de1c"
+    },
+    {
+      "method": "thread/realtime/outputAudio/delta",
+      "paramsType": "ThreadRealtimeOutputAudioDeltaNotification",
+      "paramsSha256": "b3f9ca484e8912f58ef05c725b74d70564832414869b6861946669d653081f92"
+    },
+    {
+      "method": "thread/realtime/sdp",
+      "paramsType": "ThreadRealtimeSdpNotification",
+      "paramsSha256": "ef88599f0b62840c40297e03a11c7e2c5be9dcfa5090c405f4d5d5f8d43fc5fa"
+    },
+    {
+      "method": "thread/realtime/started",
+      "paramsType": "ThreadRealtimeStartedNotification",
+      "paramsSha256": "5a28fcdc0e035e358fa8490b9fe5a7cbe890872f7448daff2d4f8d641a0d36b9"
+    },
+    {
+      "method": "thread/realtime/transcript/delta",
+      "paramsType": "ThreadRealtimeTranscriptDeltaNotification",
+      "paramsSha256": "500a92cb51e73ad8f0f49f19be033fad4a76a3e6ac8494d9a42915e7efacb22e"
+    },
+    {
+      "method": "thread/realtime/transcript/done",
+      "paramsType": "ThreadRealtimeTranscriptDoneNotification",
+      "paramsSha256": "b3c465adfd535af1fc1638545d6131a5ff5edf55b17c652c1ba7dcdaa4c0ee46"
+    },
+    {
+      "method": "thread/reverted",
+      "paramsType": "ThreadRevertedNotification",
+      "paramsSha256": "466f0f458855f773d8936663cdcf97152fb5eec37242917addc3747bd18616c8"
+    },
+    {
+      "method": "thread/settings/updated",
+      "paramsType": "ThreadSettingsUpdatedNotification",
+      "paramsSha256": "650aef5113365b34cc6d86c70cb178853b9fa0723cc64ec6778ab4e2b4b559cb"
+    },
+    {
+      "method": "thread/started",
+      "paramsType": "ThreadStartedNotification",
+      "paramsSha256": "6e6b6db5de82f10a7f5486ba7227b733bdebf19f32a905759427cc43cbac0102"
+    },
+    {
+      "method": "thread/status/changed",
+      "paramsType": "ThreadStatusChangedNotification",
+      "paramsSha256": "35592d779ae7a231f709f6849b4ebf727eaefa46a922d5a2ea9770a9b8fa63ff"
+    },
+    {
+      "method": "thread/tokenUsage/updated",
+      "paramsType": "ThreadTokenUsageUpdatedNotification",
+      "paramsSha256": "ce740b5646214f81d3c72cb3794ec4434c3e93c97f67692bbc22216e01de9401"
+    },
+    {
+      "method": "thread/unarchived",
+      "paramsType": "ThreadUnarchivedNotification",
+      "paramsSha256": "d27c7005892df52bef3643ce1fd1c54507069fc6ba96358cb2a66368129f0a38"
+    },
+    {
+      "method": "turn/completed",
+      "paramsType": "TurnCompletedNotification",
+      "paramsSha256": "bcdf39e069938de814610b4b636a61b95a650d7327115bd7e45edc1b40e6d82a"
+    },
+    {
+      "method": "turn/diff/updated",
+      "paramsType": "TurnDiffUpdatedNotification",
+      "paramsSha256": "6beec7071a7d06f09436a70c55baa4a202ab07e91fd1c12f710c01f511caae15"
+    },
+    {
+      "method": "turn/moderationMetadata",
+      "paramsType": "TurnModerationMetadataNotification",
+      "paramsSha256": "0a6c5dd2707429afcb2eeb0a8f0bb01048390b2540f5708f1ad1c8436db753c5"
+    },
+    {
+      "method": "turn/plan/updated",
+      "paramsType": "TurnPlanUpdatedNotification",
+      "paramsSha256": "a68452a1996557220492698b55b4f0250e356e5a3350f0a6ff5ead0fddbda055"
+    },
+    {
+      "method": "turn/started",
+      "paramsType": "TurnStartedNotification",
+      "paramsSha256": "0389d90d45cc36ae5fff1c7f04f98063914852172f8e6688054eea897cc5c462"
+    },
+    {
+      "method": "warning",
+      "paramsType": "WarningNotification",
+      "paramsSha256": "e9733e8e6fd661101c231d8b10b4604f962d8e692ed068b6159c96e13747c18e"
+    },
+    {
+      "method": "windows/worldWritableWarning",
+      "paramsType": "WindowsWorldWritableWarningNotification",
+      "paramsSha256": "ab9b3c56e604cdb3b1cb85f988f8a3faf1ecd5d297c5ff845cb51c360c4acb08"
+    },
+    {
+      "method": "windowsSandbox/setupCompleted",
+      "paramsType": "WindowsSandboxSetupCompletedNotification",
+      "paramsSha256": "4ddd4b183d8e4aad39d715110e4f79e392a9f1cc1ed6de02dc02fe74ee7738da"
+    }
+  ]
+}

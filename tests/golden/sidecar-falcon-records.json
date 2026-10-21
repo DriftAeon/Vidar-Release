@@ -1,0 +1,18 @@
+{
+  "_about": "Ordered --falcon records from tools/claude-sidecar.mjs, replayed into src-falcon ClaudeDriver::observe. Each step's expect is the driver state after that line.",
+  "steps": [
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-a", "state": "opened" }, "expect": { "permissions": { "perm-a": "opened" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-a", "state": "responded" }, "expect": { "permissions": { "perm-a": "responded" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-a", "state": "returned" }, "expect": { "permissions": { "perm-a": "returned" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-a", "state": "settled", "signal": "tool_result" }, "expect": { "permissions": { "perm-a": "settled" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-a", "state": "opened" }, "expect": { "permissions": { "perm-a": "settled" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-b", "state": "opened" }, "expect": { "permissions": { "perm-a": "settled", "perm-b": "opened" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-b", "state": "responded" }, "expect": { "permissions": { "perm-a": "settled", "perm-b": "responded" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-b", "state": "failed" }, "expect": { "permissions": { "perm-a": "settled", "perm-b": "opened" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-b", "state": "cancelled" }, "expect": { "permissions": { "perm-a": "settled", "perm-b": "cancelled" } } },
+    { "line": { "type": "falcon", "subtype": "permission", "id": "perm-b", "state": "failed" }, "expect": { "permissions": { "perm-a": "settled", "perm-b": "cancelled" } } },
+    { "line": { "type": "falcon", "subtype": "outcome", "cid": 1, "state": "applied", "mode": "plan" }, "expect": { "mode": "plan" } },
+    { "line": { "type": "falcon", "subtype": "outcome", "cid": 2, "state": "failed", "message": "set_permission_mode: aborted" }, "expect": { "mode": "plan" } },
+    { "line": { "type": "falcon", "subtype": "outcome", "cid": 3, "state": "applied", "model": "claude-sonnet-5-5" }, "expect": { "model": "claude-sonnet-5-5" } }
+  ]
+}

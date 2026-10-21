@@ -1,0 +1,11 @@
+/* Aggregated notice for tabs closed before their backend confirmed it stopped (sessions/close-notice.ts).
+   Drawn as a tab row after New Session (2026-10-17): the row look, hover, focus ring and
+   X box come from the shared selector lists in leftbar.css (#close-notice joins .session-btn there). */
+#close-notice[hidden] { display: none; }
+#close-notice { cursor: pointer; text-align: left; }
+#close-notice .tab-face { --tab-state: var(--alert); }
+/* the warning mark sits in the face ring, the same inset as a tab's art */
+#close-notice .tab-face::before {
+  content: ""; position: absolute; inset: var(--space-4);
+  background: url("/icons/color/warning.svg") center / contain no-repeat;
+}

@@ -1,0 +1,13 @@
+{
+  "id": "acme",
+  "version": 1,
+  "provides": [],
+  "module": {
+    "id": "acme",
+    "label": "Acme",
+    "level": "required-hideable",
+    "kind": "capability",
+    "when": { "deps": ["voice"], "facts": ["characters"], "config": ["voice"], "packs": ["notes"] },
+    "capability": { "host": "acme-host" }
+  }
+}

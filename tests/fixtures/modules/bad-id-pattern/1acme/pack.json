@@ -1,0 +1,6 @@
+{
+  "id": "1acme",
+  "version": 1,
+  "provides": [],
+  "module": { "id": "1acme", "label": "One Acme", "level": "optional", "kind": "content" }
+}

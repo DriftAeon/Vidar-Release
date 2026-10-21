@@ -1,0 +1,13 @@
+{
+  "$comment": "Codex app-server policy per session mode, the one source for in-process Codex (src/agents/codex-permissions.ts) and Falcon-hosted Codex (src-falcon/src/codex/driver/policy.rs). thread/start and thread/resume take approvalPolicy, approvalsReviewer and sandbox; turn/start takes the same with sandboxPolicy.type from turnSandbox. Modes mirror contracts/permission-modes.json; tests/fixtures/falcon-codex/thread-params.json pins what both languages build.",
+  "modes": {
+    "default": { "approvalPolicy": "on-request", "approvalsReviewer": "user", "sandbox": "workspace-write" },
+    "acceptEdits": { "approvalPolicy": "on-request", "approvalsReviewer": "user", "sandbox": "workspace-write" },
+    "plan": { "approvalPolicy": "on-request", "approvalsReviewer": "user", "sandbox": "read-only" },
+    "auto": { "approvalPolicy": "on-request", "approvalsReviewer": "auto_review", "sandbox": "workspace-write" }
+  },
+  "turnSandbox": {
+    "read-only": "readOnly",
+    "workspace-write": "workspaceWrite"
+  }
+}

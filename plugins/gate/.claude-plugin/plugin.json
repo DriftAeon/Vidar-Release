@@ -1,0 +1,5 @@
+{
+  "name": "vidar-gate",
+  "version": "0.0.1",
+  "description": "Local mod: context handoff gate and session index (replaces hooks\\context-gate.mjs and hooks\\session-index.mjs)."
+}

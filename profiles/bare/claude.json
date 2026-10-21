@@ -1,0 +1,76 @@
+{
+  "$comment": "Bare launch profile for the Raw Claude tab (plan Design 1-5, 7, 8) and, through `rendered`, the Falcon-hosted Rendered Bare tab (P5). Read by src-tauri/src/bare/ at every bare spawn and by Falcon (src-falcon/src/claude.rs bare_spawn) and the sidecar at every hosted one. Placeholders: {{root}} = the Vidar install root, {{home}} = this install's agent home (%LOCALAPPDATA%\\Vidar\\homes\\<install-root-key>, src-tauri/src/bare/home_path.rs), {{payload}} = this folder's `payload` file, or for a row naming rune sets the payload built from `setsPayload` into {{home}}\\layer\\payload-<hash12>.md (src-tauri/src/bare/layer.rs), all absolute at spawn; the {{plugins}} arg expands to `--plugin-dir {{root}}\\plugins\\<name>` per entry of `plugins` (the declared set, never vidar.json pluginDirs). `assets` is what tools/sandbox/check-zip.ps1 requires in the release zip.",
+  "id": "bare",
+  "agent": "claude",
+  "binary": { "name": "claude.exe", "resolve": "allowlisted Path" },
+  "verifiedVersion": "2.1.306",
+  "host": { "name": "pwsh.exe", "args": ["-NoProfile", "-Command"] },
+  "args": [
+    "--setting-sources", "user",
+    "--append-system-prompt-file", "{{payload}}",
+    "{{plugins}}",
+    "--allowedTools", "mcp__plugin_vidar_drive",
+    "--permission-mode", "auto",
+    "{{remoteControl}}"
+  ],
+  "payload": "profiles/bare/payload.md",
+  "setsPayload": "profiles/bare/payload-sets.md",
+  "settingsTemplate": "profiles/bare/claude.settings.template.json",
+  "settingsTarget": "claude-config/settings.json",
+  "homeDirs": [
+    "claude-config",
+    "user-home",
+    "user-home/AppData/Roaming",
+    "user-home/AppData/Local",
+    "user-home/AppData/Local/Temp",
+    "manifests",
+    "logs"
+  ],
+  "sharedLogin": [
+    { "agent": "claude", "file": "claude-config/.credentials.json" }
+  ],
+  "overlay": {
+    "USERPROFILE": "{{home}}\\user-home",
+    "HOME": "{{home}}\\user-home",
+    "APPDATA": "{{home}}\\user-home\\AppData\\Roaming",
+    "LOCALAPPDATA": "{{home}}\\user-home\\AppData\\Local",
+    "TEMP": "{{home}}\\user-home\\AppData\\Local\\Temp",
+    "TMP": "{{home}}\\user-home\\AppData\\Local\\Temp",
+    "BROWSER": "{{root}}\\tools\\bare\\open-url.cmd",
+    "CLAUDE_CONFIG_DIR": "{{home}}\\claude-config",
+    "VIDAR_AGENT_HOME": "{{home}}\\claude-config",
+    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "0",
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1"
+  },
+  "plugins": ["vidar-app"],
+  "rendered": {
+    "$comment": "The Falcon-hosted Rendered Bare tab (plan P5). Falcon builds the env from the allowlist plus `overlay` above plus this `overlay`; the sidecar (tools/claude-sidecar-bare.mjs) loads exactly these `plugins` from {{root}}\\plugins\\<name> (never vidar.json pluginDirs). The gate mod is Rendered only: the Raw line above never carries it. CLAUDE_CODE_ENABLE_FUNCTION_HOOKS keeps the gate's hooks module on in a cold config dir.",
+    "plugins": ["vidar-app", "gate"],
+    "overlay": {
+      "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"
+    }
+  },
+  "assets": [
+    "profiles/bare/claude.json",
+    "profiles/bare/claude.settings.template.json",
+    "profiles/bare/payload.md",
+    "profiles/bare/payload-sets.md",
+    "contracts/agent-env.json",
+    "plugins/vidar-app/.claude-plugin/plugin.json",
+    "plugins/vidar-app/.mcp.json",
+    "tools/agent-layer/statusline-bridge.mjs",
+    "tools/agent-layer/instructions-log.mjs",
+    "tools/agent-layer/context-gate.mjs",
+    "plugins/vidar-app/skills/catapult/SKILL.md",
+    "plugins/vidar-app/skills/handoff/SKILL.md",
+    "plugins/gate/hooks/hooks.json",
+    "plugins/gate/hooks/register.js",
+    "tools/agent-layer/guard-driver.mjs",
+    "tools/claude-sidecar.mjs",
+    "tools/claude-sidecar-bare.mjs",
+    "tools/bare/open-url.cmd",
+    "tools/bare/open-url.ps1"
+  ]
+}

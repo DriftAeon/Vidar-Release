@@ -1,0 +1,17 @@
+[
+  { "runId": "0a1b2c3d", "stage": "plan", "chunks": [
+    { "files": [ { "path": "~\\CLAUDE.md", "part": null }, { "path": "~\\rules\\ui.md", "part": null } ] },
+    { "files": [ { "path": "~\\memory", "part": { "k": 1, "of": 2 } } ] },
+    { "files": [ { "path": "~\\memory", "part": { "k": 2, "of": 2 } } ] }
+  ] },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 0, "state": "running", "runes": null },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 1, "state": "running", "runes": null },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 1, "state": "retrying", "runes": null },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 0, "state": "done", "runes": 12 },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 1, "state": "done", "runes": 1 },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 2, "state": "failed", "runes": null },
+  { "runId": "0a1b2c3d", "stage": "chunk", "index": 2, "state": "stopped", "runes": null },
+  { "runId": "0a1b2c3d", "stage": "merge", "state": "running" },
+  { "runId": "0a1b2c3d", "stage": "merge", "state": "done" },
+  { "runId": "0a1b2c3d", "stage": "merge", "state": "failed" }
+]

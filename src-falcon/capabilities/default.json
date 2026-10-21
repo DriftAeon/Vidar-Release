@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "falcon-shell",
+  "description": "Core window and event access for the local Falcon shell.",
+  "windows": ["falcon-proof"],
+  "permissions": ["core:default", "core:window:allow-destroy"]
+}

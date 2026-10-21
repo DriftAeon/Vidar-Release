@@ -1,0 +1,46 @@
+{
+  "$comment": "Bare launch profile for the Rendered Codex tab (plan Design 1-3, 6-8, § P6). Read by src-tauri/src/bare/ at every bare Codex spawn (agent.rs spawn_codex_appserver, pty.rs spawn_pty). Placeholders: {{root}} = the Vidar install root, {{home}} = the agentHomes folder (contracts/paths.json), both absolute at spawn; {{localappdata}} = the spawning process's own real LOCALAPPDATA (Vidar's, or Falcon's for a hosted spawn), refused when unset, relative or inside the Bare home (src-tauri/src/bare/env.rs), because a Codex shell's TEMP is built from it and a redirected folder that was never created leaves pwsh in ConstrainedLanguage. `binary` is the D7 resolver: the first allowlisted Path folder holding one of `shims` and `script` under it (never APPDATA); the version is read from `package`. The Rendered spawn is `<node> <script> app-server`; the Raw row (pty.rs) spawns `<node> <script> <rawArgs>`, the TUI in the tab's PTY: `--no-daemon` keeps it off the shared background server (outside the tab's process tree), `--no-alt-screen` runs it inline so the `[Vidar Bare: ...]` warning line stays in scrollback. Both use an env built from contracts/agent-env.json plus `overlay`; the config template is generated into `configTarget` under the home on every launch. `setsPayload` is the template a row's rune sets and the copied bareSkills listing fill, built into {{home}}\\layer\\payload-<hash12>.md and passed as `-c developer_instructions` after `app-server` or `rawArgs` (src-tauri/src/bare/mod.rs); `configTarget` keeps `payload`. `assets` is what tools/sandbox/check-zip.ps1 requires in the release zip.",
+  "id": "bare",
+  "agent": "codex",
+  "binary": {
+    "shims": ["codex.ps1", "codex.cmd"],
+    "script": "node_modules/@openai/codex/bin/codex.js",
+    "package": "node_modules/@openai/codex/package.json"
+  },
+  "verifiedVersion": "0.163.0",
+  "host": { "name": "node.exe" },
+  "args": ["app-server"],
+  "rawArgs": ["--no-daemon", "--no-alt-screen"],
+  "payload": "profiles/bare/codex.payload.md",
+  "setsPayload": "profiles/bare/codex.payload-sets.md",
+  "configTemplate": "profiles/bare/codex.config.template.toml",
+  "configTarget": "codex-home/config.toml",
+  "homeDirs": [
+    "codex-home",
+    "user-home",
+    "user-home/AppData/Roaming",
+    "user-home/AppData/Local",
+    "user-home/AppData/Local/Temp",
+    "manifests",
+    "logs"
+  ],
+  "overlay": {
+    "USERPROFILE": "{{home}}\\user-home",
+    "HOME": "{{home}}\\user-home",
+    "APPDATA": "{{home}}\\user-home\\AppData\\Roaming",
+    "LOCALAPPDATA": "{{localappdata}}",
+    "TEMP": "{{home}}\\user-home\\AppData\\Local\\Temp",
+    "TMP": "{{home}}\\user-home\\AppData\\Local\\Temp",
+    "CODEX_HOME": "{{home}}\\codex-home",
+    "VIDAR_AGENT_HOME": "{{home}}\\codex-home"
+  },
+  "assets": [
+    "profiles/bare/codex.json",
+    "profiles/bare/codex.config.template.toml",
+    "profiles/bare/codex.payload.md",
+    "profiles/bare/codex.payload-sets.md",
+    "profiles/bare/codex-skills/vidar-control/SKILL.md",
+    "contracts/agent-env.json",
+    "tools/desks/codex-notify.ps1"
+  ]
+}

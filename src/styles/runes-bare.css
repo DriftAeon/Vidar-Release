@@ -1,0 +1,97 @@
+/* The Runes tab for a focused Bare tab (src/runes/bare/view.ts). Libraries reuse today's rune sets and
+   cards (runes.css), Local Files and Every Bare Row use the .rp-source tick rows (end of this file),
+   buttons are the house .ws-btn with the green .ws-add primary. This file holds only the view's layout
+   and the disabled floors the reused rows lack. */
+.runes-bare { display: flex; flex-direction: column; gap: var(--space-16); }
+.runes-bare[aria-busy="true"] { cursor: progress; }
+.runes-bare-note { font-size: var(--font-12); color: var(--fg-dim); }
+.runes-bare-center { display: flex; justify-content: center; padding: var(--space-24) 0; }
+
+/* tick rows: active press, locked-on block targets, and the disabled floor (fold nit) */
+.runes-bare .rp-source:active:not(:disabled):not([aria-disabled="true"]) { background: var(--bg); }
+.runes-bare .rp-source[aria-disabled="true"] { cursor: default; }
+.runes-bare .rp-source:disabled { opacity: 0.5; cursor: default; }
+.runes-bare .rp-source:disabled:hover:not([aria-pressed="true"]) { background: var(--bg-panel); color: var(--fg-dim); }
+.runes-bare .ws-btn:disabled { opacity: 0.5; cursor: default; }
+/* clickable source rows read as buttons: a 1px border tinted from the set hue (no side bar); hover strengthens it */
+.runes-bare .rp-source[data-kind]:not(.is-ro):not([aria-pressed="true"]) { border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); }
+.runes-bare .rp-source[data-kind]:not(.is-ro):not([aria-pressed="true"]):hover:not(:disabled) { border-color: var(--set-hue, var(--fg-dim)); }
+.runes-bare .rp-source[data-kind]:not(.is-ro):focus-visible { border-color: var(--accent); }
+
+/* Generating: one line per source */
+.runes-bare-lines { display: flex; flex-direction: column; gap: var(--space-4); }
+.runes-bare-line { display: flex; align-items: baseline; gap: var(--space-8); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border); }
+.runes-bare-line-path { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg-dim); overflow-wrap: anywhere; }
+.runes-bare-line-state { flex: none; font-size: var(--font-12); color: var(--fg); }
+.runes-bare-line-state.rp-error { color: var(--alert); }
+
+/* Generating: one card per chunk (2026-10-18). Running takes the accent border and a 2px
+   sweep along the bottom edge; retrying the amber signal colour. Merge sits below a separator in its own card. */
+.runes-gen-cards { display: flex; flex-direction: column; gap: var(--space-4); }
+.runes-gen-card { position: relative; display: flex; align-items: center; gap: var(--space-8); min-height: var(--row-28); padding: var(--space-4) var(--space-8); box-sizing: border-box; background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); overflow: hidden; }
+.runes-gen-card[data-state="done"] { background: var(--bg-panel); }
+.runes-gen-card[data-state="running"] { border-color: var(--accent); }
+.runes-gen-card[data-state="retrying"] { border-color: var(--approval-amber); }
+.runes-gen-sep { height: var(--border-w); margin: var(--space-4) 0; background: var(--border); }
+.runes-gen-glyph { flex: none; display: flex; width: var(--space-12); height: var(--space-12); }
+.runes-gen-glyph svg { display: block; }
+.runes-gen-path { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg-dim); overflow-wrap: anywhere; }
+.runes-gen-merge .runes-gen-path { font-family: var(--font-ui); }
+.runes-gen-card[data-state="pending"] .runes-gen-path, .runes-gen-card[data-state="stopped"] .runes-gen-path { opacity: 0.55; }
+.runes-gen-card[data-state="running"] .runes-gen-path, .runes-gen-card[data-state="retrying"] .runes-gen-path { color: var(--fg); }
+.runes-gen-time { flex: none; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--font-11); color: var(--fg-dim); }
+.runes-gen-state { flex: none; font-size: var(--font-12); color: var(--fg); }
+.runes-gen-state.rp-error { color: var(--alert); }
+.rg-glyph .rg-ring { stroke: var(--border); }
+.rg-pending circle { stroke: var(--border-strong); }
+.rg-running .rg-arc { stroke: var(--accent); }
+.rg-retrying .rg-arc { stroke: var(--approval-amber); }
+.rg-done path { stroke: var(--ok-green); }
+.rg-failed path { stroke: var(--alert); }
+.rg-stopped rect { fill: var(--fg-dim); }
+.rg-running, .rg-retrying { animation: rg-spin 1s linear infinite; /* motion: progress spinner, continuous, not a state change */ }
+.runes-gen-card[data-state="running"]::after, .runes-gen-card[data-state="retrying"]::after {
+  content: ""; position: absolute; bottom: 0; left: -30%; width: 30%; height: var(--space-2); background: var(--accent); pointer-events: none;
+  animation: rg-sweep 1600ms linear infinite; /* motion: indeterminate progress sweep, continuous by definition */
+}
+.runes-gen-card[data-state="retrying"]::after { background: var(--approval-amber); }
+@keyframes rg-spin { to { transform: rotate(360deg); } }
+@keyframes rg-sweep { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .rg-running, .rg-retrying { animation: none; }
+  .runes-gen-card[data-state="running"]::after, .runes-gen-card[data-state="retrying"]::after { animation: none; }
+}
+
+/* View: the launch warnings and transcript loads, once (filled by panels/runes.ts). A warning is one line, the full text in its tooltip. */
+.runes-bare-trace { display: flex; flex-direction: column; gap: var(--space-8); }
+.runes-bare-trace[hidden] { display: none; }
+.runes-warn-line { display: flex; align-items: center; gap: var(--space-8); font-size: var(--font-12); line-height: var(--line-16); cursor: help; }
+.runes-warn-line .icn { flex: none; width: var(--space-16); height: var(--space-16); }
+.runes-warn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* View rows: the ticked shared items, read-only, no accent */
+.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: var(--bg-panel); border-color: var(--border); color: var(--fg); overflow-wrap: anywhere; }
+
+/* View / Modify: seated on the Key's last line at the right; Done takes the accent (it marks the editing state) */
+.runes-mode { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8); font-weight: var(--weight-strong); }
+.runes-mode[hidden] { display: none; }
+.runes-mode .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.runes-mode:disabled { opacity: 0.5; cursor: default; }
+.runes-mode:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.runes-mode.is-editing { color: var(--accent); border-color: var(--accent); background: var(--bg-selected); }
+
+/* moved from the retired rules-bricks.css: the Bare view's empty line, error line, source list and action row */
+.rp-empty { color: var(--fg-dim); font-size: var(--font-13); padding: var(--space-8) 0; }
+.rp-error { font-size: var(--font-12); color: var(--alert); }
+.rp-error b { font-weight: var(--weight-strong); margin-right: var(--space-4); }
+
+.rp-sources { display: flex; flex-direction: column; gap: var(--space-4); }
+.rp-source {
+  text-align: left; padding: var(--space-8) var(--space-12); cursor: pointer;
+  font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg-dim);
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+}
+.rp-source:hover { background: var(--bg-hover); color: var(--fg); }
+.rp-source[aria-pressed="true"] { background: var(--bg-selected); border-color: var(--accent); color: var(--fg); }
+.rp-source:focus-visible { outline: none; border-color: var(--accent); }
+.rp-actions { display: flex; gap: var(--space-8); }

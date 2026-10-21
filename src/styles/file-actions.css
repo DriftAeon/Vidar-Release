@@ -1,0 +1,13 @@
+/* File-action buttons (Copy, Copy Path, Open Folder, Delete): built by panels/file-actions.ts for
+   Display, Document and the Tray, so one rule set styles them everywhere. Imported after
+   workbench.css and display.css; the doubled class outranks `.wb-actions button` there. */
+button.icon-btn.file-action {
+  background: none; border: var(--border-w) solid var(--border); border-radius: var(--radius-4); cursor: pointer;
+  color: var(--fg-dim); font-size: var(--font-12); line-height: 1; padding: var(--space-4) var(--space-8);
+}
+button.icon-btn.file-action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--bg-hover); }
+button.icon-btn.file-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--accent); border-color: var(--accent); }
+button.icon-btn.file-action:active:not(:disabled) { background: var(--bg-selected); }
+button.icon-btn.file-action:disabled { opacity: 0.5; cursor: default; }
+button.icon-btn.file-action[aria-label="Delete"]:hover:not(:disabled),
+button.icon-btn.file-action[aria-label="Delete"]:focus-visible { color: var(--alert); border-color: var(--alert); }

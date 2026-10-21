@@ -1,0 +1,71 @@
+/* Settings > Modules follows the approved compact group and row layout. */
+.sc-row:has(> .sc-bind .module-settings) > .sc-text { display: none; }
+.sc-row:has(> .sc-bind .module-settings) { padding-block: var(--space-8); }
+.sc-bind:has(> .module-settings) { width: 100%; }
+.module-settings { width: 100%; font-family: var(--font-ui); }
+.module-settings__status {
+  display: block; min-height: var(--line-16); margin-bottom: var(--space-4);
+  color: var(--fg-dim); font-size: var(--font-11); text-align: right;
+}
+.module-settings__status[data-state="pending"] { color: var(--accent); }
+.module-settings__status[data-state="error"] { color: var(--alert); }
+.module-settings__group + .module-settings__group { margin-top: var(--space-16); }
+.module-settings__heading {
+  margin: 0 0 var(--space-4); color: var(--fg-dim);
+  font-size: var(--font-12); font-weight: 600;
+}
+.module-settings__row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-12);
+  min-height: var(--space-32); padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-4);
+}
+.module-settings__row:hover { background: var(--bg-hover); }
+.module-settings__name {
+  display: inline-flex; align-items: center; gap: var(--space-8);
+  min-width: 0; font-size: var(--font-13);
+}
+.module-settings__name .icn { width: var(--row-24); height: var(--row-24); object-fit: contain; flex: none; }
+/* Rename (2026-10-17): the Changes tab's .cx-rename pencil (changes.css),
+   hidden at rest and shown on row hover or focus; the field replaces the name while editing. */
+.module-settings__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.module-settings__row:hover .module-settings__rename,
+.module-settings__row:focus-within .module-settings__rename { opacity: 1; }
+.module-settings__name .module-settings__rename .icn { width: var(--space-16); height: var(--space-16); }
+.module-settings__row:hover .module-settings__rename:disabled { opacity: .5; cursor: default; }
+.module-settings__name:has(> .module-settings__rename-input) { flex: 1; }
+.module-settings__rename-input {
+  box-sizing: border-box; flex: 1; min-width: 0; height: var(--row-24); padding: 0 var(--space-4);
+  background: var(--bg); color: var(--fg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  font: var(--font-13) var(--font-ui);
+}
+.module-settings__rename-input::placeholder { color: var(--fg-dim); }
+.module-settings__rename-input:hover:not(:disabled), .module-settings__rename-input:active:not(:disabled) { border-color: var(--border-strong); }
+.module-settings__rename-input:focus-visible, .module-settings__rename-input:focus { outline: none; border-color: var(--accent); }
+.module-settings__rename-input:disabled { opacity: .5; cursor: default; }
+.module-settings__controls { display: inline-flex; align-items: center; gap: var(--space-8); flex: none; }
+.module-settings__order {
+  display: grid; place-items: center; width: var(--space-24); height: var(--space-24);
+  padding: 0; border: 1px solid var(--border); border-radius: var(--radius-4);
+  background: var(--bg); color: var(--fg-dim); font: var(--font-12) var(--font-ui);
+  cursor: pointer;
+}
+.module-settings__order:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.module-settings__order:focus-visible, .module-settings__switch:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.module-settings__order:active:not(:disabled) { background: var(--bg-selected); }
+.module-settings__order:disabled { opacity: .3; cursor: default; }
+.module-settings__switch {
+  display: flex; align-items: center; width: 40px; height: var(--row-24);
+  margin-left: var(--space-8); padding: var(--space-2); border: 1px solid var(--border);
+  border-radius: var(--radius-full); background: var(--bg); cursor: pointer;
+}
+.module-settings__switch::before {
+  content: ""; width: var(--line-16); height: var(--line-16); border-radius: var(--radius-full);
+  background: var(--fg-dim); transition: transform .12s ease;
+}
+.module-settings__switch[aria-checked="true"] { background: var(--bg-selected); border-color: var(--accent); }
+.module-settings__switch[aria-checked="true"]::before { background: var(--accent); transform: translateX(18px); }
+.module-settings__switch:hover:not(:disabled) { border-color: var(--accent); }
+.module-settings__switch:active:not(:disabled) { background: var(--bg-hover); }
+.module-settings__switch:disabled { opacity: .65; cursor: default; }

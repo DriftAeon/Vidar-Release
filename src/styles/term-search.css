@@ -1,0 +1,19 @@
+/* search overlay floats — static flow would clip the terminal bottom with
+   no ResizeObserver correction (container size unchanged) */
+#search-overlay {
+  position: absolute; top: 10px; right: 14px; z-index: 60;
+  display: flex; gap: var(--space-6); align-items: center;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-8); padding: var(--space-6) var(--space-8);
+}
+#search-overlay input {
+  width: 180px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: var(--radius-5);
+  padding: var(--space-4) var(--space-8); font-size: var(--font-13);
+}
+#search-overlay button {
+  background: none; border: none; color: var(--fg-dim);
+  font-size: 15px; cursor: pointer; padding: var(--space-2) var(--space-6);
+}
+#search-overlay button:hover { color: var(--accent); }
+

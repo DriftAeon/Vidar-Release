@@ -1,0 +1,21 @@
+/* Shared browser fullscreen (src/browser/full.ts, look C1): fills the module in place of the head, filter row
+   and list; top row, title, fields, rich body, sections and comments. */
+.br-full-host { flex: 1; min-height: 0; overflow-y: auto; }
+.br-full { display: flex; flex-direction: column; gap: var(--space-16); outline: none; }
+.br-full-top { display: flex; align-items: center; gap: var(--space-8); height: var(--row-28); min-width: 0; }
+.br-grow { flex: 1; }
+.br-full-title { font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); line-height: var(--line-20); overflow-wrap: anywhere; }
+.br-full-icon { margin-right: var(--space-8); }
+.br-full .br-fields { flex: none; }
+.br-stack { display: flex; flex-direction: column; gap: var(--space-16); }
+.br-stack-tight { display: flex; flex-direction: column; gap: var(--space-4); }
+.br-rich { padding: var(--space-12); background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); line-height: var(--line-16); overflow-wrap: anywhere; }
+.br-rich .rich-link { color: var(--accent); cursor: pointer; }
+.br-rich .rich-link:hover { text-decoration: underline; }
+.br-rich .rich-link:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.br-sec { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); color: var(--fg-dim); font-weight: var(--weight-strong); }
+.br-sec .br-n { font-weight: var(--weight-regular); }
+.br-comments { display: flex; flex-direction: column; gap: var(--space-12); }
+.br-cm { display: flex; flex-direction: column; gap: var(--space-4); padding: 0 var(--space-4); line-height: var(--line-16); }
+.br-cm-h { display: flex; gap: var(--space-8); align-items: baseline; }
+.br-when { color: var(--fg-dim); font-family: var(--font-mono); font-size: var(--font-11); }

@@ -1,0 +1,19 @@
+/* Onboarding Modules step (mock onboarding-shell-modules M1, One List): a single centred list, icon and name
+   left, the Settings switch right (.module-settings__switch, settings/modules.css). Rows reuse the Settings
+   row height and hover. */
+.ob-modules {
+  flex: 1; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0;
+  padding: calc(var(--row-32) * 2) var(--space-32) var(--space-32);
+}
+.ob-mod-list {
+  width: min(100%, calc(var(--row-32) * 13)); max-height: 100%; overflow: auto;
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+}
+.ob-mod-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-12);
+  min-height: var(--row-32); padding: var(--space-4) var(--space-12);
+}
+.ob-mod-row + .ob-mod-row { border-top: var(--border-w) solid var(--border); }
+.ob-mod-row:hover { background: var(--bg-hover); }
+.ob-mod-name { display: inline-flex; align-items: center; gap: var(--space-8); min-width: 0; font-size: var(--font-13); color: var(--fg-bright); }
+.ob-mod-name .icn { width: var(--row-24); height: var(--row-24); object-fit: contain; flex: none; }

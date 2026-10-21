@@ -1,0 +1,24 @@
+{
+  "cycles": [
+    [
+      "src/flow/engine.ts",
+      "src/flow/run-view.ts"
+    ],
+    [
+      "src/flow/inspector.ts",
+      "src/flow/modifiers.ts",
+      "src/flow/nodes.ts",
+      "src/flow/popover.ts"
+    ],
+    [
+      "src/panels/comments.ts",
+      "src/panels/document.ts",
+      "src/panels/rendered.ts",
+      "src/panels/rendered/text-stream.ts",
+      "src/panels/sessions.ts",
+      "src/panels/sessions/hosted.ts",
+      "src/panels/sessions/rendered-body.ts",
+      "src/panels/workbench.ts"
+    ]
+  ]
+}

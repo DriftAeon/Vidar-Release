@@ -1,0 +1,63 @@
+/* ---- rail stripe: the proxy MCP button near the bottom of the empty right rail; it opens the
+   drawer (2026-10-10). The button shares .tool-btn's look; the surface is fixed on
+   body, under the floating layer (100+) like #status-expanded (80). panels/rail-stripe.ts */
+#rail-stripe {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  gap: var(--space-4); padding: 0 0 var(--rail-btn-pad); flex: 1; min-height: 0;
+}
+/* tools: a top-aligned column of square buttons, --rail-btn-pad from the rail's top; the drawer buttons
+   below it are bottom-aligned with the same pad. Options: toolbench.css */
+#toolbench { flex: 0 0 auto; padding-top: var(--rail-btn-pad); }
+#tool-grid { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
+#tool-grid .tool-btn { width: var(--row-32); height: var(--row-32); aspect-ratio: auto; flex-shrink: 0; }
+/* bench toggle: first in #toolbench, above the grid (panels/workbench.ts); a .rail-btn.tool-btn, centred, one tool gap above the first tool */
+#wb-toggle { margin: 0 auto var(--space-4); }
+/* the arrow art read tiny at the rail's 16px (2026-10-18): 20px inside the same button box */
+#wb-toggle .icn { width: calc(var(--font-16) + var(--space-4)); height: calc(var(--font-16) + var(--space-4)); }
+/* the full rail is back (a module in #modules): the stripe's buttons go */
+#app:has(#modules > *) #rail-stripe { display: none; }
+/* Settings, the rail's last item in both modes (2026-10-11): 30 tall with its top line, flush on the
+   window bottom, so the line sits level with the workbench's #bottombar (flush too, bottombar.css) and the
+   cog centres on the whole row; the stripe's buttons stand --rail-btn-pad above the line. */
+#rail-foot {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  height: var(--bottombar-h); /* layout.css */
+  border-top: var(--border-w) solid var(--border);
+}
+
+.rail-btn.tool-btn {
+  width: var(--row-32); height: var(--row-32); aspect-ratio: auto; flex-shrink: 0;
+  display: grid; place-items: center;
+}
+.rail-btn .icn { width: var(--font-16); height: var(--font-16); opacity: 0.75; }
+.rail-btn:hover:not(:disabled) .icn, .rail-btn.open .icn { opacity: 1; }
+.rail-btn:active:not(:disabled) { background: var(--bg-selected); }
+.rail-btn:disabled { opacity: 0.5; cursor: default; }
+/* current selection: its surface is open */
+.rail-btn.open { border-color: var(--accent); box-shadow: 0 0 0 var(--border-w) var(--accent); }
+
+.rail-surface {
+  position: fixed; z-index: 80;
+  background: var(--bg-panel);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+  overflow-y: auto; scrollbar-width: thin; /* no shadow: #status-expanded's is an rgba literal lint-ui refuses in a new rule */
+}
+/* the surface is the card: the rack's own box drops its border and fill */
+.rail-surface .module-box { border: 0; background: transparent; }
+
+/* drawer, bottom on the bottom bar's top (JS sets bottom), hugs its content and grows upward up to the
+   window top; flush to the rail */
+.rail-drawer {
+  right: var(--rail-stripe-w); /* layout.css */
+  max-height: calc(100vh - var(--rail-bottom, 0px)); /* cap = the space above the bar; scrolls past it */
+  width: calc(var(--space-32) * 10); /* 320px panel */
+  border-radius: var(--radius-6) 0 0 0; border-width: var(--border-w) 0 0 var(--border-w);
+  animation: rail-drawer-in 180ms ease-out; /* motion: drawer slide in */
+}
+
+/* the clip trails the slide so the panel never draws over the rail while it moves */
+@keyframes rail-drawer-in {
+  from { transform: translateX(100%); clip-path: inset(0 100% 0 0); }
+  to { transform: none; clip-path: inset(0); }
+}
+@media (prefers-reduced-motion: reduce) { .rail-drawer { animation: none; } }

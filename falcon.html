@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Falcon</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/falcon.css" />
+  </head>
+  <body>
+    <div id="falcon-app">
+      <header class="falcon-bar">
+        <div class="falcon-identity"><strong>Falcon</strong></div>
+        <label class="falcon-picker-label" for="falcon-picker">Session</label>
+        <select id="falcon-picker" aria-label="Hosted session"><option value="">Loading sessions…</option></select>
+        <button id="falcon-refresh" type="button" aria-label="Refresh" title="Refresh"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg></button>
+        <button id="falcon-dock" type="button" disabled>Dock</button>
+        <button id="falcon-close-session" class="danger" type="button" disabled>Close Session</button>
+      </header>
+      <div id="falcon-status" role="status" aria-live="polite"></div>
+      <main id="falcon-body" class="rendered-host"><div class="falcon-empty"></div></main>
+    </div>
+    <script type="module" src="/src/falcon.ts"></script>
+  </body>
+</html>

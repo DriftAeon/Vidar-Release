@@ -1,0 +1,179 @@
+{
+  "about": "lint:copy grandfathered Title Case findings (tools/ui/lint-copy.mjs). Rewrite with `node tools/ui/lint-copy.mjs --update-baseline`.",
+  "entries": [
+    {
+      "file": "index.html",
+      "sink": "html",
+      "text": "Listen for the wake word",
+      "count": 1
+    },
+    {
+      "file": "src/character/arena.ts",
+      "sink": "attr",
+      "text": "Character arena",
+      "count": 1
+    },
+    {
+      "file": "src/character/renderer.ts",
+      "sink": "attr",
+      "text": "{} model viewer",
+      "count": 1
+    },
+    {
+      "file": "src/character/renderer.ts",
+      "sink": "attr",
+      "text": "Character arena",
+      "count": 1
+    },
+    {
+      "file": "src/flow/flow-picker.ts",
+      "sink": "attr",
+      "text": "Flow name",
+      "count": 1
+    },
+    {
+      "file": "src/launcher/locations.ts",
+      "sink": "prop",
+      "text": "failed: {} — {}",
+      "count": 1
+    },
+    {
+      "file": "src/launcher/locations.ts",
+      "sink": "prop",
+      "text": "pulling in…",
+      "count": 1
+    },
+    {
+      "file": "src/panels/comments.ts",
+      "sink": "prop",
+      "text": "Hide margin",
+      "count": 1
+    },
+    {
+      "file": "src/panels/comments.ts",
+      "sink": "prop",
+      "text": "Show margin",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document-dialog.ts",
+      "sink": "attr",
+      "text": "Document name",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "attr",
+      "text": "Document source",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "changed on disk — reload before saving",
+      "count": 2
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "open failed: {}",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "opening…",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "reload failed: {}",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "reloading…",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "save failed: {}",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "save in progress",
+      "count": 1
+    },
+    {
+      "file": "src/panels/document.ts",
+      "sink": "prop",
+      "text": "unsaved changes",
+      "count": 2
+    },
+    {
+      "file": "src/panels/preview-fixtures.ts",
+      "sink": "prop",
+      "text": "run preview fixtures",
+      "count": 1
+    },
+    {
+      "file": "src/panels/rendered/composer.ts",
+      "sink": "prop",
+      "text": "Queued: click to undo",
+      "count": 1
+    },
+    {
+      "file": "src/panels/rendered/host-payload.ts",
+      "sink": "prop",
+      "text": "Queued: click to undo",
+      "count": 1
+    },
+    {
+      "file": "src/panels/rendered/tool-pills.ts",
+      "sink": "prop",
+      "text": "(call not seen)",
+      "count": 1
+    },
+    {
+      "file": "src/panels/sessions/search-overlay.ts",
+      "sink": "html",
+      "text": "find…",
+      "count": 1
+    },
+    {
+      "file": "src/panels/split.ts",
+      "sink": "prop",
+      "text": "Resize (double-click to centre)",
+      "count": 1
+    },
+    {
+      "file": "src/panels/workbench-actions.ts",
+      "sink": "prop",
+      "text": "save failed: {}",
+      "count": 1
+    },
+    {
+      "file": "src/panels/workbench-actions.ts",
+      "sink": "prop",
+      "text": "saving…",
+      "count": 1
+    },
+    {
+      "file": "src/panels/workbench-bridge.ts",
+      "sink": "prop",
+      "text": "truncated on restore",
+      "count": 1
+    },
+    {
+      "file": "src/panels/workbench-tray.ts",
+      "sink": "prop",
+      "text": "decoding…",
+      "count": 1
+    }
+  ]
+}

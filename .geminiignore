@@ -1,0 +1,21 @@
+# Gemini CLI file filter. .gitignore is NOT honoured here (see .gemini/settings.json): the run
+# folders under docs/runs/ and the bridge/ dirs a review must read are gitignored. This file
+# re-excludes only what is heavy or irrelevant to a review.
+node_modules/
+dist/
+src-tauri/target/
+target-staging/
+bridge/logs/
+bridge/sessions/
+bridge/shots/
+bridge/clips/
+bridge/voice/
+bridge/viewer-research/
+bridge/*.tgz
+runtime/bridge/logs/
+runtime/bridge/sessions/
+runtime/bridge/shots/
+runtime/bridge/clips/
+runtime/bridge/voice/
+runtime/bridge/viewer-research/
+runtime/bridge/*.tgz

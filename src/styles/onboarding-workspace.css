@@ -1,0 +1,22 @@
+/* Onboarding Workspace step (mock primary-agent-variants A, frames 5 and 6): a centred column holding the
+   picked folder row (name, mono path) over the green Add Workspace button. The button shares the footer
+   bar's size and the .ws-add decision-pair look (decision-pair.css). */
+.ob-workspace {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-16); min-width: 0; padding: 0 var(--space-32);
+}
+.ob-ws-row {
+  display: flex; align-items: center; gap: var(--space-12); height: var(--row-32); max-width: 100%;
+  padding: 0 var(--space-12);
+  background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-6);
+  font-size: var(--font-13);
+}
+.ob-ws-name { flex: none; color: var(--fg-bright); font-weight: var(--weight-strong); }
+.ob-ws-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); font-size: var(--font-12); }
+.ob-workspace .ob-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-8);
+  height: calc(var(--row-32) + var(--space-8)); padding: 0 var(--space-24);
+  font-size: var(--font-16); font-weight: var(--weight-bold); color: var(--fg-bright); border-radius: var(--radius-6);
+}
+.ob-workspace .ob-btn:disabled { opacity: 0.4; cursor: default; }
+.ob-workspace .ob-error { color: var(--alert); font-size: var(--font-12); }
