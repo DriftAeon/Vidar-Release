@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { rel } from "../lib/paths.mjs";
+import { isExportedTree } from "../lib/release-layout.mjs";
 import { validate } from "./board.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -83,9 +84,9 @@ test("where keeps an open exit row visible when every card is done", { skip: noG
     for (const d of ["tools/lib", "contracts", "docs/projects/x", rel("runs")]) mkdirSync(join(dir, ...d.split("/")), { recursive: true });
     writeFileSync(join(dir, "contracts", "paths.json"), "");
     writeFileSync(join(dir, "docs/projects/x/board.json"), JSON.stringify({
-      title: "Fixture", goal: "G", notes: "docs/INDEX.md",
+      title: "Fixture", goal: "G", notes: "package.json",
       exitTest: [{ text: "Push still unverified", status: "open" }],
-      cards: [{ id: "C1", kind: "core", title: "Finished", status: "done", commit, evidence: ["docs/INDEX.md"] }], // validate resolves both against the real repo
+      cards: [{ id: "C1", kind: "core", title: "Finished", status: "done", commit, evidence: ["package.json"] }], // validate resolves both against the real repo
     }));
     const r = spawnSync(process.execPath, [join(HERE, "where.mjs"), "--root", dir], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
@@ -123,7 +124,9 @@ function boards(dir, found = []) {
   return found;
 }
 
-test("every docs/**/board.json passes --check", { skip: noGit }, () => {
+const docsSkip = noGit || (isExportedTree(ROOT) ? "docs/ is not in this tree (docs not shipped)" : false);
+
+test("every docs/**/board.json passes --check", { skip: docsSkip }, () => {
   const found = boards(join(ROOT, "docs"));
   assert.ok(found.length > 0, "no board.json under docs/");
   // In-process validate (the same call --check makes); the spawned --check path is the first test's CLI smoke.

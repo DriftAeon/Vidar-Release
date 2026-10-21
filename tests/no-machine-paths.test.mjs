@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isExportedTree } from "../tools/lib/release-layout.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 // Every tracked root the release zip ships (tools/release/ship-list.txt); tests and tools included,
@@ -83,7 +84,7 @@ test("shipped sources carry no machine paths beyond the allowlist", () => {
   }
   for (const [path, entry] of allow) {
     const n = hits.get(path) ?? 0;
-    if (!HAS_GIT && !existsSync(join(ROOT, path))) continue; // export-ignored file: not in this tree, nothing to go stale
+    if ((!HAS_GIT || isExportedTree(ROOT)) && !existsSync(join(ROOT, path))) continue; // export-ignored file: not in this tree, nothing to go stale
     if (n < entry.count) problems.push(`${path}: ${n} machine-path hit(s), allowlist says ${entry.count}; stale entry, lower the count in tests/no-machine-paths.allow.json${n === 0 ? " (or remove it)" : ""}`);
   }
   assert.deepEqual(problems, [], "\n" + problems.join("\n"));

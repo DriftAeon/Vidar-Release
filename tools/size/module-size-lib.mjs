@@ -4,6 +4,7 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isExportedTree } from "../lib/release-layout.mjs";
 
 export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const CONTRACT = "contracts/module-size.json";
@@ -114,8 +115,8 @@ export function treeProblems(contract, root = ROOT) {
   for (const e of contract.entries) {
     const c = counts.get(e.path);
     if (!c && exportIgnored(contract, e.path)) continue; // absent by design in the release export
-    // A source export (no .git) omits files its set leaves out: an entry whose file is absent is not a miss there.
-    if (!c && !existsSync(join(root, ".git")) && !existsSync(join(root, e.path))) continue;
+    // A source export (no .git, or a git checkout of one) omits files its set leaves out: an entry whose file is absent is not a miss there.
+    if (!c && (!existsSync(join(root, ".git")) || isExportedTree(root)) &&!existsSync(join(root, e.path))) continue;
     if (!c) problems.push(`${e.path}: missing from the scan set (recorded ceiling ${e.code}); run \`${CLI} --write\``);
     else if (c.code <= c.line) problems.push(`${e.path}: ${c.code} code lines, under its line of ${c.line} (recorded ceiling ${e.code}); run \`${CLI} --write\``);
   }
