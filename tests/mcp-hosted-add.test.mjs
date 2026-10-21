@@ -39,7 +39,7 @@ const SLACK_ARGS = ["mcp", "add", "-s", "user", "-t", "http", "--client-id", "16
 const claudeAdd = (name) => ["mcp", "add", "-s", "user", "-t", "http", name, URLS[name]];
 
 function rig() {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "vidar-hosted-mcp-")));
+  const base = realpathSync.native(mkdtempSync(join(tmpdir(), "vidar-hosted-mcp-")));
   const dirs = Object.fromEntries(["shim", "profile", "appdata", "local", "codex"].map((d) => [d, join(base, d)]));
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
   writeFileSync(join(dirs.shim, "shim.mjs"), SHIM_JS);

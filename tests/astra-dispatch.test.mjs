@@ -9,7 +9,7 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,7 @@ const hasPwsh = process.platform === "win32" && !spawnSync("pwsh", ["-NoProfile"
 const skip = !hasPwsh ? "needs pwsh on Windows" : missingInputs(import.meta.url, "../tools/desks/astra-dispatch.ps1") ?? false;
 
 function fakeVidar() {
-  const tmp = mkdtempSync(join(tmpdir(), "vidar-astra-"));
+  const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "vidar-astra-")));
   const desks = join(tmp, "tools", "desks");
   mkdirSync(desks, { recursive: true });
   mkdirSync(join(tmp, "runtime", "bridge","review", "dispatch"), { recursive: true });

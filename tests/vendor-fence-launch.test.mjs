@@ -8,12 +8,12 @@ import { GATEWAY, VENDOR, VENDOR_FILES, copyPathsLib, hasPwsh, launchRig, plain 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 test("vendor-tab.ps1 refuses to start claude on a weakened or missing fence", { skip: hasPwsh ? false : "needs pwsh on Windows" }, () => {
-  const tmp = mkdtempSync(join(tmpdir(), "vidar-fence-"));
+  const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "vidar-fence-")));
   try {
     const dir = join(tmp, "tools", "vendor");
     const bin = join(tmp, "bin");
@@ -61,7 +61,8 @@ test("vendor-tab.ps1 refuses when project settings re-inject a credential or dis
     rig.opts.cwd = proj;
     const r = rig.run();
     assert.notEqual(r.status, 0, "project settings must refuse");
-    const out = plain(r);
+    // pwsh wraps its error box at the console width, so a long temp path splits "settings.local.json sets".
+    const out = plain(r).replace(/\s*\r?\n[\s|]*/g, " ");
     assert.match(out, /proj.*settings\.local\.json sets.*env\.Other_Api_Key,.*disableAllHooks/s);
     assert.doesNotMatch(out, /must-not-print/);
     assert.equal(existsSync(rig.marker), false, "claude was started");

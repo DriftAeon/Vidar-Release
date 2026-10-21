@@ -2,7 +2,7 @@
 // scrub below is an import-time side effect that must run in each test process.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,7 +68,7 @@ export function copyPathsLib(tmp, { pack = fixturePack(), snapshot } = {}) {
 // ANTHROPIC_AUTH_TOKEN is non-empty (never values: with a real User-scope key present, AUTH_TOKEN
 // holds it). The shape rule mirrors vendor-tab.ps1's Test-CredentialName.
 export function launchRig(tabTag, fixtures, packOpts) {
-  const tmp = mkdtempSync(join(tmpdir(), "vidar-fence-"));
+  const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "vidar-fence-"))); // expands an 8.3 runner temp
   const dir = join(tmp, "tools", "vendor");
   const bin = join(tmp, "bin");
   mkdirSync(dir, { recursive: true });

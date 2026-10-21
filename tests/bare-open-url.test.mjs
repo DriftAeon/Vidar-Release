@@ -39,7 +39,9 @@ function psList(file, opener) {
   return [...rest.slice(0, end).matchAll(/'([^']+)'/g)].map((m) => m[1]);
 }
 
-test("the system-name list matches tools/release/clean-env.ps1 (not shipped, so copied)", () => {
+test("the system-name list matches tools/release/clean-env.ps1 (not shipped, so copied)", {
+  skip: existsSync(join(here, "..", "tools", "release", "clean-env.ps1")) ? false : "tools/release/clean-env.ps1 is not in this tree (not shipped)",
+}, () => {
   const ours = psList("tools/bare/open-url.ps1", /\$systemNames = @\(/);
   const theirs = psList("tools/release/clean-env.ps1", /\$script:CleanEnvSystemNames = @\(/);
   assert.ok(ours.length > 10, ours.join(","));
