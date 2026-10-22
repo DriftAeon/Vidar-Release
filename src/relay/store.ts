@@ -1,8 +1,9 @@
 // Relay pending-item store: what is waiting on the user, merged from every source. No DOM, no invoke.
 // A source replaces its own slice; seen state is memory only.
+import type { AskReply, QuestionRecord } from "../asks/record";
 import type { NodeMatrix } from "../control/node-matrix";
 
-export type RelayKind ="display" | "ask" | "card";
+export type RelayKind ="display" | "ask" | "card" | "question";
 /** a pending ask as the source painted it; `sha256` is the content hash a claim/settle binds to */
 export interface RelayAsk {
   id: string;
@@ -19,7 +20,8 @@ export interface RelayAsk {
 type RelayView =
   | { type: "display"; path: string; fileKind: "png" | "svg" | "html"; mtimeMs: number }
   | { type: "doc"; path: string }
-  | { type: "ask"; ask: RelayAsk }
+  /** any ask as the shared record; `pend` is the stored entry behind a pend ask */
+  | { type: "question"; record: QuestionRecord; pend?: RelayAsk }
   /** an approval card shown as label/value rows (the Run Flow card); Approve/Deny answer it */
   | { type: "card"; rows: [string, string][]; matrix?: NodeMatrix };
 export interface RelayVerdict {
@@ -27,6 +29,8 @@ export interface RelayVerdict {
   comment: string;
   choice?: string;
   binding?: { path: string; sha256: string };
+  /** a question item's picks and note */
+  reply?: AskReply;
 }
 export interface RelayItem {
   id: string;
@@ -35,14 +39,16 @@ export interface RelayItem {
   title: string;
   sinceMs: number;
   view: RelayView;
+  /** the tab that asked, when the source knows it */
+  askerTab?: string | null;
   error?: string;
   /** throws -> the strip shows the message */
   resolve(v: RelayVerdict): Promise<void>;
 }
 
-/** the file a display/doc view shows; "" for an ask or a card */
+/** the file a display/doc view shows; "" for a question or a card */
 export function viewPath(item: RelayItem | null): string {
-  return !item || item.view.type === "ask" || item.view.type === "card" ? "" : item.view.path;
+  return !item || item.view.type === "card" || item.view.type === "question" ? "" : item.view.path;
 }
 
 const slices = new Map<string, readonly RelayItem[]>();

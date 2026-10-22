@@ -26,17 +26,19 @@ export interface SubagentRelayDeps {
   tools: Map<string, ToolRecord>;
   /** pending approval cards by request id (rendered.ts `approvals`) */
   approvals: Map<string, HTMLElement>;
+  /** true while a restore replays history: publish nothing then */
+  hydrating?: () => boolean;
 }
 
 /** The Agent call whose child list holds `card` (innermost when agents nest). */
-function ownerOf(card: HTMLElement, tools: Map<string, ToolRecord>): ToolRecord | null {
+export function ownerOf(card: HTMLElement, tools: Map<string, ToolRecord>): ToolRecord | null {
   const box = card.closest<HTMLElement>(".tool-children");
   if (!box) return null;
   for (const t of tools.values()) if (t.children === box) return t;
   return null;
 }
 
-function agentText(t: ToolRecord | null): string {
+export function agentText(t: ToolRecord | null): string {
   const type = t?.subagentType || "Agent";
   return t?.subagentDesc ? `${type} · ${t.subagentDesc}` : type;
 }
@@ -61,10 +63,11 @@ export function createSubagentRelay(deps: SubagentRelayDeps) {
   let lastSig = "[]";
 
   function sync(): void {
-    if (disposed) return;
+    if (disposed || deps.hydrating?.()) return;
     const items: RelayItem[] = [];
     for (const [requestId, card] of approvals) {
       if (!card.closest(".tool-children")) continue; // main thread (or not yet in its pill): out of scope
+      if (card.classList.contains("blk-question")) continue; // question cards publish through question-relay.ts
       const owner = ownerOf(card, tools);
       if (!firstSeen.has(requestId)) firstSeen.set(requestId, Date.now());
       const tool = card.querySelector<HTMLElement>(".approval-head .tool-name")?.textContent || card.dataset.tool || DASH;

@@ -10,7 +10,6 @@
 // Nothing in `details` or `question` is ever parsed or executed; both are set as
 // textContent. Rust has already allowlisted them to one line of printable ASCII.
 import { iconImg } from "../icon-img";
-import { svgEl } from "./rendered/icons";
 import { splitRecommended } from "./rendered/ask-answers";
 import { ASK_KINDS, DEFAULT_ASK_PLACEHOLDER } from "./askgate-kinds";
 import { renderNodeMatrix, type NodeMatrix } from "../control/node-matrix";
@@ -157,10 +156,9 @@ function render(req: AskRequest, kind: string | undefined, done: (a: AskAnswer) 
   head.className = "ask-head";
   head.id = "ask-title";
   // every gate head is the title bar strip with its icon in a tile (title-bar.css): the shield on a
-  // permission ask, the amber question mark on the Question ask (kind "ctl-ask")
-  const icon = req.permission ? iconImg("shield") : kind === "ctl-ask" ? svgEl("message-circle-question", "Question") : null;
+  // permission ask (questions no longer reach the gate; they live in Relay)
+  const icon = req.permission ? iconImg("shield") : null;
   if (icon) {
-    if (!req.permission) icon.classList.add("title-q");
     const tile = document.createElement("span");
     tile.className = "title-tile";
     tile.appendChild(icon);

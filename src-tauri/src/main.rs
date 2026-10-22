@@ -67,6 +67,7 @@ mod tray;
 mod tray_config;
 mod tray_native;
 mod unreal;
+mod vidar_worktree;
 mod usage_ledger;
 mod voice;
 mod voice_slots;
@@ -177,6 +178,7 @@ fn main() {
             agent::kill_agent,
             bare::codex_trust::codex_trust_offer,
             bare::codex_trust::codex_trust_folder,
+            vidar_worktree::vidar_worktree_open,
             agent::agent_reap_all,
             codex_threads::list_codex_threads,
             status::list_external_sessions,

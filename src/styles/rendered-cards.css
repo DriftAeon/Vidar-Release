@@ -16,6 +16,7 @@
 .blk-approval .approval-head { align-items: center; gap: var(--space-8); margin-bottom: var(--space-4); }
 .blk-approval .approval-head .icn { width: var(--space-16); height: var(--space-16); flex: none; color: var(--approval-amber); }
 .blk-approval .approval-title { color: var(--fg); font-weight: var(--weight-strong); }
+.blk-approval .approval-head > .mark { width: var(--space-16); height: var(--space-16); }
 .blk-approval .approval-head .tool-name {
   font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim);
   border: var(--border-w) solid var(--border); border-radius: var(--radius-2); padding: 0 var(--space-4);
@@ -132,6 +133,13 @@
 .blk-question .q-other-row:hover .q-other { border-color: var(--border-strong); }
 .blk-question .q-other-row.on .q-other, .blk-question .q-other-row .q-other:focus-visible { border-color: var(--accent); }
 .blk-question .q-other-row .q-other:disabled { opacity: 0.4; cursor: default; }
+
+/* Relay ask drawn in its asker's tab (tab-asks.ts): Relay's Comment field takes the Other row's slot, so it
+   carries no marker and spans the row; a failed answer's message sits dim-red before Answer */
+.blk-tab-ask .q-comment-row::before { display: none; }
+.blk-tab-ask .q-comment-row .q-other { grid-column: 1 / -1; }
+.blk-tab-ask .approval-error { color: var(--deny-red); font-size: var(--font-12); line-height: var(--line-16); min-width: 0; overflow-wrap: anywhere; }
+.blk-tab-ask .approval-error:empty { display: none; }
 
 /* Answer then Deny, right-aligned like the permission card's pair (no reason field here to push them) */
 .blk-question .approval-allow { margin-left: auto; }

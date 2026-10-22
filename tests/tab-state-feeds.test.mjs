@@ -35,6 +35,10 @@ test("asks count per tab; unresolved sessions count nowhere", () => {
   assert.equal(countAsksByTab([], () => "x").size, 0);
 });
 
+test("a question view counts as an Ask in the Relay count line", () => {
+  assert.equal(relayCountText(["question", "display"]), "1 Ask · 1 Display");
+});
+
 test("a chip merged with the tab's ask count: relay outranks ready and working", () => {
   const counts = countAsksByTab(["s1"], () => "t1");
   const d = deriveRendered(chip({ inTurn: true }), null, counts.get("t1") ?? 0);
@@ -50,8 +54,8 @@ test("a dead tab keeps its phase whatever the ask count", () => {
 });
 
 const ask = (session) => ({
-  id: session, kind: "ask", source: "test", title: "Question", sinceMs: 1,
-  view: { type: "ask", ask: { session } },
+  id: session, kind: "question", source: "test", title: "Question", sinceMs: 1,
+  view: { type: "question", record: { askerSession: session, questions: [] } },
 });
 const hostedTab = () => ({ rendered: { hosted: () => true, sessionId: () => "claude-1" } });
 

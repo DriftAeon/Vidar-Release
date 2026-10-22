@@ -8,13 +8,14 @@ import { toolClass } from "./tool-class";
 import { toolSummary } from "./format";
 import { btn, el } from "./dom";
 import { cardShell } from "./card-shell";
-import { clearMark, setMark } from "./marks";
+import { clearMark, labelledMark, setMark } from "./marks";
 import { approvalDetail, approvalToolLabel } from "./approval-detail";
 import { svgEl } from "./icons";
 import { iconImg } from "../../icon-img";
 import { questionForm } from "./question-form";
 import { asyncAnswerText, asyncAskFormInput, type AsyncQuestion } from "../../agents/codex-async-ask";
 import { mcpElicitationForm } from "./mcp-elicitation-form";
+import { recordFromAskInput, updatedInputFromReply, type AskReply, type QuestionRecord } from "../../asks/record";
 import type { Group, RenderedState, ToolRecord } from "./state";
 import type { Follow } from "./follow";
 import type { HydrateStats } from "./hydrate-stats";
@@ -59,10 +60,30 @@ export async function denyWithin(deny: () => Promise<void>, ms = DENY_WAIT_MS): 
   }
 }
 
+/** the folded check's tooltip for a question answered from Relay */
+const RELAY_ANSWERED = "Answered in Relay";
+/** the picked labels of an answer, joined, for the settled event (empty for a deny) */
+function pickedText(d: { behavior: string; updatedInput?: unknown }): string {
+  const a = d.behavior === "allow" && d.updatedInput && typeof d.updatedInput === "object" ? (d.updatedInput as { answers?: unknown }).answers : null;
+  if (!a || typeof a !== "object") return "";
+  return Object.values(a as Record<string, unknown>).filter((v): v is string => typeof v === "string" && v !== "").join(", ");
+}
+
+/** A pending question card as a record plus the ways to settle it (openQuestions). Both reject with
+ *  "Already Answered", "Not Delivered" or a refusal text; `dismiss` is null where no deny exists. */
+export interface QuestionHandle {
+  key: string;
+  record: QuestionRecord;
+  answer(reply: AskReply): Promise<void>;
+  dismiss: (() => Promise<void>) | null;
+}
+
 export function createCards(S: RenderedState, deps: CardsDeps) {
   const { transport, textarea, follow, tools, approvals, approvalQueue, awaiting, sendEncoded, append, sealGroup, groupRefresh, stalePill, refreshState, noticeBlock, agent, stats } = deps;
   /** tool ids whose card attached while hydrating (opening is deferred to hydration end) */
   const hydratedCards = new Set<string>();
+  /** open question cards by request id / async item id, for openQuestions */
+  const questionCards = new Map<string, { card: HTMLElement; handle: QuestionHandle }>();
   /** mount a card inside its pill: the pill opens, waits, and the card's fate becomes the pill's */
   function attachCard(toolUseId: string, card: HTMLElement) {
     const t = tools.get(toolUseId);
@@ -119,9 +140,10 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     // `approvals` (below) tracks pending requests only and is never consulted here.
     card.dataset.tool = tool;
     card.dataset.requestId = requestId;
+    if (isQuestion) card.dataset.askKey = requestId; // Relay's focus event and the settled event find the card by it
     card.dataset.summary = toolSummary(tool, input); // a subagent's card repeats it in Relay (subagent-relay.ts)
     const head = shell.head!;
-    if (isQuestion) head.prepend(svgEl("message-circle-question", "Question"));
+    if (isQuestion) head.prepend(labelledMark("awaiting", "Question"));
     else { const sh = iconImg("shield"); sh.title = "Permission"; head.prepend(sh); }
     if (!isQuestion) head.appendChild(el("span", "tool-name", approvalToolLabel(tool, input)));
     // plain line first (toolSummary reads a Bash/PowerShell description before the command), raw detail below
@@ -206,10 +228,13 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
       head.appendChild(el("span", "approval-inline", inlineText));
       if (reason) { const w = el("span", "approval-why", reason); w.title = label; head.appendChild(w); }
       const glyph = el("span", `${DRIVE_CLASS.result} ${outcome}`);
-      glyph.title = label;
-      glyph.setAttribute("aria-label", label);
+      // an answer from Relay (the flag is set by the handle and subagent-relay before the settle) says so in the tooltip
+      const tip = isQuestion && outcome === "ok" && card.dataset.relayAnswer === "1" ? RELAY_ANSWERED : label;
+      glyph.title = tip;
+      glyph.setAttribute("aria-label", tip);
       glyph.appendChild(svgEl(outcome === "ok" ? "check" : outcome === "no" ? "x" : "minus", label));
       head.appendChild(glyph);
+      if (isQuestion) card.dataset.askAnswer = pickedText(decision);
       // inside a pill the card folds to its head row; the pill carries the state on
       const t = toolUseId ? tools.get(toolUseId) : undefined;
       if (t && t.card === card) {
@@ -249,6 +274,25 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     approvalQueue.push(requestId);
     if (!S.pendingApproval) S.pendingApproval = requestId;
     (card as HTMLElement & { settle?: typeof settle; hostSettle?: (state: HostPermissionState) => void }).settle = settle;
+    if (isQuestion) {
+      const record = recordFromAskInput(input, { key: requestId, origin: agent === "codex" ? "codex" : "claude", askedAtMs: Date.now() });
+      const rawQuestions = (input && typeof input === "object" ? (input as { questions?: unknown }).questions : undefined) ?? [];
+      // the same checks and settle the Answer button runs; the card must have left `approvals` afterwards
+      const run = async (decision: SentDecision) => {
+        if (!approvals.has(requestId) || responding) throw new Error("Already Answered");
+        const refused = S.adapter.permissionRefusal?.(requestId, decision) ?? null;
+        if (refused) throw new Error(refused);
+        card.dataset.relayAnswer = "1"; // settle reads and clears it: no composer focus for a Relay answer
+        try { await settle(decision); } finally { delete card.dataset.relayAnswer; }
+        if (approvals.has(requestId)) throw new Error("Not Delivered");
+      };
+      questionCards.set(requestId, { card, handle: {
+        key: requestId,
+        record,
+        answer: (reply) => run({ behavior: "allow", updatedInput: updatedInputFromReply(rawQuestions, record, reply) }),
+        dismiss: () => run({ behavior: "deny" }),
+      } });
+    }
     (card as HTMLElement & { hostSettle?: (state: HostPermissionState) => void }).hostSettle = (state) => {
       const r = hostSettleDecision(state, sent, isQuestion);
       if (!r) return;
@@ -302,7 +346,8 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     const card = shell.root, head = shell.head!, body = shell.body!, row = shell.actions!;
     card.dataset.tool = "AskUserQuestion";
     card.dataset.requestId = id;
-    head.prepend(svgEl("message-circle-question", "Question"));
+    card.dataset.askKey = id;
+    head.prepend(labelledMark("awaiting", "Question"));
     const form = questionForm(body, asyncAskFormInput(questions), (ok) => { answer.disabled = !ok; });
     const msg = el("input", DRIVE_CLASS.message);
     msg.setAttribute("aria-label", "Notes");
@@ -310,35 +355,75 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     const fold = () => {
       if (!asyncAsks.has(id)) return;
       asyncAsks.delete(id);
+      questionCards.delete(id);
       card.classList.add(DRIVE_CLASS.settled, "allow");
       row.remove();
       body.remove();
       head.appendChild(el("span", "approval-inline", ""));
       const glyph = el("span", `${DRIVE_CLASS.result} ok`);
-      glyph.title = "Answered";
-      glyph.setAttribute("aria-label", "Answered");
+      const tip = card.dataset.relayAnswer === "1" ? RELAY_ANSWERED : "Answered";
+      glyph.title = tip;
+      glyph.setAttribute("aria-label", tip);
       glyph.appendChild(svgEl("check", "Answered"));
       head.appendChild(glyph);
+      refreshState();
     };
     let sending = false;
-    const answer = btn("Answer", DRIVE_CLASS.allow, () => {
-      if (sending || !asyncAsks.has(id) || !form.answered() || !deps.sendText) return;
-      const { answers } = form.collect() as { answers: Record<string, string> };
-      const taken = deps.sendText(asyncAnswerText(questions, answers, msg.value));
-      if (taken === true) { fold(); return; }
-      if (taken === false) return;
+    /** the guarded send both the button and the handle run; true once folded */
+    const deliver = async (answers: Record<string, string>, notes: string): Promise<boolean> => {
+      if (sending || !asyncAsks.has(id) || !deps.sendText) return false;
+      card.dataset.askAnswer = pickedText({ behavior: "allow", updatedInput: { answers } });
+      const taken = deps.sendText(asyncAnswerText(questions, answers, notes));
+      if (taken === true) { fold(); return true; }
+      if (taken === false) return false;
       sending = true;
-      void taken.then((ok) => { sending = false; if (ok) fold(); });
+      const ok = await taken;
+      sending = false;
+      if (ok) fold();
+      return ok;
+    };
+    const answer = btn("Answer", DRIVE_CLASS.allow, () => {
+      if (!form.answered()) return;
+      const { answers } = form.collect() as { answers: Record<string, string> };
+      void deliver(answers, msg.value);
     });
     answer.disabled = !form.answered();
     row.append(msg, answer);
     asyncAsks.set(id, fold);
+    const record = recordFromAskInput(asyncAskFormInput(questions), { key: id, origin: "codex-async", askedAtMs: Date.now() });
+    questionCards.set(id, { card, handle: {
+      key: id,
+      record,
+      answer: async (reply) => {
+        if (sending || !asyncAsks.has(id)) throw new Error("Already Answered");
+        card.dataset.relayAnswer = "1"; // fold reads it for the check's tooltip
+        try {
+          if (!(await deliver(reply.answers, reply.notes))) throw new Error("Not Delivered");
+        } finally { delete card.dataset.relayAnswer; }
+      },
+      dismiss: null,
+    } });
     sealGroup();
     append(card);
+    refreshState();
   }
   /** a later user message reached the thread: every open async ask before it is answered */
   function settleAsyncAsks() {
     for (const fold of [...asyncAsks.values()]) fold();
+  }
+  /** the transcript was wiped: its async asks went with it, answered or not */
+  function clearAsyncAsks() {
+    for (const id of asyncAsks.keys()) questionCards.delete(id);
+    asyncAsks.clear();
+  }
+  /** every question card still pending and in the document, oldest first */
+  function openQuestions(): QuestionHandle[] {
+    const out: QuestionHandle[] = [];
+    for (const [key, { card, handle }] of questionCards) {
+      if (approvals.get(key) !== card && !asyncAsks.has(key)) { questionCards.delete(key); continue; } // settled, or replaced
+      if (card.isConnected) out.push(handle);
+    }
+    return out;
   }
 
   function cancelApprovals(reason: string) {
@@ -382,5 +467,5 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     return true;
   }
 
-  return { attachCard, openHydratedCards, approvalCard, asyncAskCard, settleAsyncAsks, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED, AGENT_EXITED };
+  return { attachCard, openHydratedCards, approvalCard, asyncAskCard, settleAsyncAsks, clearAsyncAsks, openQuestions, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED, AGENT_EXITED };
 }

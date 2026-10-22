@@ -9,7 +9,7 @@
   background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
 }
 .title-tile > .icn { width: var(--space-16); height: var(--space-16); margin: 0; vertical-align: 0; flex: none; }
-.title-tile > .icn.title-q { color: var(--approval-amber); }
+.title-tile > .mark { width: var(--space-16); height: var(--space-16); }
 .ask-head, .swap-confirm-head, .flow-approval-card-head,
 .sc-head, #acs-pop .acs-title {
   display: flex; align-items: center;

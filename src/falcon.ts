@@ -189,6 +189,7 @@ async function adopt(session: HostedSession, draft?: string, detached = false): 
       onResume: () => { void openPicker(); },
       onSelectWorkspace: null, // no launcher in this window: a home refusal shows Retry only
       onReopenHere: null, // likewise: the trust card shows no Refresh
+      onOpenWorktree: null, // likewise: a Vidar-folder refusal shows the notice and Retry only
       // The conversation id stays off the header (2026-10-03); it lives in the Falcon
       // launcher row's tooltip and will get its own place later.
       onSession: null,

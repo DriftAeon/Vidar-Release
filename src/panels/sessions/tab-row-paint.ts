@@ -64,7 +64,7 @@ export function startTabRowPaint(): void {
 export function paintRelayRow(list: readonly RelayItem[]): void {
   const btn = document.getElementById("relay-btn");
   if (!btn) return;
-  const asks = list.filter((i) => i.view.type === "ask").length;
+  const asks = list.filter((i) => i.view.type === "question").length;
   setSlot(btn, "tab-chip", asks > 0 ? String(asks) : "");
   const rc = btn.querySelector<HTMLElement>(".tab-rc");
   if (rc) rc.title = asks > 0 ? reasonText({ kind: "relay", count: asks }) : ""; // copy-ok: reason kind id, not shown

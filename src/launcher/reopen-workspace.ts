@@ -2,6 +2,7 @@
 // codex_cwd.rs): pick a folder, open a tab of the same agent, body and Bare profile there, close the
 // refused one. Also the trust card's Refresh: the same tab again in its own folder. main.ts binds both
 // into the rendered body (panels/sessions/rendered-body.ts).
+import { invoke } from "../ipc";
 import type { TerminalSession } from "../panels/sessions/types";
 import { closeSession } from "../panels/sessions";
 import { agentKind } from "./agent-kind";
@@ -26,6 +27,15 @@ export async function reopenInWorkspace(s: TerminalSession): Promise<void> {
   const loc = await pickWorkspace();
   if (!loc) return;
   await spawnFrom({ ...row, cwd: undefined }, loc);
+  closeSession(s.id);
+}
+
+/** The Vidar-folder refusal card's Open in Worktree: a git worktree of Vidar at HEAD, the same row
+ *  opened there, this tab closed. A failed worktree or spawn rejects and keeps the tab. */
+export async function reopenInWorktree(s: TerminalSession): Promise<void> {
+  const row = rowOf(s);
+  const path = await invoke("vidar_worktree_open");
+  await spawnFrom({ ...row, cwd: undefined }, { label: folderName(path), cwd: path });
   closeSession(s.id);
 }
 

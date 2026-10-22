@@ -52,3 +52,12 @@ export function markSlot(mark: Mark): HTMLSpanElement {
   s.textContent = MARK_GLYPH[mark];
   return s;
 }
+
+/** A status mark with a name for assistive tech and the hover tooltip (an ask's head or badge). */
+export function labelledMark(mark: Mark, label: string, glyph: Mark = mark): HTMLSpanElement {
+  const s = markSlot(glyph);
+  s.dataset.mark = mark;
+  s.title = label;
+  s.setAttribute("aria-label", label);
+  return s;
+}

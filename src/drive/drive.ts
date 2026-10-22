@@ -21,8 +21,11 @@ import { rulesPlan } from "../rules/inject";
 import { DRIVE_CLASS as C } from "../panels/rendered-drive";
 import { API_KEY_CARD } from "../panels/rendered/api-key-card";
 import { pendingAsks } from "../panels/askgate";
+import { items as relayItems } from "../relay/store";
 import { getRegistry } from "../settings/registry";
 import { drivePaste, type DrivePastePayload, type DrivePasteResult, type DrivePasteTarget } from "./paste";
+
+type CardDriven = { id: string; kind: string | null; title: string; decision: string };
 
 /** Mirrors main.ts's own `AgentType`/`Location` shapes structurally — no import
  *  back into main.ts, so this stays a leaf module (module-boundaries). */
@@ -64,7 +67,7 @@ declare global {
       state(): ReturnType<typeof driveStateHosted>;
       shortcut(id: string): { id: string; name: string; activeBefore: string | null; activeAfter: string | null };
       paste(target: DrivePasteTarget, payload: DrivePastePayload): Promise<DrivePasteResult>;
-      card(id: string, decision: string, opts?: { choice?: string; comment?: string }): { id: string; kind: string | null; title: string; decision: string };
+      card(id: string, decision: string, opts?: { choice?: string; comment?: string }): CardDriven | Promise<CardDriven>;
     };
   }
 }
@@ -207,6 +210,14 @@ async function driveStateHosted() {
 // order the user sees.
 function driveCard(id: string, decision: string, opts: { choice?: string; comment?: string } = {}) {
   if (decision !== "approve" && decision !== "deny") throw new Error(`decision must be approve or deny, got "${decision}"`);
+  // A ctl.ask is a Relay question item, not a modal; it answers through the item's own resolve.
+  const q = relayItems().find((i) => i.id === id && i.view.type === "question" && i.view.record.origin === "ctl-ask");
+  if (q && q.view.type === "question") {
+    const first = q.view.record.questions[0];
+    const reply = { answers: first && opts.choice !== undefined ? { [first.id]: opts.choice } : {}, notes: opts.comment ?? "" };
+    return q.resolve({ verdict: decision === "approve" ? "approve" : "deny", comment: opts.comment ?? "", choice: opts.choice, reply })
+      .then(() => ({ id, kind: "ctl-ask", title: q.title, decision }));
+  }
   const asks = pendingAsks();
   const ask = asks.find((a) => a.id === id);
   if (!ask) throw new Error(`no pending gate card "${id}"; pending: ${asks.map((a) => a.id).join(", ") || "none"}`);

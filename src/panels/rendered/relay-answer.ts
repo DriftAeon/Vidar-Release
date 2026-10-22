@@ -3,7 +3,7 @@
 // answered-Ask block (the .ask-answer look): the pick in bold over the comment, no label.
 
 import { el } from "./dom";
-import { svgEl } from "./icons";
+import { labelledMark } from "./marks";
 import { askLabel } from "./ask-answers";
 
 const JSON_STR = String.raw`null|"(?:[^"\\]|\\.)*"`;
@@ -29,7 +29,7 @@ export function relayAnswerBlock(a: RelayAnswer): HTMLElement {
   // the answered-Ask badge (green ? bubble) as a prefix, so the block reads as the user's answer
   // and not as a bare line of text (2026-10-05)
   const badge = el("span", "tool-badge");
-  badge.append(svgEl("message-circle-question", "Relay Answer"));
+  badge.append(labelledMark("answered", "Relay Answer", "awaiting")); // a green "?"
   host.append(badge);
   const row = el("div", "ask-answer");
   if (a.choice) {

@@ -207,6 +207,10 @@
   --place-group: #a495e8;
   --place-channel: #8cc496;
   --place-private: #e3a15c;
+  /* Ask scrim (user pick, 2026-10-22): the panel-dark ink at 78% over an ask card's body, with the one
+     user-picked blur exception; --bg is the dark family (#0f0f13 and its three theme siblings) in every theme */
+  --ask-scrim: color-mix(in srgb, var(--bg) 78%, transparent);
+  --blur-scrim: 1.5px;
   /* new-ui:end */
 }
 

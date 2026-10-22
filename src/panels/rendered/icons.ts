@@ -15,7 +15,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
    on absent path data instead of falling back to its word. */
 export type IconName = "square-chart-gantt" | "square-chevron-right" | "square-terminal" | "square-pen" | "search-code" | "book-open"
   | "cpu" | "chevron-right" | "chevron-down" | "x" | "check" | "globe" | "folder-search"
-  | "message-circle-question" | "bot" | "clock" | "calendar" | "shield" | "minus" | "braces";
+  | "bot" | "clock" | "calendar" | "shield" | "minus" | "braces";
 /* Both square glyphs share one outline: lucide draws it as
    <rect x=3 y=3 w=18 h=18 rx=2 ry=2>, written here as the equivalent rounded-rect
    path so svgEl only ever has to emit <path> elements. This is the one place the
@@ -91,12 +91,6 @@ const ICON_PATHS = new Map<IconName, readonly string[]>([
     "M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1",
     "m21 21-1.9-1.9",
     "M20 17a3 3 0 1 1-6 0 3 3 0 1 1 6 0z",
-  ]],
-  /* message-circle-question: all three paths verbatim. */
-  ["message-circle-question", [
-    "M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719",
-    "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3",
-    "M12 17h.01",
   ]],
   /* bot: <rect x4 y8 w16 h12 rx2> as a path; the rest verbatim. */
   ["bot", [

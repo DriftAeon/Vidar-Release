@@ -57,6 +57,8 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return MOCK_CONFIG.defaultCwd;
     case "codex_cwd_refused":
       return false;
+    case "vidar_worktree_open":
+      return `${mockPath("bridge")}worktrees\\codex-20261022-120000`;
     case "list_characters":
       return { packs: [], default: null };
     case "spawn_pty":

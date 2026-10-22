@@ -35,6 +35,53 @@ test("relay ask: ask items stay unread on the first snapshot", async () => {
   assert.equal(store.isUnread(ASK.id), true, "a restart-time ask was auto-seen");
 });
 
+test("relay ask: a pend entry is a question item carrying the record, the entry and the asker tab", () => {
+  const it = store.items().find((i) => i.id === ASK.id);
+  assert.equal(it.kind, "question");
+  assert.equal(it.view.type, "question");
+  assert.equal(it.view.pend.sha256, "aaa");
+  assert.equal(it.view.record.origin, "pend");
+  assert.equal(it.view.record.needsPrompt, true);
+  assert.deepEqual(it.view.record.questions[0].options.map((o) => o.label), ["sqlite", "postgres"]);
+  assert.equal(it.askerTab, "tab-1");
+});
+
+test("relay ask: resolve with a reply sends the pend wire text", async () => {
+  globalThis.__sent = [];
+  calls.length = 0;
+  served = ASK;
+  await store.items().find((i) => i.id === ASK.id).resolve({ verdict: "approve", comment: "needs json", reply: { answers: { "0:Which database should we pick?": "postgres" }, notes: "needs json" } });
+  assert.equal(globalThis.__sent[0].text, 'Answer to pending question 01234567: choice="postgres" comment="needs json"');
+});
+
+test("relay ask: a refused claim reads Already Answered, a changed entry Question Changed", async () => {
+  const ok = dom.ipc.answers.claim_pending_ask;
+  try {
+    dom.ipc.answers.claim_pending_ask = () => { throw new Error("pending ask already being answered"); };
+    await assert.rejects(sendAnswer(ASK, "sqlite", ""), /^Error: Already Answered$/);
+    dom.ipc.answers.claim_pending_ask = () => { throw new Error("pending ask not found"); };
+    await assert.rejects(sendAnswer(ASK, "sqlite", ""), /^Error: Already Answered$/);
+    dom.ipc.answers.claim_pending_ask = () => { throw new Error("pending ask changed"); };
+    await assert.rejects(sendAnswer(ASK, "sqlite", ""), /^Error: Question Changed$/);
+  } finally {
+    dom.ipc.answers.claim_pending_ask = ok;
+  }
+});
+
+test("relay ask: Dismiss waits out a send in flight", async () => {
+  served = ASK;
+  let release;
+  const prev = globalThis.__failSend;
+  dom.ipc.answers.claim_pending_ask = () => new Promise((r) => { release = r; });
+  const it = store.items().find((i) => i.id === ASK.id);
+  const sending = sendAnswer(ASK, "sqlite", "");
+  await assert.rejects(it.resolve({ verdict: "deny", comment: "" }), /Already Sending/);
+  release();
+  await sending;
+  dom.ipc.answers.claim_pending_ask = (a) => { calls.push(["claim", a]); };
+  globalThis.__failSend = prev;
+});
+
 test("relay ask: the answer text is built from the re-read entry and never contains the question", async () => {
   globalThis.__sent = [];
   calls.length = 0;

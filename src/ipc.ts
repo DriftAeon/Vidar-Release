@@ -270,6 +270,8 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   // the Trust Folder action on a Bare Codex tab (bare/codex_trust.rs)
   codex_trust_offer: Cmd<{ id: string }, { folder: string; text: string } | null>;
   codex_trust_folder: Cmd<{ id: string; folder: string }, void>;
+  // the refused-Vidar-folder card's Open in Worktree (vidar_worktree.rs): the new folder's path
+  vidar_worktree_open: Cmd<undefined, string>;
   // rules (src-tauri/src/rules/mod.rs `RulesPrepared`, camelCase)
   rules_prepare: Cmd<{ key: string; ids: string[]; client: "claude" | "codex" }, {
     file: string | null;

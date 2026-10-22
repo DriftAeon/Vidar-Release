@@ -24,16 +24,19 @@
 /* band cards (browser/list.ts .br-group): Databases, Pages and each status band are a card. Tinted Edges (user pick,
    2026-10-22, replacing the 2026-10-20 Sheen heads): the head label is the bright tone on that tone at 16% over the
    panel, with no rule under it; the card keeps a 1px border in the tone; pills are a solid tone fill with a --bg label.
-   No coloured bar on the rows (user, 2026-10-22). */
+   No coloured bar on the rows (user, 2026-10-22). Head and frame then went to one flat fill, the tone at 45% over the
+   panel, so the bar blends into the left, right and bottom border like the Relay ask card, with a white bold label:
+   5.4-7.5:1 on every tone, where white on the bright tone read 1.5-2.5:1 (user, 2026-10-22). */
 .notion-pane .br-group {
   --band-bright: var(--tone-gray-bright);
+  --band-fill: color-mix(in srgb, var(--band-bright) 45%, var(--bg-panel));
   flex: none; min-width: 0; display: flex; flex-direction: column; padding: 0 0 var(--space-4); overflow: hidden;
-  background: var(--bg); border: var(--border-w) solid var(--band-bright); border-radius: var(--radius-4);
+  background: var(--bg); border: var(--border-w) solid var(--band-fill); border-radius: var(--radius-4);
 }
 .notion-pane .br-group + .br-group { margin-top: var(--space-4); }
 .notion-pane .br-group > .br-band {
   margin: 0 0 var(--space-4); border-left: 0; border-radius: 0; border-bottom: 0;
-  background: color-mix(in srgb, var(--band-bright) 16%, var(--bg-panel)); color: var(--band-bright);
+  background: var(--band-fill); color: var(--fg-bright); font-weight: var(--weight-bold);
   font-size: var(--font-12); letter-spacing: 0; text-transform: none;
 }
 .notion-pane .br-group > .br-row { margin: 0 var(--space-4); }

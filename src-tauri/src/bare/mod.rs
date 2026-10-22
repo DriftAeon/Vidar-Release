@@ -811,6 +811,10 @@ fn vidar_cwd_hit(cwd: &[String], root: &[String]) -> bool {
     !(cwd.len() > root.len() + 2 && cwd[root.len() + 1] == "worktrees")
 }
 
+/// The refusal for Vidar's folder; the Rendered tab's card matches it (`VIDAR_CWD_REFUSED` in
+/// src/panels/rendered/lifecycle.ts) and offers a worktree.
+pub const VIDAR_CWD_REFUSED: &str = "Codex Can't Start in Vidar's Folder: Its Sandbox Could Write Vidar's Launch Files";
+
 /// A Codex Bare sandbox can write its launch folder, so that folder must not hold Vidar's own
 /// trusted launch surfaces (vidar.json, runtime\bridge\falcon\frontend): refuses the Vidar root,
 /// any ancestor of it and anything under `<root>\runtime` except `runtime\worktrees\<name>` and
@@ -830,7 +834,7 @@ pub fn refuse_vidar_cwd(cwd: &str, root: &Path) -> Result<(), String> {
         return Ok(());
     }
     if forms.iter().any(|f| roots.iter().any(|r| vidar_cwd_hit(f, r))) {
-        return Err(format!("Bare Codex refused: cwd {cwd} is Vidar's folder, a parent of it or its runtime folder, which the sandbox could write; pick a project folder, or a worktree under runtime\\worktrees for Vidar work"));
+        return Err(VIDAR_CWD_REFUSED.to_string());
     }
     Ok(())
 }

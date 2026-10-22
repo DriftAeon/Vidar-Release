@@ -18,7 +18,7 @@ export interface RelayLargeHooks {
   onChange(): void;
 }
 
-const KIND_CHIP = { display: "Display", ask: "Ask", card: "Approval" } as const;
+const KIND_CHIP = { display: "Display", ask: "Ask", card: "Approval", question: "Ask" } as const;
 
 let hooks: RelayLargeHooks | null = null;
 let wrap: HTMLElement;

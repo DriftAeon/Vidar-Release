@@ -3,6 +3,7 @@
 // staging); a doc view is read_document + renderMarkdownOrText. Owns the painting/error/note state
 // the Large bar's strip reads; that strip's verdict binds to relayCurrent().
 
+import type { QuestionRecord } from "../asks/record";
 import { invoke } from "../ipc";
 import { createDisplayRenderer, sourcePre, type DisplayRenderer, type Painted } from "../panels/display-render";
 import { renderMarkdownOrText } from "../panels/markdown-build";
@@ -32,8 +33,16 @@ function set(next: Partial<RelayViewState>) {
 /** What a paint of `item` depends on; a change repaints the view and rebuilds its card. */
 export function relayViewKey(item: RelayItem): string {
   const v = item.view;
-  // an ask repaints on its content hash: a changed question rebuilds the form it was answered on
-  return v.type === "display" ? `${item.id}|${v.mtimeMs}` : v.type === "ask" ? `${item.id}|${v.ask.sha256}` : v.type === "card" ? `${item.id}|card` : `${item.id}|doc`;
+  // a question repaints on a hash of its questions and options: a changed question rebuilds the form it was answered on
+  return v.type === "display" ? `${item.id}|${v.mtimeMs}` : v.type === "card" ? `${item.id}|card` : v.type === "question" ? `${item.id}|${questionHash(v.record)}` : `${item.id}|doc`;
+}
+
+/** djb2 over the record's question ids, texts, flags and option labels */
+function questionHash(record: QuestionRecord): string {
+  const text = JSON.stringify(record.questions.map((q) => [q.id, q.text, q.multi, q.other, q.secret, q.options.map((o) => [o.label, o.description ?? ""])]));
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
 }
 
 export function mountRelayView(host: HTMLElement, opts: { onChange?(): void; onAskNote?(msg: string): void } = {}): HTMLElement {
@@ -58,7 +67,7 @@ export async function showRelayItem(item: RelayItem | null): Promise<void> {
     return;
   }
   const v = item.view;
-  if (v.type === "ask") {
+  if (v.type === "question") {
     renderer.clear(); // drops any display render and its staging; the host is ours
     askForm = createAskForm(hostEl, item, { onNote: (m) => onAskNote(m) });
     set({ painting: false, error: "", note: "" });

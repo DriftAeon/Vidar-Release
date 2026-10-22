@@ -21,7 +21,7 @@ export function tabTitleCase(name: string): string {
 export function relayCountText(views: readonly string[]): string {
   const parts: string[] = [];
   for (const [type, one, many] of [["ask", "Ask", "Asks"], ["display", "Display", "Displays"], ["doc", "Doc", "Docs"]] as const) {
-    const n = views.filter((v) => v === type).length;
+    const n = views.filter((v) => v === type || (type === "ask" && v === "question")).length;
     if (n > 0) parts.push(`${n} ${n === 1 ? one : many}`);
   }
   return parts.join(" · ");

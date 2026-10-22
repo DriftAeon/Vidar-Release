@@ -79,6 +79,8 @@ windows = { version = "0.61", features = [
   "Win32_Security_Credentials",
   # credman.rs: CryptProtectData/CryptUnprotectData wrap the stored tokens (DPAPI).
   "Win32_Security_Cryptography",
+  # vidar_worktree.rs: GetLocalTime names the worktree by local time.
+  "Win32_System_SystemInformation",
 ] }
 
 [dev-dependencies]

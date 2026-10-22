@@ -23,7 +23,7 @@ import { hostedNames } from "./launcher/hosted-names-pref";
 import { initLauncherKeyboard, openLauncherByKeyboard } from "./launcher/keyboard";
 import { openLocations } from "./launcher/locations";
 import { initRecent } from "./launcher/recent";
-import { reopenHere, reopenInWorkspace } from "./launcher/reopen-workspace";
+import { reopenHere, reopenInWorkspace, reopenInWorktree } from "./launcher/reopen-workspace";
 import { bindReopenInWorkspace } from "./panels/sessions/rendered-body";
 import { GENERAL_CATEGORY, registerGeneralRows } from "./settings/general";
 import { registerWorkspaceRows } from "./settings/workspaces";
@@ -124,7 +124,7 @@ setViewClasses("sessions");
 
 initLauncherMenu({ openLocations });
 initRecent();
-bindReopenInWorkspace(reopenInWorkspace, reopenHere);
+bindReopenInWorkspace(reopenInWorkspace, reopenHere, reopenInWorktree);
 initLauncherKeyboard({ launcherMenu, launcherSub, launcherCols, col, openLauncher });
 
 /* ---- settings ---- */

@@ -150,6 +150,28 @@ export function trustCard(tabId: string, trust: TrustOffer, reopen?: TrustReopen
   return c.root;
 }
 
+export const VIDAR_CARD_TEXT = "Codex can't run in Vidar's own folder: its sandbox could write Vidar's launch files.";
+export const WORKTREE_LABEL = "Open in Worktree";
+export const WORKTREE_TITLE = "Makes a git worktree of Vidar at HEAD under runtime\\worktrees and opens Codex there; uncommitted changes stay here.";
+const WORKTREE_FAILED = "Couldn't open a worktree: ";
+
+/** The refused-Vidar-folder card: Open in Worktree (busy, error line) and Dismiss. Same card and button
+ *  builders as the trust card; `open` makes the worktree and opens the replacement tab. */
+export function vidarFolderCard(open: () => Promise<void>): HTMLElement {
+  const c = card(VIDAR_CARD_TEXT);
+  const b = actionButton(
+    WORKTREE_LABEL,
+    "Opening",
+    true,
+    () => open().catch((e) => { throw new Error(WORKTREE_FAILED + (e instanceof Error ? e.message : String(e))); }),
+    c.error,
+    WORKTREE_FAILED + "try again",
+  );
+  b.title = WORKTREE_TITLE;
+  c.acts.append(b, dismissButton(c.root));
+  return c.root;
+}
+
 /** Draws the warnings a Bare spawn reported: the trust card (when the folder is untrusted), then one
  *  card per warning. */
 export function bareNotices(host: NoticeHost, warnings: readonly string[], trust: TrustOffer | null): void {

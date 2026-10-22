@@ -1316,7 +1316,7 @@ fn a_bare_codex_cwd_in_vidars_folder_refuses_except_worktrees() {
     ];
     for b in &bad {
         let e = refuse_vidar_cwd(b, &root).unwrap_err();
-        assert!(e.contains("runtime\\worktrees"), "{b}: {e}");
+        assert_eq!(e, VIDAR_CWD_REFUSED, "{b}");
     }
     let ok = [
         s(&rt.join("worktrees").join("x")),

@@ -65,9 +65,11 @@ export async function codexHostCapabilities(): Promise<readonly string[] | null>
  *  picker and respawn here at startup, so this module imports no launcher code (import-cycles contract). */
 let reopenInWorkspace: (s: TerminalSession) => Promise<void> = async () => {};
 let reopenHere: (s: TerminalSession, keepThis: boolean) => Promise<void> = async () => {};
-export function bindReopenInWorkspace(fn: (s: TerminalSession) => Promise<void>, here: (s: TerminalSession, keepThis: boolean) => Promise<void>): void {
+let reopenInWorktree: (s: TerminalSession) => Promise<void> = async () => {};
+export function bindReopenInWorkspace(fn: (s: TerminalSession) => Promise<void>, here: (s: TerminalSession, keepThis: boolean) => Promise<void>, worktree: (s: TerminalSession) => Promise<void>): void {
   reopenInWorkspace = fn;
   reopenHere = here;
+  reopenInWorktree = worktree;
 }
 
 export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: string, onAdopted?: (ok: boolean, reason?: string) => void, focus = true, capabilities: readonly string[] | null = null) {
@@ -121,6 +123,7 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
     })),
     onSelectWorkspace: () => reopenInWorkspace(s),
     onReopenHere: (keepThis) => reopenHere(s, keepThis),
+    onOpenWorktree: () => reopenInWorktree(s),
     onSession: (info) => {
       const cur = sessions.get(id);
       if (!cur || cur.rendered !== body) return;

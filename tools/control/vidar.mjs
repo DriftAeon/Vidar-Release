@@ -8,7 +8,7 @@
 //   node tools\control\vidar.mjs focus <tab>|workbench
 //   node tools\control\vidar.mjs prompt <tab> [--notify] [--report p] <text...>
 //   node tools\control\vidar.mjs spawn <agent> --model m [--effort level] [--cwd p] (--brief path | --text t) [--title t] [--notify] [--report p]
-//   node tools\control\vidar.mjs ask <question> [--choice a,b,c [--detail text]...] [--placeholder text]
+//   node tools\control\vidar.mjs ask <question> [--choice a,b,c [--detail text]...] [--pending [--context line]]
 //   node tools\control\vidar.mjs unpend [id]
 //   node tools\control\vidar.mjs wait <tab> [--report path] [--timeout s]
 //   node tools\control\vidar.mjs flow start --template id (--input text | --input-file path) [--cwd path]
@@ -20,6 +20,9 @@
 // <tab> is a tab id or a tab name (the state verb lists both; a name has a space, so quote it: "Amber Raptor").
 // A name matches case-insensitively and exactly; an unknown or ambiguous one fails like an unknown id.
 // A tab's own agent finds its name in $env:VIDAR_TAB_NAME (set at spawn; a later rename is not reflected).
+// `ask` shows in the asker's tab and in Relay, answered from either. Without --pending it blocks until answered
+// (about 280 s, then err expired); with --pending (Falcon-hosted tabs only) it returns at once and the answer
+// arrives later as a user message. A hosted Claude tab must use --pending or AskUserQuestion.
 //
 // Exit codes: 0 ok, 1 err <reason>, 2 timeout (incl. `wait`'s `err timeout`), 3 bus unavailable, 4 no token
 // in env (not a Vidar tab).

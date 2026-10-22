@@ -33,7 +33,7 @@ import { createComposer } from "./rendered/composer";
 import { createPalette } from "./rendered/palette";
 import { createCacheCell } from "./rendered/cache-cell";
 import { createAgentsBlock } from "./rendered/agents-block";
-import { createSubagentRelay } from "./rendered/subagent-relay";
+import { createAskMirror } from "./rendered/ask-mirror";
 import { createGroups } from "./rendered/groups";
 import { createTextStream } from "./rendered/text-stream";
 import { createToolPills, OUTPUT_SHOW_MAX } from "./rendered/tool-pills";
@@ -210,7 +210,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   const stateChip = el("span", "rendered-state");
   const tools = new Map<string, ToolRecord>();
   const approvals = new Map<string, HTMLElement>(); // pending cards; here so refreshState's relay sync never meets it uninitialised
-  const subRelay = createSubagentRelay({ tabId: opts.tabId, tabName: opts.tabName, tools, approvals });
+  const askMirror = createAskMirror({ tabId: opts.tabId, tabName: opts.tabName, tools, approvals, openQuestions: () => openQuestions(), hydrating: () => S.hydrating, host: transcript });
   // built here, where its DOM stood: `tools` is declared just above; the rest are hoisted functions
   const agents = createAgentsBlock(S, { tools, noticeBlock, refreshState, transcript });
   const { waiting, addWaiting, resumeWaiting, taskDone, liveTasks, settleDoneAgents, settleReplayedAgents, clearWaiting } = agents;
@@ -332,6 +332,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
     stream.reset(); // frames, text blocks, interim candidates
     tools.clear();
     awaiting.clear();
+    clearAsyncAsks(); // its cards left with the transcript
     groups.reset(); // open and counted thoughts
     queued.length = 0;
     S.curGroup = null;
@@ -341,6 +342,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
     S.stick = true;
     sendStick.disarm(); // a send's echo the reset swallowed must not re-stick a later, unrelated echo
     clearWaiting(); bang.invalidate(); // hydration start, /clear, resume: a ! run in flight lands nowhere
+    askMirror.redraw(); // Relay's tab cards were wiped with the transcript (drawn again unless hydrating)
   }
 
   /* -- activity groups, streamed text, tool pills --
@@ -356,7 +358,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   const { textDelta, textDone, markInterim, clearInterim, cancelFrames } = stream;
   const { toolHost, toolPending, toolStart, toolDone, stalePill } = createToolPills(S, {
     transcript, tools, awaiting, append, groupFor, groupCount, groupRefresh, groupError, markInterim, agent: opts.agent,
-    attachCard: (toolUseId, card) => { attachCard(toolUseId, card); subRelay.sync(); }, // a card that beat its child pill
+    attachCard: (toolUseId, card) => { attachCard(toolUseId, card); askMirror.sync(); }, // a card that beat its child pill
   });
   const bang = createBang(S, { enabled: AGENT_PROFILE[opts.agent].localCommands, hostOk: hostHas(opts.host, "bangMode"), sealGroup, toolStart, toolDone, noticeBlock });
 
@@ -387,7 +389,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
 
   /* -- approvals -- */
 
-  const { attachCard, openHydratedCards, approvalCard, asyncAskCard, settleAsyncAsks, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED } = createCards(S, {
+  const { attachCard, openHydratedCards, approvalCard, asyncAskCard, settleAsyncAsks, clearAsyncAsks, openQuestions, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED } = createCards(S, {
     transport, textarea, follow, tools, approvals, approvalQueue, awaiting, sendEncoded,
     append, sealGroup, groupRefresh, stalePill, refreshState, noticeBlock, agent: opts.agent, stats: hydrateStats,
     sendText: (text) => sendText(text), // composer is built below; called only on a click
@@ -456,7 +458,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
     opts.onTabState?.(chip, (S.pendingApproval && approvals.get(S.pendingApproval)?.dataset.tool) || null, S.hydrating);
     bar.syncControls(); // mode, model and effort segments
     syncCharacterActive();
-    subRelay.sync(); // a subagent's pending approval as a Relay card
+    askMirror.sync(); // a subagent's pending approval as a Relay card
   }
 
   /* -- backend: built last; composer, events and the status bar reach it through thunks -- */
@@ -577,7 +579,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
       S.disposed = true;
       stopCacheTimer();
       agents.dispose();
-      subRelay.dispose(); // the tab's Relay cards leave with it
+      askMirror.dispose(); // the tab's Relay cards leave with it
       closeStMenu(); bar.closeCabinet(); bar.login?.dispose?.(); // ends a running Claude login
       releaseAdapterRoute(opts.tabId, S.adapter);
       cancelFrames();

@@ -7,6 +7,7 @@ import { items as relayItems, subscribe, markSeen, isUnread, type RelayItem } fr
 import { paintRelayRow } from "./sessions/tab-row-paint";
 import { startDisplaySource, refresh } from "../relay/source-display";
 import { startAskSource, refresh as refreshAsks } from "../relay/source-asks";
+import { startCtlAskSource } from "../relay/source-ctl-asks";
 import { setAskVisible } from "../relay/ask-view";
 import { mountRelayStack, paintRelayStack } from "../relay/stack";
 import { mountRelayLarge, openLarge, largeId, syncLarge } from "../relay/large";
@@ -36,6 +37,12 @@ let notifyFn: (unseen: boolean) => void = () => {};
 let started = false;
 let renderQueued = false;
 
+/** The Relay tab is really on screen (workbench shown and Relay its active tab), which `shown().relay`
+ *  over-approximates. Cards read it through their hooks, so relay/ never imports this file. */
+export function relayOnScreen(): boolean {
+  return onScreen;
+}
+
 /** A card came into view: seen only while the tab is on screen; off screen it stays unread. */
 function cardVisible(id: string): void {
   if (!onScreen || !isUnread(id)) return;
@@ -54,13 +61,14 @@ export function mountRelayTab(parent: HTMLElement, notify: (unseen: boolean) => 
   el.id = "relay-view";
   el.style.display = "none";
   el.innerHTML = `<div class="relay-stack"></div>`;
-  mountRelayStack(el.querySelector<HTMLElement>(".relay-stack")!, { openLarge, onVisible: cardVisible });
+  mountRelayStack(el.querySelector<HTMLElement>(".relay-stack")!, { openLarge, onVisible: cardVisible, relayVisible: relayOnScreen });
   parent.appendChild(el);
   subscribe(apply);
   if (!started) {
     started = true;
     startDisplaySource();
     startAskSource();
+    startCtlAskSource();
   }
   apply(relayItems());
   return el;

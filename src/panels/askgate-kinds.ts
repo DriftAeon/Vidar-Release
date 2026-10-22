@@ -1,7 +1,7 @@
 // One place for the copy of every permission ask that goes through askGate(). A caller passes a
 // `kind`; the title (and a placeholder, if the kind needs its own) comes from here, so two cards
 // that do different things cannot drift into near-identical hand-rolled titles. The one caller
-// that is not registered is the "Question" ask (listen.ts, kind "ctl-ask"), which carries its own.
+// questions never come here: ctl.ask lives in Relay (relay/source-ctl-asks.ts), so every kind is registered.
 
 /** The comment-box placeholder every ask shows unless its kind registers its own. */
 export const DEFAULT_ASK_PLACEHOLDER = "Additional Info"; // 2026-10-10

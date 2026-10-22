@@ -71,8 +71,10 @@
 .runes-warn-line .icn { flex: none; width: var(--space-16); height: var(--space-16); }
 .runes-warn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* View rows: the ticked shared items, read-only, no accent; the same tinted edge and fill as the .runes-blk entries, no hover change */
-.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: color-mix(in srgb, var(--fg-dim) 26%, var(--bg-panel)); border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); color: var(--fg); overflow-wrap: anywhere; }
+/* View rows: the ticked shared items, read-only; the ticked fill's accent tint a fifth stronger (12% → 14%) and the path lifted
+   30% toward --fg, so the dim path clears 4.5:1 (Cobalt 5.6, Onyx 5.2; user, 2026-10-22); the .runes-blk edge, no hover change */
+.runes-bare .rp-source.is-ro > .rp-path { color: color-mix(in srgb, var(--fg) 30%, var(--fg-dim)); }
+.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel)); border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); color: var(--fg); overflow-wrap: anywhere; }
 
 /* View / Modify: seated on the Key's last line at the right; Done takes the accent (it marks the editing state) */
 .runes-mode { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8); font-weight: var(--weight-strong); }

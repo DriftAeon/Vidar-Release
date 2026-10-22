@@ -79,7 +79,10 @@ function onStatus(ev: Event): void {
 async function onRelay(list: readonly RelayItem[]): Promise<void> {
   const gen = ++generation;
   pruneRelayTabs();
-  const sessions = list.flatMap((i) => (i.view.type === "ask" ? [i.view.ask.session] : []));
+  // a question names its tab (askerTab) or only its Falcon session, which resolves to one below
+  const questions = list.flatMap((i) => (i.view.type === "question" ? [i] : []));
+  const direct = questions.flatMap((i) => (i.askerTab ? [i.askerTab] : []));
+  const sessions = questions.flatMap((i) => (!i.askerTab && i.view.type === "question" && i.view.record.askerSession ? [i.view.record.askerSession] : []));
   const misses = [...new Set(sessions)].filter((s) => !sessionTab.has(s));
   let pairs: Promise<FalconTabMatch[]> | null = null; // one falconTabPairs pass, shared by every miss
   const sharedPairs = () => (pairs ??= falconTabPairs("full"));
@@ -90,6 +93,7 @@ async function onRelay(list: readonly RelayItem[]): Promise<void> {
   if (gen !== generation) return; // a newer store change owns the result
   pruneRelayTabs();
   const next = countAsksByTab(sessions, (s) => sessionTab.get(s)?.id ?? null);
+  for (const id of direct) next.set(id, (next.get(id) ?? 0) + 1);
   const prev = askCounts;
   askCounts = next;
   for (const id of new Set([...prev.keys(), ...next.keys()])) {

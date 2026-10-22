@@ -18,6 +18,7 @@ import "../character/behavior";
 import type { LaunchOpts, PageSpec, TerminalSession } from "./sessions/types";
 import { armAstra, armedId, bindAstraBridge, disarmAstra, initAstraBridge } from "./sessions/astra-bridge";
 import { forgetPair, pairMate, rememberPair } from "./sessions/pair";
+import { setShown } from "./sessions/shown";
 import { bindTabStrip, buildTabButton, dismissTabMenuFor, initTabStrip, orderedIds, resolveBodyKind } from "./sessions/tab-strip";
 import { bindSessionTabOrder, placeRestoredTab, saveTabOrder } from "./sessions/tab-order-bind";
 import { bindZoom, initZoom } from "./sessions/zoom";
@@ -329,6 +330,7 @@ function layout(refocus: boolean) {
   viewEl.classList.toggle("dual", visible.length > 1 || workbenchOpen);
   viewEl.classList.toggle("workbench", workbenchOpen);
   setWorkbenchShown(workbenchOpen);
+  setShown(visible, relayOpen || workbenchOpen);
   for (const [oid, os] of sessions) {
     const shown = visible.includes(oid);
     os.container.style.display = shown ? "block" : "none";

@@ -1,7 +1,8 @@
-// Pending asks as Relay items (kind "ask"): the agent posted named options and ended its turn.
+// Pending asks as Relay items (kind "question", origin pend): the agent posted named options and ended its turn.
 // Send Answer is the only path that delivers text into the asker's tab: claim -> re-read (the sha
 // must still match what the form painted) -> sendPromptTo -> settle. Nothing is persisted but the ask.
 
+import { pendReplyParts, recordFromAskInput, type QuestionRecord } from "../asks/record";
 import { invoke, listen } from "../ipc";
 import { setItems, type RelayAsk, type RelayItem, type RelayVerdict } from "./store";
 
@@ -19,6 +20,14 @@ export function answerText(ask: Pick<RelayAsk, "id">, choice: string | null | un
 
 const readAll = async (): Promise<RelayAsk[]> => (await invoke("list_pending_asks"))?.items ?? [];
 const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Rust's sentence-case refusals (pending_ask.rs) as the strip's Title Case lines; anything else passes through. */
+function mapRustError(e: unknown): unknown {
+  const m = msgOf(e);
+  if (m.includes("pending ask changed")) return new Error("Question Changed");
+  if (m.includes("pending ask not found") || m.includes("already being answered")) return new Error("Already Answered");
+  return e;
+}
 
 // Loaded on first use: the session layer reaches back into the workbench, so a static import
 // would close a cycle (tests/import-cycles.test.mjs) through panels/relay.
@@ -41,7 +50,11 @@ export async function sendAnswer(painted: RelayAsk, choice: string | null, comme
   if (busy.has(painted.id)) throw new Error("Already Sending");
   busy.add(painted.id);
   try {
-    await invoke("claim_pending_ask", { id: painted.id, sha256: painted.sha256 });
+    try {
+      await invoke("claim_pending_ask", { id: painted.id, sha256: painted.sha256 });
+    } catch (e) {
+      throw mapRustError(e);
+    }
     let delivered = false;
     try {
       const cur = (await readAll()).find((a) => a.id === painted.id);
@@ -65,26 +78,41 @@ export async function sendAnswer(painted: RelayAsk, choice: string | null, comme
   }
 }
 
-/** Dismiss: settles without sending; needs no claim. */
+/** Dismiss: settles without sending; needs no claim, but never runs under a send in flight. */
 async function dismissAsk(painted: RelayAsk): Promise<void> {
+  if (busy.has(painted.id)) throw new Error("Already Sending");
   try {
     await invoke("settle_pending_ask", { id: painted.id, sha256: painted.sha256 });
+  } catch (e) {
+    throw mapRustError(e);
   } finally {
     void refresh().catch(() => {});
   }
 }
 
-function itemFor(a: RelayAsk): RelayItem {
+/** The pend entry as the shared record: one question, its choices as options. */
+function recordFor(a: RelayAsk, askerTab: string | null): QuestionRecord {
+  const options = a.choices.map((label, i) => (a.details?.[i] ? { label, description: a.details[i] } : { label }));
+  return recordFromAskInput({ questions: [{ question: a.question, options }] }, {
+    key: a.id, origin: "pend", askerTab, askerSession: a.session, askedAtMs: a.askedAtMs,
+    ...(a.context ? { context: a.context } : {}),
+  });
+}
+
+function itemFor(a: RelayAsk, askerTab: string | null): RelayItem {
+  const record = recordFor(a, askerTab);
   return {
     id: a.id,
-    kind: "ask",
+    kind: "question",
     source: SOURCE,
     title: a.question.replace(/\s+/g, " ").trim(),
     sinceMs: a.askedAtMs,
-    view: { type: "ask", ask: a },
+    view: { type: "question", record, pend: a },
+    askerTab,
     async resolve(v: RelayVerdict) {
-      if (v.verdict === "deny" || v.verdict === "dismiss") await dismissAsk(a);
-      else await sendAnswer(a, v.choice ?? null, v.comment);
+      if (v.verdict === "deny" || v.verdict === "dismiss") { await dismissAsk(a); return; }
+      const { choice, comment } = v.reply ? pendReplyParts(record, v.reply) : { choice: v.choice ?? null, comment: v.comment };
+      await sendAnswer(a, choice, comment);
     },
   };
 }
@@ -92,13 +120,22 @@ function itemFor(a: RelayAsk): RelayItem {
 export async function refresh(): Promise<void> {
   const gen = ++latest;
   const asks = await readAll();
+  const tabs = await Promise.all(asks.map((a) => askTabState(a.session).then((r) => r.tab).catch(() => null)));
   if (gen !== latest) return;
-  setItems(SOURCE, asks.map(itemFor));
+  setItems(SOURCE, asks.map((a, i) => itemFor(a, tabs[i])));
 }
 
 export { msgOf as askErrorText };
 
+const FOCUS_DEBOUNCE_MS = 300;
+let focusTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function startAskSource(): void {
   void listen("pending-ask-update", () => { void refresh().catch(() => {}); });
+  // a re-adopted or closed asker tab changes askerTab; the focus event follows both
+  document.addEventListener("vidar-focus", () => {
+    if (focusTimer !== null) clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => { focusTimer = null; void refresh().catch(() => {}); }, FOCUS_DEBOUNCE_MS);
+  });
   void refresh().catch(() => {});
 }

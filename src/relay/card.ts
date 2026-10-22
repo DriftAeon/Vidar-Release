@@ -8,7 +8,9 @@
 
 import { createDisplayRenderer, type DisplayRenderer } from "../panels/display-render";
 import { iconImg } from "../icon-img";
+import { labelledMark } from "../panels/rendered/marks";
 import { createAskForm, type AskForm } from "./ask-view";
+import { createAskState, type AskState } from "./card-ask-state";
 import { createCardForm, type CardForm } from "./card-view";
 import { isUnread, type RelayItem } from "./store";
 import { createRelayStrip, type RelayStrip } from "./strip";
@@ -19,6 +21,10 @@ export interface RelayCardHooks {
   openLarge(id: string): void;
   /** the card came into view (or the DOM has no IntersectionObserver): the seen mark is the caller's */
   onVisible(id: string): void;
+  /** Relay is really on screen (panels/relay.ts); absent, true */
+  relayVisible?(): boolean;
+  /** an ask card showed its answered state long enough: the stack drops it */
+  onSettledDone?(id: string): void;
 }
 
 export interface RelayCard {
@@ -27,10 +33,14 @@ export interface RelayCard {
   key: string;
   /** `current`: this item is the one open large */
   update(item: RelayItem, current: boolean): void;
+  /** an ask card whose item left the store without Relay answering it: the tab may still report the answer */
+  lingers(): boolean;
+  /** the card shows its answered state; its own timer removes it */
+  settled(): boolean;
   dispose(): void;
 }
 
-const KIND_CHIP = { display: "Display", ask: "Ask", card: "Approval" } as const;
+const KIND_CHIP = { display: "Display", ask: "Ask", card: "Approval", question: "Ask" } as const;
 
 function clock(ms: number): string {
   const d = new Date(ms);
@@ -66,14 +76,25 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
   const isDisplay = item.view.type === "display";
   // a display or ask card shows icon-only Open Large right after the title (2026-10-11); a spacer then
   // pushes the rest right: a display card's file actions (its time is on the file line), an ask card's time
-  const openHost = isDisplay || item.view.type === "ask" ? span("relay-card-actions relay-card-open") : null;
+  const openHost = isDisplay || item.view.type === "question" ? span("relay-card-actions relay-card-open") : null;
   const cluster = isDisplay ? div("relay-card-actions") : null;
-  head.append(span("relay-chip", KIND_CHIP[item.kind]), title);
+  // an ask card's head is the amber title bar (2026-10-22): mark, Question, For <tab>, Open Large, time; no chip, no dot
+  const isAsk = item.view.type === "question";
+  const forTab = span("relay-card-for");
+  const askMark = labelledMark("awaiting", "Question");
+  const sep = span("relay-card-sep");
+  if (isAsk) {
+    el.classList.add("relay-ask-card");
+    title.textContent = "Question";
+    head.append(askMark, title, sep, forTab);
+  } else {
+    head.append(span("relay-chip", KIND_CHIP[item.kind]), title);
+  }
   if (openHost) head.append(openHost);
   head.append(span("relay-card-gap"));
   if (!isDisplay) head.append(time);
   if (cluster) head.append(cluster);
-  head.append(dot);
+  if (!isAsk) head.append(dot);
   el.append(head);
 
   const openBtn = document.createElement("button");
@@ -95,6 +116,8 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
   let renderer: DisplayRenderer | null = null;
   let thumbFit: ThumbFit | null = null;
   let askForm: AskForm | null = null;
+  let askState: AskState | null = null;
+  let answeredHere = false; // Relay's own form sent the verdict: the card leaves with its item
   let cardForm: CardForm | null = null;
   let strip: RelayStrip | null = null;
   let state: RelayViewState = { painting: false, error: "", note: "" };
@@ -114,11 +137,22 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
     strip = createRelayStrip(row, { selected: () => item, current: () => renderer?.current() ?? null, view: () => state, actionsHost: cluster ?? undefined });
     openHost?.append(openBtn);
     el.append(row);
-  } else if (v.type === "ask") {
+  } else if (v.type === "question") {
     const body = div("relay-card-ask");
     el.append(body);
-    askForm = createAskForm(body, item, { compact: true });
+    const mine: RelayItem = { ...item, resolve: (verdict) => { answeredHere = true; return item.resolve(verdict); } };
+    askForm = createAskForm(body, mine, {
+      compact: true,
+      onFor: (t) => { forTab.textContent = t; forTab.title = t; forTab.classList.toggle("hidden", !t); },
+    });
     openHost?.append(openBtn);
+    askState = createAskState({
+      card: el, body, mark: askMark, title, time, hide: [sep, forTab, openHost],
+      item: () => item,
+      relayVisible: () => hooks.relayVisible?.() ?? true,
+      onDone: () => hooks.onSettledDone?.(id),
+      onSettle: () => { askForm?.dispose(); askForm = null; }, // its poll would unhide the For label
+    });
   } else if (v.type === "card") {
     // the rows already show everything on the card: no Open Large
     const body = div("relay-card-ask");
@@ -161,14 +195,17 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
 
   function update(next: RelayItem, current: boolean): void {
     item = next;
-    title.textContent = item.title;
-    title.title = item.title;
-    time.textContent = clock(item.sinceMs);
+    if (!isAsk) {
+      title.textContent = item.title;
+      title.title = item.title;
+    }
+    if (!askState?.settled()) time.textContent = clock(item.sinceMs);
     dot.classList.toggle("unread", isUnread(id));
     el.classList.toggle("current", current);
     openBtn.classList.toggle("on", current);
     openBtn.setAttribute("aria-pressed", String(current));
     strip?.paint();
+    askState?.sync();
   }
 
   update(item, false);
@@ -176,8 +213,11 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
     el,
     key: relayViewKey(first),
     update,
+    lingers: () => isAsk && !answeredHere && !askState?.settled(),
+    settled: () => askState?.settled() ?? false,
     dispose() {
       disposed = true;
+      askState?.dispose();
       io?.disconnect();
       thumbFit?.dispose();
       askForm?.dispose();

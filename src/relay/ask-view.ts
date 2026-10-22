@@ -1,14 +1,17 @@
-// Relay form for a pending ask, on its card and in Open Large: the question, one button per choice
-// (a click selects it; nothing is sent), an optional comment, and Answer (sends the picked choice
-// and the typed comment), Dismiss and Copy Answer (once the session has ended); the row reads state,
-// Copy Answer, Answer, Dismiss, right-aligned. Tab state (ready / not
-// ready / not open / ended) comes from source-asks; one 5 s readiness poll serves every live form
-// while the workbench Relay tab is on screen. Open Large's form polls only then too: acceptable,
-// because sendAnswer re-checks the tab before it delivers anything.
+// Relay form for a question item, on its card and in Open Large: the chat's questionForm (every
+// question, multi-select, Other), an optional note (record.notes), and Answer, Dismiss (record.dismiss)
+// and, for a record answered by a user message (needsPrompt), Copy Answer once the session has ended;
+// the row reads state, Copy Answer, Answer, Dismiss, right-aligned. A record that is not inline shows
+// its questions and an Answer In Tab button instead. Tab state (ready / not ready / not open / ended)
+// comes from source-asks and gates Answer only for needsPrompt; one 5 s readiness poll serves every
+// live form while the workbench Relay tab is on screen. Open Large's form polls only then too:
+// acceptable, because sendAnswer re-checks the tab before it delivers anything.
 
+import type { AskReply, QuestionRecord } from "../asks/record";
+import { pendReplyParts } from "../asks/record";
 import { copyText } from "../clipboard";
-import { askLabel } from "../panels/rendered/ask-answers";
 import { btn, el } from "../panels/rendered/dom";
+import { questionForm } from "../panels/rendered/question-form";
 import { answerText, askErrorText, askTabState, type AskTabState } from "./source-asks";
 import type { RelayItem } from "./store";
 
@@ -30,8 +33,10 @@ export interface AskForm {
 export interface AskFormOpts {
   /** a send failure or copy result; absent, the form's own state line shows it */
   onNote?(msg: string): void;
-  /** the card's form: a one-line comment */
+  /** the card's form: a one-line note */
   compact?: boolean;
+  /** the card's title bar carries "For <tab>": given, the form's own line is hidden and the bar gets the name */
+  onFor?(text: string): void;
 }
 
 const forms = new Set<AskForm>();
@@ -55,52 +60,72 @@ export function setAskVisible(on: boolean): void {
   syncPoll();
 }
 
-/** Builds the form for `item` into `host` (replacing its children); null unless item.view is an ask. */
+/** the record as the Claude-shaped input `questionForm` reads; answers come back keyed by the record's ids */
+function formInput(record: QuestionRecord): unknown {
+  return {
+    questions: record.questions.map((q) => ({
+      id: q.id, question: q.text, options: q.options, multiSelect: q.multi, isOther: q.other, isSecret: q.secret,
+    })),
+  };
+}
+
+/** focuses the asker's tab (loaded on first use: the session layer reaches back into Relay) */
+async function focusTab(id: string): Promise<void> {
+  (await import("../panels/sessions")).activate(id);
+}
+
+/** Builds the form for `item` into `host` (replacing its children); null unless item.view is a question. */
 export function createAskForm(host: HTMLElement, item: RelayItem, opts: AskFormOpts = {}): AskForm | null {
-  if (item.view.type !== "ask") return null;
-  const ask = item.view.ask;
-  let tabState: AskTabState = "no-tab";
+  if (item.view.type !== "question") return null;
+  const { record, pend } = item.view;
+  const session = pend?.session ?? record.askerSession;
+  const gated = record.needsPrompt;
+  let tabState: AskTabState = gated ? "no-tab" : "ready";
   let tabTitle = "";
   let sending = false;
   let tabSeq = 0;
   let disposed = false;
   let note = "";
-  let picked: string | null = null;
+  let answered = false;
 
   const form = el("div", "blk-question relay-ask-form");
   const forEl = el("div", "relay-ask-for");
   const q = el("div", "q");
-  const text = el("div", "q-text", ask.question);
-  const options = el("div", "q-options");
-  options.setAttribute("role", "radiogroup");
-  const comment = el("textarea", "q-other relay-ask-comment");
-  comment.rows = opts.compact ? 1 : 3;
-  comment.maxLength = 4000;
-  comment.placeholder = ask.choices.length > 0 ? "Comment" : "Answer";
   const actions = el("div", "relay-ask-actions");
-  const sendBtn = btn("Answer", "relay-ask-send relay-approve", () => void send(picked));
+  const stateEl = el("span", "relay-ask-state dim");
+  const notesEl = el("textarea", "q-other relay-ask-comment");
+  notesEl.rows = opts.compact ? 1 : 3;
+  notesEl.maxLength = 4000;
+  notesEl.placeholder = "Note";
+  const sendBtn = btn("Answer", "relay-ask-send relay-approve", () => void send());
   // neutral, like the display strip's Dismiss: the decision pair is reserved for Approve/Deny
   const dismissBtn = btn("Dismiss", "relay-ask-dismiss relay-dismiss", () => void run(() => item.resolve({ verdict: "deny", comment: "" })));
   const copyBtn = btn("Copy Answer", "relay-ask-copy", () => {
-    void copyText(answerText(ask, picked, comment.value.trim())).then((ok) => say(ok ? "Copied" : "Copy Failed"));
+    if (!pend) return;
+    const { choice, comment } = pendReplyParts(record, reply());
+    void copyText(answerText(pend, choice, comment)).then((ok) => say(ok ? "Copied" : "Copy Failed"));
   });
-  const stateEl = el("span", "relay-ask-state dim");
-  actions.append(stateEl, copyBtn, sendBtn, dismissBtn); // right-aligned, Dismiss at the far right
+  const tabBtn = btn("Answer In Tab", "relay-ask-tab", () => { if (record.askerTab) void focusTab(record.askerTab); });
+  tabBtn.disabled = !record.askerTab;
 
-  for (const [i, label] of ask.choices.entries()) {
-    const b = btn("", "q-opt", () => { if (sending) return; picked = label; sync(); });
-    b.setAttribute("role", "radio");
-    b.dataset.label = label;
-    b.append(askLabel(label));
-    // the description shares the button's text: readers of the picked label use dataset.label
-    const detail = ask.details?.[i];
-    if (detail) b.append(el("span", "q-desc", detail));
-    options.appendChild(b);
+  let collect: () => unknown = () => ({ answers: {} });
+  if (record.inline) {
+    const f = questionForm(q, formInput(record), (ok) => { answered = ok; sync(); });
+    collect = f.collect;
+    if (record.notes) q.append(notesEl);
+    actions.append(stateEl, copyBtn, sendBtn);
+  } else {
+    for (const it of record.questions) q.append(el("div", "q-text", it.text));
+    actions.append(stateEl, tabBtn);
   }
-  comment.addEventListener("input", sync);
-  q.append(text, options, comment);
+  if (record.dismiss !== null) actions.append(dismissBtn); // right-aligned, Dismiss at the far right
   form.append(forEl, q, actions);
   host.replaceChildren(form);
+
+  function reply(): AskReply {
+    const answers = (collect() as { answers?: Record<string, string> }).answers ?? {};
+    return { answers, notes: record.notes ? notesEl.value.trim() : "" };
+  }
 
   function say(msg: string): void {
     if (opts.onNote) { opts.onNote(msg); return; }
@@ -110,28 +135,22 @@ export function createAskForm(host: HTMLElement, item: RelayItem, opts: AskFormO
 
   function sync(): void {
     if (disposed) return;
-    const ended = tabState === "ended";
-    const ready = tabState === "ready";
-    const forText = ask.context || tabTitle;
+    const ended = gated && tabState === "ended";
+    const ready = !gated || tabState === "ready";
+    const forText = record.context || tabTitle;
     forEl.textContent = forText ? `For ${forText}` : "";
-    forEl.classList.toggle("hidden", !forText);
-    stateEl.textContent = note || STATE_TEXT[tabState];
-    const typed = comment.value.trim() !== "";
-    const hasAnswer = picked !== null || typed;
+    forEl.classList.toggle("hidden", !forText || !!opts.onFor);
+    opts.onFor?.(forText ? `For ${forText}` : "");
+    stateEl.textContent = note || (gated ? STATE_TEXT[tabState] : "");
+    // the note alone is an answer where the record has one (a pend ask answered in words)
+    const hasAnswer = answered || (record.notes && notesEl.value.trim() !== "");
     sendBtn.classList.toggle("hidden", ended);
-    copyBtn.classList.toggle("hidden", !ended);
+    copyBtn.classList.toggle("hidden", !ended || !pend);
     sendBtn.disabled = sending || !ready || !hasAnswer;
     dismissBtn.disabled = sending;
     copyBtn.disabled = sending || !hasAnswer;
-    // a choice click only selects, so it is live except while an answer is being sent
-    for (const c of options.children) {
-      const b = c as HTMLButtonElement;
-      const on = b.dataset.label === picked;
-      b.disabled = sending;
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-checked", String(on));
-    }
-    comment.disabled = sending;
+    q.toggleAttribute("inert", sending);
+    notesEl.disabled = sending;
   }
 
   async function run(action: () => Promise<void>): Promise<void> {
@@ -149,16 +168,17 @@ export function createAskForm(host: HTMLElement, item: RelayItem, opts: AskFormO
     }
   }
 
-  async function send(choice: string | null): Promise<void> {
-    if (sending || tabState !== "ready") return;
-    const body = comment.value.trim();
-    await run(() => item.resolve({ verdict: "approve", comment: body, ...(choice !== null ? { choice } : {}) }));
+  async function send(): Promise<void> {
+    if (sending || (gated && tabState !== "ready")) return;
+    const r = reply();
+    await run(() => item.resolve({ verdict: "approve", comment: r.notes, reply: r }));
   }
 
   async function refreshTab(): Promise<void> {
+    if (!session) return;
     const t = ++tabSeq;
     try {
-      const r = await askTabState(ask.session);
+      const r = await askTabState(session);
       if (t !== tabSeq || disposed) return; // a newer read owns the form, or it has gone
       tabState = r.state;
       tabTitle = r.title;
@@ -168,6 +188,7 @@ export function createAskForm(host: HTMLElement, item: RelayItem, opts: AskFormO
     sync();
   }
 
+  notesEl.addEventListener("input", sync);
   const self: AskForm = {
     actions,
     refreshTab,

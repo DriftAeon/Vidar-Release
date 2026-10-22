@@ -13,11 +13,15 @@ import type { HydrateStats } from "./hydrate-stats";
 import { closeHydration } from "./host-payload";
 import { initCodexPlans } from "../../agents/codex-plan-store";
 import { AGENT_EXITED, denyWithin } from "./cards";
-import { bareNotices } from "./notice-actions";
+import { bareNotices, vidarFolderCard } from "./notice-actions";
 
 /** The spawn error for a home-folder Codex launch: equals `HOME_CWD_REFUSED` in src-tauri/src/codex_cwd.rs
  *  (tests/codex-home-refused.test.mjs keeps the two in step). */
 export const HOME_CWD_REFUSED = "Codex Can't Start in Your Home Folder: Pick a Project Folder";
+
+/** The spawn error for a Vidar-folder Codex launch: equals `VIDAR_CWD_REFUSED` in src-tauri/src/bare/mod.rs
+ *  (tests/codex-home-refused.test.mjs keeps the two in step). */
+export const VIDAR_CWD_REFUSED = "Codex Can't Start in Vidar's Folder: Its Sandbox Could Write Vidar's Launch Files";
 
 /** What the lifecycle closes over in createRenderedBody. */
 export interface LifecycleDeps {
@@ -220,10 +224,18 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
       releaseRoute(opts.tabId, route);
       S.isAlive = false;
       root.classList.add("dead");
-      noticeBlock(`Failed to Start: ${String(e)}`, "error");
+      const openWt = opts.onOpenWorktree;
+      const vidarCard = openWt && String(e).includes(VIDAR_CWD_REFUSED);
+      if (!vidarCard) noticeBlock(`Failed to Start: ${String(e)}`, "error");
       sl.model = "—"; // never spawned, so "Starting…" is a claim about a process that does not exist
       redrawStatus();
       refreshState(); // the chip is still on "Starting…" without this
+      if (vidarCard && openWt) {
+        // Retry fails the same way here; the card opens a worktree and replaces this tab
+        append(vidarFolderCard(openWt));
+        opts.onDead();
+        return;
+      }
       const retry = el("div", "blk blk-exit");
       retry.appendChild(btn("Retry", "ws-btn rendered-retry", () => { retry.remove(); void spawn(); }));
       const pick = opts.onSelectWorkspace;

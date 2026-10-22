@@ -12,7 +12,7 @@ export const COMMAND_HOSTS = {
   pty_flow: "vidar", kill_pty: "vidar", adopt_session: "vidar",
   review_ready: "vidar", review_result: "vidar",
   open_ready: "vidar", open_result: "vidar", control_result: "vidar",
-  spawn_codex_appserver: "vidar", codex_trust_offer: "vidar", codex_trust_folder: "vidar", agent_send: "vidar", kill_agent: "vidar", agent_reap_all: "vidar", list_codex_threads: "vidar", codex_list_models: "vidar", rules_prepare: "vidar",
+  spawn_codex_appserver: "vidar", codex_trust_offer: "vidar", codex_trust_folder: "vidar", vidar_worktree_open: "vidar",agent_send: "vidar", kill_agent: "vidar", agent_reap_all: "vidar", list_codex_threads: "vidar", codex_list_models: "vidar", rules_prepare: "vidar",
   runes_catalog: "vidar", runes_loaded: "vidar", lab_item: "vidar",
   rules_import_sources: "vidar", rules_import_scan: "vidar", rules_import_apply: "vidar", rules_generate: "vidar", rules_generate_cancel: "vidar", rules_generate_toggle: "vidar", bare_local_sources: "vidar", bare_actives: "vidar", bare_layer_set: "vidar", bare_set_layer_write: "vidar", bare_launch: "vidar",
   list_external_sessions: "vidar", list_recent_sessions: "vidar", read_session_meta: "vidar",read_codex_model: "vidar", read_codex_limits: "vidar", codex_rollout_threads: "vidar", status_snapshot: "vidar",

@@ -15,6 +15,47 @@
 /* the item open large */
 .relay-card.current { border-color: var(--accent); background: var(--bg-selected); }
 .relay-card-head { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); }
+/* Ask card (user pick, 2026-10-22): the head is a solid amber bar and the card's 1px frame is the same amber,
+   one rounded shape. Ink is --bg-panel (Onyx #17171c, 7.94:1 on --approval-amber; every theme's panel is darker still). */
+.relay-card.relay-ask-card { padding: 0; gap: 0; overflow: hidden; border-color: var(--approval-amber); }
+.relay-ask-card .relay-card-ask { padding: var(--space-12); }
+.relay-ask-card > .relay-card-head { height: var(--row-28); padding: 0 var(--space-12); background: var(--approval-amber); color: var(--bg-panel); }
+.relay-ask-card .relay-card-head .mark { color: var(--bg-panel); font-weight: var(--weight-bold); }
+/* Ask overlay (user pick, 2026-10-22): while the asker's Rendered tab is on screen the body sits under a scrim with one amber
+   action. Ink is --bg-panel on --approval-amber (7.94:1); hover/active are ink washes like Open Large above. */
+.relay-ask-card .relay-card-ask { position: relative; }
+.relay-ask-scrim {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--ask-scrim); backdrop-filter: blur(var(--blur-scrim)); cursor: pointer;
+}
+.relay-ask-go {
+  display: inline-flex; align-items: center; gap: var(--space-8); height: var(--row-28); padding: 0 var(--space-16);
+  background: var(--approval-amber); color: var(--bg-panel); border: var(--border-w) solid var(--approval-amber); border-radius: var(--radius-6);
+  font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-strong); cursor: pointer;
+}
+.relay-ask-go .icn { width: var(--space-16); height: var(--space-16); flex: 0 0 auto; }
+.relay-ask-go:hover:not(:disabled) { background: color-mix(in srgb, var(--bg-panel) 14%, var(--approval-amber)); border-color: color-mix(in srgb, var(--bg-panel) 35%, var(--approval-amber)); }
+.relay-ask-go:focus-visible { outline: var(--border-w) solid var(--fg); outline-offset: var(--space-2); }
+.relay-ask-go:active:not(:disabled) { background: color-mix(in srgb, var(--bg-panel) 26%, var(--approval-amber)); }
+.relay-ask-go:disabled { opacity: 0.4; cursor: default; }
+/* Settled ask (user pick): the bar drops to the neutral hover fill with a green check, the body folds to question over answer */
+.relay-card.relay-ask-card.relay-ask-settled { border-color: var(--border); }
+.relay-ask-settled > .relay-card-head { background: var(--bg-hover); color: var(--fg); }
+.relay-ask-card.relay-ask-settled .relay-card-head .mark { color: var(--ok-green); }
+.relay-ask-card.relay-ask-settled .relay-card-head .relay-card-time { color: var(--fg); }
+.relay-ask-settled .relay-card-ask { padding: 0; }
+.relay-done-line { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-8) var(--space-12); font-size: var(--font-12); line-height: var(--line-16); }
+.relay-done-q { color: var(--fg-dim); }
+.relay-done-a { color: var(--fg); font-weight: var(--weight-strong); }
+.relay-card-for { flex: 0 1 auto; min-width: 0; font-size: var(--font-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.relay-card-sep { flex: 0 0 auto; width: var(--border-w); height: 14px; /* divider height, no token */ background: color-mix(in srgb, var(--bg-panel) 35%, transparent); }
+.relay-ask-card .relay-card-head .relay-card-time { color: var(--bg-panel); }
+/* Open Large on the bar: dark hover wash, dark focus ring (the accent ring is amber on amber), lit state a darker wash */
+.relay-ask-card .relay-card-head .relay-act.file-action { border-color: transparent; }
+.relay-ask-card .relay-card-head .relay-act.file-action:hover:not(:disabled) { background: color-mix(in srgb, var(--bg-panel) 14%, transparent); border-color: color-mix(in srgb, var(--bg-panel) 35%, transparent); }
+.relay-ask-card .relay-card-head .relay-act.file-action:focus-visible { outline: var(--border-w) solid var(--bg-panel); outline-offset: calc(-1 * var(--border-w)); }
+.relay-ask-card .relay-card-head .relay-act.file-action:active:not(:disabled) { background: color-mix(in srgb, var(--bg-panel) 26%, transparent); }
+.relay-ask-card .relay-card-head .relay-act.file-action.on:not(:disabled) { background: color-mix(in srgb, var(--bg-panel) 20%, transparent); border-color: var(--bg-panel); }
 /* the title shrinks to its text so Open Large rides right after it; .relay-card-gap pushes the rest right */
 .relay-card-title { flex: 0 1 auto; min-width: 0; font-weight: var(--weight-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .relay-card-gap { flex: 1 1 auto; min-width: 0; }

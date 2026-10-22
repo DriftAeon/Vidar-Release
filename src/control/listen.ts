@@ -22,6 +22,7 @@ import { briefRows } from "./brief-card";
 import { cardText, laneRows } from "./lane-card";
 import { handleFlowCard, listenFlowObserve } from "./flow";
 import { startFlowApprovalRelay } from "../flow/approvals-relay";
+import { publishCtlAsk, hostedClaudeAsker, CTL_ASK_STEER } from "../relay/source-ctl-asks";
 import { promptTargetRefusal, promptDeliveryRefusal } from "./prompt-gate";
 
 export type { Requester };
@@ -215,7 +216,7 @@ function settleCard(cardId: string): boolean {
   return cancelled.delete(cardId);
 }
 
-// Shared by `prompt`/`spawn`/`ask`: one event, one modal shape
+// Shared by `prompt`/`spawn`/`flow`/`ask`: one event; all but `ask` use one modal shape
 // (`askGate`, the same component the Astra ask card uses), branching on
 // `verb` only for what Approve does with the details.
 ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; details: Record<string, unknown>; claimedAtMs: number; expiresAtMs: number }>(
@@ -351,41 +352,17 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
       return;
     }
     if (verb === "ask") {
-      // Arrives through the same ctl-card path as prompt/spawn:
-      // its own card id (not the control id), its details
-      // still carry question/choices/placeholder.
-      const question = String(details.question ?? "");
+      // A question, not an approval: it goes to Relay (source-ctl-asks) and never opens the modal. Card id,
+      // expiry and cancel behave as before; one ask in flight per asker keeps silent asks off the shared card cap.
+      const askerTab = requesterTabId(requester);
+      if (hostedClaudeAsker(driveSnapshot().tabs, askerTab)) { cardResult(id, cardId, false, CTL_ASK_STEER); return; }
       const choices = Array.isArray(details.choices) ? details.choices.map(String) : undefined;
       const choiceDetails = Array.isArray(details.details) ? details.details.map(String) : undefined;
-      const placeholder = typeof details.placeholder === "string" ? details.placeholder : undefined;
-      // Fixed kind, not per-question: one `ctl.ask` in flight at a time is the bound, not one
-      // per distinct question, or a wedged ask would silently swallow the
-      // dedup on the next one instead of queuing behind it.
-      let askTimer: ReturnType<typeof setTimeout>;
-      live.add(cardId);
-      void askGate({
-        title: "Question", // the Asked By row names the tab (2026-10-10: "A tab has a question" read poorly)
-        details: [["Asked By",requesterLabel(requester)]],
-        question,
-        choices,
-        choiceDetails,
-        placeholder,
-        id: cardId,
-        tab: requesterTabId(requester) ?? undefined,
-        claimedAtMs,
-        expiresAtMs,
-      }, "ctl-ask").then(({ approved, shown, comment, reason, choice }) => {
-        clearTimeout(askTimer);
-        const wasCancelled = settleCard(cardId);
-        if (!shown) { cardResult(id, cardId, false, `err ${reason ?? "self-answered"}`); return; }
-        if (reason === "expired") return;
-        if (wasCancelled) return;
-        if (!approved) { cardResult(id, cardId, false, `denied ${comment}`); return; }
-        cardResult(id, cardId, true, `answered choice=${choice ?? "-"} comment="${comment}"`);
-      }).catch(() => { settleCard(cardId); });
-      askTimer = setTimeout(() => {
-        if (cancelAsk("ctl-ask", "expired")) cardResult(id, cardId, false, "err expired");
-      }, Math.max(0, expiresAtMs - Date.now()));
+      const refused = publishCtlAsk(
+        { cardId, askerTab, question: String(details.question ?? ""), choices, details: choiceDetails, claimedAtMs, expiresAtMs },
+        (ok, line) => cardResult(id, cardId, ok, line),
+      );
+      if (refused) cardResult(id, cardId, false, `err ${refused}`);
       return;
     }
     cardResult(id, cardId, false, `err verb "${verb}" has no card yet`);

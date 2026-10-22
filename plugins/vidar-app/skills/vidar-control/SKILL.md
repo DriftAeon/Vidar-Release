@@ -59,10 +59,11 @@ Quote the script path: a root with spaces breaks an unquoted one.
   1-65536 bytes, no NUL, on the same card; only a Falcon-hosted agent (Claude) takes one, others get
   `err not a hosted agent` before the card. `--title` names the tab, else the app gives it a themed name. Returns `spawned <id> prompted`, or `err prompt <reason> (spawned <id>)` when the tab
   opened but the prompt did not go in (the tab stays open; do not re-send blindly, `read`/`state` first).
-- `ask` — asks the user `<question>` through the same card queue, up to 6 `--choice` values (the nth repeatable `--detail "<text>"`, 0-120 printable
+- `ask` — asks the user `<question>`, shown in your tab and in Relay (an overlay while your tab is on screen), never the approval modal; the first answer wins, from either. Up to 6 `--choice` values (the nth repeatable `--detail "<text>"`, 0-120 printable
   ASCII, describes the nth choice; needs `--choice`, never more than the choices) and an
-  optional `--placeholder`. Returns `answered choice=<c> comment="<text>"`.
-  `ask --pending` posts to Relay instead and returns at once (`ok pending <id8>`): no card, no expiry, hosted
+  optional `--placeholder`. Without `--pending` it blocks until answered (about 280 s, then `err expired`) and returns `answered choice=<c> comment="<text>"`.
+  A hosted Claude tab must use `--pending` or AskUserQuestion, not the blocking form.
+  `ask --pending` returns at once (`ok pending <id8>`): no expiry, hosted
   tabs only, no `--placeholder`; optional `--context "<line>"` (1-80 printable ASCII) is the Relay header text. The user's answer arrives later as the tab's next user message,
   `Answer to pending question <id8>: choice=<json> comment=<json>`. Never wait or poll for it.
 - `wait` — blocks until another rendered tab's state chip reads idle; no card. Returns
@@ -118,7 +119,7 @@ jettisoned one gets `err no requester` (exit 1) on every verb. The client sends 
 with `FALCON_SESSION` when Falcon exported one; a session without it may be refused after the swap
 that introduced it (restart that tab).
 
-`prompt`/`spawn`/`ask` share one approval-card queue: 3 in flight at a time (`err busy` past that),
+`prompt`/`spawn` share one approval-card queue: 3 in flight at a time (`err busy` past that),
 each card self-expires after ~280 s (`err expired`) so an abandoned card cannot wedge the queue.
 An Approve with under 40 s left on the card also answers `err expired` and does nothing.
 Approve/Deny on the card returns `denied <comment>` on refusal. After a `spawn` or `prompt`, a

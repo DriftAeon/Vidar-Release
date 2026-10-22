@@ -53,6 +53,10 @@ export interface RenderedOpts {
   /** The trust card's Refresh: open a fresh tab in this folder; `keepThis` leaves this tab open (it has
    *  a chat). Absent (Falcon's window, harnesses): the card shows no Refresh. */
   onReopenHere: ((keepThis: boolean) => Promise<void>) | null;
+  /** The Vidar-folder refusal card's Open in Worktree: make a git worktree of Vidar, open a replacement
+   *  tab there and close this one. Rejects with the failure's message. Null (Falcon's window): the plain
+   *  notice and Retry. */
+  onOpenWorktree: (() => Promise<void>) | null;
   /** Set for a Bare (profiled) tab: `/resume` shows this notice instead of calling `onResume`
    *  (the launcher's thread list reads the default home, not this tab's). */
   resumeNotice: string | null;

@@ -29,7 +29,7 @@ export const TOOLS = [
   { name: "spawn", description: `Open a new agent tab with a first prompt (model, and brief or text, are required); ${CARD}.`,
     inputSchema: obj({ agent: s(), model: s(), effort: s("low, medium, high, xhigh or max"), cwd: s(),
       brief: s("path, absolute or relative to the session's launch directory"), text: s(), title: s(), notify: b, report: s() }, ["agent", "model"]) },
-  { name: "ask", description: `Ask the user a question, optionally with choices; ${CARD}. With pending:true it posts to Relay and returns at once, no card (no placeholder); the answer arrives later as a user message.`,
+  { name: "ask", description: "Ask the user a question, optionally with choices; it shows in your tab and in Relay and is answered from either. Without pending it blocks until answered (about 280 s, then err expired). With pending:true (Falcon-hosted tabs only) it returns at once and the answer arrives later as a user message; prefer it whenever your turn can end. Hosted Claude tabs must use pending:true or AskUserQuestion.",
     inputSchema: obj({ question: s(), choices: { type: "array", items: { type: "string" }, maxItems: 6 },
       details: { type: "array", items: { type: "string", maxLength: 120 }, maxItems: 6, description: "details[i] is a one-line description of choices[i]; needs choices, at most as many as choices, each 0-120 printable ASCII chars" },
       placeholder: s(), pending: b, context: s("with pending: what the ask is for, 1-80 printable ASCII chars") }, ["question"]) },
