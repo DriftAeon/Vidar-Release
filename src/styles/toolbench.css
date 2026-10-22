@@ -75,19 +75,20 @@
   font-size: var(--font-10); line-height: 1.35; color: var(--fg-dim);
   white-space: pre; tab-size: 4;
 }
-.tool-send {
-  flex-shrink: 0;
+.tool-send { flex-shrink: 0; border-radius: var(--radius-6); cursor: pointer; }
+.tool-send:not(.ws-btn) {
   background: var(--bg-panel); color: var(--accent);
-  border: 1px solid var(--accent); border-radius: var(--radius-6);
-  padding: var(--space-5) var(--space-10); cursor: pointer; font-size: var(--font-12);
+  border: 1px solid var(--accent);
+  font-size: var(--font-12); /* padding comes from .icon-btn (Copy is the only flat .tool-send) */
 }
-.tool-send:disabled { color: var(--fg-dim); border-color: var(--border); cursor: default; }
+.tool-send:disabled { cursor: default; }
+.tool-send:not(.ws-btn):disabled { color: var(--fg-dim); border-color: var(--border); }
+/* To Tray: the panel's primary action keeps its accent as the Sheen edge */
+.tool-send.ws-btn:not(:disabled), .tool-send.ws-btn:hover:not(:disabled) { --edge: var(--accent); color: var(--fg); }
 /* icon-only Copy: the colour art is the label; hover/focus step the background, disabled dims the art */
 .tool-send.icon-btn { display: flex; align-items: center; justify-content: center; padding: var(--space-4) var(--space-8); }
 .tool-send.icon-btn:hover:not(:disabled), .tool-send.icon-btn:focus-visible { background: var(--bg-hover); outline: none; }
 .tool-send.icon-btn:disabled { opacity: 0.5; }
-.tool-send.subtle { color: var(--fg-dim); border-color: var(--border); }
-.tool-send.subtle:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 /* the readout doubles as a prompt before anything is selected */
 .tool-readout-idle { color: var(--fg-dim); }
 

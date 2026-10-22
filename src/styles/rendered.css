@@ -209,6 +209,8 @@
 .blk-turn.error { color: var(--dead-red); }
 .turn-error { white-space: pre-wrap; word-break: break-word; margin-top: var(--space-4); }
 .blk-exit { color: var(--fg-dim); font-size: var(--font-12); display: flex; align-items: center; gap: var(--space-8); }
+/* Retry after a failed start is a text button: the Sheen `.ws-btn` face on a 24px row (rendered-resume would flatten it). */
+.blk-exit .ws-btn.rendered-retry { min-height: var(--row-24); }
 
 /* tool pills: one line collapsed, input/output when open */
 .blk-tool { border: 1px solid var(--border); border-radius: var(--radius-4); background: var(--bg-panel); font-size: var(--font-12); }
@@ -355,4 +357,31 @@ details.has-card > pre.tool-input { display: none; }
 .rendered-palette.hidden { display: none; }
 .palette-row { border-color: transparent; text-align: left; padding: var(--space-2) var(--space-8); }
 .palette-row.on { border-color: var(--accent); }
+/* Notice action card: amber wash and edge, the warning left, the actions stacked right on the
+   Sheen Cap face (`.wb-actions > button.wb-card-btn`, workbench.css). */
+.blk-notice-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8);
+  border-left: var(--notice-warn-edge); border-radius: 0 var(--radius-4) var(--radius-4) 0;
+  background: var(--notice-warn-wash); padding: var(--space-4) var(--space-8) var(--space-4) var(--space-12);
+}
+.blk-notice-card > .notice-body { flex: 1 1 auto; min-width: 0; }
+.blk-notice-card .blk-notice { padding-left: 0; overflow-wrap: anywhere; }
+.blk-notice-card .notice-err { color: var(--dead-red); font-size: var(--font-12); margin-top: var(--space-4); overflow-wrap: anywhere; }
+.blk-notice-card > .notice-acts { display: flex; flex-direction: row; align-items: center; gap: var(--space-4); flex: none; margin-left: auto; }
+/* Trust Folder: the Sheen Cap shape on the decision pair's Approve green (--approve-grad, tokens.css), bold
+   --fg-bright label like Approve (user, 2026-10-22): white on --approve-fill reads 4.63:1, darker on the lower stops. */
+.blk-notice-card > .notice-acts > button.notice-trust {
+  --face: var(--approve-grad); --depth: inset 0 1px 0 color-mix(in srgb, white 20%, transparent); --edge: var(--approve-edge);
+  color: var(--fg-bright); font-weight: var(--weight-strong);
+}
+.blk-notice-card > .notice-acts > button.notice-trust:hover:not(:disabled) { --face: var(--approve-grad-hover); --edge: var(--approve-edge); color: var(--fg-bright); }
+.blk-notice-card > .notice-acts > button.notice-trust:active:not(:disabled) { --face: var(--approve-grad-press); --depth: inset 0 2px 2px color-mix(in srgb, black 25%, transparent); color: var(--fg-bright); }
+.blk-notice-card > .notice-acts > button.wb-card-btn { min-height: var(--row-24); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); }
+.blk-notice-card > .notice-acts > button.wb-card-btn.is-error { --edge: var(--dead-red); }
+.blk-notice-card > .notice-acts > button.wb-card-btn .icn { width: var(--font-12); height: var(--font-12); flex: none; }
+.notice-spin { animation: notice-spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
+@keyframes notice-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .notice-spin { animation: none; } }
+.blk-notice.done { display: flex; align-items: center; gap: var(--space-4); }
+.blk-notice.done .icn { width: var(--font-12); height: var(--font-12); color: var(--ok-green); flex: none; }
 

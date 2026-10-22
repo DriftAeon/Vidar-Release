@@ -70,7 +70,6 @@ export function buildFilterBar(h: BarHandlers): FilterBar {
   const search = el("label", "jx-search");
   const input = el("input", "jx-search-in");
   input.type = "text";
-  input.placeholder = "Search";
   input.setAttribute("aria-label", "Search");
   input.maxLength = MAX_TEXT;
   input.spellcheck = false;
@@ -87,7 +86,7 @@ export function buildFilterBar(h: BarHandlers): FilterBar {
     h.change({ ...cur.filters, text: input.value.slice(0, MAX_TEXT) }, false);
   });
 
-  const clear = el("button", "jx-link");
+  const clear = el("button", "ws-btn jx-clear");
   clear.type = "button";
   clear.textContent = "Clear Filters";
   clear.addEventListener("click", () => { close(); h.change(blankFilters(), false); });

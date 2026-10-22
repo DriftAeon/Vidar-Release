@@ -387,9 +387,10 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
 
   /* -- approvals -- */
 
-  const { attachCard, openHydratedCards, approvalCard, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED } = createCards(S, {
+  const { attachCard, openHydratedCards, approvalCard, asyncAskCard, settleAsyncAsks, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED } = createCards(S, {
     transport, textarea, follow, tools, approvals, approvalQueue, awaiting, sendEncoded,
     append, sealGroup, groupRefresh, stalePill, refreshState, noticeBlock, agent: opts.agent, stats: hydrateStats,
+    sendText: (text) => sendText(text), // composer is built below; called only on a click
   });
 
   /* -- host payloads: built after the cards, so cancelApprovals and alreadyAnswered go in as values -- */
@@ -404,7 +405,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   /* -- composer -- */
 
   const { updatePalette, movePalette, pickPalette, hidePalette } = createPalette(S, { palette, textarea });
-  const { submit, flushQueue, markUndelivered, interrupt, queuedHosts } = createComposer(S, {
+  const { submit, sendText, flushQueue, markUndelivered, interrupt, queuedHosts } = createComposer(S, {
     transport, textarea, palette, sl, queued, approvals, sendEncoded, localCommand, denyPending,
     stopAgent: (detach) => stopAgent(detach), spawn: () => spawn(), // thunks: lifecycle is built last
     resetTranscript, setInTurn, sealGroup, append, userBlock, noticeBlock,
@@ -426,7 +427,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
     markCacheWarm, resetCache, settleModel, settleSwitch, append, userBlock, unknownBlock, noticeBlock: (t, l, q) => { if (!(l === "error" && bar.login?.fail?.(t))) noticeBlock(t, l, q); }, // a login failure shows once, in the open login card
     restoredBlock: (t, truncated) => { sealGroup(); append(restoredCard(t, truncated)); },
     textDelta, textDone, thinkingBlock, settleThoughts, sealGroup, clearInterim, collapseTurnGroups,
-    toolPending, toolStart, toolDone, stalePill, approvalCard, alreadyAnswered,
+    toolPending, toolStart, toolDone, stalePill, approvalCard, alreadyAnswered, asyncAskCard, settleAsyncAsks,
     addWaiting, resumeWaiting, taskDone, liveTasks, clearWaiting, settleDoneAgents, settleReplayedAgents, flushQueue, onExit: (code) => onExit(code), groupRefresh,
     pendingQueued: () => [...queuedHosts(), ...nextHostedPrompt()], // a hosted body never fills the composer queue
   });

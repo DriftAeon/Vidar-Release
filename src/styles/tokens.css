@@ -163,6 +163,10 @@
   --tint-ok-edge: color-mix(in srgb, var(--ok-green) 40%, var(--bg-panel));
   --tint-warn: color-mix(in srgb, var(--approval-amber) 12%, var(--bg-panel));
   --tint-warn-edge: color-mix(in srgb, var(--approval-amber) 40%, var(--bg-panel));
+  /* Notice action card (Rendered Bare warnings with Trust Folder / Ask Agent to Fix; user 2026-10-22):
+     amber at 8% over the transcript ground, and a 2px amber left edge. */
+  --notice-warn-wash: color-mix(in srgb, var(--approval-amber) 8%, var(--bg));
+  --notice-warn-edge: 2px solid var(--approval-amber);
   --tint-alert: color-mix(in srgb, var(--alert) 12%, var(--bg-panel));
   --tint-alert-edge: color-mix(in srgb, var(--alert) 40%, var(--bg-panel));
   /* Status tints (browser bands and pills): the status tone at 12% over the panel; the tone itself is the label. */
@@ -177,6 +181,9 @@
   --kind-hook: #e3bd4f;
   /* Generated rune libraries' set-head hue (2026-10-20) */
   --hue-generated: #3fbfb0;
+  /* Set-only libraries (Kit) and the Inherited Runes card (user-approved, 2026-10-22) */
+  --hue-set: #e07a7a;
+  --hue-inherited: #4f7df0;
   /* Module kind and place colours (Jira, Notion, Slack card edges, 2026-10-18); story and task are
      retuned away from --status-done and --status-todo */
   --kind-epic: #a495e8;
@@ -186,6 +193,16 @@
   --kind-subtask: #9aa6c8;
   --kind-source: #e3bd4f;
   --kind-page: #8ea4bf;
+  /* Notion bright tones (Tinted Edges, user pick 2026-10-22): band labels, card edges and solid pill fills; one set for
+     every theme, as the kind and status tokens are */
+  --kind-source-bright: #3fe0cf;
+  --kind-page-bright: #a3bcff;
+  --tone-todo-bright: #6cb6ff;
+  --tone-progress-bright: #ffc94d;
+  --tone-review-bright: #d9a0ff;
+  --tone-blocked-bright: #ff7d5c;
+  --tone-done-bright: #62e38e;
+  --tone-gray-bright: #b9bfcc;
   --place-dm: #62b6e0;
   --place-group: #a495e8;
   --place-channel: #8cc496;

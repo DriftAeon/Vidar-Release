@@ -72,7 +72,6 @@ export function buildFilterRow(h: ChipHooks): FilterRow {
   box.appendChild(lucide("search", "icn"));
   const search = node("input", "br-search-q");
   search.type = "search";
-  search.placeholder = "Search";
   search.setAttribute("aria-label", "Search");
   search.spellcheck = false;
   box.appendChild(search);

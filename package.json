@@ -14,7 +14,7 @@
     "tauri": "tauri",
     "lint:ui": "node tools/ui/lint-copy.mjs && node tools/ui/lint-ui.mjs",
     "lint:copy": "node tools/ui/lint-copy.mjs",
-    "test": "node --test \"tests/**/*.test.mjs\" \"tools/**/*.test.mjs\"",
+    "test": "node --test --test-timeout=30000 \"tests/**/*.test.mjs\" \"tools/**/*.test.mjs\"",
     "prepare": "node -e \"fs.existsSync('tools/gate/hooks-path.mjs')&&import('./tools/gate/hooks-path.mjs')\"",
     "gate": "node tools/gate/gate.mjs full",
     "gate:fast": "node tools/gate/gate.mjs fast"

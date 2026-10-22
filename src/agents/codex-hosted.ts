@@ -7,7 +7,7 @@
 // to Falcon operations: the bridge stays provider-neutral and never carries renderer-authored
 // JSON-RPC. Login stays in-process: there is no encodeLogin, so a hosted tab offers none.
 
-import type { AdapterStart, AgentAdapter, AgentEvent, Effort, PermissionMode } from "./protocol";
+import { isPermissionMode, type AdapterStart, type AgentAdapter, type AgentEvent, type Effort, type PermissionMode } from "./protocol";
 import { CodexAdapter } from "./codex";
 
 type Json = Record<string, unknown>;
@@ -52,6 +52,11 @@ export class HostedCodexAdapter implements AgentAdapter {
       // ModelCatalog); the view's own reply builds the same `models` event in-process does
       return this.view.reply("model/list", obj(obj(message.params)?.result) ?? {});
     }
+    if (message?.method === "falcon/skills") {
+      // the skills/list reply the Rust client asked for on attach and on skills/changed
+      // (falcon/events.rs CodexQueries); the view's reply builds the in-process `commands` event
+      return this.view.reply("skills/list", obj(obj(message.params)?.result) ?? {});
+    }
     const m = reply(line);
     if (!m) return this.view.feed(line);
     // a reply answers the host's own request, so no pending id names it: its shape does (the
@@ -68,25 +73,70 @@ export class HostedCodexAdapter implements AgentAdapter {
   }
 
   encodeUser(content: string): string {
-    return JSON.stringify({ type: "user", content });
+    // a skill prompt leaves as items (text + skill); the host validates and forwards them
+    const items = this.view.skills.input(content);
+    return JSON.stringify({ type: "user", content: items.length > 1 ? items : content });
   }
   encodePermission(requestId: string, decision: Decision): string {
     this.view.encodePermission(requestId, decision); // settles the card here; the host writes the answer
     return JSON.stringify({ type: "permission_response", id: requestId, ...decision });
   }
+  permissionRefusal(requestId: string, decision: Decision): string | null {
+    return this.view.permissionRefusal(requestId, decision);
+  }
   encodeInterrupt(): string {
     return JSON.stringify({ type: "interrupt" });
   }
+  // The setters store into the view only when the host applied them (hostRecord): a Failed one
+  // must leave the view as it was.
   encodeSetPermissionMode(mode: PermissionMode): string {
-    this.view.encodeSetPermissionMode(mode); // the session line and Auto Review downgrade read it
     return JSON.stringify({ type: "set_permission_mode", mode });
   }
   encodeSetModel(model: string): string {
-    this.view.encodeSetModel(model);
     return JSON.stringify({ type: "set_model", model });
   }
   encodeSetEffort(level: Effort): string {
-    this.view.encodeSetEffort(level);
     return JSON.stringify({ type: "set_effort", level });
+  }
+
+  /** setter commands accepted but not yet settled, keyed by generation and command id */
+  private readonly accepted = new Map<string, { kind: string; payload: Json }>();
+
+  /** The host's journal records for the three setters: an applied one (this client's, another
+   *  client's, or a replay's) becomes the event the panel's pills settle on; a failed or unknown
+   *  one stays silent (the panel's send() result and the host notice cover it). */
+  hostRecord(body: Json, gen = 0): AgentEvent[] {
+    const key = (command: unknown) => `${gen}:${String(command)}`;
+    if (body.record === "permission-mode-changed") {
+      if (!isPermissionMode(body.mode)) return [];
+      this.view.encodeSetPermissionMode(body.mode);
+      return [{ kind: "mode", mode: body.mode, ack: true }];
+    }
+    if (body.record === "command-accepted") {
+      const kind = body.kind;
+      if (kind === "set_model" || kind === "set_effort" || kind === "set_permission_mode") {
+        this.accepted.set(key(body.command), { kind, payload: obj(body.payload) ?? {} });
+      }
+      return [];
+    }
+    if (body.record !== "command-settled") return [];
+    const k = key(body.command);
+    const held = this.accepted.get(k);
+    this.accepted.delete(k);
+    if (!held || body.outcome !== "applied") return [];
+    const { kind, payload } = held;
+    if (kind === "set_model" && typeof payload.model === "string" && payload.model) {
+      this.view.encodeSetModel(payload.model);
+      return [{ kind: "model_set", model: payload.model }];
+    }
+    if (kind === "set_permission_mode" && isPermissionMode(payload.mode)) {
+      this.view.encodeSetPermissionMode(payload.mode);
+      return [{ kind: "mode", mode: payload.mode, ack: true }];
+    }
+    if (kind === "set_effort" && typeof payload.level === "string" && payload.level) {
+      this.view.encodeSetEffort(payload.level as Effort);
+      return [{ kind: "effort", level: payload.level }];
+    }
+    return [];
   }
 }

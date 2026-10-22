@@ -59,6 +59,9 @@ pub struct GenerateJson {
     pub warnings: Vec<String>,
     /// The row payload as a Codex spawn encodes it; `null` on Claude rows. Bare Codex rows have no cap.
     pub encoded_chars: Option<usize>,
+    /// Written (as `null`) by older generations; read so those libraries still parse, never written again.
+    #[serde(default, skip_serializing)]
+    pub limit: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -191,6 +194,7 @@ pub fn render(env: &Envelope, inputs: &[Input], meta: &Meta) -> Result<Rendered,
         dropped: env.dropped.clone(),
         warnings: Vec::new(),
         encoded_chars: None,
+        limit: None,
     };
     Ok(Rendered { files, on, manifest })
 }
@@ -198,6 +202,32 @@ pub fn render(env: &Envelope, inputs: &[Input], meta: &Meta) -> Result<Rendered,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_older_generate_json_with_a_null_limit_still_parses_and_is_not_rewritten_with_it() {
+        let now = GenerateJson {
+            version: VERSION,
+            library: "gen-x-1".into(),
+            row_key: "x".into(),
+            agent: "claude".into(),
+            model: "m".into(),
+            effort: "low".into(),
+            skill_sha256: "s".into(),
+            date: "2026-10-18".into(),
+            inputs: Vec::new(),
+            runes: Vec::new(),
+            sections: Vec::new(),
+            dropped: Vec::new(),
+            warnings: Vec::new(),
+            encoded_chars: None,
+            limit: None,
+        };
+        let written = serde_json::to_string(&now).unwrap();
+        assert!(!written.contains("limit"));
+        let older = format!("{},\"limit\":null}}", written.trim_end_matches('}'));
+        let g: GenerateJson = serde_json::from_str(&older).expect("a null limit parses");
+        assert_eq!(g, now);
+    }
 
     #[test]
     fn keys_equal_header_mjs() {

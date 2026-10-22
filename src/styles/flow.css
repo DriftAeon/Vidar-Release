@@ -117,19 +117,14 @@
 .flow-port polygon { fill: var(--kind); stroke: var(--kind); stroke-width: 1; stroke-linejoin: round; }
 .flow-port-in:not(.connected) polygon { fill: var(--bg); }
 .flow-port:hover svg { transform: scale(1.35); filter: brightness(1.4); }
-.flow-reset, .flow-add-btn, .flow-run-cancel, .flow-tidy-btn, .flow-save-btn {
-  font-size: var(--font-11); padding: var(--space-2) var(--space-6); /* grandfathered toolbar look; Save joined the list (2026-10-05), values unchanged */
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-3); /* grandfathered toolbar look, as above */
-  color: var(--fg-dim); cursor: pointer;
-}
+/* Flow text buttons wear the Sheen `.ws-btn` face (user 2026-10-22); the icon buttons Save and Tidy keep the flat look. */
+.flow-tidy-btn, .flow-save-btn { font-size: var(--font-11); padding: var(--space-2) var(--space-6); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-3); color: var(--fg-dim); cursor: pointer; } /* pre-existing legacy tokens, grandfathered (lint:ui) */
+.flow-tidy-btn:hover, .flow-save-btn:hover { color: var(--fg); border-color: var(--accent); }
+.flow-save-btn:disabled:hover, .flow-tidy-btn:disabled:hover { color: var(--fg-dim); border-color: var(--border); }
 /* Bottom-right corner of the canvas. */
 .flow-reset { position: absolute; bottom: 8px; right: 8px; }
-.flow-reset:hover, .flow-add-btn:hover, .flow-run-cancel:hover, .flow-tidy-btn:hover, .flow-save-btn:hover { color: var(--fg); border-color: var(--accent); }
 /* Icon-only like Tidy (the .icon-btn class sizes the icon); the disc reads 20% darker (2026-10-11) */
 .flow-save-btn .icn { filter: brightness(0.8); }
-/* Save is disabled while the canvas shows a User graph, Tidy while no flow is open: no hover lift
-   then (base.css dims it) */
-.flow-save-btn:disabled:hover, .flow-tidy-btn:disabled:hover { color: var(--fg-dim); border-color: var(--border); }
 /* No flow open (the open one was deleted): the Changes pane's empty-state look (.cx-empty,
    changes.css) centred over the canvas; [hidden] has to win over its display:flex. */
 .flow-canvas .flow-empty { position: absolute; inset: 0; justify-content: center; padding: 0; pointer-events: none; }
@@ -201,7 +196,8 @@
 #flow-pick-menu .flow-pick-head { color: var(--fg-dim); font-size: var(--font-11); }
 #flow-pick-menu div.flow-pick-head { padding: var(--space-4) var(--space-12); }
 #flow-pick-menu .flow-pick-user:not(:first-child) { margin-top: var(--space-4); }
-#flow-pick-menu .flow-pick-user .car { flex-shrink: 0; color: var(--fg-dim); }
+#flow-pick-menu .flow-pick-user .car { flex-shrink: 0; color: var(--fg-dim); display: inline-flex; }
+#flow-pick-menu .flow-pick-user .car .icn { width: var(--space-12); height: var(--space-12); }
 /* User rows (flow-picker.ts addUserRow): the menu row plus a Delete icon beside it, shown on row
    hover or focus like the Changes section actions; hover is the shared menu row look (menus.css). */
 #flow-pick-menu .flow-pick-item { display: flex; align-items: center; gap: var(--space-2); }

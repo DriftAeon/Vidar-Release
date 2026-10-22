@@ -37,6 +37,10 @@ pub const CAPABILITIES: &[&str] = &[CAPABILITY_STEER];
 pub const CAPABILITY_CODEX_TURNS: &str = "codex_turns";
 /// The host can relay allowlisted Codex reads to their requesting connection.
 pub const CAPABILITY_CODEX_QUERY: &str = "codex_query";
+/// The host's hosted Codex prompt takes one `skill` block beside its text (`turns::input`).
+/// Listed with [`CAPABILITY_CODEX_TURNS`]; a client asks `skills/list` only on a host that
+/// listed it.
+pub const CAPABILITY_CODEX_SKILLS: &str = "codex_skills";
 /// The host admits a Codex spawn with `profile: "bare"` (`codex.rs`): the child runs on the
 /// Bare home's allowlisted env and the admitted payload. Listed with [`CAPABILITY_CODEX_TURNS`],
 /// so only when Codex resolves; a client sends a profiled Codex spawn only to a host that listed

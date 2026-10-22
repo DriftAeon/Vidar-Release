@@ -83,7 +83,8 @@ test("the form: the token is emptied on submit, never left in the DOM, and error
   await open(UNSET);
   btn("Connect").click();
   assert.equal(root.querySelector("form").hidden, false);
-  assert.ok(btn("Open Notion Connections") && btn("Cancel"));
+  assert.deepEqual([...root.querySelectorAll("form .nt-link")].map((b) => b.textContent), ["Create a Personal Token", "Use a Connection Instead"], "the personal token leads");
+  assert.ok(btn("Cancel"));
   assert.equal(tokenField().type, "password");
   const titles = [];
   for (const kind of ["auth", "network", "endpoint"]) {
@@ -94,7 +95,8 @@ test("the form: the token is emptied on submit, never left in the DOM, and error
     assert.ok(!root.outerHTML.includes("ntn_secret_000"), "the token is not in the DOM");
   }
   assert.deepEqual(titles, ["Notion Refused the Token", "Notion Did Not Answer", "Notion Couldn't Connect"]);
-  btn("Open Notion Connections").click();
+  btn("Create a Personal Token").click();
+  btn("Use a Connection Instead").click();
   await dom.flush();
   answers.notion_connect = { workspace: "Example Workspace", kind: "connection" };
   await submit("ntn_secret_000");

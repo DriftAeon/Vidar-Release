@@ -1,0 +1,31 @@
+{
+  "accept": [
+    {
+      "blocks": [
+        { "type": "text", "text": "/build.plan tidy" },
+        { "type": "skill", "name": "build.plan", "path": "C:/work/plan/SKILL.md", "extra": 1 }
+      ],
+      "input": [
+        { "type": "text", "text": "/build.plan tidy" },
+        { "type": "skill", "name": "build.plan", "path": "C:/work/plan/SKILL.md" }
+      ]
+    }
+  ],
+  "refuse": [
+    { "why": "no text block", "blocks": [{ "type": "skill", "name": "a", "path": "C:/a/SKILL.md" }] },
+    {
+      "why": "two skills",
+      "blocks": [
+        { "type": "text", "text": "x" },
+        { "type": "skill", "name": "a", "path": "C:/a/SKILL.md" },
+        { "type": "skill", "name": "b", "path": "C:/b/SKILL.md" }
+      ]
+    },
+    { "why": "empty name", "blocks": [{ "type": "text", "text": "x" }, { "type": "skill", "name": "", "path": "C:/a/SKILL.md" }] },
+    { "why": "whitespace in name", "blocks": [{ "type": "text", "text": "x" }, { "type": "skill", "name": "a b", "path": "C:/a/SKILL.md" }] },
+    { "why": "control in name", "blocks": [{ "type": "text", "text": "x" }, { "type": "skill", "name": "a\u0007", "path": "C:/a/SKILL.md" }] },
+    { "why": "relative path", "blocks": [{ "type": "text", "text": "x" }, { "type": "skill", "name": "a", "path": "a/SKILL.md" }] },
+    { "why": "control in path", "blocks": [{ "type": "text", "text": "x" }, { "type": "skill", "name": "a", "path": "C:/a\n/SKILL.md" }] },
+    { "why": "missing path", "blocks": [{ "type": "text", "text": "x" }, { "type": "skill", "name": "a" }] }
+  ]
+}

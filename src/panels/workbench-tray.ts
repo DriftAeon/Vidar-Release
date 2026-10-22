@@ -14,7 +14,7 @@ import { publishBlock, publishEntry, restoreTray, type Outcome, type Restore } f
 import { trayTakesPaste } from "./workbench-paste";
 import { releaseName, reserveNames, takeBlockName } from "./workbench-names";
 import { MAX_PIXELS, TEXT_EXT, admit } from "./workbench-limits";
-import { copyContent, copyPathAction } from "./workbench-actions";
+import { copyContent, copyPathAction, ensureSaved } from "./workbench-actions";
 import { iconImg } from "../icon-img";
 import { mountAnnotation } from "./workbench-annotate";
 import { copyButton, copyPathButton, isBrowserPath, openInBrowserButton } from "./file-actions";
@@ -314,9 +314,15 @@ function buildBlock(kind: Block["kind"], source: Source, previewBytes: number, c
   if (file && (/\.md$/i.test(file.name) || (/\.txt$/i.test(file.name) && file.truncated))) {
     btn("Open", "Open",() => void deps.openInDocument(file.path));
   }
-  // Open in Browser only where the backend opens the file (.html/.htm); no disabled state, like Open
-  if (isBrowserPath(file?.path)) {
-    actions.append(openInBrowserButton({ path: () => b.path, note: (m) => { b.note.textContent = m; } }));
+  // Open in Browser where the backend opens the file (html, htm, svg, png, jpg, jpeg, gif, webp) and
+  // for any image block: a file-less one saves once to bridge\clips on click (b.path then reused).
+  // No disabled state, like Open.
+  if (isBrowserPath(file?.path) || kind === "png") {
+    actions.prepend(openInBrowserButton({ // far left, ahead of Copy (user, 2026-10-22)
+      path: () => b.path,
+      ensure: () => ensureSaved(b),
+      note: (m) => { b.note.textContent = m; },
+    }));
   }
   // Annotate sits last before ✕ (2026-10-05)
   actions.append(ann.button);

@@ -133,7 +133,7 @@ export type BareFileKind = "rules" | "memory" | "skill" | "agent" | "hook" | "mc
 export interface BareLocalFile {
   path: string; shown: string; kind: BareFileKind; library?: string; section?: string;
   scope: "global" | "project"; ticked: boolean; pickable: boolean;
-  reason?: "pathScoped" | "notMjs" | "guardDriver" | "blockTarget"
+  reason?: "pathScoped" | "notMjs" | "guardDriver"
     | "tooLarge" | "shadowed" | "summaryOnly" | "notHosted" | "stdio";
   guard?: { event: string; matcher?: string; run: string[] };
   /** Absent = a Claude row; mcp rows carry the hosted server name and its pinned url. */
@@ -266,7 +266,10 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   open_result: Cmd<{ id: string; ok: boolean; tab?: string | null; verdict: string; comment?: string | null; reason?: string | null }, void>;
   control_result: Cmd<{ id: string; ok: boolean; line: string; cardId?: string | null }, void>;
   // agent (Codex app-server)
-  spawn_codex_appserver: Cmd<{ id: string; cwd: string; rulesFile?: string | null; tabName?: string | null; profile?: string | null; rowKey?: string | null; agent?: string | null }, { gen: number; developerInstructions: string | null }>;
+  spawn_codex_appserver: Cmd<{ id: string; cwd: string; rulesFile?: string | null; tabName?: string | null; profile?: string | null; rowKey?: string | null; agent?: string | null }, { gen: number; developerInstructions: string | null; bareWarnings?: string[] }>;
+  // the Trust Folder action on a Bare Codex tab (bare/codex_trust.rs)
+  codex_trust_offer: Cmd<{ id: string }, { folder: string; text: string } | null>;
+  codex_trust_folder: Cmd<{ id: string; folder: string }, void>;
   // rules (src-tauri/src/rules/mod.rs `RulesPrepared`, camelCase)
   rules_prepare: Cmd<{ key: string; ids: string[]; client: "claude" | "codex" }, {
     file: string | null;

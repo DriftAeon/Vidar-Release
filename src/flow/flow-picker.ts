@@ -238,7 +238,8 @@ function addCollapsibleHead(parent: HTMLElement, label: string, collapsed: boole
   nm.textContent = label;
   const car = document.createElement("span");
   car.className = "car";
-  car.textContent = collapsed ? "▸" : "▾";
+  car.append(iconImg("folder"));
+  head.title = collapsed ? "Expand" : "Collapse";
   head.append(nm, car);
   head.addEventListener("click", onToggle);
   parent.append(head);

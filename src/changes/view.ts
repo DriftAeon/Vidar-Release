@@ -319,10 +319,10 @@ export function buildView(h: Handlers): View {
     return card;
   }
 
-  function drawEmpty(icon: LucideName, title: string, sub: string | null) {
+  function drawEmpty(icon: LucideName | null, title: string, sub: string | null) {
     clearEmptyState(empty);
     empty.replaceChildren();
-    empty.append(lucide(icon, "icn cx-empty-icon"));
+    if (icon) empty.append(lucide(icon, "icn cx-empty-icon"));
     const t = el("span", "cx-empty-title");
     t.textContent = title;
     empty.append(t);
@@ -473,7 +473,7 @@ export function buildView(h: Handlers): View {
     list.hidden = !repo || total === 0;
     if (s.mode === "no-folder") drawEmpty("folder", "No Folder", null);
     else if (s.mode === "no-repo") drawNoRepo(s.cwd, s.note);
-    else if (repo && total === 0) drawEmpty("check", "No Changes", null);
+    else if (repo && total === 0) drawEmpty(null, "No Changes", null);
     empty.hidden = !(s.mode === "no-folder" || s.mode === "no-repo" || (repo && total === 0));
     bar.hidden = !repo;
     syncBar();

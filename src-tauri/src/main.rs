@@ -175,6 +175,8 @@ fn main() {
             lab::lab_item,
             agent::agent_send,
             agent::kill_agent,
+            bare::codex_trust::codex_trust_offer,
+            bare::codex_trust::codex_trust_folder,
             agent::agent_reap_all,
             codex_threads::list_codex_threads,
             status::list_external_sessions,

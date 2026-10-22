@@ -37,7 +37,6 @@ interface Handlers {
   submit(token: string): void;
   refresh(): void;
   disconnect(): void;
-  open(item: SlackItem): void;
   send(item: SlackItem): void;
   copyManifest(): void;
   openApps(): void;
@@ -160,7 +159,6 @@ export function buildView(h: Handlers): View {
 
   function drawRow(item: SlackItem, seen: string | null): HTMLElement {
     const row = el("div", "cx-row");
-    row.title = "Opens the message in Slack.";
     const isNew = isNewer(item.ts, seen);
     const dot = el("span", isNew ? "sx-dot sx-dot-new" : "sx-dot");
     if (isNew) {
@@ -189,11 +187,6 @@ export function buildView(h: Handlers): View {
     send.addEventListener("click", (e) => { e.stopPropagation(); h.send(item); });
     racts.append(send);
     row.append(dot, av, from, summary, status, racts);
-    row.tabIndex = 0;
-    row.addEventListener("click", () => h.open(item));
-    row.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target === row) { e.preventDefault(); h.open(item); }
-    });
     return row;
   }
 

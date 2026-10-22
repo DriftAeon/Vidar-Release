@@ -17,6 +17,7 @@ import { getPref } from "../prefs";
 import { ensureCodexModels } from "../agents/codex-models";
 import { canLoad, traceRunes } from "../runes/trace";
 import type { RunesCatalog, RunesLoaded } from "../runes/types";
+import { trustCard, type TrustOffer } from "./rendered/notice-actions";
 
 const GROUP_NAME: Record<string, string> = { global: "Global", vidar: "Vidar" };
 // tier dividers as the sets view: tier 1 (every session) is the top group and gets none
@@ -183,11 +184,12 @@ function warnLine(text: string): HTMLElement {
 
 /** The Bare trace, drawn once in View: the launch's warnings, then today's file-load rows when the
  *  transcript has any. The set, skill and hook name lists repeat the config and are not drawn. */
-function bareTraceParts(launch: BareLaunch | null, launchErr: string | null, res: RunesLoaded | null): HTMLElement[] {
+export function bareTraceParts(launch: BareLaunch | null, launchErr: string | null, res: RunesLoaded | null, tabId = "", trust: TrustOffer | null = null): HTMLElement[] {
   const parts: HTMLElement[] = [];
   if (launchErr) parts.push(el("div", "runes-err", launchErr));
   else if (launch) {
-    for (const w of launch.warnings) parts.push(warnLine(w));
+    // the untrusted-folder warning becomes the chat's trust card (Trust Folder, Dismiss) while the tab has an offer
+    for (const w of launch.warnings) parts.push(trust && w === trust.text ? trustCard(tabId, trust) : warnLine(w));
   }
   if (hasLoads(res)) parts.push(...traceParts(res));
   return parts;
@@ -205,7 +207,7 @@ export function codexModelsReady(agent: string): Promise<void> | undefined {
 }
 
 /** Bare tab: the import and actives view replaces the tab's body; the load trace sits collapsed below it. */
-function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null, launch: BareLaunch | null, launchErr: string | null) {
+function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null, launch: BareLaunch | null, launchErr: string | null, trust: TrustOffer | null) {
   const [text, bad, strip] = bareStateLine(f, res, err, launch);
   stateEl.textContent = strip ? "" : text;
   stateEl.classList.toggle("runes-err", bad);
@@ -219,7 +221,7 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
   drawnKey = null;
   const rowKey = sessionLaunchInfo(f.id)?.rowKey ?? null;
   const key = rowKey ? `${f.agent}|${rowKey}|${f.cwd}` : `tab|${f.id}`;
-  const drawKey = JSON.stringify([res, err, catalogErr, catalogVer, launch, launchErr]);
+  const drawKey = JSON.stringify([res, err, catalogErr, catalogVer, launch, launchErr, trust]);
   const fresh = freshNext || f.id !== lastTabId;
   freshNext = false;
   let e = bareViews.get(key);
@@ -233,7 +235,7 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
         rowKey,
         cwd: f.cwd,
         profile: "bare",
-        traceParts: bareTraceParts(launch, launchErr, res),
+        traceParts: bareTraceParts(launch, launchErr, res, f.id, trust),
         card: ctx,
         gen: () => genModels(f.agent),
         modelsReady: codexModelsReady(f.agent),
@@ -244,7 +246,7 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
     bareViews.set(key, e);
   } else {
     if (e.drawKey !== drawKey) {
-      e.handle.setTrace(bareTraceParts(launch, launchErr, res));
+      e.handle.setTrace(bareTraceParts(launch, launchErr, res, f.id, trust));
       e.drawKey = drawKey;
     }
     if (fresh) e.handle.reload();
@@ -298,11 +300,16 @@ async function refresh(reloadCatalog: boolean) {
       launchErr = String(e);
     }
   }
+  // a Codex tab whose folder the user's config does not trust has an offer; the chat reads it the same way (transport.ts)
+  let trust: TrustOffer | null = null;
+  if (f?.profile === "bare" && f.agent === "codex" && launch && my === seq && viewEl) {
+    try { trust = (await invoke("codex_trust_offer", { id: f.id })) ?? null; } catch { trust = null; }
+  }
   if (my !== seq || !viewEl) return; // a newer query or disposal owns the view
   refreshBtn.disabled = false;
   refreshBtn.removeAttribute("aria-busy");
   if (f?.profile === "bare") {
-    drawBare(f, res, err, launch, launchErr);
+    drawBare(f, res, err, launch, launchErr, trust);
     lastTabId = f.id;
     return;
   }

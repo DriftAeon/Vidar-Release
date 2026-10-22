@@ -8,7 +8,7 @@ use super::home::norm_cwd;
 
 /// The user's Codex config: `%CODEX_HOME%\config.toml`, else `~\.codex\config.toml`.
 #[cfg_attr(test, allow(dead_code))]
-fn user_config_path() -> Option<PathBuf> {
+pub(super) fn user_config_path() -> Option<PathBuf> {
     let home = std::env::var_os("CODEX_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).or_else(|| {
         let up = std::env::var_os("USERPROFILE").filter(|v| !v.is_empty())?;
         Some(PathBuf::from(up).join(".codex"))
@@ -56,7 +56,7 @@ fn candidates(cwd: &str) -> Vec<String> {
 /// `cwd` as a plain drive-absolute path, or `None`: a relative path, a UNC or device path
 /// (`\\server\share`, `\\?\UNC\...`) and any path with a `.` or `..` component are untrusted, so the
 /// ancestor walk and the trust key never come from a path that lexically hides another folder.
-fn plain_absolute(cwd: &str) -> Option<String> {
+pub(super) fn plain_absolute(cwd: &str) -> Option<String> {
     let p = cwd.trim().replace('/', "\\");
     let p = p.strip_prefix(r"\\?\").unwrap_or(&p);
     let b = p.as_bytes();

@@ -15,6 +15,13 @@ import type { Follow } from "./follow";
 import type { HydrateStats } from "./hydrate-stats";
 import type { Bang } from "./bang";
 
+/** The text blocks of an array prompt joined by newlines, or null when it has none. */
+function textBlocks(content: unknown): string | null {
+  if (!Array.isArray(content)) return null;
+  const texts = content.flatMap((b) => (b && b.type === "text" && typeof b.text === "string" ? [b.text] : []));
+  return texts.length ? texts.join("\n") : null;
+}
+
 /** What the host payload handler closes over in createRenderedBody. */
 export interface HostPayloadDeps {
   opts: RenderedOpts;
@@ -105,7 +112,9 @@ export function createHostPayload(S: RenderedState, deps: HostPayloadDeps) {
   function queuedHostBlock(prompt: string, content: unknown): HTMLElement {
     // held ! output rides in front of the user's text: show only the text; runs this body did
     // not compose (a bus prompt) are drawn live, and all are redrawn on a replay
-    const { runs, text } = bang.fromRecord(typeof content === "string" ? content : pretty(content), S.hydrating);
+    // a skill prompt is [text, skill] blocks: the user typed the text block ("/name args")
+    const shown = typeof content === "string" ? content : textBlocks(content) ?? pretty(content);
+    const { runs, text } = bang.fromRecord(shown, S.hydrating);
     // the host dispatches it once the turn ends; Steer folds it into the running turn now
     const host = queuedBlock(text, () => {
       void steerHosted(transport, opts.tabId, S.gen, prompt, interrupt, (error) => {

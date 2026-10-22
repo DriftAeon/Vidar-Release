@@ -59,16 +59,6 @@
 .runes-outside-row { width: 100%; box-sizing: border-box; font: inherit; color: var(--fg); text-align: left; }
 .runes-outside-row .icn, .runes-group-head .icn { width: var(--space-16); height: var(--space-16); flex: none; }
 .runes-group-head .icn { display: block; }
-/* Inherited Runes head: a toggle button with the entry shape, no underline (2026-10-20) */
-.runes-group-toggle {
-  display: flex; align-items: center; gap: var(--space-8); width: 100%; box-sizing: border-box;
-  height: var(--row-24); padding: 0 var(--space-8); text-align: left; cursor: pointer; font-family: var(--font-title);
-  background: color-mix(in srgb, var(--fg-dim) 26%, var(--bg-panel)); border: var(--border-w) solid color-mix(in srgb, var(--fg-dim) 55%, var(--border)); border-radius: var(--radius-4);
-}
-.runes-group-toggle:hover { background: color-mix(in srgb, var(--fg-dim) 34%, var(--bg-panel)); border-color: var(--fg-dim); }
-.runes-group-toggle:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); border-color: var(--accent); }
-.runes-group-body { display: flex; flex-direction: column; gap: var(--space-4); }
-.runes-group-body[hidden] { display: none; }
 .runes-outside-row:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
 
 /* set hues (data.mjs) → tokens: CLAUDE.md, AGENTS.md, path-scoped, recall, not loaded */
@@ -78,6 +68,8 @@
 .runes-set.hue-recall { --set-hue: var(--class-web); }
 .runes-set.hue-none { --set-hue: var(--fg-dim); }
 .runes-set.hue-generated { --set-hue: var(--hue-generated); }
+.runes-set.hue-set { --set-hue: var(--hue-set); }
+.runes-set.hue-inherited { --set-hue: var(--hue-inherited); }
 .runes-set.hue-skill { --set-hue: var(--kind-skill); }
 .runes-set.hue-agent { --set-hue: var(--kind-agent); }
 .runes-set.hue-hook { --set-hue: var(--kind-hook); }
@@ -93,6 +85,23 @@
 .runes-set-head::-webkit-details-marker { display: none; }
 .runes-set-head:hover { background: color-mix(in srgb, var(--set-hue) 24%, var(--bg-panel)); }
 .runes-set-head:focus-visible, .runes-blk.card:focus-visible, button.runes-chip:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+/* a set nested in a library (Kit > Skills) sits inset like the tray's cards and takes their edge (2026-10-22) */
+.runes-set > .runes-set { margin: var(--space-4) var(--space-4) 0 var(--space-4); border: var(--border-w) solid color-mix(in srgb, var(--set-hue) 55%, var(--border)); }
+.runes-set > .runes-set > .runes-tray { padding-right: var(--space-4); } /* rows sit 4 in from each side of the nested card (2026-10-22) */
+.runes-set > summary + .runes-set { margin-top: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
+.runes-tray + .runes-set { margin-top: 0; }
+.runes-set > .runes-set:last-child { margin-bottom: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
+.runes-set > .runes-err + .runes-set { margin-top: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
+/* the one set card (set-card.ts): Inherited's bordered 24px head over Kit's nested kind groups and rows (2026-10-22) */
+.runes-card { background: transparent; }
+.runes-card > .runes-set-head {
+  height: var(--row-24); box-sizing: border-box; padding: 0 var(--space-8);
+  background: color-mix(in srgb, var(--set-hue) 26%, var(--bg-panel));
+  border: var(--border-w) solid color-mix(in srgb, var(--set-hue) 55%, var(--border)); border-radius: var(--radius-4);
+}
+.runes-card > .runes-set-head:hover { background: color-mix(in srgb, var(--set-hue) 34%, var(--bg-panel)); border-color: var(--set-hue); }
+.runes-card > .runes-set-head:focus-visible { border-color: var(--accent); }
+.runes-card > .runes-set-head .runes-sn { font-family: var(--font-title); }
 .runes-scp { display: flex; }
 .runes-cond { display: flex; align-items: center; }
 .runes-cond .icn { width: var(--space-12); height: var(--space-12); flex: none; }

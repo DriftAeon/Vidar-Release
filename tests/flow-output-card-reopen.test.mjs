@@ -71,6 +71,11 @@ const FULL = "Full result ".repeat(500);
 const releaseReads = () => pendingReads.splice(0).forEach((r) => r());
 const { initFlowStorage } = await import("../src/flow/file-storage.ts");
 const { S } = await import("../src/flow/state.ts");
+// The selector opens on Run (2026-10-22); the reopened flow shows its finished run once the user picks it.
+const pickShownRun = () => {
+  document.querySelector(".flow-run-pick").click();
+  document.querySelectorAll("#flow-pick-menu .display-pick-row")[1].click();
+};
 const { setSelection } = await import("../src/flow/selection.ts");
 const flow = await import("../src/panels/flow.ts");
 await initFlowStorage();
@@ -82,6 +87,7 @@ test("reopened flow: the Output card shows the shown run's output, not a leftove
   flow.mountFlowView(parent, () => {});
   document.body.appendChild(parent);
   flow.onFlowShown();
+  pickShownRun();
   setSelection(new Set(["output"]));
   await dom.flush();
 
@@ -99,6 +105,7 @@ async function openCard() {
   flow.mountFlowView(parent, () => {});
   document.body.appendChild(parent);
   flow.onFlowShown();
+  pickShownRun();
   setSelection(new Set(["output"]));
   await dom.flush();
   const btn = (label) => [...document.querySelectorAll(".flow-pop .flow-pop-actions button")].find((b) => b.textContent === label);

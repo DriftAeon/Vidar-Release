@@ -220,6 +220,7 @@ export function buildView(h: Handlers): View {
     const sec = el("div", "jx-sec");
     sec.dataset.kind = typeKind(group.level, group.label);
     const closed = collapsed.has(group.key);
+    sec.classList.toggle("is-closed", closed);
     const headEl = el("div", "br-band tone-neutral");
     headEl.tabIndex = 0;
     headEl.setAttribute("role", "button");
@@ -228,23 +229,26 @@ export function buildView(h: Handlers): View {
     slot.append(renderTypeIcon(typeIcon(group.level, group.label)));
     const label = el("span", "br-band-label");
     label.textContent = group.label;
-    const n = el("span", "br-band-n");
-    n.textContent = String(group.issues.length);
-    headEl.append(slot, label, n);
+    headEl.title = group.issues.length === 1 ? "1 Issue" : `${group.issues.length} Issues`; // count in the tooltip, not the band (user, 2026-10-22)
+    headEl.append(slot, label);
+    const fold = el("div", "jx-fold");
+    fold.inert = closed;
     const toggle = () => {
-      if (collapsed.has(group.key)) collapsed.delete(group.key); else collapsed.add(group.key);
-      if (last) render(last);
+      const nowClosed = !collapsed.has(group.key);
+      if (nowClosed) collapsed.add(group.key); else collapsed.delete(group.key);
+      sec.classList.toggle("is-closed", nowClosed);
+      headEl.setAttribute("aria-expanded", String(!nowClosed));
+      fold.inert = nowClosed;
     };
     headEl.addEventListener("click", toggle);
     headEl.addEventListener("keydown", (e) => {
       if ((e.key === "Enter" || e.key === " ") && e.target === headEl) { e.preventDefault(); toggle(); }
     });
     sec.append(headEl);
-    if (!closed) {
-      const rows = el("div", "cx-rows");
-      for (const issue of group.issues) rows.append(drawRow(issue));
-      sec.append(rows);
-    }
+    const rows = el("div", "cx-rows");
+    for (const issue of group.issues) rows.append(drawRow(issue));
+    fold.append(rows);
+    sec.append(fold);
     return sec;
   }
 

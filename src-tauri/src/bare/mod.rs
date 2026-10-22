@@ -46,6 +46,7 @@ pub(crate) mod codex_mcp;
 #[allow(dead_code)]
 pub(crate) mod codex_payload;
 pub(crate) mod codex_roles;
+pub mod codex_trust;
 mod codex_user_trust;
 mod codex_verify;
 pub(crate) mod copies;

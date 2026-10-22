@@ -40,16 +40,7 @@ img.display-png {
   height: auto; max-height: 100%; max-width: 100%; image-rendering: auto;
   background: color-mix(in srgb, var(--border) 85%, #000); border-radius: var(--radius-4);
 }
-/* the dev fixture runner's button in the Document bar (preview-fixtures.ts) */
-#preview-fixtures, .ws-btn {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer;
-  color: var(--fg-dim); font-size: var(--font-12); line-height: 1;
-  padding: var(--space-3) 7px; /* pre-existing off-scale literal, grandfathered (lint:ui) */
-}
-#preview-fixtures:hover, .ws-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* the dev fixture runner's button in the Document bar (preview-fixtures.ts) wears `.ws-btn` */
 /* colour icons (src/icon-img.ts) inside action buttons: em-sized so they track the button's font */
 .wb-actions button .icn, .icon-btn .icn { width: 1.4em; height: 1.4em; vertical-align: -0.3em; }
 .icon-btn { display: inline-flex; align-items: center; }
-.ws-btn:focus-visible { outline: none; color: var(--accent); border-color: var(--accent); }
-.ws-btn:active { background: var(--bg); }
-.ws-btn.ws-remove:hover, .ws-btn.ws-remove:focus-visible { color: var(--alert); border-color: var(--alert); }

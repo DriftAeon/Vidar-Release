@@ -9,6 +9,7 @@
 
 import { invoke } from "../ipc";
 import { iconImg } from "../icon-img";
+import { lucide } from "../icons";
 import { getActiveSessionId, writeToSession } from "./sessions";
 
 interface Comment {
@@ -382,7 +383,8 @@ function layout() {
   if (resolved.length) {
     const fold = document.createElement("button");
     fold.className = "doc-fold";
-    fold.textContent = `${foldResolved ? "▸" : "▾"} Resolved (${resolved.length})`;
+    fold.replaceChildren(lucide("check"), `Resolved (${resolved.length})`);
+    fold.setAttribute("aria-expanded", String(!foldResolved));
     fold.addEventListener("click", (e) => { e.stopPropagation(); foldResolved = !foldResolved; layout(); });
     enqueue(fold, 0);
     if (!foldResolved) for (const el of resolved) { el.classList.add("resolved"); enqueue(el, 0); }
@@ -461,6 +463,7 @@ function card(c: Comment, editing: boolean, anchoredOk: boolean): HTMLElement {
 
 function btn(label: string, onClick: () => void): HTMLButtonElement {
   const b = document.createElement("button");
+  b.className = "ws-btn";
   b.textContent = label;
   b.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
   return b;

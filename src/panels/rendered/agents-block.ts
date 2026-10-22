@@ -258,7 +258,7 @@ export function createAgentsBlock(S: RenderedState, deps: AgentsBlockDeps) {
     const time = el("span", "agent-time");
     const tokensCell = el("span", "agent-calls agent-row-tokens");
     tokensCell.hidden = true;
-    const showBtn = btn("Show In Chat", "agent-btn agent-show", () => drawer.showInChat());
+    const showBtn = btn("Show In Chat", "agent-btn ws-btn agent-show", () => drawer.showInChat());
     showBtn.hidden = true;
     showBtn.addEventListener("click", (e) => e.stopPropagation()); // the row's own click would collapse it
     row.append(marker, word, name, bar, calls, time, tokensCell, showBtn);

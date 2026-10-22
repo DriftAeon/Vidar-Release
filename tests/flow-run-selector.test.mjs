@@ -52,6 +52,7 @@ test("the label is word, date and time joined by spaces", () => {
 test("the selector opens a dropdown of icon rows with the status as the tooltip", () => {
   const controls = buildRunControls();
   document.body.append(controls.runPick);
+  S.activeRunId = "run-a"; // a pick made earlier this session
   controls.refresh();
   assert.equal(controls.runPick.tagName, "BUTTON");
   assert.equal(document.querySelector(".flow-run-select"), null);
@@ -71,6 +72,21 @@ test("the selector opens a dropdown of icon rows with the status as the tooltip"
   assert.ok(rows[1].classList.contains("active"));
   assert.equal(globalThis.__painted, "run-a");
   controls.runPick.click();
+});
+
+test("opening a graph with no pick and no live run shows Run, not the newest run; a live run still selects itself", () => {
+  S.activeRunId = null;
+  globalThis.__held = new Set();
+  const controls = buildRunControls();
+  controls.refresh();
+  assert.equal(controls.runPick.querySelector(".nm").textContent, "Run");
+  assert.equal(S.activeRunId, null);
+  assert.equal(globalThis.__painted, null);
+  globalThis.__held = new Set(["run-f"]);
+  controls.refresh();
+  assert.equal(S.activeRunId, "run-f");
+  globalThis.__held = new Set();
+  S.activeRunId = null;
 });
 
 test("picking a row selects that run; the Run row clears the canvas", () => {

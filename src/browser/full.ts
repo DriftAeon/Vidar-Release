@@ -81,7 +81,7 @@ export function buildFull(adapter: Adapter, item: Item, h: FullHooks): FullView 
   top.appendChild(node("span", "br-grow"));
   top.append(
     sendButton("br-act", adapter.sendTip, () => adapter.send(item)),
-    iconButton("br-act", "square-arrow-out-up-right", "Open in Browser", () => adapter.open(item)),
+    iconButton("br-act", { color: "globe" }, "Open in Browser", () => adapter.open(item)),
   );
   const head = node("div", "br-stack-tight");
   const title = node("div", "br-full-title");

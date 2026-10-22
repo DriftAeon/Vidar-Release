@@ -13,6 +13,7 @@ import type { HydrateStats } from "./hydrate-stats";
 import { closeHydration } from "./host-payload";
 import { initCodexPlans } from "../../agents/codex-plan-store";
 import { AGENT_EXITED, denyWithin } from "./cards";
+import { bareNotices } from "./notice-actions";
 
 /** The spawn error for a home-folder Codex launch: equals `HOME_CWD_REFUSED` in src-tauri/src/codex_cwd.rs
  *  (tests/codex-home-refused.test.mjs keeps the two in step). */
@@ -185,7 +186,10 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
         permissionMode: S.mode, // a switched mode survives Retry/Resume
         resume: S.sessionId,
         rules: opts.rules,
-        onBareWarnings: (ws) => { for (const w of ws) noticeBlock(w, "warn"); },
+        onBareWarnings: (ws, trust) => bareNotices({
+          tabId: opts.tabId, agent: opts.agent, cwd: opts.cwd, append, sealGroup,
+          ...(opts.onReopenHere ? { reopenHere: opts.onReopenHere, hasTurns: () => root.querySelector(".blk-user") !== null } : {}),
+        }, ws, trust),
       });
       const g = spawned.gen;
       if (S.disposed || routeOf(opts.tabId) !== route) {
@@ -216,12 +220,12 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
       releaseRoute(opts.tabId, route);
       S.isAlive = false;
       root.classList.add("dead");
-      noticeBlock(`failed to start: ${String(e)}`, "error");
+      noticeBlock(`Failed to Start: ${String(e)}`, "error");
       sl.model = "—"; // never spawned, so "Starting…" is a claim about a process that does not exist
       redrawStatus();
       refreshState(); // the chip is still on "Starting…" without this
       const retry = el("div", "blk blk-exit");
-      retry.appendChild(btn("Retry", "rendered-resume", () => { retry.remove(); void spawn(); }));
+      retry.appendChild(btn("Retry", "ws-btn rendered-retry", () => { retry.remove(); void spawn(); }));
       const pick = opts.onSelectWorkspace;
       if (pick && String(e).includes(HOME_CWD_REFUSED)) {
         // Retry fails the same way here; a folder pick opens a new tab and closes this one

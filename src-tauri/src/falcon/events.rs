@@ -13,9 +13,9 @@ use super::connection::{reply_from_frame, request_frame, Connection};
 use super::reader_control::ReaderControl;
 // `falcon.rs` imports the shared protocol under a different root per build.
 #[cfg(falcon_shell)]
-use crate::protocol::CAPABILITY_CODEX_QUERY;
+use crate::protocol::{CAPABILITY_CODEX_QUERY, CAPABILITY_CODEX_SKILLS};
 #[cfg(not(falcon_shell))]
-use super::protocol::CAPABILITY_CODEX_QUERY;
+use super::protocol::{CAPABILITY_CODEX_QUERY, CAPABILITY_CODEX_SKILLS};
 use super::session_commands::forget_ctl_secret;
 use super::{read_registry, AgentExit, Falcon, Op, REQUEST_TIMEOUT};
 
@@ -332,27 +332,48 @@ const MAX_MODEL_PAGES: usize = 10;
 /// so drop) the live events interleaved with it. Each attach asks again, so a
 /// re-adopted or reattached tab gets the catalog without host state. Pages
 /// reach the adapter as a `falcon/models` line (`src/agents/codex-hosted.ts`).
-pub(super) struct ModelCatalog {
+pub(super) struct CodexQueries {
     session: String,
     host_generation: u64,
     next_id: u64,
     pending: Option<u64>,
     pages: usize,
     done: bool,
+    skills: Option<SkillsAsk>,
 }
 
-impl ModelCatalog {
-    /// A catalog to ask for, when the attached session is Codex and the host
+/// The skills catalog ask (`skills/list` for the session's cwd), kept only
+/// when the host lists `codex_skills`. One reply, no pages.
+struct SkillsAsk {
+    cwd: String,
+    pending: Option<u64>,
+    done: bool,
+}
+
+impl CodexQueries {
+    /// The queries to ask for, when the attached session is Codex and the host
     /// lists `codex_query`: an older host drops a connection on an op it
-    /// cannot parse, and this is the tab's event stream.
+    /// cannot parse, and this is the tab's event stream. The skills catalog
+    /// rides along only on a host that also lists `codex_skills` and a
+    /// session that names its cwd.
     pub(super) fn for_attach(session: &str, cut: &Value, capabilities: &[String]) -> Option<Self> {
         let summary = cut.get("session")?;
         if summary.get("agent").and_then(Value::as_str) != Some("codex") {
             return None;
         }
-        if !capabilities.iter().any(|held| held == CAPABILITY_CODEX_QUERY) {
+        let listed = |name: &str| capabilities.iter().any(|held| held == name);
+        if !listed(CAPABILITY_CODEX_QUERY) {
             return None;
         }
+        let skills = summary
+            .get("cwd")
+            .and_then(Value::as_str)
+            .filter(|cwd| !cwd.is_empty() && listed(CAPABILITY_CODEX_SKILLS))
+            .map(|cwd| SkillsAsk {
+                cwd: cwd.to_string(),
+                pending: None,
+                done: false,
+            });
         Some(Self {
             session: session.to_string(),
             host_generation: summary.get("generation").and_then(Value::as_u64)?,
@@ -360,53 +381,103 @@ impl ModelCatalog {
             pending: None,
             pages: 0,
             done: false,
+            skills,
         })
     }
 
-    fn ask(&mut self, cursor: Option<&str>) -> Option<Value> {
+    fn frame(&mut self, method: &str, params: Value) -> Option<(u64, Value)> {
         let id = self.next_id;
         self.next_id += 1;
-        let params = match cursor {
-            Some(cursor) => json!({ "cursor": cursor }),
-            None => json!({}),
-        };
         let frame = request_frame(
             id,
             &Op::Query {
                 session: self.session.clone(),
                 generation: self.host_generation,
-                method: "model/list".into(),
+                method: method.into(),
                 params,
             },
         )
         .ok()?;
+        Some((id, frame))
+    }
+
+    fn ask(&mut self, cursor: Option<&str>) -> Option<Value> {
+        let params = match cursor {
+            Some(cursor) => json!({ "cursor": cursor }),
+            None => json!({}),
+        };
+        let (id, frame) = self.frame("model/list", params)?;
         self.pending = Some(id);
         Some(frame)
     }
 
-    /// The first ask, unless one is out or the catalog is in.
-    pub(super) fn start(&mut self) -> Option<Value> {
-        if self.done || self.pending.is_some() {
-            return None;
+    /// `skills/list` for the session's cwd; `reload` asks Codex to rescan.
+    /// Replaces any ask in flight: its reply no longer matches and is dropped.
+    fn ask_skills(&mut self, reload: bool) -> Option<Value> {
+        let cwd = self.skills.as_ref()?.cwd.clone();
+        let params = if reload {
+            json!({ "cwds": [cwd], "forceReload": true })
+        } else {
+            json!({ "cwds": [cwd] })
+        };
+        let (id, frame) = self.frame("skills/list", params)?;
+        let skills = self.skills.as_mut()?;
+        skills.pending = Some(id);
+        skills.done = false;
+        Some(frame)
+    }
+
+    /// The first asks (models, then skills), each unless one is out or its
+    /// catalog is in. Every frame is written.
+    pub(super) fn start(&mut self) -> Vec<Value> {
+        let mut frames = Vec::new();
+        if !self.done && self.pending.is_none() {
+            self.pages = 0;
+            frames.extend(self.ask(None));
         }
-        self.pages = 0;
-        self.ask(None)
+        if self
+            .skills
+            .as_ref()
+            .is_some_and(|skills| !skills.done && skills.pending.is_none())
+        {
+            frames.extend(self.ask_skills(false));
+        }
+        frames
     }
 
     /// A live `falcon/thread` means the app-server has initialized: an ask
     /// that failed because the attach beat a fresh spawn's initialize goes
-    /// again here.
-    pub(super) fn on_line(&mut self, line: &Value) -> Option<Value> {
-        (line.get("method").and_then(Value::as_str) == Some("falcon/thread"))
-            .then(|| self.start())
-            .flatten()
+    /// again here. `skills/changed` re-asks the skills catalog with a reload.
+    pub(super) fn on_line(&mut self, line: &Value) -> Vec<Value> {
+        match line.get("method").and_then(Value::as_str) {
+            Some("falcon/thread") => self.start(),
+            Some("skills/changed") => self.ask_skills(true).into_iter().collect(),
+            _ => Vec::new(),
+        }
     }
 
-    /// For a response frame answering the ask in flight: the line to emit, if
-    /// the page came back, and the frame asking for the next page. `None` for
+    /// For a response frame answering an ask in flight: the line to emit, if
+    /// the reply came back, and the frame asking for the next page. `None` for
     /// any other frame. A refusal or an app-server error emits nothing and
     /// leaves the catalog open for `on_line`.
     pub(super) fn on_response(&mut self, frame: &Value) -> Option<(Option<Value>, Option<Value>)> {
+        if let Some(id) = self.skills.as_ref().and_then(|skills| skills.pending) {
+            if let Some(reply) = reply_from_frame(frame, id) {
+                let skills = self.skills.as_mut()?;
+                skills.pending = None;
+                let result = reply
+                    .applied("query")
+                    .ok()
+                    .and_then(|payload| payload.pointer("/response/result").cloned())
+                    .filter(Value::is_object);
+                let Some(result) = result else {
+                    return Some((None, None));
+                };
+                skills.done = true;
+                let line = json!({ "method": "falcon/skills", "params": { "result": result } });
+                return Some((Some(line), None));
+            }
+        }
         let id = self.pending?;
         let reply = reply_from_frame(frame, id)?;
         self.pending = None;
@@ -436,15 +507,15 @@ impl ModelCatalog {
 }
 
 #[cfg(test)]
-mod model_catalog_tests {
+mod codex_queries_tests {
     use super::*;
 
     fn cut(agent: &str) -> Value {
         json!({ "session": { "session": "s1", "generation": 7, "agent": agent }, "through": 0 })
     }
 
-    fn codex() -> ModelCatalog {
-        ModelCatalog::for_attach("s1", &cut("codex"), &[CAPABILITY_CODEX_QUERY.into()])
+    fn codex() -> CodexQueries {
+        CodexQueries::for_attach("s1", &cut("codex"), &[CAPABILITY_CODEX_QUERY.into()])
             .expect("a codex session on a codex_query host asks")
     }
 
@@ -455,30 +526,30 @@ mod model_catalog_tests {
 
     #[test]
     fn only_a_codex_session_on_a_codex_query_host_asks() {
-        assert!(ModelCatalog::for_attach("s1", &cut("claude"), &[CAPABILITY_CODEX_QUERY.into()])
+        assert!(CodexQueries::for_attach("s1", &cut("claude"), &[CAPABILITY_CODEX_QUERY.into()])
             .is_none());
-        assert!(ModelCatalog::for_attach("s1", &cut("codex"), &[]).is_none(), "an older host");
-        assert!(ModelCatalog::for_attach("s1", &json!({}), &[CAPABILITY_CODEX_QUERY.into()])
+        assert!(CodexQueries::for_attach("s1", &cut("codex"), &[]).is_none(), "an older host");
+        assert!(CodexQueries::for_attach("s1", &json!({}), &[CAPABILITY_CODEX_QUERY.into()])
             .is_none());
     }
 
     #[test]
     fn the_ask_is_a_model_list_query_for_the_host_generation() {
         let mut catalog = codex();
-        let frame = catalog.start().expect("asks");
+        let frame = catalog.start().pop().expect("asks");
         assert_eq!(frame["op"], "query");
         assert_eq!(frame["session"], "s1");
         assert_eq!(frame["generation"], 7);
         assert_eq!(frame["method"], "model/list");
         assert_eq!(frame["params"], json!({}));
         assert_eq!(frame["id"], FIRST_MODEL_QUERY);
-        assert!(catalog.start().is_none(), "one ask in flight");
+        assert!(catalog.start().is_empty(), "one ask in flight");
     }
 
     #[test]
     fn pages_follow_the_cursor_and_the_last_reads_final() {
         let mut catalog = codex();
-        let first = catalog.start().unwrap();
+        let first = catalog.start().remove(0);
         let event = json!({ "t": "event", "kind": "agent", "line": {} });
         assert!(catalog.on_response(&event).is_none(), "events are not the reply");
         let (line, next) = catalog
@@ -498,27 +569,27 @@ mod model_catalog_tests {
             .unwrap();
         assert!(line.unwrap()["params"]["result"].get("nextCursor").is_none());
         assert!(next.is_none());
-        assert!(catalog.start().is_none(), "the catalog is in");
-        assert!(catalog.on_line(&json!({ "method": "falcon/thread" })).is_none());
+        assert!(catalog.start().is_empty(), "the catalog is in");
+        assert!(catalog.on_line(&json!({ "method": "falcon/thread" })).is_empty());
     }
 
     #[test]
     fn a_failed_ask_goes_again_when_the_thread_opens() {
         let mut catalog = codex();
-        let first = catalog.start().unwrap();
+        let first = catalog.start().remove(0);
         let error = applied(&first, json!({ "id": 9, "error": { "message": "Not initialized" } }));
         assert_eq!(catalog.on_response(&error).map(|(l, n)| (l.is_none(), n.is_none())), Some((true, true)));
-        let refused = catalog.on_line(&json!({ "method": "falcon/thread" })).expect("asks again");
+        let refused = catalog.on_line(&json!({ "method": "falcon/thread" })).pop().expect("asks again");
         let failed = json!({ "t": "response", "request": refused["id"], "outcome": "failed",
                              "error": "session has exited" });
         assert_eq!(catalog.on_response(&failed).map(|(l, _)| l.is_none()), Some(true));
-        assert!(catalog.on_line(&json!({ "method": "turn/started" })).is_none());
+        assert!(catalog.on_line(&json!({ "method": "turn/started" })).is_empty());
     }
 
     #[test]
     fn a_cursor_that_never_ends_stops_at_the_page_cap() {
         let mut catalog = codex();
-        let mut ask = catalog.start();
+        let mut ask = catalog.start().pop();
         let mut pages = 0;
         while let Some(frame) = ask {
             let (line, next) = catalog
@@ -530,6 +601,89 @@ mod model_catalog_tests {
             ask = next;
         }
         assert_eq!(pages, MAX_MODEL_PAGES);
+    }
+
+    fn cut_with_cwd() -> Value {
+        json!({ "session": { "session": "s1", "generation": 7, "agent": "codex", "cwd": "C:/work" },
+                "through": 0 })
+    }
+
+    fn with_skills() -> CodexQueries {
+        CodexQueries::for_attach(
+            "s1",
+            &cut_with_cwd(),
+            &[CAPABILITY_CODEX_QUERY.into(), CAPABILITY_CODEX_SKILLS.into()],
+        )
+        .unwrap()
+    }
+
+    fn skills_reply(request: &Value) -> Value {
+        applied(request, json!({ "id": 1, "result": { "data": [{ "cwd": "C:/work", "skills": [] }] } }))
+    }
+
+    #[test]
+    fn skills_are_asked_after_models_only_with_the_capability() {
+        let frames = with_skills().start();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0]["method"], "model/list");
+        assert_eq!(frames[0]["id"], FIRST_MODEL_QUERY);
+        assert_eq!(frames[1]["method"], "skills/list");
+        assert_eq!(frames[1]["id"], FIRST_MODEL_QUERY + 1);
+        assert_eq!(frames[1]["params"], json!({ "cwds": ["C:/work"] }));
+        for held in [vec![CAPABILITY_CODEX_QUERY.to_string()], vec![]] {
+            let queries = CodexQueries::for_attach("s1", &cut_with_cwd(), &held);
+            let frames = queries.map(|mut q| q.start()).unwrap_or_default();
+            assert!(frames.iter().all(|frame| frame["method"] != "skills/list"));
+            assert_eq!(frames.len(), held.len());
+        }
+        // No cwd: nothing to scope the catalog to.
+        let held = [CAPABILITY_CODEX_QUERY.to_string(), CAPABILITY_CODEX_SKILLS.to_string()];
+        let frames = CodexQueries::for_attach("s1", &cut("codex"), &held).unwrap().start();
+        assert_eq!(frames.len(), 1);
+    }
+
+    #[test]
+    fn the_skills_reply_reaches_the_tab_as_a_skills_line() {
+        let mut queries = with_skills();
+        let frames = queries.start();
+        let (line, next) = queries.on_response(&skills_reply(&frames[1])).unwrap();
+        let line = line.unwrap();
+        assert_eq!(line["method"], "falcon/skills");
+        assert_eq!(line["params"]["result"]["data"][0]["cwd"], "C:/work");
+        assert!(next.is_none());
+        assert!(queries.on_line(&json!({ "method": "falcon/thread" })).len() <= 1);
+        let again = queries.on_line(&json!({ "method": "falcon/thread" }));
+        assert!(again.iter().all(|frame| frame["method"] != "skills/list"), "skills are in");
+    }
+
+    #[test]
+    fn skills_changed_reasks_and_the_superseded_reply_is_dropped() {
+        let mut queries = with_skills();
+        let frames = queries.start();
+        let stale = skills_reply(&frames[1]);
+        let reask = queries.on_line(&json!({ "method": "skills/changed" }));
+        assert_eq!(reask.len(), 1);
+        assert_eq!(reask[0]["method"], "skills/list");
+        assert_eq!(reask[0]["params"], json!({ "cwds": ["C:/work"], "forceReload": true }));
+        assert!(queries.on_response(&stale).is_none(), "the superseded reply is dropped");
+        let (line, _) = queries.on_response(&skills_reply(&reask[0])).unwrap();
+        assert_eq!(line.unwrap()["method"], "falcon/skills");
+        // Models reply still matches its own id.
+        assert!(queries
+            .on_response(&applied(&frames[0], json!({ "id": 2, "result": { "data": [] } })))
+            .is_some());
+    }
+
+    #[test]
+    fn a_skills_error_keeps_the_ask_open_for_the_thread() {
+        let mut queries = with_skills();
+        let frames = queries.start();
+        let error = applied(&frames[1], json!({ "id": 9, "error": { "message": "Not initialized" } }));
+        assert_eq!(queries.on_response(&error).map(|(l, n)| (l.is_none(), n.is_none())), Some((true, true)));
+        let again = queries.on_line(&json!({ "method": "falcon/thread" }));
+        let skills: Vec<_> = again.iter().filter(|frame| frame["method"] == "skills/list").collect();
+        assert_eq!(skills.len(), 1, "re-asks on falcon/thread");
+        assert_eq!(skills[0]["params"], json!({ "cwds": ["C:/work"] }));
     }
 }
 
@@ -596,7 +750,7 @@ pub(super) fn start_event_reader(
         }),
     )
     .map_err(|error| format!("emit falcon hydration start: {error}"))?;
-    let mut catalog = ModelCatalog::for_attach(&session, &cut, &connection.capabilities);
+    let mut catalog = CodexQueries::for_attach(&session, &cut, &connection.capabilities);
 
     let (ready, started) = sync_channel(1);
     let reader_thread = Arc::clone(&reader);
@@ -654,7 +808,7 @@ pub(super) fn start_event_reader(
             }
             // After the replay, so the catalog cannot land ahead of the history.
             // A failed write leaves the read below to report the broken pipe.
-            if let Some(ask) = catalog.as_mut().and_then(ModelCatalog::start) {
+            for ask in catalog.as_mut().map(CodexQueries::start).unwrap_or_default() {
                 let _ = connection.write_frame(&ask);
             }
             loop {
@@ -725,7 +879,11 @@ pub(super) fn start_event_reader(
                             "agent-event",
                             json!({ "id": tab, "gen": generation, "line": text }),
                         );
-                        if let Some(ask) = catalog.as_mut().and_then(|catalog| catalog.on_line(line)) {
+                        for ask in catalog
+                            .as_mut()
+                            .map(|catalog| catalog.on_line(line))
+                            .unwrap_or_default()
+                        {
                             let _ = connection.write_frame(&ask);
                         }
                     }

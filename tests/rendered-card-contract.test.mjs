@@ -141,6 +141,29 @@ test("unsupported MCP form keeps Allow disabled after field changes", () => {
   assert.match(card.textContent, /Unsupported field/);
 });
 
+// Codex sends mcpServer/elicitation/request without an itemId, so the card has no pill to
+// fold into (codex-requests.ts: toolUseId undefined); it folds to its head row on its own.
+test("standalone MCP card folds to its head row on allow, deny and the no-form case", async () => {
+  const cases = [
+    ["allow", { serverName: "vidar_drive", mode: "url", message: "m", url: "https://example.test/a" }, DRIVE_CLASS.allow],
+    ["deny", { serverName: "vidar_drive", mode: "url", message: "m", url: "https://example.test/a" }, DRIVE_CLASS.deny],
+    ["no-form", { serverName: "vidar_drive", message: "Allow the vidar_drive MCP server to run tool \"ask\"?" }, DRIVE_CLASS.deny],
+  ];
+  for (const durable of [false, true]) for (const [name, input, button] of cases) {
+    const h = harness({ durable, agent: "codex" });
+    h.cards.approvalCard(`mcp-${name}`, undefined, "MCP Elicitation", input, 100, []);
+    const card = h.nodes[0];
+    assert.ok(card.querySelector(".approval-body"), name);
+    card.querySelector("." + button).click();
+    await new Promise((r) => setTimeout(r, 0)); // a durable send settles after its await
+    const label = `${name} durable=${durable}`;
+    assert.ok(card.classList.contains(DRIVE_CLASS.settled), label);
+    assert.equal(card.querySelector(".approval-actions"), null, label);
+    assert.equal(card.querySelector(".approval-body"), null, label);
+    assert.ok(card.querySelector(".approval-head ." + DRIVE_CLASS.result), label);
+  }
+});
+
 test("question card: question and option classes in place", () => {
   const h = harness();
   const input = { questions: [{ question: "Which?", header: "H", options: [{ label: "A" }, { label: "B" }] }] };

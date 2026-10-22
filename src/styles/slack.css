@@ -14,13 +14,11 @@
 
 .slack-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
 .slack-pane .cx-list { min-height: 0; overflow-y: auto; }
-.slack-pane .cx-row { min-width: 0; cursor: pointer; }
-.slack-pane .cx-row:focus-visible { background: var(--bg-hover); outline: none; }
-.slack-pane .cx-row:focus-visible .cx-racts { opacity: 1; }
+.slack-pane .cx-row { min-width: 0; }
 .slack-pane .cx-empty { min-width: 0; text-align: center; }
 .slack-pane .cx-empty-title { overflow-wrap: anywhere; }
 
-.sx-from { flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-family: var(--font-ui); }
+.sx-from { flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-family: var(--font-ui); font-weight: var(--weight-strong); }
 .sx-from-new { font-weight: var(--weight-strong); }
 .sx-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 .sx-time { flex: none; max-width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); }

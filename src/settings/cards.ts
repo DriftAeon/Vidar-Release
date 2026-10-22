@@ -34,6 +34,7 @@ function kindControl(kind: CardKind): HTMLElement {
   const tools = document.createElement("span");
   tools.className = "cards-tools";
   tools.textContent = kind.tools.length ? kind.tools.join(" ") : DASH;
+  tools.title = kind.tools.join(", ");
   wrap.append(tools, sampleSegment(kind)); // tools left, card right
   return wrap;
 }

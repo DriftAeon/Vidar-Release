@@ -19,7 +19,7 @@ import { isGateway } from "../launcher/agent-kind";
 import { applyOrder, enableReorder } from "./reorder";
 import { getFocusedSession, type FocusedSession } from "./sessions";
 import { getPref, setPref } from "../prefs";
-import { dedupeRackServers, isLoopbackHttp, rackServerId, rackToolsKey, reconcileRackOrder } from "./rack-modules";
+import { backendLookupName, dedupeRackServers, isLoopbackHttp, rackServerId, rackToolsKey, reconcileRackOrder } from "./rack-modules";
 import { openModuleContextMenu, type ModuleContextMenu, type ModuleMenuAction } from "../modules/context-menu";
 
 const ORDER_KEY = "order.rack";
@@ -310,7 +310,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
     // display-only: config keys stay lowercase, the rack reads as titles. Scope moved
     // to the detail; the row key still carries it, telling apart two servers sharing
     // a name in different scopes.
-    const serverIcon = BACKEND_ICON_MAP.get(s.name);
+    const serverIcon = BACKEND_ICON_MAP.get(backendLookupName(s.name));
     let toolsLoaded = false;
     const { row, name, detail } = rackRow({
       key: rackServerId(s),

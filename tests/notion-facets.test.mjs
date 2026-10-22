@@ -235,6 +235,17 @@ test("page icons: the emoji, else a glyph for top-level hits; a blank slot only 
   assert.equal(rowItem(row({}, { icon: "" }), plan, false).lead, undefined);
 });
 
+test("built-in page icons: mapped glyph tinted by colour, unmapped name keeps the kind glyph, emoji wins", () => {
+  const h = (extra) => hitItem({ id: id(1), kind: "page", title: "T", url: "u", lastEdited: "", icon: "", ...extra });
+  assert.deepEqual(h({ iconName: "checklist", iconColor: "green" }).lead, { glyph: "list-checks", cls: "nb-c-green" });
+  assert.deepEqual(h({ iconName: "nonesuch", iconColor: "red" }).lead, { glyph: "file-text", cls: "nb-c-red" });
+  assert.deepEqual(h({ iconName: "bug", iconColor: "" }).lead, { glyph: "bug" });
+  assert.deepEqual(h({ iconName: "toString", iconColor: "gray" }).lead, { glyph: "file-text", cls: "nb-c-gray" });
+  assert.deepEqual(h({ icon: "\u{1F4D8}", iconName: "bug", iconColor: "red" }).lead, { emoji: "\u{1F4D8}" });
+  const plan = planFor(source(BASE));
+  assert.deepEqual(rowItem(row({}, { icon: "", iconName: "people", iconColor: "blue" }), plan).lead, { glyph: "users", cls: "nb-c-blue" });
+});
+
 test("the status strip keeps every segment while a filter empties one, holds the pressed state, and returns on clear", () => {
   const plan = planFor(source(BASE));
   const mk = (n, status) => ({ ...rowItem(row({ "st%3Aa": [status] }, { id: id(100 + n) }), plan), id: id(100 + n) });

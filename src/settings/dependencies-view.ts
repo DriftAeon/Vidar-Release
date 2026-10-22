@@ -313,7 +313,7 @@ function problemCard(
     const { url, note } = d.install;
     const acts = el(doc, "div", "deps-acts");
     if (url) {
-      const open = iconButton(doc, "deps-open deps-site", icon("square-arrow-out-up-right"), `Open site: ${url}`, () => actions.openUrl(url));
+      const open = iconButton(doc, "deps-open deps-site", color("globe"), `Open site: ${url}`, () => actions.openUrl(url));
       open.setAttribute("data-url", url);
       acts.appendChild(open);
     }
@@ -354,7 +354,7 @@ function readyItem(doc: Document, d: DepEntry, st: DepStatus | undefined, action
     for (const text of installCommands(d)) r.appendChild(copyButton(doc, text, actions));
     const { url, note } = d.install;
     if (url) {
-      const open = iconButton(doc, "deps-open deps-site", icon("square-arrow-out-up-right"), `Open site: ${url}`, () => actions.openUrl(url));
+      const open = iconButton(doc, "deps-open deps-site", color("globe"), `Open site: ${url}`, () => actions.openUrl(url));
       open.setAttribute("data-url", url);
       r.appendChild(open);
     }

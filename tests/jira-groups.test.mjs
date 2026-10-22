@@ -29,9 +29,9 @@ test("a row with no type name goes under Other, after every named section", () =
 });
 
 test("the icon is keyed by level first, then name", () => {
-  assert.deepEqual(typeIcon(1, "Epic"), { lucide: "zap" });
-  assert.deepEqual(typeIcon(2, "Initiative"), { lucide: "zap" });
-  assert.deepEqual(typeIcon(1, "Story"), { lucide: "zap" }, "level wins over name");
+  assert.deepEqual(typeIcon(1, "Epic"), { color: "books" });
+  assert.deepEqual(typeIcon(2, "Initiative"), { color: "books" });
+  assert.deepEqual(typeIcon(1, "Story"), { color: "books" }, "level wins over name");
   assert.deepEqual(typeIcon(0, "Story"), { color: "book" });
   assert.deepEqual(typeIcon(0, "Bug"), { lucide: "bug" });
   assert.deepEqual(typeIcon(0, "Task"), { color: "content-view" });

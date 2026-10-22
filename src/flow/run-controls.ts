@@ -93,6 +93,9 @@ export function buildRunControls(): {
   runPick.append(face, caret);
   let selectedId = "";
   let runs: FlowRun[] = [];
+  // The run the user picked (or started) per graph this session: opening or switching to a graph with
+  // no pick shows "Run" (none), not its newest run.
+  const picked = new Map<string, string>();
 
   function paintFace(): void {
     const run = selectedId ? runs.find((r) => r.id === selectedId) : undefined;
@@ -136,7 +139,7 @@ export function buildRunControls(): {
 
   const cancelBtn = document.createElement("button");
   cancelBtn.type = "button";
-  cancelBtn.className = "flow-run-cancel";
+  cancelBtn.className = "flow-run-cancel ws-btn";
   cancelBtn.textContent = "Cancel";
   cancelBtn.title = CANCEL_RUN_TOOLTIP;
   cancelBtn.disabled = true;
@@ -173,7 +176,10 @@ export function buildRunControls(): {
       return;
     }
     runs = runsForGraph(S.activeGraphId);
-    const keep = S.activeRunId && runs.some((r) => r.id === S.activeRunId) ? S.activeRunId : (runs[0]?.id ?? "");
+    const has = (id: string | null | undefined): id is string => !!id && runs.some((r) => r.id === id);
+    const pick = picked.get(S.activeGraphId);
+    const live = [...heldRunIds()].find((id) => has(id));
+    const keep = has(S.activeRunId) ? S.activeRunId : has(pick) ? pick : (live ?? "");
     // `S.activeRunId` follows the run this graph is about to show, held or finished: engine.ts's
     // `persistRun` only repaints the run whose id matches it, and inspector.ts reads the node card
     // from it. Setting it only for a held run left a finished run on the canvas while the card
@@ -220,6 +226,7 @@ export function buildRunControls(): {
     // silently overwritten on the live run's next status change).
     selectedId = id;
     S.activeRunId = id || null;
+    if (S.activeGraphId) picked.set(S.activeGraphId, id);
     paintFace();
     paintSelected();
   }
@@ -247,6 +254,7 @@ export function buildRunControls(): {
       return;
     }
     S.activeRunId = run.id;
+    if (S.activeGraphId) picked.set(S.activeGraphId, run.id);
     refresh();
     selectedId = run.id;
     paintFace();

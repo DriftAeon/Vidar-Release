@@ -30,6 +30,7 @@ export interface FixtureHost {
 export function mountFixtureRunner(bar: HTMLElement, host: FixtureHost): void {
   const run = document.createElement("button");
   run.id = "preview-fixtures";
+  run.className = "ws-btn";
   run.textContent = "run preview fixtures";
   run.title = "Dev Fixtures";
   const fixtures = () => runFixtures(host);

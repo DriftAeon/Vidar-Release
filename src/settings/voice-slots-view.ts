@@ -49,11 +49,11 @@ const SLOT_LABEL: Record<VoiceSlot, string> = {
   tts: "Text To Speech",
 };
 
-const SLOT_GLYPH: Record<VoiceSlot, LucideName> = {
+const SLOT_COLOR_ICON: Record<VoiceSlot, ColorIcon> = {
   stt: "mic",
-  wake: "zap",
-  rewrite: "pencil",
-  tts: "volume-2",
+  wake: "sun-low",
+  rewrite: "clipboard-edit",
+  tts: "speaker-on",
 };
 
 /** Same element as iconImg("copy") (src/icon-img.ts); inlined because tests load this view under node, which cannot resolve extensionless imports. */
@@ -243,7 +243,7 @@ function row(
   item.setAttribute("data-slot", pack || !r.slot ? "pack" : r.slot);
   item.setAttribute("data-state", r.state);
 
-  const glyph = pack || !r.slot ? icons.icon("file-cog") : icons.icon(SLOT_GLYPH[r.slot]);
+  const glyph = pack || !r.slot ? icons.icon("file-cog") : icons.color(SLOT_COLOR_ICON[r.slot]);
   item.appendChild(mark(doc, glyph, "vs-glyph"));
 
   const body = el(doc, "div", "vs-body");

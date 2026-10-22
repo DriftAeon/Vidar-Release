@@ -50,6 +50,9 @@ export type AgentEvent =
   | { kind: "text_delta"; blockId: string; text: string }
   /** `plan`: a checklist (Codex turn/plan/updated) the renderer draws as a card; `markdown` stays its text form */
   | { kind: "text_done"; blockId: string; markdown: string; parentToolUseId: string | null; plan?: PlanView }
+  /** a Codex async ask (request_user_input_async): drawn as a Question card that answers with
+   *  the next user message; it never holds the composer */
+  | { kind: "ask_async"; blockId: string; questions: { title: string; options: string[] }[] }
   | { kind: "thinking"; blockId: string; done: boolean }
   /** the model started emitting a tool call; input not complete yet */
   | { kind: "tool_pending"; toolUseId: string; name: string; parentToolUseId: string | null }
@@ -148,4 +151,7 @@ export interface AgentAdapter {
   /** The process exited: events for drafts it never took (Codex: send_failed per queued or
    *  login-held draft). Called once from the body's onExit. */
   exited?(): AgentEvent[];
+  /** Hosted only: one journal record the host broadcast (the unwrapped body), `gen` the backend
+   *  generation it arrived under. Events for setters another client or a replay applied. */
+  hostRecord?(body: Record<string, unknown>, gen?: number): AgentEvent[];
 }

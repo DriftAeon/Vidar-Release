@@ -77,14 +77,14 @@ export function sortTypes(types: readonly { name: string; level: number }[]): { 
 
 export const OTHER_LABEL = "Other";
 
-export type TypeLucide = "zap" | "bug" | "circle-dot";
-export type TypeColor = "book" | "content-view" | "contact-card";
+export type TypeLucide = "bug" | "circle-dot";
+export type TypeColor = "books" | "book" | "content-view" | "contact-card";
 export type TypeIcon = { color: TypeColor } | { lucide: TypeLucide };
 
 /** Plan D5: level first (an epic-like level), then the standard names, then the sub-task level, else a dot.
- *  Story, Task and sub-task are colour icons (2026-10-18). */
+ *  Epic, Story, Task and sub-task are colour icons (Epic 2026-10-22; Story, Task and sub-task 2026-10-18). */
 export function typeIcon(level: number, name: string): TypeIcon {
-  if (level >= 1) return { lucide: "zap" };
+  if (level >= 1) return { color: "books" };
   if (name === "Story") return { color: "book" };
   if (name === "Bug") return { lucide: "bug" };
   if (name === "Task") return { color: "content-view" };

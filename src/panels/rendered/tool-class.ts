@@ -21,12 +21,12 @@ export const TOOL_CLASS: Record<RenderedAgent, Readonly<Record<string, ToolClass
   },
   codex: {
     Command: "run",
+    Read: "read", // imageView (codex-items.ts)
     Edit: "edit",
     WebSearch: "web",
     Thought: "think",
     AskUserQuestion: "ask",
-    Agent: "agent", SendMessage: "agent", Wait: "agent", CloseAgent: "agent", InterruptAgent: "agent", ListAgents: "agent",
-  },
+    Agent: "agent", SendMessage: "agent", Wait: "agent", CloseAgent: "agent", InterruptAgent: "agent", ListAgents: "agent",  },
 };
 
 export function toolClass(name: string, agent: RenderedAgent): ToolClass {

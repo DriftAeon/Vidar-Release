@@ -74,6 +74,8 @@ const MODEL_NAMES: ReadonlyMap<string, string> = new Map([
   ["claude-opus-5-5", "Opus 5.5"],
   ["claude-opus-5", "Opus 5"],
   ["claude-sonnet-5", "Sonnet 5"],
+  ["claude-sonnet-5-5", "Sonnet 5.5"],
+  ["claude-haiku-5-5", "Haiku 5.5"],
   ["claude-haiku-4-5-20251001", "Haiku 4.5"],
   ["gpt-5.6-terra", "GPT-5.6 Terra"],
   ["gpt-6-astra", "GPT-6 Astra"],

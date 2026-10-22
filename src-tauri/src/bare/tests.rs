@@ -1478,6 +1478,7 @@ fn a_codex_launch_writes_the_trust_table_for_its_folder_and_validates() {
     let t = TempDir::new("codex-trust-e2e");
     let home = t.0.join("agent-home");
     let cwd = t.0.join("Work Folder");
+    std::fs::create_dir_all(cwd.join(".codex")).unwrap(); // project settings: the warning's gate
     let cwd_s = cwd.to_string_lossy().into_owned();
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
     // Untrusted in the user's own config: no table, a warning in the manifest.
@@ -1505,6 +1506,82 @@ fn a_codex_launch_writes_the_trust_table_for_its_folder_and_validates() {
     let pwsh = fake_find(&Env::default(), "pwsh.exe").unwrap();
     home::validate_codex_for(&doc, &tpl, &crate::paths::root(), &home, &pwsh, &payload, &guard(), Some(&key), &[]).unwrap();
     drop(launch);
+}
+
+#[test]
+fn a_codex_launch_leaves_the_trust_warning_to_the_card_and_registers_the_hosted_folder() {
+    let t = TempDir::new("codex-trust-card");
+    let home = t.0.join("agent-home");
+    let cwd = t.0.join("Work Folder");
+    std::fs::create_dir_all(cwd.join(".codex")).unwrap(); // project settings: the warning's gate
+    let cwd_s = cwd.to_string_lossy().into_owned();
+    let warning = codex_hosted::UNTRUSTED_FOLDER_WARNING;
+    let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
+    // In-process: untrusted, the manifest keeps the warning, the notice list drops it.
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    assert!(launch.is_untrusted());
+    assert!(launch.manifest.payload.warnings.iter().any(|w| w == warning));
+    assert!(!launch.bare_warnings().iter().any(|w| w == warning), "{:?}", launch.bare_warnings());
+    drop(launch);
+    // Hosted: the same, and the manifest write registers the folder for the card's offer.
+    let hosted = || codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &fake_find, &LaunchOpts::default(), &cwd_s).unwrap();
+    let mut h = hosted();
+    assert!(!h.bare_warnings().iter().any(|w| w == warning));
+    h.write_manifest("t-ctrust-card", "s-1", ["Path"]).unwrap();
+    assert_eq!(codex_trust::codex_trust_offer("t-ctrust-card".into()).map(|o| o.folder), Some(cwd_s.clone()));
+    drop(h);
+    // Trusted by the user's config: no warning, and a reused tab id loses its offer.
+    codex_hosted::TEST_TRUST.with(|t| t.borrow_mut().push(cwd_s.clone()));
+    let mut again = hosted();
+    again.write_manifest("t-ctrust-card", "s-2", ["Path"]).unwrap();
+    assert!(codex_trust::codex_trust_offer("t-ctrust-card".into()).is_none());
+    drop(again);
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    assert!(!launch.is_untrusted());
+}
+
+#[test]
+fn a_folder_without_codex_settings_gets_no_trust_warning_or_offer() {
+    let t = TempDir::new("codex-trust-none");
+    let home = t.0.join("agent-home");
+    let cwd = t.0.join("Plain Folder");
+    std::fs::create_dir_all(&cwd).unwrap();
+    let cwd_s = cwd.to_string_lossy().into_owned();
+    let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    assert!(!launch.is_untrusted());
+    drop(launch);
+    let mut h = codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &fake_find, &LaunchOpts::default(), &cwd_s).unwrap();
+    h.write_manifest("t-ctrust-none", "s-1", ["Path"]).unwrap();
+    assert!(codex_trust::codex_trust_offer("t-ctrust-none".into()).is_none());
+}
+
+#[test]
+fn codex_settings_are_looked_for_up_to_the_git_root_only() {
+    let t = TempDir::new("codex-settings");
+    let mk = |p: &std::path::Path| std::fs::create_dir_all(p).unwrap();
+    // launch folder itself
+    let alone = t.0.join("alone");
+    mk(&alone.join(".codex"));
+    assert!(codex_hosted::has_codex_settings(&alone));
+    // a .codex FILE is not settings
+    let file = t.0.join("file");
+    mk(&file);
+    std::fs::write(file.join(".codex"), "x").unwrap();
+    assert!(!codex_hosted::has_codex_settings(&file));
+    // no git root: ancestors do not count
+    let child = t.0.join("alone").join("sub");
+    mk(&child);
+    assert!(!codex_hosted::has_codex_settings(&child));
+    // git root above: its .codex counts, one below the root counts, one above the root does not
+    let repo = t.0.join("outer").join("repo");
+    mk(&repo.join(".git"));
+    mk(&repo.join("a").join("b"));
+    mk(&t.0.join("outer").join(".codex"));
+    assert!(!codex_hosted::has_codex_settings(&repo.join("a").join("b")), "a .codex above the git root is out of reach");
+    mk(&repo.join(".codex"));
+    assert!(codex_hosted::has_codex_settings(&repo.join("a").join("b")));
+    assert!(codex_hosted::has_codex_settings(&repo));
 }
 
 /// A temp home and a temp global config holding `config` (never the user's own).

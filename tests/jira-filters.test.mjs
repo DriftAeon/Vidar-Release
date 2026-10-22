@@ -47,7 +47,7 @@ const pick = (label) => [...root.querySelectorAll(".jx-pick")].find((b) => b.que
 const visible = () => [...root.querySelectorAll(".jx-pick")].filter((b) => !b.hidden).map((b) => b.querySelector(".jx-pick-label").textContent);
 const pop = () => document.querySelector(".jx-pop");
 const opt = (label) => [...pop().querySelectorAll(".jx-opt")].find((b) => b.querySelector(".jx-opt-label").textContent === label);
-const clearBtn = () => root.querySelector(".jx-filters .jx-link");
+const clearBtn = () => root.querySelector(".jx-filters .jx-clear");
 const input = () => root.querySelector(".jx-search-in");
 const lastFilters = () => issueCalls.at(-1).filters;
 function type(text) {

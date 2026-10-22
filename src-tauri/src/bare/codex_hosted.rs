@@ -33,6 +33,8 @@ pub(super) struct CodexHome {
     /// The launch folder is not trusted by the user's own Codex config (not in `guard_warnings`; it is
     /// chained into the manifest's and Rendered's warnings separately, and Raw prints it on its banner).
     pub(super) trust_warning: Option<String>,
+    /// The untrusted launch folder, as the card's Trust Folder action shows and writes it.
+    pub(super) untrusted_dir: Option<String>,
     /// The shared Codex login's launch warnings (`login_link::sync_codex`), chained after the trust
     /// warning wherever it goes.
     pub(super) login_warnings: Vec<String>,
@@ -74,7 +76,25 @@ pub(super) fn project_override_warning(cwd: Option<&str>) -> Option<String> {
 }
 
 /// Shown when the launch folder is not trusted in the user's own Codex config.
-pub(super) const UNTRUSTED_FOLDER_WARNING: &str = "Codex doesn't trust this folder yet. Trust it in your own Codex config to load its project settings.";
+pub(super) const UNTRUSTED_FOLDER_WARNING: &str = "Trust this Folder in your Codex Config to Load its Project Settings.";
+
+/// Whether trust would unlock anything: a `.codex` directory (project config, hooks, exec policies)
+/// in `dir` or an ancestor up to and including the nearest git root (a folder holding `.git`); with
+/// no git root above, `dir` alone.
+pub(super) fn has_codex_settings(dir: &Path) -> bool {
+    let Some(root) = dir.ancestors().find(|a| a.join(".git").exists()) else {
+        return dir.join(".codex").is_dir();
+    };
+    for a in dir.ancestors() {
+        if a.join(".codex").is_dir() {
+            return true;
+        }
+        if a == root {
+            break;
+        }
+    }
+    false
+}
 
 /// Whether the user's Codex config trusts `cwd`; tests stand in for the real `~\.codex\config.toml`.
 #[cfg(not(test))]
@@ -167,10 +187,12 @@ pub(super) fn prepare_home(
     let config = under(home_dir, &p.config_target);
     let template = under(root, &p.config_template);
     // Only a folder the user's own Codex config trusts gets the trust table; any other still runs,
-    // with its project config, hooks and exec policies not loaded, and the tab says so.
+    // with its project config, hooks and exec policies not loaded, and the tab says so, but only when
+    // the folder has a `.codex` to load (otherwise trusting it would change nothing).
     let launch_dir = cwd.filter(|c| !c.trim().is_empty());
     let trusted_cwd = launch_dir.filter(|c| trust_of(c));
-    let trust_warning = (launch_dir.is_some() && trusted_cwd.is_none()).then(|| UNTRUSTED_FOLDER_WARNING.to_string());
+    let trust_warning = (launch_dir.is_some_and(|c| trusted_cwd.is_none() && has_codex_settings(Path::new(c)))).then(|| UNTRUSTED_FOLDER_WARNING.to_string());
+    let untrusted_dir = launch_dir.filter(|_| trust_warning.is_some()).map(str::to_string);
     home::generate_codex_config_for(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &mcp)?;
     if handlers > 0 {
         let hooks_json = codex_home.join(codex_hooks::HOOKS_FILE);
@@ -198,6 +220,7 @@ pub(super) fn prepare_home(
         guard_files: if handlers > 0 { copied.files } else { Vec::new() },
         guard_warnings: copied.warnings,
         trust_warning,
+        untrusted_dir,
         login_warnings,
         git,
         config,
@@ -275,14 +298,18 @@ pub struct CodexHostedLaunch {
     manifest: manifest::Manifest,
     file_stamp: String,
     manifests_dir: PathBuf,
+    /// The launch folder when the user's Codex config does not trust it; `write_manifest` registers
+    /// it for the notice card's Trust Folder action (`codex_trust`).
+    untrusted_dir: Option<String>,
     _lock: home::HomeLock,
 }
 
 impl CodexHostedLaunch {
     /// What the tab's notice area shows: the rune build's warnings, then the binary/shell warning
     /// `record_host` set (copy and git warnings stay in the manifest, as for in-process Codex).
+    /// The untrusted-folder warning is left to the card's trust offer (the manifest keeps it).
     pub fn bare_warnings(&self) -> Vec<String> {
-        self.manifest.payload.warnings.iter().chain(&self.manifest.binary.warning).cloned().collect()
+        self.manifest.payload.warnings.iter().filter(|w| *w != UNTRUSTED_FOLDER_WARNING).chain(&self.manifest.binary.warning).cloned().collect()
     }
 
     /// Records what Falcon ran (the spawn reply's `codex_bare`): the executable, its version
@@ -306,7 +333,9 @@ impl CodexHostedLaunch {
         self.manifest.tab = tab.to_string();
         self.manifest.falcon_session = Some(falcon_session.to_string());
         self.manifest.env_names = env_names.into_iter().map(str::to_string).collect();
-        manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)
+        let written = manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)?;
+        super::codex_trust::register(tab, self.untrusted_dir.clone());
+        Ok(written)
     }
 }
 
@@ -358,5 +387,5 @@ pub(super) fn prepare_codex_hosted_with(
     // Falcon resolves and runs Codex; `record_host` fills path, version and warning from its reply.
     let binary = manifest::Binary { path: String::new(), version: None, verified_version: h.p.verified_version.clone(), warning: None };
     let (manifest, file_stamp) = h.manifest(binary, "falcon".into(), Vec::new());
-    Ok(CodexHostedLaunch { payload_file, manifest, file_stamp, manifests_dir: home_dir.join("manifests"), _lock: h.lock })
+    Ok(CodexHostedLaunch { payload_file, manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), _lock: h.lock })
 }

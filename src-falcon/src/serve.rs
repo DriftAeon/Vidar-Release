@@ -533,6 +533,7 @@ fn host_capabilities(supported_agents: &[String]) -> Vec<&'static str> {
         capabilities.push(crate::protocol::CAPABILITY_CODEX_TURNS);
         capabilities.push(crate::protocol::CAPABILITY_CODEX_QUERY);
         capabilities.push(crate::protocol::CAPABILITY_CODEX_BARE);
+        capabilities.push(crate::protocol::CAPABILITY_CODEX_SKILLS);
     }
     capabilities
 }
@@ -1244,6 +1245,7 @@ mod tests {
         let claude_only = host_capabilities(&["claude".into()]);
         assert!(!claude_only.contains(&crate::protocol::CAPABILITY_CODEX_TURNS));
         assert!(!claude_only.contains(&crate::protocol::CAPABILITY_CODEX_QUERY));
+        assert!(!claude_only.contains(&crate::protocol::CAPABILITY_CODEX_SKILLS));
         assert!(claude_only.contains(&crate::protocol::CAPABILITY_STEER));
         let both = host_capabilities(&["claude".into(), "codex".into()]);
         assert_eq!(
@@ -1252,6 +1254,10 @@ mod tests {
         );
         assert_eq!(
             both.contains(&crate::protocol::CAPABILITY_CODEX_QUERY),
+            crate::codex::CodexDriver::RUNS_TURNS
+        );
+        assert_eq!(
+            both.contains(&crate::protocol::CAPABILITY_CODEX_SKILLS),
             crate::codex::CodexDriver::RUNS_TURNS
         );
     }

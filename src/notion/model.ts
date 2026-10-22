@@ -2,7 +2,9 @@
 // § Views). Top-level hits band as "Databases" then "Pages"; data-source rows take their facets and group from
 // facets.ts. Pure apart from relative/absolute time formatting; no DOM, no IPC.
 import { absoluteTime, relativeTime } from "../browser/when";
-import type { Field, Item } from "../browser/types";
+import type { Field, Item, Lead } from "../browser/types";
+import type { LucideName } from "../icons";
+import { colorClass } from "./rich-text";
 import type { NotionErrorKind, NotionHit, NotionPage, NotionRow } from "./ipc";
 import { EDITED, NONE, groupOf, type Plan } from "./facets";
 
@@ -26,11 +28,25 @@ const edited = (iso: string): Field => {
   return f;
 };
 
+/** Notion's built-in icon names -> Lucide glyphs; a name not listed falls back to the kind glyph, still tinted. */
+const NATIVE: Record<string, LucideName> = {
+  checklist: "list-checks", checkmark: "check", document: "file-text", folder: "folder", bookmark: "bookmark",
+  bug: "bug", lock: "lock", bolt: "zap", lightning: "zap", person: "user", people: "users", hashtag: "hash",
+  code: "file-code",
+};
+
+/** The lead for a built-in icon: the mapped glyph (else `fallback`) tinted by the icon's colour. */
+function nativeLead(name: string, color: string, fallback: LucideName): Lead {
+  const cls = colorClass(color);
+  return { glyph: Object.hasOwn(NATIVE, name) ? NATIVE[name] : fallback, ...(cls ? { cls } : {}) };
+}
+
 export function hitItem(h: NotionHit): Item {
+  const kindGlyph: LucideName = h.kind === "source" ? "database" : "file-text";
   return {
     id: h.id, key: "", title: titleOf(h.title), status: "", updated: h.lastEdited,
     group: { ...BANDS[h.kind === "source" ? "source" : "page"] },
-    lead: h.icon ? { emoji: h.icon } : { glyph: h.kind === "source" ? "database" : "file-text" },
+    lead: h.icon ? { emoji: h.icon } : h.iconName ? nativeLead(h.iconName, h.iconColor, kindGlyph) : { glyph: kindGlyph },
     ...(h.kind === "source" ? { tip: DATABASE_TIP } : {}),
     facets: { [EDITED]: h.lastEdited ? [h.lastEdited] : [] },
     fields: [edited(h.lastEdited)],
@@ -49,7 +65,7 @@ function tagsOf(row: NotionRow, plan: Plan): Item["tags"] {
 }
 
 /** A data-source row: one value list per chip property ("" = None), its D4 group, then the card fields.
- *  `anyIcon`: some row of the source has an emoji, so the others keep a blank slot and titles align;
+ *  `anyIcon`: some row of the source has an emoji or built-in icon, so the others keep a blank slot and titles align;
  *  with none, no row has a lead. */
 export function rowItem(row: NotionRow, plan: Plan, anyIcon = false): Item {
   const facets: Record<string, string[]> = { [EDITED]: row.lastEdited ? [row.lastEdited] : [] };
@@ -60,7 +76,9 @@ export function rowItem(row: NotionRow, plan: Plan, anyIcon = false): Item {
   const { group, status } = groupOf(plan, row.values);
   const fields: Field[] = plan.fields.map((p) => ({ label: p.name, value: (row.values[p.id] ?? []).join(", ") }));
   fields.push(edited(row.lastEdited));
-  const lead = row.icon ? { emoji: row.icon } : anyIcon ? { blank: true as const } : undefined;
+  const lead: Lead | undefined = row.icon ? { emoji: row.icon }
+    : row.iconName ? nativeLead(row.iconName, row.iconColor, "file-text")
+    : anyIcon ? { blank: true } : undefined;
   const tags = tagsOf(row, plan);
   return {
     id: row.id, key: "", title: titleOf(row.title), status, updated: row.lastEdited, group, facets, fields,

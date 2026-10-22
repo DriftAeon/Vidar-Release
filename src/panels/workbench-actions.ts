@@ -52,6 +52,18 @@ export async function copyPathAction(b: ActionBlock) {
   }
 }
 
+/** The save half of Copy Path, for Open in Browser: the block's path, saved once if it has none. */
+export async function ensureSaved(b: ActionBlock): Promise<string | undefined> {
+  const gen = b.gen;
+  const path = await save(b);
+  if (b.gen !== gen) return undefined; // removed meanwhile
+  if (!b.path) {
+    b.path = path;
+    publishBlock(b);
+  }
+  return path;
+}
+
 function save(b: ActionBlock): Promise<string> {
   if (b.path) return Promise.resolve(b.path);
   if (!b.saving) {

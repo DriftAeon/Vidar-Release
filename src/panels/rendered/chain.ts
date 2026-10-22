@@ -5,6 +5,7 @@
 import { prettyTool, toolWords } from "../../format";
 import { svgEl, TOOL_ICON } from "./icons";
 import { BACKEND_ICON_MAP, BACKEND_ICONS_MAP, iconImg, TOOL_ICON_MAP, type ColorIcon } from "../../icon-img";
+import { backendLookupName } from "../rack-modules";
 import { splitUrl } from "./format";
 import { el } from "./dom";
 import { markSlot, type Mark } from "./marks";
@@ -60,7 +61,7 @@ function mcpDisplay(name: string): { icons: ColorIcon[]; label: string } | null 
       return { icons: ["vidar" as ColorIcon, "unreal" as ColorIcon], label: toolWords(toolName.replace(/^unreal[_-]/i, "")) };
   }
   // a Claude Code plugin server is `plugin_<plugin>_<server>` (plugin_vidar_drive): look it up as vidar-drive
-  const server = rawServer.startsWith("plugin_") ? rawServer.slice(7).replace(/_/g, "-") : rawServer;
+  const server = backendLookupName(rawServer);
   const icons: ColorIcon[] = [];
   const serverIcons = BACKEND_ICONS_MAP.get(server.toLowerCase());
   const serverIcon = serverIcons?.[0];

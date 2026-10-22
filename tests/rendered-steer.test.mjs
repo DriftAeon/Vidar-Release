@@ -129,6 +129,23 @@ test("replay: an execution error with nothing queued keeps its footer", async ()
   body.dispose();
 });
 
+test("live: a queued skill prompt shows its text blocks, not the raw items", async () => {
+  const body = mount("steer-skill");
+  await settle();
+  batch("steer-skill", [{ hydration: "start" }, { hydration: "end" }]);
+  await settle();
+  batch("steer-skill", [queued("p1", [
+    { type: "text", text: "/build.plan tidy" },
+    { type: "skill", name: "build.plan", path: "C:/work/plan/SKILL.md" },
+  ])]);
+  await settle();
+  const block = body.el.querySelector(".blk-queued");
+  assert.ok(block);
+  assert.ok(block.textContent.includes("/build.plan tidy"));
+  assert.ok(!block.textContent.includes("SKILL.md"));
+  body.dispose();
+});
+
 test("live: a hosted steer marks the waiting prompt and drops the footer", async () => {
   const body = mount("steer-3");
   await settle();

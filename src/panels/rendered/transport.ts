@@ -30,7 +30,7 @@ interface AgentSpawnParams {
   /** Prepared rules for this tab; the backend gets only the built file (Rust re-validates it). */
   rules?: RulesLaunch | null;
   /** Called with the Bare warnings a hosted profiled spawn reports (falcon_spawn `bare_warnings`). */
-  onBareWarnings?: (warnings: string[]) => void;
+  onBareWarnings?: (warnings: string[], trust: { folder: string; text: string } | null) => void;
 }
 
 /**
@@ -88,6 +88,17 @@ async function refuseHeldCodexThread(params: AgentSpawnParams): Promise<void> {
  * The in-process backend: Vidar's own `agent.rs`, exactly as it was called
  * before this interface existed. The child dies with Vidar.
  */
+/** Hands a profiled spawn's warnings, and a Codex tab's trust offer (the folder the user's own Codex
+ *  config does not trust), to `onBareWarnings`. Nothing to report reaches nothing. */
+async function reportBare(params: AgentSpawnParams, warnings: string[]): Promise<void> {
+  if (!params.onBareWarnings) return;
+  let trust: { folder: string; text: string } | null = null;
+  if (params.agent === "codex") {
+    try { trust = await invoke("codex_trust_offer", { id: params.tabId }); } catch { trust = null; }
+  }
+  if (warnings.length || trust) params.onBareWarnings(warnings, trust);
+}
+
 async function spawnInProcess(params: AgentSpawnParams, profile: string | null, rowKey?: string): Promise<AgentSpawned> {
   if (!AGENT_PROFILE[params.agent].inProcess) {
     throw new Error("claude rendered tabs are hosted by falcon, not spawned in-process");
@@ -96,7 +107,9 @@ async function spawnInProcess(params: AgentSpawnParams, profile: string | null, 
   // A launch profile (bare) sends no rules file and names its row's agent; Rust admits only
   // "codex" and builds the binary, env, home and config.toml itself (bare/, agent.rs).
   if (profile) {
-    return await invoke("spawn_codex_appserver", { id: params.tabId, cwd: params.cwd, rulesFile: null, tabName: params.tabName ?? null, profile, ...(rowKey ? { rowKey } : {}), agent: params.agent });
+    const reply = await invoke("spawn_codex_appserver", { id: params.tabId, cwd: params.cwd, rulesFile: null, tabName: params.tabName ?? null, profile, ...(rowKey ? { rowKey } : {}), agent: params.agent });
+    await reportBare(params, reply.bareWarnings ?? []);
+    return { gen: reply.gen, developerInstructions: reply.developerInstructions };
   }
   return await invoke("spawn_codex_appserver", { id: params.tabId, cwd: params.cwd, rulesFile: params.rules?.file ?? null, tabName: params.tabName ?? null });
 }
@@ -150,7 +163,7 @@ export const falconAgentTransport: AgentTransport = {
       ...(params.profile && params.rowKey ? { rowKey: params.rowKey } : {}),
     });
     if (typeof reply === "number") return { gen: reply, developerInstructions: null };
-    if (reply.bare_warnings?.length) params.onBareWarnings?.(reply.bare_warnings);
+    await reportBare(params, reply.bare_warnings ?? []);
     return { gen: reply.view_generation, developerInstructions: null };
   },
   async send(tabId, gen, line) {

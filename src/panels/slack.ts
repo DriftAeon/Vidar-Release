@@ -179,7 +179,6 @@ export function mountSlackView(parent: HTMLElement): HTMLElement {
     submit: (token) => void onSubmit(token),
     refresh: () => void refresh(),
     disconnect: () => void onDisconnect(),
-    open: (item) => { if (item.url) void invoke("open_url", { url: item.url }).catch(console.error); },
     send: (item) => void onSend(item),
     copyManifest: () => void onCopyManifest(),
     openApps: () => { void invoke("open_url", { url: APPS_PAGE }).catch(console.error); },

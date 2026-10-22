@@ -3,7 +3,7 @@
 // no key span; an empty status draws no pill, and grouped rows drop the pill since the band names it.
 // Rows are focusable (roving tabindex); their Send button shows on hover and :focus-within.
 import { lucide, type LucideName } from "../icons";
-import { iconImg } from "../icon-img";
+import { iconImg, type ColorIcon } from "../icon-img";
 import type { Selection } from "./filter";
 import { groupItems, type Segment } from "./groups";
 import type { Field, Item, Tone } from "./types";
@@ -16,12 +16,12 @@ export function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string,
 }
 
 /** An icon-only button; the tooltip doubles as its accessible name. */
-export function iconButton(cls: string, icon: LucideName, tip: string, run: () => void): HTMLButtonElement {
+export function iconButton(cls: string, icon: LucideName | { color: ColorIcon }, tip: string, run: () => void): HTMLButtonElement {
   const b = node("button", `br-ib ${cls}`);
   b.type = "button";
   b.title = tip;
   b.setAttribute("aria-label", tip);
-  b.appendChild(lucide(icon, "icn"));
+  b.appendChild(typeof icon === "string" ? lucide(icon, "icn") : iconImg(icon.color));
   b.addEventListener("click", (e) => {
     e.stopPropagation();
     run();
@@ -64,7 +64,7 @@ function lead(item: Item): HTMLElement | null {
   const el = node("span", "br-lead");
   el.setAttribute("aria-hidden", "true");
   if ("emoji" in l) el.textContent = l.emoji;
-  else if ("glyph" in l) el.appendChild(lucide(l.glyph, "icn"));
+  else if ("glyph" in l) el.appendChild(lucide(l.glyph, l.cls ? `icn ${l.cls}` : "icn"));
   return el;
 }
 

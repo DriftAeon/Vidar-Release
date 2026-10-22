@@ -13,6 +13,7 @@ import { approvalDetail, approvalToolLabel } from "./approval-detail";
 import { svgEl } from "./icons";
 import { iconImg } from "../../icon-img";
 import { questionForm } from "./question-form";
+import { asyncAnswerText, asyncAskFormInput, type AsyncQuestion } from "../../agents/codex-async-ask";
 import { mcpElicitationForm } from "./mcp-elicitation-form";
 import type { Group, RenderedState, ToolRecord } from "./state";
 import type { Follow } from "./follow";
@@ -36,6 +37,8 @@ export interface CardsDeps {
   noticeBlock: (text: string, level: "info" | "warn" | "error", quiet?: boolean) => void;
   agent: RenderedAgent;
   stats?: HydrateStats;
+  /** sends text as an ordinary user message (composer.ts sendText); false when it was not taken */
+  sendText?: (text: string) => boolean | Promise<boolean>;
 }
 
 /** Settle reasons with their own folded-card labels. */
@@ -220,7 +223,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
         else clearMark(t.details, "awaiting");
         if (t.details.dataset.cardOpened) { delete t.details.dataset.cardOpened; t.details.open = false; }
         if (t.group) groupRefresh(t.group);
-      }
+      } else if (!isQuestion) body.remove(); // no pill (a Codex MCP elicitation names no itemId): fold to the head row alone
       if (!silent && !delivered && !S.hydrating) void sendEncoded(S.adapter.encodePermission(requestId, decision));
       refreshState();
       // an answer from Relay (subagent-relay.ts sets the flag before its click) leaves focus where the user is
@@ -283,6 +286,61 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     }
     refreshState();
   }
+  /** open Codex async asks by item id: outside `approvals`, so they never hold the composer, Esc or the state chip */
+  const asyncAsks = new Map<string, () => void>();
+  /** A Codex async ask (codex-async-ask.ts) as the Question card. Answer sends the picks as the
+   *  next user message; any later user message (typed, or one from replayed history) answers it too. */
+  function asyncAskCard(id: string, questions: AsyncQuestion[]) {
+    if (asyncAsks.has(id)) return;
+    const shell = cardShell({
+      root: "div",
+      classes: `blk ${DRIVE_CLASS.card} blk-question`,
+      parts: ["head", "title", "body", "actions"],
+      title: "Question",
+      partClasses: { head: "approval-head", title: "approval-title", body: "approval-body", actions: "approval-actions" },
+    });
+    const card = shell.root, head = shell.head!, body = shell.body!, row = shell.actions!;
+    card.dataset.tool = "AskUserQuestion";
+    card.dataset.requestId = id;
+    head.prepend(svgEl("message-circle-question", "Question"));
+    const form = questionForm(body, asyncAskFormInput(questions), (ok) => { answer.disabled = !ok; });
+    const msg = el("input", DRIVE_CLASS.message);
+    msg.setAttribute("aria-label", "Notes");
+    msg.setAttribute("placeholder", "Notes");
+    const fold = () => {
+      if (!asyncAsks.has(id)) return;
+      asyncAsks.delete(id);
+      card.classList.add(DRIVE_CLASS.settled, "allow");
+      row.remove();
+      body.remove();
+      head.appendChild(el("span", "approval-inline", ""));
+      const glyph = el("span", `${DRIVE_CLASS.result} ok`);
+      glyph.title = "Answered";
+      glyph.setAttribute("aria-label", "Answered");
+      glyph.appendChild(svgEl("check", "Answered"));
+      head.appendChild(glyph);
+    };
+    let sending = false;
+    const answer = btn("Answer", DRIVE_CLASS.allow, () => {
+      if (sending || !asyncAsks.has(id) || !form.answered() || !deps.sendText) return;
+      const { answers } = form.collect() as { answers: Record<string, string> };
+      const taken = deps.sendText(asyncAnswerText(questions, answers, msg.value));
+      if (taken === true) { fold(); return; }
+      if (taken === false) return;
+      sending = true;
+      void taken.then((ok) => { sending = false; if (ok) fold(); });
+    });
+    answer.disabled = !form.answered();
+    row.append(msg, answer);
+    asyncAsks.set(id, fold);
+    sealGroup();
+    append(card);
+  }
+  /** a later user message reached the thread: every open async ask before it is answered */
+  function settleAsyncAsks() {
+    for (const fold of [...asyncAsks.values()]) fold();
+  }
+
   function cancelApprovals(reason: string) {
     for (const id of [...approvals.keys()]) {
       const card = approvals.get(id) as (HTMLElement & { settle?: (d: { behavior: "deny"; message?: string }, silent?: boolean, host?: undefined, cancelled?: boolean) => void }) | undefined;
@@ -324,5 +382,5 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     return true;
   }
 
-  return { attachCard, openHydratedCards, approvalCard, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED, AGENT_EXITED };
+  return { attachCard, openHydratedCards, approvalCard, asyncAskCard, settleAsyncAsks, cancelApprovals, denyPending, alreadyAnswered, TURN_ENDED, AGENT_EXITED };
 }

@@ -116,7 +116,8 @@ export function typeLabel(t: AgentType): string {
 // `title` overrides the themed default name (tab-names.ts) — a variant launched from
 // its flyout row has no location step, so it's titled by its label alone.
 // A `{vidar}` cwd resolves first (vidar-path.ts) and rejects "Vidar Folder Unknown" without one.
-export async function spawnFrom(t: AgentType, loc: Location, title?: string, resume?: string): Promise<string> {
+// `draft` (rendered rows) preloads the composer unsent; `onAdopted` fires once the first spawn settles.
+export async function spawnFrom(t: AgentType, loc: Location, title?: string, resume?: string, draft?: string, onAdopted?: (ok: boolean, reason?: string) => void): Promise<string> {
   closeLauncher();
   // A launch profile belongs to a Claude or Codex row without a role (Raw in a PTY, Rendered on
   // Falcon or in-process) only: on a gateway row, another agent, the shell or a role it would open
@@ -149,6 +150,8 @@ export async function spawnFrom(t: AgentType, loc: Location, title?: string, res
     body: t.body === "rendered" ? "rendered" : undefined,
     permissionMode: t.permissionMode,
     resume, // rendered only: a past session to continue (Rust refuses one that is live)
+    draft,
+    onAdopted,
     // `dataset.agent` drives the tab border colour; the title is what the
     // tooltip and inspect label show. Unset: createSession mints a themed name.
     title,

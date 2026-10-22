@@ -105,11 +105,11 @@ export function createAgentsDrawer(deps: AgentsDrawerDeps) {
   // finished agents: verdict, then the full report and the calls list each behind a collapsed fold
   const verdict = el("div", "agent-drawer-verdict");
   const reportFold = el("details", "agent-fold");
-  const reportSum = el("summary", "agent-btn agent-fold-sum", "Report");
+  const reportSum = el("summary", "agent-btn ws-btn agent-fold-sum", "Report");
   const reportBody = el("div", "agent-report");
   reportFold.append(reportSum, reportBody);
   const callsFold = el("details", "agent-fold");
-  const callsSum = el("summary", "agent-btn agent-fold-sum");
+  const callsSum = el("summary", "agent-btn ws-btn agent-fold-sum");
   callsFold.append(callsSum);
   body.append(desc, needsLine, list);
   root.append(body);

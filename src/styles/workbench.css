@@ -21,7 +21,7 @@
 .wb-block { flex-shrink: 0; border: var(--border-w) solid var(--border); border-radius: var(--radius-6); overflow: hidden; } /* overflow:hidden zeroes the flex min-height, so rows shrank inside the scrolling #workbench-body */
 /* the whole bar is the toggle (variant A, neutral: a step lighter than the page, no accent tint or edge) */
 .wb-block-head {
-  display: flex; align-items: center; gap: var(--space-8); height: var(--row-32); box-sizing: border-box;
+  display: flex; align-items: center; gap: var(--space-8); height: var(--row-32); min-height: var(--row-32); max-height: var(--row-32); flex: none; box-sizing: border-box;
   padding: 0 var(--space-4) 0 var(--space-8); font-size: var(--font-12);
   background: var(--bg-hover); border-bottom: var(--border-w) solid var(--border); cursor: pointer;
 }
@@ -31,33 +31,61 @@
 .wb-block > :not(.wb-block-head) { margin: var(--space-8); }
 /* tray blocks only: a collapsed block shows just its head */
 .wb-block.wb-collapsed > :not(.wb-block-head) { display: none; }
-.wb-block.wb-collapsed .wb-block-head { border-bottom: 0; }
+.wb-block.wb-collapsed .wb-block-head { border-bottom-color: transparent; } /* was border-bottom: 0, which moved the head's content 0.5 px between states; the 1px line stays, unseen */
 .wb-block-name {
   color: var(--fg); font-weight: var(--weight-strong); white-space: nowrap; flex-shrink: 0; letter-spacing: 0.04em;
   text-transform: uppercase; /* display only: the stored name stays "Mike" so "Tray Mike" still resolves */
 }
 .wb-block-note { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-actions { display: flex; gap: var(--space-4); }
-.wb-actions button {
+/* Bench bar buttons: the Sheen Cap face (settings `.ws-btn`; flat toolbar look retired, user 2026-10-22).
+   Primary marks itself with an accent edge, not accent text: accent on the Sheen top reads 3.35-4.89:1, --fg 7.85:1+.
+   Tray blocks (.wb-block) keep their own tray rule set below; `:not(:where(.wb-block *))` fences them out of the Sheen at zero specificity. */
+.wb-actions button:not(:where(.wb-block *)) {
+  --face: var(--titlebar-grad); --depth: var(--titlebar-highlight); --edge: var(--border-strong);
+  background: var(--face); box-shadow: var(--depth); border: var(--border-w) solid var(--edge); border-radius: var(--radius-4); cursor: pointer;
+  color: var(--fg); font-size: var(--font-11); line-height: 1;
+}
+.wb-actions button:hover:not(:disabled):not(:where(.wb-block *)) {
+  --face: linear-gradient(180deg, color-mix(in srgb, var(--titlebar-top), var(--fg) 8%), color-mix(in srgb, var(--bg-titlebar), var(--fg) 5%) 55%, var(--titlebar-bottom));
+  --depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 24%, transparent); --edge: var(--fg-dim); color: var(--fg);
+}
+.wb-actions button:active:not(:disabled):not(:where(.wb-block *)) {
+  --face: linear-gradient(180deg, var(--bg), var(--titlebar-bottom));
+  --depth: inset 0 2px 2px color-mix(in srgb, black 35%, transparent); padding-top: var(--space-2);
+}
+.wb-actions button:focus-visible:not(:where(.wb-block *)) { outline: 2px solid var(--accent); outline-offset: var(--space-2); }
+.wb-actions button:disabled { opacity: 0.5; cursor: default; }
+/* primary: accent edge (hover included, so the edge holds) */
+.wb-actions button.wb-card-btn-primary, .wb-actions button.wb-card-btn-primary:hover:not(:disabled) { --edge: var(--accent); }
+/* Tray blocks: the tray block rules, scoped to .wb-block so the Sheen above does not reach them (user, 2026-10-22).
+   One addition: the head and every bar button are pinned so expanding a block changes neither height. */
+.wb-block .wb-actions button {
   background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4); cursor: pointer;
   color: var(--fg-dim); font-size: var(--font-11); line-height: 1;
 }
 /* every bar button is 24 px tall; icon-only ones 24 wide, "Open" keeps its word at the same height */
 .wb-block .wb-actions button, .wb-block .wb-actions button.icon-btn.file-action {
   background: var(--bg); border: var(--border-w) solid var(--border); /* one backing for all bar buttons (the X's); beats the file-action none */
-  box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
+  box-sizing: border-box; height: var(--row-24); min-height: var(--row-24); max-height: var(--row-24); flex: none; min-width: var(--row-24); padding: 0 var(--space-8);
   display: inline-flex; align-items: center; justify-content: center;
 }
 .wb-block .wb-actions button.icon-btn, .wb-block .wb-actions button.icon-btn.file-action { width: var(--row-24); padding: 0; }
-.wb-actions button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--bg-hover); }
-.wb-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--accent); border-color: var(--accent); }
+.wb-block .wb-actions button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--bg-hover); }
+.wb-block .wb-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--accent); border-color: var(--accent); }
 .wb-block .wb-actions button.icon-btn.file-action:focus-visible { border-color: var(--accent); }
-.wb-actions button:active:not(:disabled) { background: var(--bg-selected); }
-.wb-actions button:disabled { opacity: 0.5; cursor: default; }
+.wb-block .wb-actions button:active:not(:disabled) { background: var(--bg-selected); }
+.wb-block .wb-actions button:disabled { opacity: 0.5; cursor: default; }
+.wb-block .wb-actions button.wb-annotate-btn.selected { color: var(--accent); border-color: var(--accent); }
+/* Icon-only bar buttons (Changes, Notion, row actions) keep the flat look; text buttons keep the Sheen (user, 2026-10-22). The Jira/Slack head icons wear .wb-card-btn and stay Sheen. */
+.wb-actions button:is(.cx-ico, .nt-ico, .cx-ra):not(.wb-card-btn) { background: var(--bg); box-shadow: none; border-color: var(--border); color: var(--fg-dim); }
+.wb-actions button:is(.cx-ico, .nt-ico, .cx-ra):not(.wb-card-btn):hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+.wb-actions button:is(.cx-ico, .nt-ico, .cx-ra):not(.wb-card-btn):active:not(:disabled) { background: var(--bg-selected); box-shadow: none; padding-top: 0; }
+.wb-actions button:is(.cx-ico, .nt-ico, .cx-ra):not(.wb-card-btn):focus-visible { outline-offset: 1px; color: var(--accent); border-color: var(--accent); }
 .wb-text { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: var(--font-12); max-height: 45vh; overflow: auto; }
 .wb-img { display: block; max-width: calc(100% - var(--space-16)); max-height: 45vh; object-fit: contain; border-radius: var(--radius-4); }
 /* annotation: Annotate button state, saved text, editor with Save / Cancel (panels/workbench-annotate.ts) */
-.wb-block .wb-actions button.wb-annotate-btn.selected { color: var(--accent); border-color: var(--accent); }
+/* .wb-annotate-btn.selected takes its accent edge with the bar-button face above */
 .wb-annotation[hidden], .wb-annotation [hidden] { display: none; }
 .wb-annotation-text {
   white-space: pre-wrap; word-break: break-word; font-size: var(--font-12); line-height: var(--line-16);
@@ -72,15 +100,11 @@
 }
 .wb-annotation-editor textarea:focus { outline: none; border-color: var(--accent); }
 .wb-annotation-actions { display: flex; gap: var(--space-4); margin-top: var(--space-4); }
+/* size only: the row is 24px, so the Sheen face (.ws-btn) keeps today's height, padding and label size */
 .wb-annotation-actions button {
-  box-sizing: border-box; height: var(--row-24); padding: 0 var(--space-8); cursor: pointer;
-  background: var(--bg); color: var(--fg-dim); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
-  font-size: var(--font-11); line-height: 1;
+  box-sizing: border-box; height: var(--row-24); min-height: var(--row-24); padding: 0 var(--space-8); cursor: pointer;
+  border-radius: var(--radius-4); font-size: var(--font-11); line-height: 1;
 }
-.wb-annotation-actions button:hover { color: var(--accent); border-color: var(--accent); background: var(--bg-hover); }
-.wb-annotation-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--accent); border-color: var(--accent); }
-.wb-annotation-actions button:active { background: var(--bg-selected); }
-.wb-annotation-actions button.wb-annotation-save { color: var(--accent); border-color: var(--accent); }
 /* ---- workbench tabs + Document view (panels/document.ts) ---- */
 /* Sliding fill: one track holds the tabs; #wb-fill sits behind them and glides to the current tab
    (panels/workbench.ts placeFill). Tab widths come from content. */
@@ -124,23 +148,9 @@
    itself with an accent edge, not an accent label: accent on the Sheen top reads 3.35-4.89:1 across the
    themes, --fg 7.85:1 or better. */
 .wb-actions > button.wb-card-btn {
-  --face: var(--titlebar-grad); --depth: var(--titlebar-highlight); --edge: var(--border-strong);
-  background: var(--face); box-shadow: var(--depth); border: var(--border-w) solid var(--edge);
-  border-radius: var(--radius-4); color: var(--fg); min-height: var(--row-28); padding: 0 var(--space-12);
-  box-sizing: border-box; font: var(--weight-strong) var(--font-12)/var(--line-16) var(--font-ui);
+  min-height: var(--row-28); padding: 0 var(--space-12);
+  font: var(--weight-strong) var(--font-12)/var(--line-16) var(--font-ui);
 }
-.wb-actions > button.wb-card-btn-primary { --edge: var(--accent); }
-.wb-actions > button.wb-card-btn:hover:not(:disabled) {
-  --face: linear-gradient(180deg, color-mix(in srgb, var(--titlebar-top), var(--fg) 8%), color-mix(in srgb, var(--bg-titlebar), var(--fg) 5%) 55%, var(--titlebar-bottom));
-  --depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 24%, transparent); --edge: var(--fg-dim); color: var(--fg);
-}
-.wb-actions > button.wb-card-btn-primary:hover:not(:disabled) { --edge: var(--accent); }
-.wb-actions > button.wb-card-btn:active:not(:disabled) {
-  --face: linear-gradient(180deg, var(--bg), var(--titlebar-bottom));
-  --depth: inset 0 2px 2px color-mix(in srgb, black 35%, transparent); padding-top: var(--space-2);
-}
-.wb-actions > button.wb-card-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-2); }
-.wb-actions > button.wb-card-btn:disabled { opacity: 0.5; cursor: default; }
 .wb-actions > button.wb-card-btn[aria-busy="true"] { opacity: 1; cursor: progress; }
 .wb-pane-frame {
   flex: 1; min-height: 0; padding: var(--space-10); /* off the new-ui scale on purpose (2026-10-10) */
@@ -160,15 +170,17 @@
 #doc-open { width: var(--picker-w); height: var(--row-24); box-sizing: border-box; }
 #doc-open { max-width: 100%; text-align: left; }
 #doc-open { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
-#doc-open .doc-open-count { color: var(--fg-dim); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 #doc-open .doc-open-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#doc-open .doc-open-count { flex-shrink: 0; }
+/* the faint × on the face, flat icon look: dim at rest, full on hover (user, 2026-10-22) */
+#doc-open .doc-open-clear { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--line-16); height: var(--line-16); border-radius: var(--radius-2); color: var(--fg-dim); opacity: 0.6; cursor: pointer; }
+#doc-open:has(.doc-open-clear) { padding-right: var(--space-4); } /* the × sits near the edge, not 10px in (user, 2026-10-22) */
+#doc-open .doc-open-clear:hover { color: var(--fg); opacity: 1; }
+#doc-open .doc-open-clear:active { background: var(--bg-selected); }
+#doc-open .doc-open-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--fg); opacity: 1; }
 #doc-status { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#doc-reload, #doc-source, #doc-external, #doc-comments, #doc-request {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer;
-  color: var(--fg-dim); font-size: var(--font-12); line-height: 1; padding: var(--space-3) 7px; white-space: nowrap; /* pre-existing off-scale literal and legacy token, grandfathered until these buttons are rewritten */
-}
-#doc-reload:hover, #doc-source:hover, #doc-external:hover, #doc-comments:hover:not(:disabled), #doc-request:hover { color: var(--accent); border-color: var(--accent); }
+/* icon buttons keep the flat look (user, 2026-10-22) */
+#doc-reload, #doc-external, #doc-comments, #doc-request { background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer; color: var(--fg-dim); font-size: var(--font-12); line-height: 1; padding: var(--space-3) 7px; white-space: nowrap; } /* pre-existing off-scale literal and legacy token, grandfathered (lint:ui) */
+#doc-reload:hover, #doc-external:hover, #doc-comments:hover:not(:disabled), #doc-request:hover { color: var(--accent); border-color: var(--accent); }
 #doc-comments:disabled { opacity: 0.5; cursor: default; }
 #doc-comments.hidden, #doc-request.hidden { display: none; }
 /* Document bar right group (Copy Path, Reload, Open Externally, Save, Open Folder, Comments, Revise):
@@ -228,14 +240,11 @@
 .doc-card textarea:focus { outline: none; border-color: var(--accent); }
 .doc-card .meta { display: flex; align-items: center; gap: var(--space-6); margin-top: var(--space-6); font-size: var(--font-11); color: var(--fg-dim); }
 .doc-card .meta span { margin-right: auto; }
-/* actions read as buttons, same treatment as the doc-bar's */
-.doc-card .meta button {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-2) 7px;
-  font-size: var(--font-11); line-height: 1; color: var(--fg-dim); cursor: pointer;
-}
-.doc-card .meta button:hover { color: var(--accent); border-color: var(--accent); }
+/* actions wear the Sheen `.ws-btn` face (class set in comments.ts) */
 .doc-margin-note { position: absolute; left: 0; right: 0; font-size: var(--font-11); color: var(--fg-dim); padding: var(--space-2) 0; }
 .doc-fold { position: absolute; left: 0; right: 0; background: none; border: 0; padding: var(--space-2) 0; text-align: left; font-size: var(--font-11); color: var(--fg-dim); cursor: pointer; }
+.doc-fold { display: flex; align-items: center; gap: var(--space-4); }
+.doc-fold .icn { width: var(--space-12); height: var(--space-12); flex: none; }
 .doc-fold:hover { color: var(--accent); }
 .doc-marker { position: absolute; right: 2px; width: 10px; height: 10px; padding: 0; border: 0; border-radius: 50%; background: var(--accent); cursor: pointer; opacity: 0.8; }
 .doc-marker.hot, .doc-marker:hover { opacity: 1; }

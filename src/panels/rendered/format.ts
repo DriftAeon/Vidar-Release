@@ -58,6 +58,10 @@ export function toolSummary(name: string, input: unknown): string {
     case "Agent": return clip(s("description") || s("prompt"));
     case "Skill": return clip(s("skill") + (s("args") ? ` ${s("args")}` : ""));
     case "WebFetch": case "WebSearch": return clip(s("url") || s("query"));
+    // Codex display items (src/agents/codex-items.ts)
+    case "Image": return clip(s("prompt") || s("path"));
+    case "Sleep": return clip(s("duration"));
+    case "Subagent": return clip([s("agent") || s("thread"), s("status")].filter(Boolean).join(" · "));
     case "AskUserQuestion": {
       const qs = Array.isArray(i.questions) ? (i.questions as unknown[]) : [];
       const q0 = qs[0] && typeof qs[0] === "object" ? (qs[0] as Record<string, unknown>) : {};

@@ -31,13 +31,11 @@ test('Documents lists no ungrouped bridge\\display entries, even after a late li
   assert.deepEqual([...document.querySelectorAll('.doc-om-fold')].map((f) => f.dataset.folder), ['Inbox']);
   assert.equal(document.querySelector('.doc-om-folders .doc-om-rule'), null, 'no rule before a Display folder');
   assert.deepEqual(menuFiles().map((r) => r.dataset.value), [inbox.path]);
-  assert.equal(picker.querySelector('.doc-open-count').textContent, '1');
   menuFiles()[0].click();
   assert.deepEqual(openedDocuments, [inbox.path]);
   assert.equal(document.querySelector('#doc-om'), null, 'selection closes the dropdown');
   // only ungrouped entries: nothing to list
   setCatalog([md]);
-  assert.equal(picker.querySelector('.doc-open-count').textContent, '');
   closeOpenMenu();
 });
 

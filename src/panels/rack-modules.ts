@@ -103,8 +103,20 @@ export interface RailServer {
 // extensionless import would not resolve there.
 const SERVER_ICONS = icons.backends as Record<string, string | string[]>;
 
-function railIcon(name: string): string {
+/** The icons.json `backends` key for a server name, lookup only (ids, saved order and config
+ *  names keep the raw name). The Vidar Drive server arrives as `vidar_drive` (the Codex home's
+ *  `mcp_servers.vidar_drive` table, bare/home.rs, read verbatim by mcp/codex.rs) and as the
+ *  Claude plugin form `plugin_vidar_drive` / `plugin:vidar:drive`; all map to `vidar-drive`.
+ *  Any other plugin form maps its `_` and `:` to `-`; a plain name is returned unchanged. */
+export function backendLookupName(name: string): string {
   const lower = name.toLowerCase();
+  if (lower === "vidar_drive") return "vidar-drive";
+  if (lower.startsWith("plugin_") || lower.startsWith("plugin:")) return lower.slice(7).replace(/[_:]/g, "-");
+  return name;
+}
+
+export function railIcon(name: string): string {
+  const lower = backendLookupName(name).toLowerCase();
   const mark = Object.hasOwn(SERVER_ICONS, lower) ? [SERVER_ICONS[lower]].flat()[0] : undefined;
   if (mark) return mark;
   if (lower.startsWith("openai")) return "openai";

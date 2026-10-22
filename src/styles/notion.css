@@ -21,33 +21,37 @@
 .nt-head-acts { display: inline-flex; gap: var(--space-4); flex: none; }
 .nt-head > .nt-ico { flex: none; }
 
-/* band cards (browser/list.ts .br-group): Databases, Pages and each status band are a card with a Sheen head
-   (8e55f7bc). Colour rule (2026-10-20, replacing the 3px left edge of pick B): the head bar takes the kind colour at
-   the top level and the band's status inside a data source, 25% over the Sheen stops (white label 4.5:1 or better on
-   every stop, hovered included, in all four themes); the card keeps its plain border. */
+/* band cards (browser/list.ts .br-group): Databases, Pages and each status band are a card. Tinted Edges (user pick,
+   2026-10-22, replacing the 2026-10-20 Sheen heads): the head label is the bright tone on that tone at 16% over the
+   panel, with no rule under it; the card keeps a 1px border in the tone; pills are a solid tone fill with a --bg label.
+   No coloured bar on the rows (user, 2026-10-22). */
 .notion-pane .br-group {
-  --band-hue: var(--fg-dim);
-  --band-fill: linear-gradient(180deg,
-    color-mix(in srgb, var(--band-hue) 25%, var(--titlebar-top)) 0%,
-    color-mix(in srgb, var(--band-hue) 25%, var(--bg-titlebar)) 55%,
-    color-mix(in srgb, var(--band-hue) 25%, var(--titlebar-bottom)) 100%);
+  --band-bright: var(--tone-gray-bright);
   flex: none; min-width: 0; display: flex; flex-direction: column; padding: 0 0 var(--space-4); overflow: hidden;
-  background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  background: var(--bg); border: var(--border-w) solid var(--band-bright); border-radius: var(--radius-4);
 }
 .notion-pane .br-group + .br-group { margin-top: var(--space-4); }
 .notion-pane .br-group > .br-band {
-  margin: 0 0 var(--space-4); border-left: 0; border-radius: 0; border-bottom: var(--border-w) solid var(--border);
-  background: var(--band-fill); box-shadow: var(--titlebar-highlight); color: var(--fg-bright);
+  margin: 0 0 var(--space-4); border-left: 0; border-radius: 0; border-bottom: 0;
+  background: color-mix(in srgb, var(--band-bright) 16%, var(--bg-panel)); color: var(--band-bright);
   font-size: var(--font-12); letter-spacing: 0; text-transform: none;
 }
 .notion-pane .br-group > .br-row { margin: 0 var(--space-4); }
-.notion-pane .br-group[data-band="databases"] { --band-hue: var(--kind-source); }
-.notion-pane .br-group[data-band="pages"] { --band-hue: var(--kind-page); }
-.notion-pane .br-group[data-tone="todo"] { --band-hue: var(--status-todo); }
-.notion-pane .br-group[data-tone="progress"] { --band-hue: var(--status-progress); }
-.notion-pane .br-group[data-tone="review"] { --band-hue: var(--status-review); }
-.notion-pane .br-group[data-tone="blocked"] { --band-hue: var(--status-blocked); }
-.notion-pane .br-group[data-tone="done"] { --band-hue: var(--status-done); }
+.notion-pane .br-group[data-tone="todo"] { --band-bright: var(--tone-todo-bright); }
+.notion-pane .br-group[data-tone="progress"] { --band-bright: var(--tone-progress-bright); }
+.notion-pane .br-group[data-tone="review"] { --band-bright: var(--tone-review-bright); }
+.notion-pane .br-group[data-tone="blocked"] { --band-bright: var(--tone-blocked-bright); }
+.notion-pane .br-group[data-tone="done"] { --band-bright: var(--tone-done-bright); }
+.notion-pane .br-group[data-band="databases"] { --band-bright: var(--kind-source-bright); }
+.notion-pane .br-group[data-band="pages"] { --band-bright: var(--kind-page-bright); }
+
+/* pills (status and tags): solid tone fill, --bg label; no tone reads gray */
+.notion-pane .br-pill { background: var(--tone-gray-bright); color: var(--bg); font-weight: var(--weight-strong); }
+.notion-pane .br-pill.tone-todo { background: var(--tone-todo-bright); color: var(--bg); }
+.notion-pane .br-pill.tone-progress { background: var(--tone-progress-bright); color: var(--bg); }
+.notion-pane .br-pill.tone-review { background: var(--tone-review-bright); color: var(--bg); }
+.notion-pane .br-pill.tone-blocked { background: var(--tone-blocked-bright); color: var(--bg); }
+.notion-pane .br-pill.tone-done { background: var(--tone-done-bright); color: var(--bg); }
 
 /* the level's empty or error state (in the browser root, under the head); hidden behind fullscreen */
 .nt-state { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-8); padding: var(--space-24) 0; min-width: 0; text-align: center; }

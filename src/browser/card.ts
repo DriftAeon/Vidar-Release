@@ -34,7 +34,7 @@ export function buildCard(adapter: Adapter, item: Item, h: CardHooks): HTMLEleme
   const acts = node("div", "br-acts");
   acts.append(
     sendButton("br-act", adapter.sendTip, () => adapter.send(item)),
-    iconButton("br-act", "square-arrow-out-up-right", "Open in Browser", () => adapter.open(item)),
+    iconButton("br-act", { color: "globe" }, "Open in Browser", () => adapter.open(item)),
     iconButton("br-act", "maximize-2", "Fullscreen", () => h.fullscreen(item)),
   );
   bar.append(fieldBar(item.fields), acts);

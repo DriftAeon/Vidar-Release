@@ -247,6 +247,9 @@ enum BaseEnv {
 pub struct CodexSpawned {
     gen: u64,
     developer_instructions: Option<String>,
+    /// A Bare launch's notice-area warnings (the untrusted-folder one rides `codex_trust_offer`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    bare_warnings: Vec<String>,
 }
 
 /// Spawn `codex app-server` for a tab. No mode flags: approval policy and
@@ -309,7 +312,7 @@ fn spawn_codex_appserver_blocking(
             args.extend(crate::rules::codex::appserver_args(&file).map_err(|e| format!("Rules file refused: {e}"))?);
         }
         let gen = spawn_agent(app.clone(), &state, id, "node".into(), args, cwd, env, BaseEnv::Scrubbed, None, None, None)?;
-        return Ok(CodexSpawned { gen, developer_instructions: None });
+        return Ok(CodexSpawned { gen, developer_instructions: None, bare_warnings: Vec::new() });
     };
     if !valid_tab_id(&id) {
         return Err("invalid tab id".into());
@@ -331,6 +334,8 @@ fn spawn_codex_appserver_blocking(
     let policy = app.state::<crate::control::policy::PolicyState>();
     crate::control::policy::register(&policy, token.clone(), id.clone());
     let program = launch.program.to_string_lossy().into_owned();
+    let bare_warnings = launch.bare_warnings();
+    let untrusted_dir = launch.is_untrusted().then(|| cwd.clone());
     let result = spawn_agent(
         app.clone(),
         &state,
@@ -349,10 +354,12 @@ fn spawn_codex_appserver_blocking(
         crate::control::policy::unregister_token(&policy, &token);
         let _ = fs::remove_file(&manifest); // no process, so no launch record
     }
+    // The card's Trust Folder action reads this; a failed spawn leaves no tab to offer it to.
+    crate::bare::codex_trust::register(&id, untrusted_dir.filter(|_| result.is_ok()));
     let developer_instructions = launch.developer_instructions.take();
     drop(launch); // releases the home lock
     drop(prepare_guard);
-    result.map(|gen| CodexSpawned { gen, developer_instructions })
+    result.map(|gen| CodexSpawned { gen, developer_instructions, bare_warnings })
 }
 
 // Not a `#[tauri::command]`: a private fn with two callers, both in `spawn_codex_appserver`
@@ -523,6 +530,7 @@ pub async fn kill_agent(state: State<'_, AgentManager>, id: String, gen: u64) ->
     tauri::async_runtime::spawn_blocking(move || {
         proc.stop();
         remove_own(&sessions, &id, gen);
+        crate::bare::codex_trust::forget(&id);
     })
     .await
     .map_err(|e| e.to_string())

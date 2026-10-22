@@ -4,6 +4,7 @@
 import { invoke } from "../ipc";
 import { iconImg, type ColorIcon } from "../icon-img";
 import { renderMarkdownOrText } from "../panels/markdown-build";
+import { setCard, setHead } from "./set-card";
 import { isPluginTarget, type TracedLibrary, type TracedSet } from "./trace";
 import type { RuneItem, RuneSet, RuneSetMember } from "./types";
 
@@ -250,18 +251,15 @@ function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: Trace
 
 export function setSection(t: TracedLibrary, ts: TracedSet, ctx: CardCtx): HTMLElement {
   const s = ts.set;
-  const det = el("details", `runes-set ${hueOf(s)}`);
-  if (ts.state === "Not Loaded" || ts.state === "On Touch") det.classList.add("is-dim");
-  const sum = el("summary", "runes-set-head");
-  sum.title = `${s.id}\n${s.target ?? "No file"}${s.paths.length ? `\n${s.paths.join("\n")}` : ""}`;
-  const scp = el("span", "runes-scp");
-  scp.appendChild(iconImg(s.scope.includes("global") ? "globe" : "vidar"));
   const cond = el("span", "runes-cond");
   fillCondition(cond, s);
-  sum.append(scp, el("span", "runes-sn", setTitle(s)), cond, el("span", "runes-sc", String(s.members.length)));
+  const sum = setHead(setTitle(s), s.members.length, s.scope.includes("global") ? "globe" : "vidar", cond);
+  sum.title = `${s.id}\n${s.target ?? "No file"}${s.paths.length ? `\n${s.paths.join("\n")}` : ""}`;
+  const det = setCard(hueOf(s), sum);
+  if (ts.state === "Not Loaded" || ts.state === "On Touch") det.classList.add("is-dim");
   const tray = el("div", "runes-tray");
   for (const m of s.members) tray.appendChild(runeCard(t, ctx, m, ts));
-  det.append(sum, tray);
+  det.appendChild(tray);
   openKeyOf.set(det, `${t.lib.key}/${s.id}`);
   return det;
 }

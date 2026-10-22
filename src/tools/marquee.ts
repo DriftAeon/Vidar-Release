@@ -92,8 +92,8 @@ export function marqueeTool(): Tool {
         <textarea class="tool-text" id="mq-text" spellcheck="false"
           placeholder="Recognised Text"></textarea>
         <button class="tool-send icon-btn" id="mq-copy" aria-label="Copy Text" title="Copy Text"></button>
-        <button class="tool-send" id="mq-tray">To Tray</button>
-        <button class="tool-send subtle" id="mq-again">Marquee Again</button>
+        <button class="tool-send ws-btn" id="mq-tray">To Tray</button>
+        <button class="tool-send subtle ws-btn" id="mq-again">Marquee Again</button>
         <p class="dim sub" id="mq-result"></p>
         <p class="dim sub" id="mq-path" hidden></p>`;
 

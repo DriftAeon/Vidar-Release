@@ -186,7 +186,7 @@ test("Open in Browser sits beside Copy Path: enabled for html, disabled with HTM
   assert.equal(await openDocumentPath(note.path), true);
   assert.ok(!btn.classList.contains("hidden"));
   assert.equal(btn.disabled, true, "md: disabled");
-  assert.equal(btn.title, "HTML Only");
+  assert.equal(btn.title, "HTML and Images Only");
   assert.equal(await openDocumentPath(drawing.path), true); // stops the Markdown stat poll
 });
 
@@ -232,4 +232,39 @@ test("documentDirty is true only while the draft differs from the loaded text", 
     // a visual again stops the Markdown stat poll so the test process exits
     await openDocumentPath(drawing.path);
   }
+});
+
+test("the × on the Open button clears the document, stays out of the menu, and shows only while one is open", async () => {
+  const view = mountDocumentView(document.body, () => {});
+  await settle();
+  const face = view.querySelector("#doc-open");
+  assert.equal(face.querySelector(".doc-open-clear"), null, "no document, no ×");
+  assert.equal(await openDocumentPath(note.path), true);
+  const x = face.querySelector(".doc-open-clear");
+  assert.ok(x, "× shows while a document is open");
+  assert.equal(x.getAttribute("aria-label"), "Clear");
+  assert.equal(x.title, "Clear");
+  assert.equal(x.tabIndex, 0);
+  // click clears without opening the dropdown
+  x.click();
+  await settle();
+  assert.equal(document.getElementById("doc-om"), null, "the click never reaches the trigger");
+  assert.equal(face.querySelector(".doc-open-clear"), null);
+  assert.equal(face.title, "");
+  assert.equal(view.querySelector("#doc-scroll").children.length, 0, "the empty Docs screen");
+  assert.equal(documentDirty(), false);
+  assert.ok(dom.ipc.invoked.includes("delete_workbench_entry"), "the persisted open document is deleted");
+  // keyboard: Enter on the × of a freshly opened document clears it too
+  assert.equal(await openDocumentPath(note.path), true);
+  const x2 = face.querySelector(".doc-open-clear");
+  x2.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await settle();
+  assert.equal(document.getElementById("doc-om"), null);
+  assert.equal(face.querySelector(".doc-open-clear"), null);
+  // a Display visual clears the same way
+  assert.equal(await openDocumentPath(drawing.path), true);
+  face.querySelector(".doc-open-clear").dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+  await settle();
+  assert.equal(face.querySelector(".doc-open-clear"), null);
+  assert.equal(view.querySelector("#doc-scroll").children.length, 0);
 });

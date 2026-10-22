@@ -15,6 +15,7 @@ import "./document-open-menu.css";
 import { getPref, setPref } from "../prefs";
 import { prettyName } from "./display-name";
 import { iconImg } from "../icon-img";
+import { lucide } from "../icons";
 import { groupIcon, iconSlot } from "./catalog-group-icon";
 import { enableReorder } from "./reorder";
 import { dropdown, type Dropdown } from "./dropdown";
@@ -33,6 +34,8 @@ export interface OpenMenuHooks {
   onOpen(path: string): void;
   /** the path of the open document, if any */
   openPath(): string | undefined;
+  /** the × on the button face: close the open document (user, 2026-10-22) */
+  onClear(): void;
 }
 
 let btn: HTMLButtonElement | undefined;
@@ -48,6 +51,7 @@ let selectedFolder: string | undefined;
 export function mountOpenMenu(button: HTMLButtonElement, h: OpenMenuHooks) {
   btn = button;
   hooks = h;
+  openDoc = undefined; // a fresh button starts blank
   dd = dropdown({
     button,
     // the button, not #doc-bar: a wrapped bar would put its edge below the button
@@ -96,17 +100,40 @@ export function setOpenDocLabel(name: string, path: string) {
   updateButtonLabel();
 }
 
+/** document.ts calls this when the document is cleared: the label goes blank and the × goes. */
+export function clearOpenDocLabel() {
+  openDoc = undefined;
+  updateButtonLabel();
+}
+
+/** The faint × on the face, shown only while a document is open. A span, not a nested button;
+ *  its click and Enter/Space never reach the trigger, so the menu stays closed. */
+function clearControl(): HTMLSpanElement {
+  const x = document.createElement("span");
+  x.className = "doc-open-clear";
+  x.setAttribute("role", "button");
+  x.tabIndex = 0;
+  x.title = "Clear";
+  x.setAttribute("aria-label", "Clear");
+  x.appendChild(lucide("x", "icn")); // grey line glyph: the red colour close reads as delete (user, 2026-10-22)
+  const fire = (e: Event) => { e.preventDefault(); e.stopPropagation(); hooks?.onClear(); };
+  x.addEventListener("click", fire);
+  x.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") fire(e);
+    else if (e.key !== "Tab") e.stopPropagation(); // the trigger's ArrowDown opens the menu only from the trigger itself
+  });
+  return x;
+}
+
 function updateButtonLabel() {
   if (!btn) return;
-  // title left (ellipsised), file count right; no chevron, the box reads as the button (2026-10-04)
+  // title left (ellipsised), no count and no chevron: the box reads as the button (2026-10-04; count dropped, user 2026-10-22)
   const label = document.createElement("span");
   label.className = "doc-open-name";
   label.textContent = openDoc ? prettyName(openDoc.name) : " "; // blank keeps the height, like Display
   btn.title = openDoc?.path ?? "";
-  const count = document.createElement("span");
-  count.className = "doc-open-count";
-  count.textContent = catalog.length ? String(catalog.length) : "";
-  btn.replaceChildren(label, count);
+  btn.replaceChildren(label);
+  if (openDoc) btn.append(clearControl());
 }
 
 /* ---- model ---- */
@@ -336,7 +363,7 @@ function renderOpenMenu(m: HTMLDivElement) {
   const search = document.createElement("input");
   search.className = "doc-om-search";
   search.type = "search";
-  search.placeholder = "Search Documents";
+  search.setAttribute("aria-label", "Search Documents");
   search.spellcheck = false;
   search.value = query;
   search.addEventListener("input", () => updateFilePane(m, search.value));

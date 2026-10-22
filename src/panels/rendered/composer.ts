@@ -82,6 +82,12 @@ export function createComposer(S: RenderedState, deps: ComposerDeps) {
     if (fromKey) sendStick.arm(); // a keyed send's echo re-sticks the view; a bus write leaves it
     return sendUser(text);
   }
+  /** Text from a card (a Codex async ask's answer) as an ordinary user message; the composer's draft is left alone. */
+  function sendText(text: string): boolean | Promise<boolean> {
+    if (!text.trim() || !S.isAlive || S.hydrating || S.disconnected) return false;
+    if (S.inTurn && !transport.durable) { queueMessage(text); return true; }
+    return sendUser(text);
+  }
   async function clearSession() {
     // the stop/respawn drops the caret (2026-10-09: /clear then /catapult needed a click);
     // hand it back unless the user has since focused something else
@@ -225,5 +231,5 @@ export function createComposer(S: RenderedState, deps: ComposerDeps) {
 
   /** What a steered turn hands over: flushQueue sends the whole queue as one message. */
   const queuedHosts = () => queued.map((q) => q.host).filter((h) => h.classList.contains("blk-queued"));
-  return { submit, flushQueue, markUndelivered, interrupt, queuedHosts };
+  return { submit, sendText, flushQueue, markUndelivered, interrupt, queuedHosts };
 }

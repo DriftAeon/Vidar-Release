@@ -7,7 +7,7 @@
 }
 /* tools: a top-aligned column of square buttons, --rail-btn-pad from the rail's top; the drawer buttons
    below it are bottom-aligned with the same pad. Options: toolbench.css */
-#toolbench { flex: 0 0 auto; padding-top: var(--rail-btn-pad); }
+#toolbench { flex: 0 0 auto; padding-top: calc(var(--rail-btn-pad) + var(--space-4) + var(--border-w) + var(--space-2)); } /* first item centred on the #wb-tabs strip: measured 2026-10-22, the rail starts 6px above the workbench and its 32px button is 4px taller than a 28px tab, so +4 lands it at the strip's inner box (workbench.css #wb-tabs) */
 #tool-grid { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
 #tool-grid .tool-btn { width: var(--row-32); height: var(--row-32); aspect-ratio: auto; flex-shrink: 0; }
 /* bench toggle: first in #toolbench, above the grid (panels/workbench.ts); a .rail-btn.tool-btn, centred, one tool gap above the first tool */

@@ -148,7 +148,7 @@ function ensureModal() {
   search = document.createElement("input");
   search.className = "sc-search";
   search.type = "search";
-  search.placeholder = "Search";
+  search.setAttribute("aria-label", "Search");
   search.spellcheck = false;
   search.addEventListener("input", () => {
     const q = search!.value;

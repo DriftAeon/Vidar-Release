@@ -168,8 +168,8 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return {
         files: [
           { path: "~\\.claude\\CLAUDE.md", shown: "~\\.claude\\CLAUDE.md", kind: "rules", library: "claude-user", scope: "global", ticked: true, pickable: true },
-          { path: "~\\.claude\\hooks\\guard-cwd.mjs", shown: "~\\.claude\\hooks\\guard-cwd.mjs", kind: "hook", scope: "global", ticked: true, pickable: false,
-            reason: "blockTarget", guard: { event: "PreToolUse", matcher: "Bash", run: ["~\\.claude\\hooks\\guard-cwd.mjs"] } },
+          { path: "~\\.claude\\hooks\\guard-cwd.mjs", shown: "~\\.claude\\hooks\\guard-cwd.mjs", kind: "hook", scope: "global", ticked: true, pickable: true,
+            guard: { event: "PreToolUse", matcher: "Bash", run: ["~\\.claude\\hooks\\guard-cwd.mjs"] } },
           { path: "~\\.codex\\AGENTS.md", shown: "~\\.codex\\AGENTS.md", kind: "rules", library: "codex-user", scope: "global", ticked: true, pickable: true, agent: "codex" },
           { path: "~\\.codex\\config.toml#notion", shown: "notion", kind: "mcp", scope: "global", ticked: true, pickable: true, agent: "codex",
             hosted: "notion", url: "https://mcp.notion.com/mcp" },

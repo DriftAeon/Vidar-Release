@@ -78,7 +78,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     if (confirmed) S.mode = confirmed;
     sl.mode = modeLabel(S.mode, opts.agent);
     redrawStatus();
-    if (confirmed) opts.onModeChange?.();
+    if (confirmed && !S.hydrating) opts.onModeChange?.();
   }
   function pickModeMenu() {
     if (modeBtnBlocked() || !S.modeBtn) return;
@@ -91,7 +91,13 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     S.switchPending = true;
     sl.mode = modeLabel(next, opts.agent);
     redrawStatus();
-    void send(line).then((ok) => { if (!ok && S.switchPending) settleSwitch(null); });
+    // a Codex setter line goes to the host, which answers Applied or Failed: send() true is that
+    // Applied (Claude settles on its own ack event instead)
+    void send(line).then((ok) => {
+      if (!S.switchPending) return;
+      if (!ok) settleSwitch(null);
+      else if (opts.agent === "codex") settleSwitch(next);
+    });
     S.switchTimer = window.setTimeout(() => {
       if (!S.switchPending) return;
       settleSwitch(null);
@@ -108,12 +114,17 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     const want = S.modelWant;
     S.modelWant = null;
     if (confirmed) {
-      S.pickedModel = want; // the menu value, not the CLI's resolved id
+      if (shownBefore !== null) S.pickedModel = want; // the menu value, not the CLI's resolved id; a replayed change has no pick
       sl.model = prettyModel(confirmed);
       S.modelHinted = false;
       S.characterModel = confirmed;
       S.characterModelLive = true;
-      emitCharacterStatus(true);
+      if (!S.hydrating) emitCharacterStatus(true);
+      // the new model may not offer the level showing: Codex clamps to the nearest it does
+      if (opts.agent === "codex" && !S.hydrating && sl.effort) {
+        const clamped = codexEffort(sl.effort as Effort, effortLevels());
+        if (clamped && clamped !== sl.effort) { redrawStatus(); setEffort(sl.effort as Effort); return; }
+      }
     }
     else if (shownBefore !== null) sl.model = prettyModel(shownBefore); // revert to what was shown before the pick
     redrawStatus();
@@ -126,12 +137,15 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     S.modelPending = sl.model; // remember the label to revert to (already pretty; prettyModel is idempotent enough)
     if (line === null) {
       settleModel(want);
-      if (sl.effort) setEffort(sl.effort as Effort);
       return;
     }
     sl.model = prettyModel(want);
     redrawStatus();
-    void send(line).then((ok) => { if (!ok && S.modelPending !== null) settleModel(null); });
+    void send(line).then((ok) => {
+      if (S.modelPending === null) return;
+      if (!ok) settleModel(null);
+      else if (opts.agent === "codex") settleModel(want); // the host's Applied (Claude settles on its model_set ack)
+    });
     S.modelTimer = window.setTimeout(() => {
       if (S.modelPending === null) return;
       settleModel(null);
@@ -205,7 +219,14 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     }
     effortPending = true;
     redrawStatus();
-    void send(line).then((ok) => { effortPending = false; if (ok) opts.effort = level; redrawStatus(); });
+    void send(line).then((ok) => {
+      effortPending = false;
+      if (ok) {
+        opts.effort = level;
+        if (opts.agent === "codex") { sl.effort = level; S.liveEffort = level; } // the host's Applied
+      }
+      redrawStatus();
+    });
   }
   function pickEffortMenu() {
     const anchor = effortBtn ?? S.modelBtn;

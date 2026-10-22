@@ -117,7 +117,10 @@
     "content-view": {"source":"fluent-color/svg/ic_fluent_content_view_24_color.svg","note":"Jira Task type"},
     "contact-card": {"source":"fluent-color/svg/ic_fluent_contact_card_24_color.svg","note":"Jira Subtask type"},
     "person-dm": {"source":"fluent-color/svg/ic_fluent_person_24_color.svg","note":"recoloured to one flat grey #b4b4b4 (every gradient fill; the grey of the theme brush); Slack Direct Messages head"},
-    "rack": {"source":"flat-color-icons/svg/business.svg","note":"MCP Rack settings row"}
+    "rack": {"source":"flat-color-icons/svg/business.svg","note":"MCP Rack settings row"},
+    "sun-low": {"source":"fluent-color/svg/ic_fluent_weather_sunny_low_24_color.svg"},
+    "clipboard-edit": {"source":"fluent-color/svg/ic_fluent_clipboard_text_edit_24_color.svg"},
+    "books": {"source":"noto-emoji/svg/emoji_u1f4da.svg"}
   },
   "tools": {
     "Thought": "thought",

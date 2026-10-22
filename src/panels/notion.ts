@@ -14,7 +14,7 @@ import {
   ROW_CAP_NOTE, SHOWN_KINDS, TOP_CAP_NOTE, connectCopy, errorCopy, hitItem, partialNote, rowItem, type NotionErr,
 } from "../notion/model";
 import {
-  CONNECTIONS_URL, buildNotionView, type ErrView, type NotionView, type SourceState, type TopState, type ViewState,
+  CONNECTIONS_URL, TOKENS_URL, buildNotionView, type ErrView, type NotionView, type SourceState, type TopState, type ViewState,
 } from "../notion/view";
 import { getPref, setPref } from "../prefs";
 import { getFocusedSession } from "./sessions/lookup";
@@ -130,7 +130,7 @@ async function readSource(mine: number, id: string, adapter: SourceState["adapte
   if (r.error?.kind === "unset") { showNotice(); draw(); return; }
   rememberLinks(r.rows.map((row) => ({ id: row.id, url: row.url })));
   const plan = r.plan;
-  const anyIcon = r.rows.some((row) => !!row.icon);
+  const anyIcon = r.rows.some((row) => !!(row.icon || row.iconName));
   const items = plan ? r.rows.map((row) => rowItem(row, plan, anyIcon)) : [];
   const partial = !!r.error && items.length > 0;
   state = {
@@ -268,6 +268,7 @@ export function mountNotionView(parent: HTMLElement): HTMLElement {
     hide: hideTab,
     submit: (token) => void onSubmit(token),
     openConnections: () => openLink(CONNECTIONS_URL),
+    openTokens: () => openLink(TOKENS_URL),
     refresh: () => void refresh(),
     disconnect: () => void onDisconnect(),
     back,

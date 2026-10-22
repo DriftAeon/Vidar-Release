@@ -24,7 +24,8 @@ test("Document Open search spans folders and survives catalog refresh until Esca
   let search = document.querySelector(".doc-om-search");
   assert.equal(document.activeElement, search, "menu opens in the search field");
   assert.equal(search.type, "search");
-  assert.equal(search.placeholder, "Search Documents");
+  assert.equal(search.placeholder, "");
+  assert.equal(search.getAttribute("aria-label"), "Search Documents");
   assert.equal(search.spellcheck, false);
 
   search.value = "sHaReD";

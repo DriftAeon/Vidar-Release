@@ -154,6 +154,25 @@ test("a Codex Bare tab shows no launch lists, never Codex Doesn't Report Loads",
   focus(bare);
 });
 
+test("a Codex Bare trace with a trust offer shows the trust card; other warnings stay compact lines", async () => {
+  const TEXT = "Trust this Folder in your Codex Config to Load its Project Settings.";
+  dom.ipc.answers.bare_launch = { ...LAUNCH, agent: "codex", guards: [], skills: [], warnings: [TEXT, "No bareGuards in vidar.json"] };
+  dom.ipc.answers.codex_trust_offer = (a) => (a.id === "t1" ? { folder: "C:/proj", text: TEXT } : null);
+  focus({ ...bare, agent: "codex", art: "codex" });
+  onRunesHidden();
+  onRunesShown();
+  await settle();
+  const card = traceBody().querySelector(".blk-notice-card");
+  assert.ok(card, "trust card");
+  assert.deepEqual([...card.querySelectorAll("button")].map((b) => b.textContent), ["Trust Folder", "Dismiss"]);
+  assert.deepEqual([...traceBody().querySelectorAll(":scope > .runes-warn-line")].map((e) => e.textContent), ["No bareGuards in vidar.json"]);
+  assert.equal(dom.ipc.invoked.includes("codex_trust_folder"), false, "no write without a click");
+  card.querySelectorAll("button")[1].click();
+  assert.equal(traceBody().querySelector(".blk-notice-card"), null, "Dismiss hides the card");
+  dom.ipc.answers.codex_trust_offer = null;
+  focus(bare);
+});
+
 test("the focused tab's finished turn re-queries once; another tab's does not", async () => {
   dom.ipc.answers.bare_launch = LAUNCH;
   onRunesHidden();

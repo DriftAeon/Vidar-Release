@@ -1,8 +1,7 @@
-// src\runes\bare\view.ts — the Runes tab for a focused Bare tab (run 2026-10-17-bare-runes-flow, T2a).
+// src\runes\bare\view.ts — the Runes tab for a focused Bare tab.
 // Views: Actives (the row's libraries as today's rune sets and cards, Inherited Runes as per-item ticks),
 // Local Files (the onboarding tick list) and Generating (one line per source). The flow core in ./flow
-// does every read and write; `io` is bound to the bare_* commands by the wiring wave. Strings are verbatim
-// from docs/projects/bare/runes-tab-plan.md.
+// does every read and write; `io` is bound to the bare_* commands.
 import { iconImg, type ColorIcon } from "../../icon-img";
 import type { RuneItem } from "../types";
 import { BARE_SCOPE, cardDetails, fillCard, openKeys, reopen, runeName, type CardCtx } from "../cards";
@@ -12,9 +11,10 @@ import {
   rowGenerating, watchGenerating,
   type BareFlowIo, type BareGuard, type BareLocalFile, type BareLocalSources, type GenerateLine, type LibraryDelta,
 } from "./flow";
-import { setAttachments } from "./set-attach";
+import { attachedCount, setAttachments } from "./set-attach";
+import { setCard, setHead } from "../set-card";
 import { genLabel } from "./gen-label";
-import { doneGate, startView } from "./view-entry";
+import { isFileRow, nameAndPath } from "./row-name";import { doneGate, startView } from "./view-entry";
 export { genLabel };
 import { TIP_GENERATING, btn, createAgentView, el, type GenCtx } from "./agent-view";
 
@@ -43,7 +43,6 @@ const TIP_REASON: Record<NonNullable<BareLocalFile["reason"]>, string> = {
   pathScoped: "This file is path-scoped; a Bare tab loads it every session.",
   notMjs: "Only node .mjs hooks copy into a Bare home.",
   guardDriver: "Vidar runs this one itself in Bare.",
-  blockTarget: "Vidar's block guards stay on in Bare.",
   tooLarge: "This file is over 256 KB, so it does not import.",
   shadowed: "AGENTS.override.md replaces this file.",
   summaryOnly: "Only the memory summary imports; MEMORY.md stays in its home.",
@@ -96,7 +95,7 @@ export function layerFiles(src: BareLocalSources | null, a: BareActives, codex =
     const on = f.kind === "skill" ? (codex ? a.codexSkills ?? [] : a.skills).includes(f.path)
       : f.kind === "mcp" ? !!f.hosted && (a.codexMcp ?? []).includes(f.hosted)
       : f.kind === "agent" ? (codex ? a.codexAgents ?? [] : a.agents).includes(f.path)
-      : f.reason === "blockTarget" || (!!f.guard && guards.has(guardKey(f.guard)));
+      : !!f.guard && guards.has(guardKey(f.guard));
     if (on) ticked.add(f.path);
   }
   return { files, ticked };
@@ -125,9 +124,9 @@ export function filesTicks(files: readonly BareLocalFile[], a: BareActives | nul
   return t;
 }
 
-function hueOf(lib: BareActiveLibrary): string {
+export function hueOf(lib: Pick<BareActiveLibrary, "generated" | "source" | "library">): string {
   if (lib.generated) return "hue-generated";
-  if (lib.source === null) return "hue-none";
+  if (lib.source === null) return "hue-set";
   if (lib.library.startsWith("memory-")) return "hue-recall";
   return /agents(\.override)?\.md$/i.test(lib.source) ? "hue-agents" : "hue-claude";
 }
@@ -229,14 +228,6 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
     deltas = await flow.check();
   }
 
-  function setHead(name: string, count: number, icon: ColorIcon | null, cond?: HTMLElement): HTMLElement {
-    const sum = el("summary", "runes-set-head");
-    const scp = el("span", "runes-scp");
-    if (icon) scp.appendChild(iconImg(icon));
-    sum.append(scp, el("span", "runes-sn", name), cond ?? el("span", "runes-cond"), el("span", "runes-sc", String(count)));
-    return sum;
-  }
-
   function trackOpen(det: HTMLDetailsElement, key: string, dflt: boolean): void {
     det.open = openSets.get(key) ?? dflt;
     fillCard(det); // an open card has its body now, not a task later
@@ -248,9 +239,6 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
     const bricks = modify ? lib.bricks : lib.bricks.filter((b) => b.on);
     const attached = setGroups(lib);
     if (!bricks.length && !attached.length) return null;
-    const det = el("details", `runes-set ${hueOf(lib)}`);
-    det.dataset.library = lib.library;
-    trackOpen(det, "lib:" + lib.library, false);
     const cond = el("span", "runes-cond");
     if (lib.sourceGone) cond.textContent = "Source Not Found";
     else if (delta && (delta.added || delta.gone)) {
@@ -259,10 +247,15 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
       }
     }
     const label = lib.generated ? genLabel(lib.library) : null;
-    const head = setHead(label ?? lib.library, bricks.length, lib.scope === "project" ? "folder" : "globe", cond);
+    // a user's library name shows with its first letter capitalised; the name on disk is untouched
+    const shown = label ?? lib.library.charAt(0).toUpperCase() + lib.library.slice(1);
+    const head = setHead(shown, bricks.length + attachedCount(sources, lib, codex), lib.scope === "project" ? "folder" : "globe", cond);
     const tips = [label ? lib.library : "", lib.source ?? "", lib.source === null && !lib.generated ? TIP_READ_ONLY : "", lib.sourceGone ? TIP_GONE : "",
       lib.scope === "project" ? TIP_PROJECT : ""].filter(Boolean);
     head.title = [...tips, ...(lib.sets ?? []).flatMap((s) => s.warnings)].join("\n");
+    const det = setCard(hueOf(lib), head);
+    det.dataset.library = lib.library;
+    trackOpen(det, "lib:" + lib.library, false);
     const rowBusy = rowGenerating(ctx.rowKey);
     const locked = !flow.editable || (lib.source === null && !lib.generated) || lib.sourceGone || rowBusy;
     const tray = el("div", "runes-tray");
@@ -285,23 +278,21 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
         });
       });
       const rune = { id: b.id, kind: b.kind, scope: [], activate: b.activate, description: b.description, path: b.path, body: b.body };
-      const card = cardDetails(
-        rune,
-        {
-          name: lib.generated ? runeName({ id: b.id, path: b.path } as RuneItem) : b.section[b.section.length - 1] ?? b.id,
-          dim: modify && !b.on,
-          title: `${b.id}\n${b.section.join(" / ")}`,
-          scopes: [{ icon: BARE_SCOPE.icons[lib.scope], title: `Scope: ${BARE_SCOPE.names[lib.scope]}` }],
-          tail: modify ? [sw] : [],
-          barScope: BARE_SCOPE.names[lib.scope],
-        },
-        cardCtx,
-      );
+      const card = cardDetails(rune, {
+        // the name is the slug's Title Case form; a sentence description or heading goes to the tooltip (user, 2026-10-22)
+        name: runeName({ id: b.id, path: b.path } as RuneItem),
+        dim: modify && !b.on,
+        title: [b.id, ...new Set([b.description, b.section.join(" / ")].filter(Boolean))].join("\n"),
+        scopes: [{ icon: BARE_SCOPE.icons[lib.scope], title: `Scope: ${BARE_SCOPE.names[lib.scope]}` }],
+        tail: modify ? [sw] : [],
+        barScope: BARE_SCOPE.names[lib.scope],
+      }, cardCtx);
       card.dataset.id = b.id;
       trackOpen(card, `rune:${lib.library}:${b.id}`, false);
       tray.appendChild(card);
     }
-    det.append(head, ...agentV.libraryExtras(lib), tray, ...attached);
+    // an empty tray still carries its vertical padding: with only attached groups it left a blank band above Skills
+    det.append(...agentV.libraryExtras(lib), ...(bricks.length ? [tray] : []), ...attached);
     return det;
   }
 
@@ -319,28 +310,18 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
     const b = btn(f.shown, "rp-source", flip, off || !f.pickable);
     b.dataset.path = f.path;
     b.setAttribute("aria-pressed", String(on));
-    if (f.reason === "blockTarget") { b.disabled = false; b.setAttribute("aria-disabled", "true"); }
-    if (f.reason) b.title = TIP_REASON[f.reason];
+    if (isFileRow(f)) {
+      b.replaceChildren(...nameAndPath(f));
+      b.title = f.reason ? `${f.path}\n${TIP_REASON[f.reason]}` : f.path;
+    } else if (f.reason) b.title = TIP_REASON[f.reason];
     return b;
   }
 
   function everyRow(a: BareActives): HTMLElement | null {
-    const group = el("section", "runes-group");
-    // the head toggles its body: collapsed state is per mount, not persisted
-    const h = el("button", "runes-group-head runes-group-toggle", "Inherited Runes") as HTMLButtonElement;
-    h.type = "button";
+    const h = setHead("Inherited Runes", null, "globe");
     h.title = TIP_EVERY_ROW;
-    h.setAttribute("aria-expanded", "true");
-    const scp = el("span", "runes-scp"); // the same leading icon slot as the set heads
-    scp.appendChild(iconImg("globe"));
-    h.prepend(scp);
-    const body = el("div", "runes-group-body");
-    h.addEventListener("click", () => {
-      const open = h.getAttribute("aria-expanded") !== "true";
-      h.setAttribute("aria-expanded", String(open));
-      body.hidden = !open;
-    });
-    group.append(h, body);
+    const group = setCard("hue-inherited", h);
+    trackOpen(group, "every", true);
     const { files, ticked: on } = layerFiles(sources, a, codex);
     let drawn = 0;
     for (const [kind, name, icon] of layerKinds) {
@@ -355,7 +336,8 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
       const list = el("div", "rp-sources runes-tray");
       for (const f of kindFiles) {
         if (!modify) {
-          const ro = el("div", "rp-source is-ro", f.shown);
+          const ro = el("div", "rp-source is-ro", isFileRow(f) ? "" : f.shown);
+          if (isFileRow(f)) ro.append(...nameAndPath(f));
           ro.dataset.path = f.path;
           ro.dataset.kind = kind;
           ro.title = f.path;
@@ -363,7 +345,6 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
           continue;
         }
         const row = tickRow(f, on.has(f.path), () => {
-          if (f.reason === "blockTarget") return;
           const next = new Set(on);
           if (!next.delete(f.path)) next.add(f.path);
           void act(async () => {
@@ -380,7 +361,7 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
         list.appendChild(row);
       }
       det.appendChild(list);
-      body.appendChild(det);
+      group.appendChild(det);
     }
     return drawn ? group : null;
   }
@@ -453,34 +434,33 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
 
   function filesView(): HTMLElement[] {
     const out: HTMLElement[] = [];
-    const top = el("section", "runes-group");
-    const topHead = el("h3", "runes-group-head", "Local Files");
+    const topHead = setHead("Local Files", null, "folder");
     if (codex) topHead.title = TIP_FILES_CODEX;
-    top.appendChild(topHead);
+    const top = setCard("hue-none", topHead);
+    trackOpen(top, "files", true);
     out.push(top);
     const files = sourcesErr ? [] : (sources?.files ?? []).filter((f) => !codex || f.kind === "rules" || f.kind === "memory" || f.kind === "skill" || f.kind === "agent" || f.kind === "mcp");
-    if (sourcesErr) { const se = errEl({ ok: false, reason: "failed", error: sourcesErr }); if (se) top.appendChild(se); }
-    else if (!files.length) top.appendChild(el("div", "rp-empty", "No Local Files Found")); // note-ok: docs/projects/bare/runes-tab-plan.md
+    if (sourcesErr) { const se = errEl({ ok: false, reason: "failed", error: sourcesErr }); if (se) { const t = el("div", "runes-tray"); t.appendChild(se); top.appendChild(t); } }
+    else if (!files.length) { const t = el("div", "runes-tray"); t.appendChild(el("div", "rp-empty", "No Local Files Found")); top.appendChild(t); } // note-ok: docs/projects/bare/runes-tab-plan.md
     for (const [kind, name] of KIND_HEAD) {
       const kindFiles = files.filter((f) => f.kind === kind);
       if (!kindFiles.length) continue;
-      const group = el("section", "runes-group");
+      const group = el("details", `runes-set hue-${kind === "skill" || kind === "agent" || kind === "hook" ? kind : "none"}`);
       group.dataset.kind = kind;
-      group.appendChild(el("h3", "runes-group-head", name));
-      const list = el("div", "rp-sources");
+      trackOpen(group, "file:" + kind, true);
+      group.appendChild(setHead(name, kindFiles.filter((f) => ticked.has(f.path)).length, LAYER_KINDS.find(([k]) => k === kind)?.[2] ?? null));
+      const list = el("div", "rp-sources runes-tray");
       for (const f of kindFiles) {
         list.appendChild(tickRow(f, ticked.has(f.path), () => {
-          if (f.reason === "blockTarget") return;
           if (busy) return;
           if (!ticked.delete(f.path)) ticked.add(f.path);
           paint();
         }, false));
       }
       group.appendChild(list);
-      out.push(group);
+      top.appendChild(group);
     }
-    // block targets ride along locked on; they alone are not a pick
-    const any = files.some((f) => f.pickable && f.reason !== "blockTarget" && ticked.has(f.path));
+    const any = files.some((f) => f.pickable && ticked.has(f.path));
     const actions = el("div", "rp-actions");
     const gen = sources && !sourcesErr ? agentV.generateButton(sources, ticked, any) : null;
     const asIs = btn("Import Raw","ws-btn", () => void runGenerate(), busy || !any || rowGenerating(ctx.rowKey));

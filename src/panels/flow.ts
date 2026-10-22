@@ -136,7 +136,7 @@ export function mountFlowView(parent: HTMLElement, openPathInDocument: (path: st
     <div class="flow-canvas">
       <div class="flow-world"></div>
       <div class="cx-empty flow-empty" hidden>Open a Flow or Start a New One</div>
-      <button type="button" class="flow-reset">Reset Layout</button>
+      <button type="button" class="flow-reset ws-btn">Reset Layout</button>
     </div>`;
 
   const toolbarEl = shell.head;

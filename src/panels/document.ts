@@ -10,7 +10,7 @@ import { paneShell } from "./pane-shell";
 import { copyButton, copyPathButton, isBrowserPath, OPEN_IN_BROWSER, openFolderButton, openInBrowserButton } from "./file-actions";
 import { copyText } from "../clipboard";
 import { mountComments, setCommentsDocument, wrapForComments } from "./comments";
-import { mountOpenMenu, closeOpenMenu, setCatalog, setOpenDocLabel } from "./document-open-menu";
+import { mountOpenMenu, closeOpenMenu, setCatalog, setOpenDocLabel, clearOpenDocLabel } from "./document-open-menu";
 import { renderMarkdownOrText } from "./markdown-build";
 import { documentDialog as runDialog } from "./document-dialog";
 import { colourDiffs, sourcePre } from "./document-diff";
@@ -138,6 +138,7 @@ export function mountDocumentView(parent: HTMLElement, note: (msg: string) => vo
     onNew: () => void newDocument(),
     onOpen: (path) => void openDocumentPath(path),
     openPath,
+    onClear: () => void clearDocument(),
   });
   // throttled save; a hidden view never writes (offsetParent null) and the
   // pending save is flushed before any hide/toggle/reload
@@ -174,7 +175,7 @@ function showBrowser(path: string): void {
   browserBtn.classList.remove("hidden");
   const html = isBrowserPath(path);
   browserBtn.disabled = !html;
-  browserBtn.title = html ? OPEN_IN_BROWSER : "HTML Only";
+  browserBtn.title = html ? OPEN_IN_BROWSER : "HTML and Images Only";
 }
 /** Copy for the open visual: svg/html as source text, png as an image fetched from the painted URL
  *  (navigator.clipboard only: the text rescue cannot carry an image). null = no visual, click does nothing. */
@@ -383,6 +384,29 @@ export async function openDocumentPath(path: string): Promise<boolean> {
     // Every rejected/failed Open advanced the generation of its retained watcher.
     if (gen === docGen && doc === previous && doc) startWatch();
   }
+}
+
+/** The × on the Open button: back to the empty Docs screen, as before anything was picked.
+ *  publish() with no document deletes document.json, so a relaunch opens empty too. */
+async function clearDocument(): Promise<void> {
+  if (!doc && !visual) return;
+  if (!(await mayDiscard())) return;
+  flushScroll();
+  ++docGen; // every in-flight open, reload and stat check bails
+  watcher.stop();
+  visualRenderer.clear();
+  visual = null;
+  doc = null;
+  publish();
+  setCommentsDocument(null);
+  wrapForComments(null);
+  scrollEl.classList.remove("doc-visual");
+  scrollEl.replaceChildren();
+  updateSave();
+  setReloadStale(false);
+  for (const b of [externalBtn, copyBtn, copyPathBtn, browserBtn, locationBtn]) b.classList.add("hidden");
+  statusEl.textContent = "";
+  clearOpenDocLabel();
 }
 
 /** A Display group file (.svg/.html/.png on top of bridge\display): painted by the Display

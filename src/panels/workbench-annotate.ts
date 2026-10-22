@@ -37,11 +37,12 @@ export function mountAnnotation(b: Annotatable, onSave: () => void): { button: H
   row.className = "wb-annotation-actions";
   const save = document.createElement("button");
   save.type = "button";
-  save.className = "wb-annotation-save";
+  save.className = "wb-annotation-save ws-btn";
   save.textContent = "Save";
   save.title = "Save";
   const cancel = document.createElement("button");
   cancel.type = "button";
+  cancel.className = "ws-btn";
   cancel.textContent = "Cancel";
   cancel.title = "Cancel";
   row.append(save, cancel);

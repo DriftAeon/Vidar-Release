@@ -114,5 +114,8 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | contact-card.svg | fluent-color/svg/ic_fluent_contact_card_24_color.svg | Fluent Color, MIT; Jira Subtask type |
 | person-dm.svg | fluent-color/svg/ic_fluent_person_24_color.svg | Fluent Color, MIT; recoloured to one flat grey #b4b4b4 (every gradient fill; the grey of the theme brush); Slack Direct Messages head |
 | rack.svg | flat-color-icons/svg/business.svg | flat-color-icons (icons8), MIT; MCP Rack settings row |
+| sun-low.svg | fluent-color/svg/ic_fluent_weather_sunny_low_24_color.svg | Fluent Color, MIT |
+| clipboard-edit.svg | fluent-color/svg/ic_fluent_clipboard_text_edit_24_color.svg | Fluent Color, MIT |
+| books.svg | noto-emoji/svg/emoji_u1f4da.svg | Noto Emoji, Apache-2.0 |
 
 Loaded by `src/icon-img.ts` (`iconImg(name)`).

@@ -82,18 +82,28 @@ export function openFolderButton(o: OpenFolderOpts): HTMLButtonElement {
 
 export const OPEN_IN_BROWSER = "Open in Browser";
 
-/** True when `path` is a file Open in Browser accepts (the backend allowlist: .html, .htm). */
+/** True when `path` is a file Open in Browser accepts (the backend allowlist: html, htm, svg, png, jpg, jpeg, gif, webp). */
 export function isBrowserPath(path: string | null | undefined): boolean {
-  return !!path && /\.html?$/i.test(path);
+  return !!path && /\.(html?|svg|png|jpe?g|gif|webp)$/i.test(path);
 }
 
-/** Open in Browser: an .html/.htm file with the shell's handler for it (the default browser).
+export interface OpenInBrowserOpts extends OpenFolderOpts {
+  /** a block with no file yet (a pasted image): saves it and returns the path; used when `path()` is empty */
+  ensure?: () => Promise<string | null | undefined>;
+}
+
+/** Open in Browser: an .html/.htm file with the shell's handler for it (the default browser); an
+ *  image (svg, png, jpg, jpeg, gif, webp) in the browser registered for .html, not the image viewer.
  *  Any other path does nothing; the caller disables the button for it. */
-export function openInBrowserButton(o: OpenFolderOpts): HTMLButtonElement {
-  return build(OPEN_IN_BROWSER, "globe", o, () => {
-    const path = o.path();
+export function openInBrowserButton(o: OpenInBrowserOpts): HTMLButtonElement {
+  const open = (path: string | null | undefined) => {
     if (!isBrowserPath(path)) return;
     invoke("open_in_browser", { path: path! }).catch((e) => o.note(`Open in Browser Failed: ${String(e)}`));
+  };
+  return build(OPEN_IN_BROWSER, "globe", o, () => {
+    const path = o.path();
+    if (path || !o.ensure) return open(path);
+    void o.ensure().then(open, (e) => o.note(`Open in Browser Failed: ${String(e)}`));
   });
 }
 

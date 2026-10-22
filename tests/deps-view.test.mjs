@@ -228,7 +228,7 @@ test("Open Site and Setup Via Agent are icon buttons with a tooltip and an aria-
   const root = render(allFoundExcept("node"), null, null);
   const open = root.querySelector('.deps-row[data-id="node"] .deps-site');
   assert.equal(open.textContent, "");
-  assert.ok(open.querySelector("svg"), "Open Site has no icon");
+  assert.match(open.querySelector("img.icn")?.getAttribute("src") ?? "", /\/globe\./, "Open Site has no globe");
   assert.equal(open.title, `Open site: ${node.install.url}`);
   assert.equal(open.getAttribute("aria-label"), open.title);
   const setup = root.querySelector(".deps-setup");

@@ -7,15 +7,15 @@ export type NotionKind = "connection" | "personal";
 export type NotionErrorKind = "unset" | "auth" | "forbidden" | "missing" | "rate" | "endpoint" | "network" | "parse";
 export interface NotionError { error: { kind: NotionErrorKind; message: string; retryAfter?: number } }
 export type NotionReply<T> = T | NotionError;
-/** `icon` is the page's own emoji, or "" (non-emoji icons are dropped in Rust). */
-export interface NotionHit { id: string; kind: "page" | "source"; title: string; url: string; lastEdited: string; icon: string }
+/** `icon` is the page's own emoji, or "" (image icons are dropped in Rust); `iconName`/`iconColor` are the built-in icon, or "". */
+export interface NotionHit { id: string; kind: "page" | "source"; title: string; url: string; lastEdited: string; icon: string; iconName: string; iconColor: string }
 export interface NotionProp {
   id: string; name: string; type: string;
   options: { name: string; color: string }[];
   groups: { name: string; options: string[] }[];
 }
 export interface NotionSource { id: string; title: string; url: string; props: NotionProp[] }
-export interface NotionRow { id: string; title: string; url: string; lastEdited: string; icon: string; values: Record<string, string[]> }
+export interface NotionRow { id: string; title: string; url: string; lastEdited: string; icon: string; iconName: string; iconColor: string; values: Record<string, string[]> }
 export interface NotionPage {
   id: string; title: string; url: string; lastEdited: string; created: string;
   fields: { label: string; value: string; dim?: boolean }[];

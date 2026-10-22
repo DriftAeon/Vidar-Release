@@ -102,6 +102,31 @@ test("a falcon/models page gives the models event an in-process model/list reply
   assert.deepEqual(expectedFinal[0].models.map((m) => m.value), ["gpt-5.5"]);
 });
 
+test("a falcon/skills reply gives the commands event an in-process skills/list reply gives, and a skill prompt leaves as items", () => {
+  const data = [{ cwd: "C:/work", skills: [
+    { name: "build.plan", path: "C:/work/plan/SKILL.md", enabled: true },
+    { name: "off", path: "C:/work/off/SKILL.md", enabled: false },
+  ] }];
+  const local = new CodexAdapter();
+  const wire = [];
+  local.attach((line) => wire.push(JSON.parse(line)));
+  local.start({ cwd: "C:/work", permissionMode: "default" });
+  local.feed(JSON.stringify({ id: wire.findLast((m) => m.method === "initialize").id, result: {} }));
+  const expected = local.feed(JSON.stringify({ id: wire.findLast((m) => m.method === "skills/list").id, result: { data } }));
+  assert.equal(expected[0].kind, "commands");
+
+  const view = new HostedCodexAdapter();
+  view.attach(() => assert.fail("the Rust client asks for the catalog, not the view"));
+  view.start({ cwd: "C:/work", permissionMode: "default" });
+  assert.deepEqual(view.feed(JSON.stringify({ method: "falcon/skills", params: { result: { data } } })), expected);
+  assert.equal(view.encodeUser("/build.plan tidy"), JSON.stringify({ type: "user", content: [
+    { type: "text", text: "/build.plan tidy" },
+    { type: "skill", name: "build.plan", path: "C:/work/plan/SKILL.md" },
+  ] }));
+  assert.equal(view.encodeUser("/off x"), JSON.stringify({ type: "user", content: "/off x" }), "a disabled skill is plain text");
+  assert.equal(view.encodeUser("/unknown"), JSON.stringify({ type: "user", content: "/unknown" }));
+});
+
 test("hosted user actions leave as the sidecar lines Falcon's bridge maps", () => {
   const adapter = new HostedCodexAdapter();
   adapter.attach(() => {});
@@ -136,8 +161,75 @@ test("a hosted mode pick reaches the next session line", () => {
   adapter.attach(() => {});
   adapter.start(golden.start);
   adapter.encodeSetPermissionMode("acceptEdits");
+  adapter.hostRecord(accepted(1, "set_permission_mode", { type: "set_permission_mode", mode: "acceptEdits" }));
+  adapter.hostRecord(settled(1, "applied"));
   const [session] = adapter.feed(JSON.stringify({ id: 2, result: { thread: { id: "thr-1" } } }));
   assert.equal(session.permissionMode, "acceptEdits");
+});
+
+const accepted = (command, kind, payload) => ({ record: "command-accepted", command, client: "vidar", kind, payload });
+const settled = (command, outcome, message = null) => ({ record: "command-settled", command, outcome, message });
+function started() {
+  const adapter = new HostedCodexAdapter();
+  adapter.attach(() => {});
+  adapter.start(golden.start);
+  return adapter;
+}
+
+test("applied setter pairs become the events the panel settles on, with the payload's value", () => {
+  const adapter = started();
+  assert.deepEqual(adapter.hostRecord(accepted(1, "set_model", { type: "set_model", model: "gpt-5.5" })), []);
+  assert.deepEqual(adapter.hostRecord(settled(1, "applied")), [{ kind: "model_set", model: "gpt-5.5" }]);
+  adapter.hostRecord(accepted(2, "set_permission_mode", { type: "set_permission_mode", mode: "auto" }));
+  assert.deepEqual(adapter.hostRecord(settled(2, "applied")), [{ kind: "mode", mode: "auto", ack: true }]);
+  adapter.hostRecord(accepted(3, "set_effort", { type: "set_effort", level: "high" }));
+  assert.deepEqual(adapter.hostRecord(settled(3, "applied")), [{ kind: "effort", level: "high" }]);
+  // the view took the applied values
+  const [session] = adapter.feed(JSON.stringify({ id: 2, result: { thread: { id: "thr-1" } } }));
+  assert.equal(session.permissionMode, "auto");
+});
+
+test("a failed or unknown setter pair emits nothing and leaves the view unchanged", () => {
+  const adapter = started();
+  adapter.encodeSetPermissionMode("auto");
+  adapter.hostRecord(accepted(1, "set_permission_mode", { type: "set_permission_mode", mode: "auto" }));
+  assert.deepEqual(adapter.hostRecord(settled(1, "failed", "refused")), []);
+  adapter.hostRecord(accepted(2, "set_model", { type: "set_model", model: "gpt-x" }));
+  assert.deepEqual(adapter.hostRecord(settled(2, "delivery-unknown")), []);
+  const [session] = adapter.feed(JSON.stringify({ id: 2, result: { thread: { id: "thr-1" } } }));
+  assert.equal(session.permissionMode, golden.start.permissionMode);
+});
+
+test("a settle with no accepted record, or for another kind or generation, emits nothing", () => {
+  const adapter = started();
+  assert.deepEqual(adapter.hostRecord(settled(9, "applied")), []);
+  adapter.hostRecord(accepted(4, "user", { type: "user" }), 1);
+  assert.deepEqual(adapter.hostRecord(settled(4, "applied"), 1), []);
+  adapter.hostRecord(accepted(5, "set_model", { type: "set_model", model: "gpt-5.5" }), 1);
+  assert.deepEqual(adapter.hostRecord(settled(5, "applied"), 2), []);
+  assert.deepEqual(adapter.hostRecord(settled(5, "applied"), 1), [{ kind: "model_set", model: "gpt-5.5" }]);
+});
+
+test("a permission-mode-changed record is a mode ack; an unknown mode is ignored", () => {
+  const adapter = started();
+  assert.deepEqual(adapter.hostRecord({ record: "permission-mode-changed", mode: "default" }), [{ kind: "mode", mode: "default", ack: true }]);
+  assert.deepEqual(adapter.hostRecord({ record: "permission-mode-changed", mode: "bogus" }), []);
+});
+
+test("the router hands a hostRecord to the adapter and feeds its events to the tab", async () => {
+  const { deliver } = await import("../src/panels/rendered/host-router.ts");
+  const adapter = started();
+  const handled = [];
+  const route = { gen: 1, floor: 0, handle: (ev) => handled.push(ev), dropped() {}, exit() {}, adapter, host() {} };
+  deliver(route, { hostRecord: { body: accepted(7, "set_effort", { type: "set_effort", level: "low" }) }, gen: 1 });
+  deliver(route, { hostRecord: { body: settled(7, "applied") }, gen: 1 });
+  assert.deepEqual(handled, [{ kind: "effort", level: "low" }]);
+});
+
+test("the hosted view refuses a misfit permission answer like the in-process one", () => {
+  const adapter = started();
+  assert.equal(typeof adapter.permissionRefusal, "function");
+  assert.equal(adapter.permissionRefusal("none", { behavior: "deny" }), new CodexAdapter({ hosted: true }).permissionRefusal("none", { behavior: "deny" }));
 });
 
 test("host history envelopes identify a resumed thread and replay before live output", () => {

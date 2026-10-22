@@ -12,8 +12,8 @@ export interface GroupFacet { id: string; value: string }
 
 export interface Group { id: string; label: string; tone: Tone; rank: number; facet?: GroupFacet }
 
-/** A row's leading mark: the page's own emoji, a named glyph, or a blank slot that keeps titles aligned. */
-export type Lead = { emoji: string } | { glyph: LucideName } | { blank: true };
+/** A row's leading mark: the page's own emoji, a named glyph (optionally tinted by a class), or a blank slot that keeps titles aligned. */
+export type Lead = { emoji: string } | { glyph: LucideName; cls?: string } | { blank: true };
 
 export interface ItemTag { label: string; tone: Tone }
 

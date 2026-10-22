@@ -64,8 +64,10 @@ export async function codexHostCapabilities(): Promise<readonly string[] | null>
 /** The refused Codex tab's Select Workspace…: the launcher side (launcher/reopen-workspace.ts) binds the
  *  picker and respawn here at startup, so this module imports no launcher code (import-cycles contract). */
 let reopenInWorkspace: (s: TerminalSession) => Promise<void> = async () => {};
-export function bindReopenInWorkspace(fn: (s: TerminalSession) => Promise<void>): void {
+let reopenHere: (s: TerminalSession, keepThis: boolean) => Promise<void> = async () => {};
+export function bindReopenInWorkspace(fn: (s: TerminalSession) => Promise<void>, here: (s: TerminalSession, keepThis: boolean) => Promise<void>): void {
   reopenInWorkspace = fn;
+  reopenHere = here;
 }
 
 export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: string, onAdopted?: (ok: boolean, reason?: string) => void, focus = true, capabilities: readonly string[] | null = null) {
@@ -118,6 +120,7 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
       detail: { agent: agentKind, cwd: s.cwd, ...(s.profile ? { profile: s.profile, rowKey: s.rowKey } : {}) },
     })),
     onSelectWorkspace: () => reopenInWorkspace(s),
+    onReopenHere: (keepThis) => reopenHere(s, keepThis),
     onSession: (info) => {
       const cur = sessions.get(id);
       if (!cur || cur.rendered !== body) return;

@@ -55,12 +55,31 @@ pub(super) fn emoji_icon(v: &Value) -> String {
     emoji.to_string()
 }
 
+fn icon_token(v: &str) -> bool {
+    !v.is_empty() && v.len() <= 40 && v.bytes().all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-'))
+}
+
+/// The page's built-in icon as `(name, color)`. Only `icon.type == "icon"` counts; a name or
+/// colour outside `[a-z0-9_-]{1,40}` reads "" (colour alone may be empty).
+pub(super) fn native_icon(v: &Value) -> (String, String) {
+    let Some(icon) = v.get("icon").filter(|i| s(i, "type") == Some("icon")) else { return Default::default() };
+    let inner = icon.get("icon").unwrap_or(icon);
+    let name = s(inner, "name").or_else(|| s(icon, "name")).unwrap_or_default();
+    if !icon_token(name) {
+        return Default::default();
+    }
+    let color = s(inner, "color").or_else(|| s(icon, "color")).unwrap_or_default();
+    (name.to_string(), if icon_token(color) { color.to_string() } else { String::new() })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hit {
     pub id: String,
     pub kind: &'static str,
     pub icon: String,
+    pub icon_name: String,
+    pub icon_color: String,
     pub title: String,
     pub url: String,
     pub last_edited: String,
@@ -79,10 +98,13 @@ pub fn hits(body: &Value, object: &str) -> Vec<Hit> {
         })
         .filter_map(|r| {
             let id = normalise_id(s(r, "id")?)?;
+            let (icon_name, icon_color) = native_icon(r);
             Some(Hit {
                 url: page_url(s(r, "url"), &id),
                 title: props::title_of(r),
                 icon: emoji_icon(r),
+                icon_name,
+                icon_color,
                 last_edited: owned(r, "last_edited_time"),
                 kind,
                 id,
@@ -195,6 +217,8 @@ pub fn source(body: &Value) -> Option<Source> {
 pub struct Row {
     pub id: String,
     pub icon: String,
+    pub icon_name: String,
+    pub icon_color: String,
     pub title: String,
     pub url: String,
     pub last_edited: String,
@@ -215,10 +239,13 @@ pub fn rows(body: &Value) -> Vec<Row> {
                     values.insert(pid.to_string(), Value::from(vals));
                 }
             }
+            let (icon_name, icon_color) = native_icon(r);
             Some(Row {
                 url: page_url(s(r, "url"), &id),
                 title: props::title_of(r),
                 icon: emoji_icon(r),
+                icon_name,
+                icon_color,
                 last_edited: owned(r, "last_edited_time"),
                 id,
                 values,

@@ -92,27 +92,63 @@ pub(super) enum Target {
     Gone,
 }
 
-/// A prompt's content as Codex `UserInput` items. Text only: a string, or
-/// Claude-shaped `text` blocks. Anything else is refused rather than dropped,
-/// so a prompt is never sent with part of it missing.
+/// Longest skill name and path, in bytes, a prompt may carry.
+const SKILL_NAME_MAX: usize = 128;
+const SKILL_PATH_MAX: usize = 4096;
+
+/// One `skill` block rebuilt as `{type,name,path}`. Shape only: no catalog or
+/// `SKILL.md` check, Codex decides whether the skill exists.
+fn skill_item(block: &Value) -> Result<Value, String> {
+    let field = |key: &str| block.get(key).and_then(Value::as_str).unwrap_or("");
+    let (name, path) = (field("name"), field("path"));
+    if name.is_empty()
+        || name.len() > SKILL_NAME_MAX
+        || name.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err("a skill block has an invalid name".into());
+    }
+    let absolute = std::path::Path::new(path).is_absolute()
+        || path.starts_with('/')
+        || path.starts_with("\\\\");
+    if path.len() > SKILL_PATH_MAX || !absolute || path.chars().any(char::is_control) {
+        return Err("a skill block has an invalid path".into());
+    }
+    Ok(json!({ "type": "skill", "name": name, "path": path }))
+}
+
+/// A prompt's content as Codex `UserInput` items: a string, or Claude-shaped
+/// `text` blocks plus at most one `skill` block (which needs a text block
+/// beside it). Anything else is refused rather than dropped, so a prompt is
+/// never sent with part of it missing.
 pub(super) fn input(content: &Value) -> Result<Vec<Value>, String> {
     let text = |text: &str| json!({ "type": "text", "text": text });
     match content {
         Value::String(body) => Ok(vec![text(body)]),
-        Value::Array(blocks) if !blocks.is_empty() => blocks
-            .iter()
-            .map(|block| match block.get("type").and_then(Value::as_str) {
-                Some("text") => block
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .map(text)
-                    .ok_or_else(|| "a text block has no text".to_string()),
-                other => Err(format!(
-                    "unsupported: hosted Codex takes text prompts only (got a {} block)",
-                    other.unwrap_or("untyped")
-                )),
-            })
-            .collect(),
+        Value::Array(blocks) if !blocks.is_empty() => {
+            let items = blocks
+                .iter()
+                .map(|block| match block.get("type").and_then(Value::as_str) {
+                    Some("text") => block
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .map(text)
+                        .ok_or_else(|| "a text block has no text".to_string()),
+                    Some("skill") => skill_item(block),
+                    other => Err(format!(
+                        "unsupported: hosted Codex takes text and skill prompts only (got a {} block)",
+                        other.unwrap_or("untyped")
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let skills = items.iter().filter(|i| i["type"] == "skill").count();
+            if skills > 1 {
+                return Err("a prompt takes at most one skill block".into());
+            }
+            if skills == items.len() {
+                return Err("a skill block needs a text block beside it".into());
+            }
+            Ok(items)
+        }
         _ => Err("unsupported: hosted Codex takes text prompts only".into()),
     }
 }
@@ -766,8 +802,32 @@ mod tests {
         );
         assert!(input(&json!([{"type": "image", "source": {}}]))
             .unwrap_err()
-            .contains("text prompts only"));
+            .contains("text and skill prompts only"));
         assert!(input(&json!([])).is_err());
         assert!(input(&json!({"text": "x"})).is_err());
+    }
+
+    #[test]
+    fn input_takes_one_skill_beside_text_and_refuses_the_rest() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../../tests/fixtures/falcon-codex/skill-prompt.json"))
+                .unwrap();
+        for case in fixture["accept"].as_array().unwrap() {
+            assert_eq!(
+                Value::Array(input(&case["blocks"]).unwrap()),
+                case["input"]
+            );
+        }
+        let refuse = fixture["refuse"].as_array().unwrap();
+        assert!(!refuse.is_empty());
+        for case in refuse {
+            assert!(input(&case["blocks"]).is_err(), "{}", case["why"]);
+        }
+        let long_name = "n".repeat(SKILL_NAME_MAX + 1);
+        let long_path = format!("C:/{}", "p".repeat(SKILL_PATH_MAX));
+        for (name, path) in [(long_name.as_str(), "C:/a"), ("a", long_path.as_str())] {
+            let content = json!([{"type": "text", "text": "x"}, {"type": "skill", "name": name, "path": path}]);
+            assert!(input(&content).is_err());
+        }
     }
 }

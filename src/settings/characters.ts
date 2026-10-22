@@ -189,7 +189,9 @@ function editor(setError: (msg: string) => void): HTMLElement {
     const head = el("div", "ch-row");
     const open = expanded.has(entry.folder);
     head.classList.toggle("open", open);
-    const caret = button(open ? "⌄" : "›", "ch-caret");
+    const caret = button("", "ch-caret");
+    caret.append(iconImg("arrow-down-square"));
+    caret.title = open ? "Collapse" : "Expand";
     caret.setAttribute("aria-expanded", String(open));
     caret.setAttribute("aria-label", `${open ? "Collapse" : "Expand"} ${nameOf(entry)}`);
     caret.addEventListener("click", () => {

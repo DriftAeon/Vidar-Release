@@ -230,6 +230,22 @@ fn hits_and_rows_carry_emoji_icons_only() {
 }
 
 #[test]
+fn native_icons_keep_a_safe_name_and_colour() {
+    let ok = json!({ "icon": { "type": "icon", "icon": { "name": "checklist", "color": "green" } } });
+    assert_eq!(parse::native_icon(&ok), ("checklist".to_string(), "green".to_string()));
+    assert_eq!(parse::emoji_icon(&ok), "", "not an emoji");
+    let bad_color = json!({ "icon": { "type": "icon", "icon": { "name": "bug", "color": "Gr een" } } });
+    assert_eq!(parse::native_icon(&bad_color), ("bug".to_string(), String::new()));
+    let bad_name = json!({ "icon": { "type": "icon", "icon": { "name": "../x", "color": "red" } } });
+    assert_eq!(parse::native_icon(&bad_name), (String::new(), String::new()));
+    let long = json!({ "icon": { "type": "icon", "icon": { "name": "a".repeat(41), "color": "red" } } });
+    assert_eq!(parse::native_icon(&long), (String::new(), String::new()));
+    let emoji = json!({ "icon": { "type": "emoji", "emoji": "x" } });
+    assert_eq!(parse::native_icon(&emoji), (String::new(), String::new()));
+    assert_eq!(parse::native_icon(&json!({})), (String::new(), String::new()));
+}
+
+#[test]
 fn schema_keeps_options_and_status_groups() {
     let store = Memory::with_token(TOKEN);
     let (p, _) = pacer();

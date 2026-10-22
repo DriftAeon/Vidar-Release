@@ -134,10 +134,7 @@
    source strings stay Title Case, the caps are display only */
 .mod-head-caps { text-transform: uppercase; letter-spacing: 0.06em; }
 .mod-head-count { font-size: var(--font-11); }
-.mod-refresh {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius-4);
-  color: var(--fg-dim); font-size: var(--font-11); line-height: 1; padding: 1px var(--space-5); cursor: pointer;
-}
+.mod-refresh { background: none; border: 1px solid var(--border); border-radius: var(--radius-4); color: var(--fg-dim); font-size: var(--font-11); line-height: 1; padding: 1px var(--space-5); cursor: pointer; }
 .mod-refresh:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 /* refresh controls carry the lucide refresh-cw glyph (icons.ts), not a text arrow */
 .mod-refresh .icn { width: 11px; height: 11px; vertical-align: -0.1em; }

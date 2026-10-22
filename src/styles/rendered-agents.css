@@ -71,17 +71,22 @@
   padding: 0 var(--space-8);
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius-4);
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* flat face: the Sheen .ws-btn buttons (Report, Calls, Show In Chat) take theirs from settings-modal.css */
+.agent-btn:not(.ws-btn) {
   background: transparent;
   color: var(--fg-dim);
   font: inherit;
-  white-space: nowrap;
-  cursor: pointer;
   transition: background 80ms ease, color 80ms ease, border-color 80ms ease;
 }
-.agent-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--fg); }
-.agent-btn:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; color: var(--fg); }
-.agent-btn:active { background: var(--border-strong); color: var(--fg); }
-.agent-btn:disabled { opacity: 0.4; cursor: default; background: transparent; border-color: var(--border); color: var(--fg-dim); }
+.agent-btn:not(.ws-btn):hover { background: var(--bg-hover); border-color: var(--border-strong); color: var(--fg); }
+.agent-btn:not(.ws-btn):focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; color: var(--fg); }
+.agent-btn:not(.ws-btn):active { background: var(--border-strong); color: var(--fg); }
+.agent-btn:not(.ws-btn):disabled { opacity: 0.4; cursor: default; background: transparent; border-color: var(--border); color: var(--fg-dim); }
+/* size only: Sheen buttons keep the 24px row height and 8px padding the flat ones had */
+.agent-btn.ws-btn { min-height: 0; padding: 0 var(--space-8); }
 
 /* rows */
 /* collapse: the wrap animates grid-template-rows 1fr -> 0fr, the rows clip inside it */
@@ -180,7 +185,7 @@
 .agent-fold[hidden] { display: none; }
 .agent-fold > .agent-fold-sum { display: inline-flex; align-items: center; gap: var(--space-4); list-style: none; }
 .agent-fold > .agent-fold-sum::-webkit-details-marker { display: none; }
-.agent-fold[open] > .agent-fold-sum { background: var(--bg-selected); color: var(--fg); }
+.agent-fold[open] > .agent-fold-sum { --edge: var(--accent); color: var(--fg); } /* open fold: Sheen accent edge, not a flat fill (2026-10-22) */
 .agent-fold-n { font-family: var(--font-mono); font-size: var(--font-11); }
 .agent-fold > .agent-report, .agent-fold > .agent-calls-list { margin-top: var(--space-8); }
 .agent-report { color: var(--fg); overflow-wrap: anywhere; }

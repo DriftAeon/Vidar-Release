@@ -10,7 +10,7 @@ import {
   type BareLocalSources, type BareSetLayer, type BareSetLayerWrite,
 } from "./flow";
 import { el } from "./agent-view";
-
+import { isFileRow, nameAndPath } from "./row-name";
 const lastSeg = (p: string): string => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 const samePath = (a: string, b: string): boolean => a.replace(/\//g, "\\").toLowerCase() === b.replace(/\//g, "\\").toLowerCase();
 /** A guard's identity as set_layer.rs `guard_name` dedupes it: event, matcher and run file names. */
@@ -18,11 +18,11 @@ const guardName = (g: BareGuard): string =>
   [g.event, g.matcher ?? "", g.run.map((r) => lastSeg(r).toLowerCase()).join(",")].join("|");
 
 /** Pure: one set's attachment files: the offered skill, agent and hook files (Codex: skills only; Vidar's own
- *  block guards are left out, they stay on in every Bare row) plus any sidecar entry no longer offered (kept so
+ *  block guards are offered like any hook) plus any sidecar entry no longer offered (kept so
  *  a toggle round-trips it), ticked from what the set's sidecar holds. */
 export function setFiles(src: BareLocalSources | null, s: BareSetLayer, codex = false): { files: BareLocalFile[]; ticked: Set<string> } {
   const files = agentFiles(src?.files ?? [], codex)
-    .filter((f) => f.kind === "skill" || (!codex && (f.kind === "agent" || (f.kind === "hook" && f.reason !== "blockTarget"))));
+    .filter((f) => f.kind === "skill" || (!codex && (f.kind === "agent" || f.kind === "hook")));
   const lists: ["skill" | "agent", string[]][] = codex ? [["skill", s.codexSkills]] : [["skill", s.skills], ["agent", s.agents]];
   for (const [kind, list] of lists) {
     for (const p of list) {
@@ -44,6 +44,11 @@ export function setFiles(src: BareLocalSources | null, s: BareSetLayer, codex = 
     if (on) ticked.add(f.path);
   }
   return { files, ticked };
+}
+
+/** Pure: how many skills, agents and hooks the sets `lib` names attach (the sum of the group heads' counts). */
+export function attachedCount(src: BareLocalSources | null, lib: Pick<BareActiveLibrary, "sets">, codex = false): number {
+  return (lib.sets ?? []).reduce((n, s) => n + setFiles(src, s, codex).ticked.size, 0);
 }
 
 /** Pure: the sidecar write that flips `f` in set `s`: only the key of its kind (a Codex skill writes `codexSkills`). */
@@ -88,7 +93,8 @@ export function setAttachments(lib: BareActiveLibrary, c: SetAttachCtx): HTMLEle
       const list = el("div", "rp-sources runes-tray");
       for (const f of kindFiles) {
         if (!c.modify || !writable) {
-          const ro = el("div", "rp-source is-ro", f.shown);
+          const ro = el("div", "rp-source is-ro", isFileRow(f) ? "" : f.shown);
+          if (isFileRow(f)) ro.append(...nameAndPath(f));
           ro.dataset.path = f.path;
           ro.dataset.kind = kind;
           ro.title = f.path;

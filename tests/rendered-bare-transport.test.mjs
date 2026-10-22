@@ -44,6 +44,41 @@ test("a Falcon spawn reply's bare_warnings reach onBareWarnings; a bare number o
   assert.equal(seen.length, 1);
 });
 
+test("a Codex Bare spawn asks for the trust offer and passes it with the warnings, hosted or in-process", async () => {
+  const seen = [];
+  const onBareWarnings = (ws, trust) => seen.push([ws, trust]);
+  const codex = { ...params, agent: "codex", onBareWarnings };
+  const offer = { folder: "C:\\work", text: "Trust this Folder in your Codex Config to Load its Project Settings." };
+  let asked;
+  h.ipc.answers.codex_trust_offer = (args) => { asked = args; return offer; };
+  // Hosted: a reply with no warnings still reports the offer.
+  h.ipc.answers.falcon_spawn = () => ({ view_generation: 5 });
+  assert.equal((await createFalconProfileTransport("bare").spawn(codex)).gen, 5);
+  assert.deepEqual(asked, { id: "tab" });
+  assert.deepEqual(seen.pop(), [[], offer]);
+  // In-process: bareWarnings ride the reply, and the generation still comes back.
+  h.ipc.answers.spawn_codex_appserver = () => ({ gen: 3, developerInstructions: null, bareWarnings: ["No guard hooks"] });
+  const { createProfileTransport } = await import("../src/panels/rendered/transport.ts");
+  assert.equal((await createProfileTransport("bare").spawn(codex)).gen, 3);
+  assert.deepEqual(seen.pop(), [["No guard hooks"], offer]);
+  // Trusted folder, no warnings: nothing is reported. A failed offer lookup reports the warnings alone.
+  h.ipc.answers.codex_trust_offer = () => null;
+  h.ipc.answers.spawn_codex_appserver = () => ({ gen: 4, developerInstructions: null });
+  assert.equal((await createProfileTransport("bare").spawn(codex)).gen, 4);
+  assert.equal(seen.length, 0);
+  h.ipc.answers.codex_trust_offer = () => { throw new Error("gone"); };
+  h.ipc.answers.spawn_codex_appserver = () => ({ gen: 3, developerInstructions: null, bareWarnings: ["No guard hooks"] });
+  await createProfileTransport("bare").spawn(codex);
+  assert.deepEqual(seen.pop(), [["No guard hooks"], null]);
+  // A Claude spawn never asks.
+  asked = undefined;
+  h.ipc.answers.codex_trust_offer = (args) => { asked = args; return offer; };
+  h.ipc.answers.falcon_spawn = () => ({ view_generation: 6, bare_warnings: ["w"] });
+  await createFalconProfileTransport("bare").spawn({ ...params, onBareWarnings });
+  assert.equal(asked, undefined);
+  assert.deepEqual(seen.pop(), [["w"], null]);
+});
+
 test("re-adopt keeps the profile:/clear after an adopt respawns bare", async () => {
   let spawned;
   h.ipc.answers.falcon_adopt = () => 8;

@@ -13,6 +13,8 @@ import type { NotionKind } from "./ipc";
 import type { Copy } from "./model";
 
 export const CONNECTIONS_URL = "https://app.notion.com/developers/connections";
+/** Where Notion issues personal access tokens (developers.notion.com, Personal access tokens guide). */
+export const TOKENS_URL = "https://www.notion.so/developers/tokens";
 
 export interface ErrView extends Copy {
   /** The message is a sentence shown under the title; otherwise it is the title's tooltip. */
@@ -39,6 +41,7 @@ export interface Handlers {
   hide(): void;
   submit(token: string): void;
   openConnections(): void;
+  openTokens(): void;
   refresh(): void;
   disconnect(): void;
   back(): void;
@@ -129,7 +132,7 @@ export function buildNotionView(h: Handlers, topAdapter: Adapter): NotionView {
   const notice = buildEmptyState({
     icon: brandIcon("notion"),
     title: "Notion Not Connected",
-    note: "Add a connection token to read the pages you share with it.", // note-ok: docs/projects/notion/plan.md
+    note: "Add a personal access token to read the pages you can open.", // note-ok: user, 2026-10-22
     actions: connectActions(() => h.connectStart(), () => h.hide()),
   }, "nt-notice");
 
@@ -148,15 +151,17 @@ export function buildNotionView(h: Handlers, topAdapter: Adapter): NotionView {
   token.spellcheck = false;
   token.autocomplete = "new-password";
   field.append(el("span", "nt-field-label", "Token"), token);
-  const link = textBtn("Open Notion Connections", "nt-link", () => h.openConnections());
+  // personal token first: it reads what its owner can open, with no per-page sharing (user, 2026-10-22)
+  const link = textBtn("Create a Personal Token", "nt-link", () => h.openTokens());
   const formNote = el("span", "nt-sub");
-  formNote.textContent = "Create an internal connection with Read Content and Read User Information Without Email, then paste its token. It is kept in Windows Credential Manager, never in vidar.json."; // note-ok: docs/projects/notion/plan.md
+  formNote.textContent = "Create a personal access token with the Notion API capability, then paste it. A connection token also works but reads only the pages you share with it. Either is kept in Windows Credential Manager, never in vidar.json."; // note-ok: user, 2026-10-22
+  const connLink = textBtn("Use a Connection Instead", "nt-link", () => h.openConnections());
   const formActs = el("div", "nt-actions wb-actions");
   const connect = el("button", "nt-primary wb-card-btn wb-card-btn-primary", "Connect");
   connect.type = "submit";
   const cancel = textBtn("Cancel", "nt-cancel wb-card-btn",() => h.cancel());
   formActs.append(connect, cancel);
-  form.append(el("div", "nt-form-title", "Connect Notion"), formErr, field, link, formNote, formActs);
+  form.append(el("div", "nt-form-title", "Connect Notion"), formErr, field, link, formNote, connLink, formActs);
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const value = token.value;

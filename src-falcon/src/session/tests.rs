@@ -472,7 +472,9 @@ fn a_waiting_prompt_can_be_retracted_but_a_dispatched_one_cannot() {
 /// turn's `result` releases the next prompt.
 #[test]
 fn a_second_pump_during_a_turn_dispatches_nothing() {
-    let (_temp, session) = uncontrolled_session("queue-inflight");
+    // A child that stays open: `cmd /c exit` can close its stdin before the
+    // first write lands, which failed this test on a hosted runner.
+    let (_temp, session) = listening_session("queue-inflight");
     session
         .enqueue_prompt(serde_json::json!("first"))
         .expect("queue");

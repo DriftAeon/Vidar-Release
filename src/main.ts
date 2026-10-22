@@ -12,6 +12,9 @@ import { loadConfig, onSettingsChanged } from "./config";
 import { overlayAgents } from "./config-agents";
 import { setLauncherLead } from "./launcher/body-order";
 import { builtinAgents, setGatewayModules, spawnFrom, spawnAstra, rosterView, shownRoots, shownVariants } from "./launcher/roster";
+import { createFixOpener } from "./launcher/fix-tab";
+import { setFixOpener } from "./panels/rendered/fix-seam";
+import { showSessionsToast } from "./panels/sessions/zoom";
 import { gatewayKey, gatewayModules } from "./launcher/gateways";
 import { initLauncherMenu, launcherMenu, launcherSub, buildTypeMenu, openLauncher } from "./launcher/menu";
 import { launcherCols, col } from "./launcher/columns";
@@ -20,7 +23,7 @@ import { hostedNames } from "./launcher/hosted-names-pref";
 import { initLauncherKeyboard, openLauncherByKeyboard } from "./launcher/keyboard";
 import { openLocations } from "./launcher/locations";
 import { initRecent } from "./launcher/recent";
-import { reopenInWorkspace } from "./launcher/reopen-workspace";
+import { reopenHere, reopenInWorkspace } from "./launcher/reopen-workspace";
 import { bindReopenInWorkspace } from "./panels/sessions/rendered-body";
 import { GENERAL_CATEGORY, registerGeneralRows } from "./settings/general";
 import { registerWorkspaceRows } from "./settings/workspaces";
@@ -121,7 +124,7 @@ setViewClasses("sessions");
 
 initLauncherMenu({ openLocations });
 initRecent();
-bindReopenInWorkspace(reopenInWorkspace);
+bindReopenInWorkspace(reopenInWorkspace, reopenHere);
 initLauncherKeyboard({ launcherMenu, launcherSub, launcherCols, col, openLauncher });
 
 /* ---- settings ---- */
@@ -155,6 +158,8 @@ settingsBtn.addEventListener("click", (e) => {
 // module needs, injected once here; rosterView is read per call, after the config lands.
 initDrive({ spawnFrom, roster: rosterView });
 setGatewayModules(gatewayModules);
+// Ask Agent to Fix on a Rendered notice card opens its fix tab through this opener (launcher/fix-tab.ts).
+setFixOpener(createFixOpener({ roots: shownRoots, variants: shownVariants, spawn: spawnFrom, toast: showSessionsToast }));
 
 /* ---- config-gated init: config MUST land before the first session spawns
    (agents, fontSize, defaultCwd, rider gating) ---- */

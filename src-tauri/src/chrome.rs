@@ -229,21 +229,71 @@ fn open_with_dialog(owner: isize, file: &str) -> Result<(), String> {
 }
 
 /// Open an `.html`/`.htm` file with the shell's handler for its type: the default
-/// browser on a stock install (no browser is named here). Same hardening as
-/// `open_document`, only the allowlist differs; the Relay strip disables the
-/// button for any other extension, this is the backstop.
+/// browser on a stock install (no browser is named here). An image (svg, png, jpg,
+/// jpeg, gif, webp) opens in the program registered for `.html` instead, as a
+/// `file:///` URL, never through the image's own handler (the photo viewer).
+/// Same hardening as `open_document`, only the allowlist differs; the UI hides or
+/// disables the button for any other extension, this is the backstop.
 #[tauri::command]
 pub async fn open_in_browser(path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || shell_open_checked(&path, HTML_EXTS))
-        .await
-        .map_err(|e| format!("open task failed: {e}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let plain = harden_path(&path, BROWSER_EXTS)?;
+        if is_html_path(&plain) {
+            shell_execute(&plain)
+        } else {
+            let exe = html_handler_exe()?;
+            spawn_app(&exe, &file_url(&plain))
+        }
+    })
+    .await
+    .map_err(|e| format!("open task failed: {e}"))?
 }
 
 const DOC_EXTS: &[&str] = &["md", "txt"];
 const HTML_EXTS: &[&str] = &["html", "htm"];
+const BROWSER_EXTS: &[&str] = &["html", "htm", "svg", "png", "jpg", "jpeg", "gif", "webp"];
 
-fn shell_open_checked(path: &str, exts: &[&str]) -> Result<(), String> {
-    shell_execute(&harden_path(path, exts)?)
+fn is_html_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    HTML_EXTS.iter().any(|e| lower.ends_with(&format!(".{e}")))
+}
+
+/// `C:\a b\#x.png` -> `file:///C:/a%20b/%23x.png`: backslashes to slashes, everything outside
+/// unreserved characters, `/` and the drive colon percent-encoded (UTF-8 bytes).
+fn file_url(path: &str) -> String {
+    let mut out = String::from("file:///");
+    for (i, c) in path.replace('\\', "/").chars().enumerate() {
+        if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~' | '/') || (i == 1 && c == ':') {
+            out.push(c);
+        } else {
+            let mut buf = [0u8; 4];
+            for byte in c.encode_utf8(&mut buf).bytes() {
+                out.push_str(&format!("%{byte:02X}"));
+            }
+        }
+    }
+    out
+}
+
+/// The executable registered for `.html` (the default browser), or an error: an image never
+/// falls back to its own handler.
+fn html_handler_exe() -> Result<String, String> {
+    use windows::core::{w, PWSTR};
+    use windows::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_NONE, ASSOCSTR_EXECUTABLE};
+    let mut buf = vec![0u16; 1024];
+    let mut len = buf.len() as u32;
+    let r = unsafe {
+        AssocQueryStringW(ASSOCF_NONE, ASSOCSTR_EXECUTABLE, w!(".html"), None, Some(PWSTR(buf.as_mut_ptr())), &mut len)
+    };
+    if r.is_err() || len < 2 {
+        return Err("no browser registered for .html".into());
+    }
+    // len counts the terminating NUL
+    let exe = String::from_utf16_lossy(&buf[..(len as usize - 1).min(buf.len())]);
+    if exe.trim().is_empty() {
+        return Err("no browser registered for .html".into());
+    }
+    Ok(exe)
 }
 
 /// The path hardening shared by every open: returns the plain (no `\\?\`) resolved path.
@@ -385,6 +435,30 @@ pub fn set_titlebar_icon(window: &tauri::WebviewWindow) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_browser_allow_list_takes_images_and_refuses_programs() {
+        let dir = std::env::temp_dir().join(format!("vidar-browser-ext-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let check = |ext: &str| {
+            let p = dir.join(format!("f.{ext}"));
+            std::fs::write(&p, b"x").unwrap();
+            harden_path(p.to_str().unwrap(), BROWSER_EXTS)
+        };
+        for ok in ["png", "PNG", "html", "svg", "webp"] {
+            assert!(check(ok).is_ok(), "{ok}");
+        }
+        for bad in ["exe", "bat", "lnk"] {
+            assert!(check(bad).is_err(), "{bad}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_file_url_encodes_space_hash_and_percent() {
+        assert_eq!(file_url("C:\\a b\\#x%.png"), "file:///C:/a%20b/%23x%25.png");
+        assert!(is_html_path("C:\\a\\p.HTML") && !is_html_path("C:\\a\\p.png"));
+    }
 
     fn app(setting: Option<&str>, ok: bool) -> DocApp {
         doc_app(setting, |_| if ok { Ok(()) } else { Err("bad exe".to_string()) })

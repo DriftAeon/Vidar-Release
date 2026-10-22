@@ -21,6 +21,19 @@ export interface HostPayload {
   disconnected?: string;
   replay?: boolean;
 }
+type Item = { line?: string; dropped?: number; gen?: number } & HostPayload;
+/** One payload to its tab: the host's own handling first, then the adapter's events for a journal
+ *  record (setters another client or a replay applied) or a wire line. */
+export function deliver(l: Live, p: Item): void {
+  if (p.hydration || p.hostRecord || p.disconnected) l.host(p);
+  if (p.hostRecord && l.adapter.hostRecord) {
+    const body = (p.hostRecord.body ?? p.hostRecord) as Record<string, unknown>;
+    for (const ev of l.adapter.hostRecord(body, p.gen)) l.handle(ev);
+  }
+  if (typeof p.dropped === "number") { l.dropped(p.dropped); return; }
+  if (typeof p.line !== "string") return;
+  for (const ev of l.adapter.feed(p.line)) l.handle(ev);
+}
 const live = new Map<string, Live>();
 let listening = false;
 
@@ -59,13 +72,6 @@ export async function ensureListeners() {
       l.gen = gen;
     }
     return l.gen === gen;
-  };
-  type Item = { line?: string; dropped?: number } & HostPayload;
-  const deliver = (l: Live, p: Item) => {
-    if (p.hydration || p.hostRecord || p.disconnected) l.host(p);
-    if (typeof p.dropped === "number") { l.dropped(p.dropped); return; }
-    if (typeof p.line !== "string") return;
-    for (const ev of l.adapter.feed(p.line)) l.handle(ev);
   };
   // A replay arrives as `{ id, gen, batch: [...] }` (one IPC per up to 64 records, same order
   // as singles; src-tauri/src/falcon/events.rs ReplayBatch); live events stay single payloads.

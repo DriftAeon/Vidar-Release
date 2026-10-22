@@ -5,7 +5,7 @@ import type { ProgressEvent } from "./progress";
 
 export type BareFileKind = "rules" | "memory" | "skill" | "agent" | "hook" | "mcp";
 export type BareFileReason =
-  | "pathScoped" | "notMjs" | "guardDriver" | "blockTarget"
+  | "pathScoped" | "notMjs" | "guardDriver"
   | "tooLarge" | "shadowed" | "summaryOnly" | "notHosted" | "stdio";
 export interface BareGuard { event: string; matcher?: string; run: string[] }
 export interface BareLocalFile {
@@ -121,7 +121,7 @@ const guardKey = (g: BareGuard): string => JSON.stringify([g.event, g.matcher ??
 
 /** Pure: the preselection the list starts from. */
 export const defaultTicks = (files: readonly BareLocalFile[]): Set<string> =>
-  new Set(files.filter((f) => (f.ticked && f.pickable) || f.reason === "blockTarget").map((f) => f.path));
+  new Set(files.filter((f) => f.ticked && f.pickable).map((f) => f.path));
 
 /** Pure: the files one view lists. A Claude view drops `agent: "codex"` rows; a Codex view keeps only them. */
 export const agentFiles = (files: readonly BareLocalFile[], codex: boolean): BareLocalFile[] =>
@@ -138,8 +138,8 @@ export const codexTicks = (files: readonly BareLocalFile[]): Set<string> =>
 const lockedBrick = (b: Pick<BareScanBrick, "status">): boolean => b.status === "profilePath";
 
 /** Pure (fold 6): the `guards` to write, or undefined to leave bareGuards untouched.
- *  Block targets are always in; entries the list does not offer round-trip unchanged; `[]` only when the
- *  user unticked every pickable hook and no block target exists. */
+ *  Block targets are ordinary hooks (on only when picked); entries the list does not offer round-trip
+ *  unchanged; `[]` only when the user unticked every pickable hook. */
 export function planGuards(
   files: readonly BareLocalFile[],
   ticked: ReadonlySet<string>,
@@ -148,7 +148,7 @@ export function planGuards(
   const hooks = files.filter((f) => f.kind === "hook" && f.guard);
   if (!hooks.length) return undefined;
   const offered = new Set(hooks.map((f) => guardKey(f.guard!)));
-  const picked = hooks.filter((f) => f.reason === "blockTarget" || (f.pickable && ticked.has(f.path)));
+  const picked = hooks.filter((f) => f.pickable && ticked.has(f.path));
   const pickedKeys = new Set(picked.map((f) => guardKey(f.guard!)));
   const currentOffered = new Set(current.filter((g) => offered.has(guardKey(g))).map(guardKey));
   const same = pickedKeys.size === currentOffered.size && [...pickedKeys].every((k) => currentOffered.has(k));
@@ -160,9 +160,7 @@ export function planGuards(
     if (!seen.has(k)) { seen.add(k); out.push(f.guard!); }
   }
   if (!out.length) {
-    const blocks = hooks.some((f) => f.reason === "blockTarget");
-    const anyPickable = hooks.some((f) => f.pickable);
-    if (blocks || !anyPickable) return undefined;
+    if (!hooks.some((f) => f.pickable)) return undefined;
   }
   return out;
 }

@@ -78,6 +78,9 @@ export interface EventsDeps {
   stalePill: (t: { details: HTMLDetailsElement; group: Group | null }) => void;
   approvalCard: (requestId: string, toolUseId: string | undefined, tool: string, input: unknown, inputBytes: number, _suggestions: unknown[]) => void;
   alreadyAnswered: (text: string) => boolean;
+  /** cards.ts: a Codex async ask as the Question card, and the fold a later user message gives it */
+  asyncAskCard?: (id: string, questions: { title: string; options: string[] }[]) => void;
+  settleAsyncAsks?: () => void;
   addWaiting: (taskId: string, toolUseId: string | undefined) => void;
   resumeWaiting: (taskId: string, toolUseId: string | undefined) => void;
   taskDone: (taskId: string, status?: string, summary?: string, report?: string, tokens?: number, fromUpdate?: boolean) => void;
@@ -105,7 +108,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
     modeLabel, renderAgentPill, redrawStatus, refreshState, emitCharacterStatus, setInTurn, updateCtx,
     markCacheWarm, resetCache, settleModel, settleSwitch, append, userBlock, noticeBlock, restoredBlock, unknownBlock,
     textDelta, textDone, thinkingBlock, settleThoughts, sealGroup, clearInterim, collapseTurnGroups,
-    toolPending, toolStart, toolDone, stalePill, approvalCard, alreadyAnswered,
+    toolPending, toolStart, toolDone, stalePill, approvalCard, alreadyAnswered, asyncAskCard, settleAsyncAsks,
     addWaiting, resumeWaiting, taskDone, liveTasks, clearWaiting, settleDoneAgents, settleReplayedAgents, flushQueue, pendingQueued, onExit, groupRefresh,
   } = deps;
   const monitors = createMonitorRun(S, { tools, groupRefresh });
@@ -118,6 +121,23 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
     redrawStatus();
     // the right panel's Model select reads the tab's model off the focus event
     opts.onSession?.({ sessionId: S.sessionId ?? "", model, cwd: opts.cwd, permissionMode: S.mode });
+    emitCharacterStatus(false);
+  }
+  /** Before the first reply the pill shows the spawn alias ("Opus", "Opus 1M"); the catalog row
+   *  for that alias says which version it covers, so the pill names it as a hint. `system/init`
+   *  stays the live truth (it sets characterModelLive and overwrites this). */
+  function versionAlias(models: { value: string; resolved?: string }[]) {
+    const alias = opts.model;
+    if (opts.agent !== "claude" || !alias || S.characterModelLive || sl.model !== prettyModel(alias)) return;
+    const resolved = models.find((m) => m.value === alias)?.resolved;
+    if (!resolved) return;
+    const versioned = /\[1m\]$/i.test(alias) && !/\[1m\]$/i.test(resolved) ? `${resolved}[1m]` : resolved;
+    const name = prettyModel(versioned);
+    if (name === sl.model) return;
+    sl.model = name;
+    S.modelHinted = true;
+    S.characterModel = versioned;
+    opts.onSession?.({ sessionId: S.sessionId ?? "", model: versioned, cwd: opts.cwd, permissionMode: S.mode });
     emitCharacterStatus(false);
   }
   function handle(ev: AgentEvent) {
@@ -157,10 +177,12 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
         emitCharacterStatus(true);
         break;
       case "turn_start":
+        settleAsyncAsks?.(); // a new turn follows a user message: an open async ask before it is answered
         if (!S.replaying) S.characterTurnOpen = true;
         setInTurn(true); // refreshState → syncCharacterActive
         break;
       case "user_echo":
+        settleAsyncAsks?.();
         userBlock(ev.text);
         break;
       case "replay":
@@ -200,6 +222,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
         monitors.onToolDone(ev.toolUseId, ev.content, ev.isError);
         opts.onToolDone?.(ev.toolUseId, ev.isError);
         break;
+      case "ask_async": asyncAskCard?.(ev.blockId, ev.questions); break;
       case "approval": approvalCard(ev.requestId, ev.toolUseId, ev.tool, ev.input, ev.inputBytes, ev.suggestions); break;
       case "turn_done": {
         const authoritativeCharacterTurn = S.characterTurnOpen && !S.replaying;
@@ -277,6 +300,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
         // resolves to: show that model, as a hint (first-run smoke 2026-10-08, finding 7)
         const byDefault = sl.model === "Ready" ? ev.models.find((m) => m.value === "default")?.resolved : undefined;
         if (byDefault) hintModel(byDefault);
+        else versionAlias(ev.models);
         redrawStatus();
         break;
       }
@@ -314,7 +338,8 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
         if (ev.level !== sl.effort) { sl.effort = ev.level; redrawStatus(); }
         if ((EFFORT_LEVELS as readonly string[]).includes(ev.level)) S.liveEffort = ev.level as Effort;
         // seed a body with no chosen effort so a /clear respawn keeps the running level
-        if (opts.effort === null && (EFFORT_LEVELS as readonly string[]).includes(ev.level)) opts.effort = ev.level as Effort;
+        // a replayed Codex level (the host's applied pick) is the tab's choice too
+        if ((opts.effort === null || (S.hydrating && opts.agent === "codex")) && (EFFORT_LEVELS as readonly string[]).includes(ev.level)) opts.effort = ev.level as Effort;
         break;
       case "rate_limit":
         if (ev.utilization !== null) {

@@ -6,8 +6,9 @@
 //! - memory: `~\.claude\projects\<memory_slug(cwd)>\memory\*.md` but `MEMORY.md`, one library for the folder.
 //! - skill: `~\.claude\skills\<name>\SKILL.md` (the folder); agent: `~\.claude\agents\*.md`.
 //! - hook: each command of `~\.claude\settings.json` `hooks`, a port of `guardList` in
-//!   `tools/bare/guard-probe.mjs`: a block target is ticked and locked (`blockTarget`), `guard-driver` and a
-//!   command with no `.mjs` script are not pickable. A vidar.json holding `bareGuards` ticks its entries.
+//!   `tools/bare/guard-probe.mjs`: `guard-driver` and a command with no `.mjs` script are not pickable. A
+//!   vidar.json holding `bareGuards` ticks its entries (block targets included); with no key the block
+//!   targets start ticked, as `--emit` has them.
 //!   Every `.mjs` hook but guard-driver carries the `guard` entry it would write.
 //! - Codex home files (`codex_home.rs`) follow each kind's own Claude files, and its `mcp` rows come last;
 //!   each carries `agent: "codex"`.
@@ -300,10 +301,12 @@ fn hooks(env: &LocalEnv, bare_guards: Option<&Vec<Value>>) -> Vec<LocalFile> {
                 return LocalFile { pickable: false, reason: Some("guardDriver"), ..base };
             }
             let guard = Guard { event: h.event, matcher: h.matcher, run: h.run };
-            if BLOCK_TARGETS.contains(&name.as_str()) {
-                return LocalFile { ticked: true, pickable: false, reason: Some("blockTarget"), guard: Some(guard), ..base };
-            }
-            let ticked = bare_guards.is_some_and(|list| list.iter().any(|b| same_guard(&guard, b)));
+            // With no `bareGuards` key yet (first import) the block targets start on, as guard-probe --emit has them;
+            // once the key exists a block target is on only when the list holds it, like any other hook.
+            let ticked = match bare_guards {
+                Some(list) => list.iter().any(|b| same_guard(&guard, b)),
+                None => BLOCK_TARGETS.contains(&name.as_str()),
+            };
             LocalFile { ticked, guard: Some(guard), ..base }
         })
         .collect()
@@ -427,7 +430,7 @@ mod tests {
 
         let by = |end: &str| got.files.iter().find(|f| f.path.ends_with(end)).unwrap_or_else(|| panic!("no hook {end}")).clone();
         let install = by("guard-install.mjs");
-        assert_eq!((install.ticked, install.pickable, install.reason, install.scope), (true, false, Some("blockTarget"), "global"));
+        assert_eq!((install.ticked, install.pickable, install.reason, install.scope), (true, true, None, "global"));
         let driver = by("guard-driver.mjs");
         assert_eq!((driver.ticked, driver.pickable, driver.reason, driver.guard.is_none()), (false, false, Some("guardDriver"), true));
         let pwsh = by("ctx-search.ps1");
@@ -436,17 +439,18 @@ mod tests {
         assert_eq!((seal.ticked, seal.pickable, seal.reason), (false, true, None));
         assert_eq!(got.files.iter().filter(|f| f.kind == "hook").count(), 11);
 
-        // An existing bareGuards ticks its own entries; block targets stay ticked and locked.
+        // An existing bareGuards ticks its own entries only; block targets are ordinary pickable hooks.
         let seal_guard = json!({ "event": "PostToolUse", "matcher": "Write", "run": [r"c:/users/example-user/.claude/hooks/handoff-seal.mjs"] });
         std::fs::write(&config, json!({ "bareGuards": [seal_guard] }).to_string()).unwrap();
         let again = discover(&env);
         assert!(again.guards_key);
         let ticked: Vec<&str> = again.files.iter().filter(|f| f.ticked).map(|f| f.path.as_str()).collect();
-        assert_eq!(ticked.len(), 7, "{ticked:?}");
+        assert_eq!(ticked.len(), 1, "{ticked:?}");
+        assert!(again.files.iter().any(|f| f.path.ends_with("guard-install.mjs") && !f.ticked && f.pickable));
         assert!(again.files.iter().any(|f| f.path.ends_with("handoff-seal.mjs") && f.ticked && f.pickable));
         let json = serde_json::to_value(&again).unwrap();
         assert_eq!(json["guardsKey"], true);
-        assert_eq!(json["files"][0]["reason"], "blockTarget");
+        assert_ne!(json["files"][0]["reason"], "blockTarget");
         assert!(json["files"][0].get("library").is_none());
         let _ = std::fs::remove_dir_all(&root);
     }

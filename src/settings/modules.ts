@@ -15,7 +15,7 @@ import { getFocusedSession } from "../panels/sessions";
 import { isGateway } from "../launcher/agent-kind";
 import pickerIcon from "../assets/picker.png";
 import type { McpRack } from "../panels/rack";
-import { dedupeRackServers, rackServerId, reconcileRackOrder } from "../panels/rack-modules";
+import { backendLookupName, dedupeRackServers, rackServerId, reconcileRackOrder } from "../panels/rack-modules";
 import { applyOrder } from "../panels/reorder";
 import { moduleName, onModuleNamesChange, type RenameOutcome } from "../modules/names";
 import { addSettingRow, registerCategory } from "./registry";
@@ -262,7 +262,7 @@ async function loadRack() {
     rackEntries = [
       ...servers.map((server) => ({
         id: rackServerId(server), key: rackServerId(server), label: titleWords(server.name),
-        level: "optional" as const, icon: BACKEND_ICON_MAP.get(server.name),
+        level: "optional" as const, icon: BACKEND_ICON_MAP.get(backendLookupName(server.name)),
       })),
       { id: "rack:lmstudio", key: "lmstudio", label: "LM Studio", level: "optional", icon: "lmstudio" },
     ];

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
-const { mountBareView } = await import("../src/runes/bare/view.ts");
+const { mountBareView, layerFiles } = await import("../src/runes/bare/view.ts");
 
 const ROW = "claude-bare";
 const CTX = { agent: "claude", rowKey: ROW, cwd: "C:/proj", profile: "bare" };
@@ -24,7 +24,7 @@ const SOURCES = {
     file("C:/proj/.claude/rules/ui.md", "rules", { ticked: false, reason: "pathScoped" }),
     file("C:/h/skills/ctx", "skill"),
     file("C:/h/agents/a.md", "agent", { ticked: false }),
-    file("C:/h/hooks/block.mjs", "hook", { reason: "blockTarget", guard: { event: "PreToolUse", run: ["node", "C:/h/hooks/block.mjs"] } }),
+    file("C:/h/hooks/block.mjs", "hook", { guard: { event: "PreToolUse", run: ["node", "C:/h/hooks/block.mjs"] } }),
     file("C:/h/hooks/x.ps1", "hook", { pickable: false, ticked: false, reason: "notMjs" }),
   ],
 };
@@ -56,6 +56,39 @@ function mount(ctx, io) {
 
 const button = (host, text) => [...host.querySelectorAll("button")].find((b) => b.textContent === text);
 
+test("hueOf picks generated, set (no source), recall, agents or claude", async () => {
+  const { hueOf } = await import("../src/runes/bare/view.ts");
+  assert.equal(hueOf({ library: "g", source: null, generated: {} }), "hue-generated");
+  assert.equal(hueOf({ library: "kit", source: null }), "hue-set");
+  assert.equal(hueOf({ library: "memory-x", source: "C:/m.md" }), "hue-recall");
+  assert.equal(hueOf({ library: "a", source: "C:/AGENTS.md" }), "hue-agents");
+  assert.equal(hueOf({ library: "c", source: "C:/CLAUDE.md" }), "hue-claude");
+});
+
+test("a library head count adds the skills, agents and hooks its sets attach to its bricks", async () => {
+  const { attachedCount } = await import("../src/runes/bare/set-attach.ts");
+  const set = { set: "kit", editable: true, skills: ["C:/h/skills/a", "C:/h/skills/b"], agents: [], guards: [{ event: "Stop", run: ["C:/h/hooks/x.mjs"] }], codexSkills: [], warnings: [] };
+  assert.equal(attachedCount(null, { sets: [set] }), 3);
+  assert.equal(attachedCount(null, { sets: [] }), 0);
+  const lib = { library: "kit", source: null, scope: "global", sourceGone: false, bricks: [], sets: [set] };
+  const io = fakeIo({ actives: { rowKey: ROW, libraries: [lib], skills: [], agents: [], guards: [], guardsKey: false } });
+  const { host, dispose } = mount(CTX, io);
+  await settle();
+  const head = host.querySelector('.runes-set[data-library="kit"] > .runes-set-head');
+  assert.match(head.textContent, /3/, "library head reads 3");
+  dispose();
+});
+
+test("a block-target hook with empty bareGuards is not ticked and stays pickable", () => {
+  const guard = { event: "PreToolUse", run: ["node", "C:/h/hooks/guard-install.mjs"] };
+  const hook = file("C:/h/hooks/guard-install.mjs", "hook", { guard });
+  const row = (guards) => ({ rowKey: ROW, libraries: [], skills: [], agents: [], guards, guardsKey: true });
+  const off = layerFiles({ memoryDir: null, guardsKey: true, files: [hook] }, row([]));
+  assert.equal(off.ticked.has(hook.path), false);
+  assert.equal(off.files.find((f) => f.path === hook.path).pickable, true);
+  assert.equal(layerFiles({ memoryDir: null, guardsKey: true, files: [hook] }, row([guard])).ticked.has(hook.path), true);
+});
+
 test("a row with no runes shows the create button even when the shared skills and agents are set", async () => {
   const io = fakeIo({ actives: { rowKey: ROW, libraries: [], skills: ["C:/h/skills/ctx"], agents: ["C:/h/agents/a.md"], guards: [], guardsKey: false } });
   const { host, dispose } = mount(CTX, io);
@@ -74,15 +107,18 @@ test("an empty row shows only the create button, and it opens Local Files", asyn
   assert.equal(host.querySelector(".runes-bare-trace summary"), null, "no Active Runes section");
   create.click();
   await settle();
-  const heads = [...host.querySelectorAll(".runes-group-head")].map((h) => h.textContent);
+  const heads = [...host.querySelectorAll(".runes-set-head .runes-sn")].map((h) => h.textContent);
   assert.deepEqual(heads, ["Local Files", "Rules", "Skills", "Agents", "Hooks"]);
   const row = (p) => host.querySelector(`.rp-source[data-path="${p}"]`);
   assert.equal(row("C:/proj/CLAUDE.md").getAttribute("aria-pressed"), "true");
   assert.equal(row("C:/proj/.claude/rules/ui.md").title, "This file is path-scoped; a Bare tab loads it every session.");
-  assert.equal(row("C:/h/hooks/block.mjs").title, "Vidar's block guards stay on in Bare.");
-  assert.equal(row("C:/h/hooks/block.mjs").getAttribute("aria-disabled"), "true");
+  assert.equal(row("C:/h/hooks/block.mjs").getAttribute("aria-disabled"), null, "a block target is not locked");
+  assert.equal(row("C:/h/hooks/block.mjs").disabled, false);
   assert.equal(row("C:/h/hooks/x.ps1").disabled, true);
-  assert.equal(row("C:/h/hooks/x.ps1").title, "Only node .mjs hooks copy into a Bare home.");
+  assert.equal(row("C:/h/hooks/x.ps1").title, "C:/h/hooks/x.ps1\nOnly node .mjs hooks copy into a Bare home.");
+  assert.equal(row("C:/h/hooks/x.ps1").querySelector(".rp-name").textContent, "X");
+  assert.equal(row("C:/h/hooks/x.ps1").querySelector(".rp-path").textContent, "C:/h/hooks/x.ps1");
+  assert.equal(row("C:/proj/CLAUDE.md").querySelector(".rp-name"), null, "rune rows keep their plain text");
   assert.ok(button(host, "Back"));
   dispose();
   assert.equal(host.childElementCount, 0, "disposer removes the view");
@@ -104,9 +140,9 @@ test("Generate is disabled with nothing ticked; Generate runs the flow and redra
   button(host, "Create Runes").click();
   await settle();
   // untick everything pickable: Generate disables
-  for (const p of ["C:/proj/CLAUDE.md", "C:/h/skills/ctx"]) host.querySelector(`.rp-source[data-path="${p}"]`).click();
+  for (const p of ["C:/proj/CLAUDE.md", "C:/h/skills/ctx", "C:/h/hooks/block.mjs"]) host.querySelector(`.rp-source[data-path="${p}"]`).click();
   assert.equal(button(host, "Import Raw").disabled, true);
-  for (const p of ["C:/proj/CLAUDE.md", "C:/h/skills/ctx"]) host.querySelector(`.rp-source[data-path="${p}"]`).click();
+  for (const p of ["C:/proj/CLAUDE.md", "C:/h/skills/ctx", "C:/h/hooks/block.mjs"]) host.querySelector(`.rp-source[data-path="${p}"]`).click();
   assert.equal(button(host, "Import Raw").disabled, false);
   button(host, "Import Raw").click();
   await settle();
@@ -120,7 +156,7 @@ test("Generate is disabled with nothing ticked; Generate runs the flow and redra
   assert.ok(set, "library set");
   assert.equal(set.querySelector(".runes-set-head").title.includes("Imported from a project folder; this row loads it in every folder."), true);
   assert.equal(set.querySelectorAll(".runes-rn[data-id]").length, 2);
-  assert.ok([...host.querySelectorAll(".runes-group-head")].some((h) => h.textContent === "Inherited Runes"));
+  assert.ok([...host.querySelectorAll(".runes-set-head")].some((h) => h.textContent === "Inherited Runes"));
   assert.equal(button(host, "Update from Source"), undefined, "no deltas, no Update");
   await modify();
   assert.ok(host.textContent.includes("Changes load in the next Bare tab you open; this tab keeps what it started with."));
@@ -166,17 +202,17 @@ test("the switch toggles through the flow without opening, the Off card dims; Up
   assert.equal(handle.modeButton.hidden, false);
   assert.equal(handle.modeButton.textContent, "Modify");
   assert.equal(host.querySelectorAll(".runes-set[data-kind] .rp-source:not(.is-ro)").length, 0, "View: ticked items are read-only");
-  assert.deepEqual([...host.querySelectorAll(".runes-set[data-kind] .rp-source")].map((r) => r.dataset.path), ["C:/h/skills/ctx", "C:/h/hooks/block.mjs"], "View: only ticked items (the locked-on block guard counts)");
+  assert.deepEqual([...host.querySelectorAll(".runes-set[data-kind] .rp-source")].map((r) => r.dataset.path), ["C:/h/skills/ctx"], "View: only ticked items (a block guard not in bareGuards is off)");
   assert.ok(button(host, "Update from Source"), "Update from Source still shows in View");
   await modify();
   assert.equal(handle.modeButton.textContent, "Done");
   assert.equal(handle.modeButton.classList.contains("is-editing"), true, "Done takes the accent");
   const card = (lib = "glob", id = "a") => host.querySelector(`.runes-set[data-library="${lib}"] .runes-rn[data-id="${id}"]`);
   const sw = (lib, id) => card(lib, id).querySelector(".runes-bare-switch");
-  // the shared card: kind, name (last heading), scope from lib.scope, activate, then the switch
+  // the shared card: kind, name (the id in Title Case), scope from lib.scope, activate, then the switch
   const chip = (c, sel) => c.querySelector(sel);
   assert.equal(chip(card(), ".runes-kslot .runes-chip").title, "Kind: Fact");
-  assert.equal(card().querySelector(".runes-rname").textContent, "Response Style");
+  assert.equal(card().querySelector(".runes-rname").textContent, "A");
   const chips = [...card().querySelectorAll(".runes-chips > *")];
   assert.deepEqual(chips.map((c) => c.title), ["Scope: Global", "Activate: Recall", "On"]);
   assert.ok(chips[0].querySelector("img").src.includes("/globe."), "global scope reads globe");
@@ -220,7 +256,7 @@ test("the switch toggles through the flow without opening, the Off card dims; Up
   assert.ok(goneSet.querySelector(".runes-set-head").title.includes("The source file is gone, so this set stays as it is until it's back."));
   assert.equal(sw("old", "g").disabled, true);
   // Inherited Runes: per-item ticks, a tick writes only the layer
-  const every = [...host.querySelectorAll(".runes-group-head")].find((h) => h.textContent === "Inherited Runes");
+  const every = [...host.querySelectorAll(".runes-set-head")].find((h) => h.textContent === "Inherited Runes");
   assert.equal(every.title, "Inherited runes: skills reach every Bare row, agents every Bare row of their own agent, hooks every Claude Bare row. An open Bare tab may pick them up when another one starts.");
   assert.equal(button(host, "Update from Source").title, "Rescans the source; other rows that use this library get its new text too.");
   assert.equal(sw("glob", "a").title, "Off\nRescans the source; other rows that use this library get its new text too.");
@@ -329,7 +365,7 @@ test("a Codex save sends bareCodexSkills and bareCodexMcp, and a refusal shows a
 });
 
 test("every Local Files reason has a tip, and the new Codex tips are verbatim", async () => {
-  const reasons = ["pathScoped", "notMjs", "guardDriver", "blockTarget", "tooLarge", "shadowed", "summaryOnly", "notHosted", "stdio"];
+  const reasons = ["pathScoped", "notMjs", "guardDriver", "tooLarge", "shadowed", "summaryOnly", "notHosted", "stdio"];
   const io = fakeIo({ actives: { rowKey: "codex-bare", libraries: [], skills: [], agents: [], guards: [], guardsKey: false } });
   io.localSources = async () => ({ memoryDir: null, guardsKey: false,
     files: reasons.map((r) => file("C:/h/" + r, "rules", { agent: "codex", reason: r, pickable: false, ticked: false })) });
@@ -363,14 +399,14 @@ test("a Codex Bare tab shows runesets, Skills only, the launch trace, and its ow
   assert.deepEqual([...host.querySelectorAll(".runes-set[data-kind] .runes-sn")].map((s) => s.textContent), ["Skills", "Agents", "MCP Servers"]);
   assert.deepEqual([...host.querySelectorAll(".rp-source")].map((r) => r.dataset.path), ["C:/h/skills/ctx", "C:/h/agents/rev.toml", "C:/h/c.toml#notion", "C:/h/c.toml#local"], "no Claude skill, agent or server");
   assert.equal(host.querySelector(".runes-bare-note").textContent, "Changes load on the next start, including /clear or Retry.");
-  const every = [...host.querySelectorAll(".runes-group-head")].find((h) => h.textContent === "Inherited Runes");
+  const every = [...host.querySelectorAll(".runes-set-head")].find((h) => h.textContent === "Inherited Runes");
   assert.equal(every.title, "Inherited runes: skills reach every Bare row, agents every Bare row of their own agent, hooks every Claude Bare row. An open Bare tab may pick them up when another one starts.");
   assert.equal(button(host, "Update from Source").title, "Rescans the source; other rows that use this library get its new text too.");
   button(host, "Add Local Files").click();
   await settle();
-  const heads = [...host.querySelectorAll(".runes-group-head")];
+  const heads = [...host.querySelectorAll(".runes-set-head")];
   assert.equal(heads[0].title, "Codex Bare loads rules, memories, skills, agents and hosted MCP servers.");
-  assert.deepEqual(heads.map((h) => h.textContent), ["Local Files", "Rules", "Skills", "Agents", "MCP Servers"]);
+  assert.deepEqual(heads.map((h) => h.querySelector(".runes-sn").textContent),["Local Files", "Rules", "Skills", "Agents", "MCP Servers"]);
   button(host, "Import Raw");
   dispose();
 });
@@ -441,6 +477,7 @@ test("Local Files offers Model and Effort selects, Generate, Import Raw and Back
   // nothing ticked: Generate off
   host.querySelector('.rp-source[data-path="C:/proj/CLAUDE.md"]').click();
   host.querySelector('.rp-source[data-path="C:/h/skills/ctx"]').click();
+  host.querySelector('.rp-source[data-path="C:/h/hooks/block.mjs"]').click(); // a block target is an ordinary pick now
   assert.equal(button(host, "Generate").disabled, true);
   // picking another model moves the tooltip
   sel(host, "Model").value = "claude-opus-5-5";
@@ -651,12 +688,28 @@ test("set heads carry the hue: generated libraries get hue-generated, Inherited 
   const set = (lib) => host.querySelector(`.runes-set[data-library="${lib}"]`);
   assert.ok(set(gen.library).classList.contains("hue-generated"));
   assert.ok(set("glob").classList.contains("hue-claude"));
-  assert.ok(set("vidar-x").classList.contains("hue-none"));
+  assert.ok(set("vidar-x").classList.contains("hue-set"), "a set-only library (no source) takes the set hue");
+  assert.ok([...host.querySelectorAll(".runes-set-head")].find((h) => h.textContent === "Inherited Runes").parentElement.classList.contains("hue-inherited"));
   assert.ok(host.querySelector('.runes-set[data-kind="skill"]').classList.contains("hue-skill"));
   dispose();
 });
 
-test("a generated card is named by its id; an import card keeps its section heading", async () => {
+test("a row with a sentence description is named by its slug, the description in the tooltip", async () => {
+  const sentence = "Download-and-run is ask-first, with vetting and a post scan";
+  const lib = { library: "claude-user", source: null, scope: "global", sourceGone: false,
+    bricks: [active("download-run-ask-first", [sentence], true)] };
+  const io = genIo({ actives: { ...EMPTY, libraries: [lib] } });
+  const { host, dispose } = mount(CTX, io);
+  await settle();
+  const row = host.querySelector('.runes-set[data-library="claude-user"] .runes-rn[data-id="download-run-ask-first"]');
+  assert.equal(row.querySelector(".runes-rname").textContent, "Download Run Ask First");
+  const tip = row.querySelector(".runes-blk").title;
+  assert.equal(tip, `download-run-ask-first\n${sentence}`);
+  assert.equal(host.querySelector(".runes-rname").textContent.includes("vetting"), false);
+  dispose();
+});
+
+test("a generated card is named by its id; an import card is named by its id too", async () => {
   const gen = genLib({}, [active("report-every-finding", ["Responses"], true), active("keep-it-short", ["Responses"], true)]);
   const imp = { library: "glob", source: "C:/h/CLAUDE.md", scope: "global", sourceGone: false,
     bricks: [active("report-every-finding", ["Doc", "Responses"], true)] };
@@ -665,8 +718,7 @@ test("a generated card is named by its id; an import card keeps its section head
   await settle();
   const names = (lib) => [...host.querySelectorAll(`.runes-set[data-library="${lib}"] .runes-rname`)].map((n) => n.textContent);
   assert.deepEqual(names(gen.library), ["Report Every Finding", "Keep It Short"]);
-  assert.deepEqual(names("glob"), ["Responses"]);
-  dispose();
+  assert.deepEqual(names("glob"), ["Report Every Finding"]);  dispose();
 });
 
 test("a generated library draws no warning count, and a large Codex payload shows no note", async () => {
@@ -680,23 +732,23 @@ test("a generated library draws no warning count, and a large Codex payload show
   dispose();
 });
 
-test("the Inherited Runes head is a toggle button that collapses its body", async () => {
+test("the Inherited Runes head is a set card head that collapses its kinds", async () => {
   const lib = { library: "proj", source: "C:/proj/CLAUDE.md", scope: "project", sourceGone: false, bricks: [active("a", ["Doc", "A"], true)] };
   const io = fakeIo({ actives: { rowKey: ROW, libraries: [lib], skills: ["C:/h/skills/ctx"], agents: [], guards: [], guardsKey: false } });
   io.localSources = async () => ({ memoryDir: null, guardsKey: false, files: [file("C:/h/skills/ctx", "skill", { ticked: true })] });
   const { host, dispose } = mount(CTX, io);
   await settle();
-  const head = [...host.querySelectorAll(".runes-group-head")].find((h) => h.textContent === "Inherited Runes");
-  assert.equal(head.tagName, "BUTTON");
-  assert.equal(head.getAttribute("aria-expanded"), "true");
-  const body = host.querySelector(".runes-group-body");
-  assert.equal(body.hidden, false);
-  assert.ok(body.querySelector(".runes-set[data-kind=\"skill\"]"));
-  head.click();
-  assert.equal(head.getAttribute("aria-expanded"), "false");
-  assert.equal(body.hidden, true);
-  head.click();
-  assert.equal(body.hidden, false);
+  const head = [...host.querySelectorAll(".runes-set-head")].find((h) => h.textContent === "Inherited Runes");
+  assert.equal(head.tagName, "SUMMARY");
+  const card = head.parentElement;
+  assert.ok(card.classList.contains("runes-card") && card.classList.contains("hue-inherited"));
+  assert.equal(card.open, true, "open by default");
+  assert.equal(head.querySelector(".runes-sc").textContent, "", "no count");
+  assert.ok(card.querySelector(":scope > .runes-set[data-kind=\"skill\"]"));
+  card.open = false;
+  assert.equal(card.open, false);
+  card.open = true;
+  assert.equal(card.open, true);
   dispose();
 });
 
@@ -774,7 +826,7 @@ test("ticking a set's skill writes that set's sidecar and redraws it ticked; the
   const row = () => host.querySelector('.runes-set[data-set="row-claude-bare"][data-kind="skill"] .rp-source[data-path="C:/h/skills/ctx"]');
   assert.equal(row().getAttribute("aria-pressed"), "false");
   assert.deepEqual([...host.querySelectorAll('.runes-set[data-set="row-claude-bare"]')].map((d) => d.dataset.kind), ["skill", "agent", "hook"],
-    "skills, agents and hooks are offered (the block guard is not)");
+    "skills, agents and hooks are offered (block guards too)");
   row().click();
   await settle();
   assert.deepEqual(io.calls.filter((c) => c[0] === "setLayerWrite").map((c) => c[1]),

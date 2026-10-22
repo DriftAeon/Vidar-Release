@@ -41,7 +41,7 @@ function statusPart(icon: ColorIcon, label: string, detail: string, signal: Sign
   part.setAttribute("aria-label", detail);
   const dot = el("span", "ux-dot");
   dot.dataset.state = signal;
-  part.append(iconImg(icon), dot);
+  part.append(dot, iconImg(icon)); // dot left, logo right: the logo lines up with the larger action buttons (user, 2026-10-22)
   return part;
 }
 
@@ -145,10 +145,8 @@ export function buildView(handlers: Handlers): View {
     const top = el("div", "cx-sec");
     const name = el("span", "cx-sec-label");
     name.textContent = label;
-    const count = el("span", "cx-sec-count");
-    count.textContent = String(diags.length);
     if (icon) top.append(iconImg(icon));
-    top.append(name, count);
+    top.append(name);
     if (diags.length > 1) {
       const all = el("button", "cx-ra");
       all.type = "button";
@@ -184,7 +182,7 @@ export function buildView(handlers: Handlers): View {
     } else if (!state.status?.project) {
       empty.removeAttribute("role");
       empty.removeAttribute("title");
-      empty.append(lucide("folder-x", "icn cx-empty-icon"));
+      empty.append(lucide("folder", "icn cx-empty-icon"));
       const message = el("span", "cx-empty-title");
       message.textContent = "No Unreal Project Here"; // note-ok: plan D6 (bench-tab-plan.md)
       empty.append(message);

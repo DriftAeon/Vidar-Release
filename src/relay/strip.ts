@@ -134,7 +134,7 @@ export function createRelayStrip(host: HTMLElement, deps: RelayStripDeps): Relay
     // only .html/.htm opens in the browser; anything else is disabled and says why
     const html = isBrowserPath(path);
     browserBtn.disabled = !html;
-    browserBtn.title = html || !path ? OPEN_IN_BROWSER : "HTML Only";
+    browserBtn.title = html || !path ? OPEN_IN_BROWSER : "HTML and Images Only";
   }
 
   // leaving Relay (a workbench tab switch hides the view) or hiding the Open Large bar drops the message;

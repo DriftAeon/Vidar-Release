@@ -27,6 +27,9 @@ getrandom = "0.3"
 # Already in Cargo.lock via tauri-utils (1.1.4); codex_config.rs reads real Codex config.toml
 # files, whose quoted and dotted headers bare/home.rs's parse_toml_lite refuses.
 toml = "1"
+# Already in Cargo.lock via toml; bare/codex_trust.rs edits the user's Codex config.toml in place
+# (comments, order and tables stay) when the Trust Folder action adds a trusted project.
+toml_edit = "0.25"
 # Already in Cargo.lock via Tauri; characters\pin.rs pins each pack's model (size + sha256)
 # and bridge::read_character_model re-checks it on every load.
 sha2 = "=0.10.9"

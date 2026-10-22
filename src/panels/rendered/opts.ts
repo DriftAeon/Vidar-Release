@@ -50,6 +50,9 @@ export interface RenderedOpts {
    *  folder and opens a replacement tab. Resolves on a pick or a cancel, rejects with the failed spawn's
    *  message. Null/absent (Falcon's window): no button. */
   onSelectWorkspace: (() => Promise<void>) | null;
+  /** The trust card's Refresh: open a fresh tab in this folder; `keepThis` leaves this tab open (it has
+   *  a chat). Absent (Falcon's window, harnesses): the card shows no Refresh. */
+  onReopenHere: ((keepThis: boolean) => Promise<void>) | null;
   /** Set for a Bare (profiled) tab: `/resume` shows this notice instead of calling `onResume`
    *  (the launcher's thread list reads the default home, not this tab's). */
   resumeNotice: string | null;

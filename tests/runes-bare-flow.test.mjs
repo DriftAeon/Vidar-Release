@@ -84,20 +84,21 @@ test("generate on a Codex row: each source is scanned and applied in turn, like 
   assert.ok(io.calls.filter((c) => c[0] === "apply").every((c) => !("ahead" in c[1])), "no ahead list");
 });
 
-test("planGuards: block targets stay, unchanged picks write nothing, unoffered entries round-trip", () => {
-  const block = file("/h/block.mjs", "hook", { reason: "blockTarget", guard: g("PreToolUse", "/h/block.mjs") });
+test("planGuards: block targets are ordinary hooks, unchanged picks write nothing, unoffered entries round-trip", () => {
+  const block = file("/h/block.mjs", "hook", { guard: g("PreToolUse", "/h/guard-install.mjs") });
   const opt = file("/h/opt.mjs", "hook", { guard: g("PostToolUse", "/h/opt.mjs") });
   const dim = file("/h/d.sh", "hook", { pickable: false, ticked: false, reason: "notMjs", guard: g("Stop", "/h/d.sh") });
   const files = [block, opt, dim];
   const foreign = g("Stop", "/x/foreign.mjs");
   // unchanged
   assert.equal(planGuards(files, new Set(["/h/block.mjs", "/h/opt.mjs"]), [block.guard, opt.guard]), undefined);
-  // user unticks opt: block target stays, foreign round-trips
+  // user unticks opt: foreign round-trips
   assert.deepEqual(planGuards(files, new Set(["/h/block.mjs"]), [foreign, block.guard, opt.guard]), [foreign, block.guard]);
-  // block target missing from current is added even with opt unticked
-  assert.deepEqual(planGuards(files, new Set(), [opt.guard]), [block.guard]);
-  // every pickable unticked, no block targets: [] is allowed
-  assert.deepEqual(planGuards([opt], new Set(), [opt.guard]), []);
+  // a block target not picked is not re-added
+  assert.deepEqual(planGuards(files, new Set(["/h/opt.mjs"]), [block.guard, opt.guard]), [opt.guard]);
+  assert.deepEqual(planGuards(files, new Set(), [opt.guard]), []);
+  // unticking the block target too leaves [] (the old lock kept it on)
+  assert.deepEqual(planGuards([block], new Set(), [block.guard]), []);
   // nothing pickable and nothing selected: never []
   assert.equal(planGuards([dim], new Set(), [dim.guard]), undefined);
   assert.deepEqual([...defaultTicks(files)].sort(), ["/h/block.mjs", "/h/opt.mjs"]);

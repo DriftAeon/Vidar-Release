@@ -49,7 +49,8 @@ test("the head has the Mine and All pair with the verbatim tooltips, Mine on", a
 test("rows sit in type sections with the icon, the type tooltip and the parent key", async () => {
   await open({ issues: { issues: [mk("A-1", "Bug", 0, "A-9"), mk("A-9", "Epic", 1), mk("A-2", "Bug"), mk("A-3", "")], nextPageToken: null } });
   assert.deepEqual([...root.querySelectorAll(".br-band-label")].map((n) => n.textContent), ["Epic", "Bug", "Other"]);
-  assert.deepEqual([...root.querySelectorAll(".br-band-n")].map((n) => n.textContent), ["1", "2", "1"]);
+  assert.equal(root.querySelectorAll(".br-band-n").length, 0);
+  assert.deepEqual([...root.querySelectorAll(".jx-sec > .br-band")].map((n) => n.title), ["1 Issue", "2 Issues", "1 Issue"]);
   const parent = root.querySelector(".jx-parent");
   assert.equal(parent.textContent, "A-9");
   assert.equal(parent.title, "Parent: A-9");
@@ -63,11 +64,25 @@ test("rows sit in type sections with the icon, the type tooltip and the parent k
 test("clicking a head collapses its rows, keyed by name plus level, and the head stays", async () => {
   await open({ issues: { issues: [mk("A-1", "Bug"), mk("A-2", "Task")], nextPageToken: null } });
   const bug = [...root.querySelectorAll(".br-band")].find((s) => s.querySelector(".br-band-label").textContent === "Bug");
+  const sec = bug.closest(".jx-sec");
   bug.click();
-  assert.deepEqual(keys(), ["A-2"]);
+  assert.ok(sec.classList.contains("is-closed"));
+  assert.equal(bug.getAttribute("aria-expanded"), "false");
+  assert.ok(sec.querySelector(".jx-fold").inert, "closed rows leave the tab order");
+  assert.deepEqual(keys(), ["A-1", "A-2"], "rows stay in the DOM so the fold can animate");
   assert.equal(root.querySelectorAll(".br-band").length, 2);
-  [...root.querySelectorAll(".br-band")].find((s) => s.querySelector(".br-band-label").textContent === "Bug").click();
-  assert.deepEqual(keys(), ["A-1", "A-2"]);
+  bug.click();
+  assert.ok(!sec.classList.contains("is-closed"));
+  assert.equal(bug.getAttribute("aria-expanded"), "true");
+  assert.ok(!sec.querySelector(".jx-fold").inert);
+});
+
+test("the toggle flips the section in place without rebuilding its node", async () => {
+  await open({ issues: { issues: [mk("A-1", "Bug"), mk("A-2", "Task")], nextPageToken: null } });
+  const secs = [...root.querySelectorAll(".jx-sec")];
+  secs[0].querySelector(".br-band").click();
+  assert.deepEqual([...root.querySelectorAll(".jx-sec")], secs, "same nodes after the toggle");
+  assert.ok(secs[0].classList.contains("is-closed"));
 });
 
 test("Load 50 More shows only with a next page token", async () => {

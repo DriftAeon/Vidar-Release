@@ -462,7 +462,7 @@ function buildOutputCard(node: FlowNode): HTMLElement {
   actions.className = "flow-pop-actions";
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
-  copyBtn.className = "flow-add-btn";
+  copyBtn.className = "flow-add-btn ws-btn";
   copyBtn.textContent = "Copy";
   copyBtn.disabled = !outputText;
   // Both actions export the full result, never the summary: read it now if the card's read has not
@@ -484,7 +484,7 @@ function buildOutputCard(node: FlowNode): HTMLElement {
   });
   const openBtn = document.createElement("button");
   openBtn.type = "button";
-  openBtn.className = "flow-add-btn";
+  openBtn.className = "flow-add-btn ws-btn";
   openBtn.textContent = `Open in ${moduleName("doc", "Document")}`;
   openBtn.disabled = !outputText;
   openBtn.addEventListener("click", () => {

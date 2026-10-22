@@ -25,6 +25,8 @@ import { KNOWN_NOTIFICATIONS } from "./codex-methods";
 import { CodexRequests } from "./codex-requests";
 import { CodexProgress, codexPlan, rememberCodexPlan } from "./codex-progress";
 import { CodexHistory } from "./codex-history";
+import { asyncAskEvents, asyncAskQuestions } from "./codex-async-ask";
+import { codexItemCompleted, codexItemStarted } from "./codex-items";
 import { codexPlans } from "./codex-plan-store";
 import { downgradeEvents, reviewerDowngrade, reviewerError, reviewNotice } from "./codex-review";
 import { CodexSkills } from "./codex-skills";
@@ -44,6 +46,7 @@ interface ItemState {
   output: string;
   changes: Change[];
   thinking: boolean;
+  asyncAsk?: boolean; // codex-async-ask.ts: its deltas are the flattened questions, never drawn
 }
 
 function parseChanges(v: unknown): Change[] {
@@ -74,7 +77,7 @@ export class CodexAdapter implements AgentAdapter {
   private sentAuto = false;
   private reviewLive = false;
   private settings = new CodexSettings();
-  private skills = new CodexSkills();
+  readonly skills = new CodexSkills(); // public: the hosted view builds skill input from it
   private cwd = "";
   private resume: string | undefined;
   private queuedUser: string[] = [];
@@ -357,7 +360,7 @@ export class CodexAdapter implements AgentAdapter {
       case "item/completed": return this.itemCompleted(obj(p.item) ?? {});
       case "item/agentMessage/delta":
       case "item/plan/delta":
-        return [{ kind: "text_delta", blockId: str(p.itemId), text: str(p.delta) }];
+        return this.items.get(str(p.itemId))?.asyncAsk ? [] : [{ kind: "text_delta", blockId: str(p.itemId), text: str(p.delta) }];
       case "item/commandExecution/outputDelta":
       case "item/fileChange/outputDelta": {
         const it = this.item(str(p.itemId), "commandExecution");
@@ -475,10 +478,8 @@ export class CodexAdapter implements AgentAdapter {
     const it = this.item(id, type);
     switch (type) {
       case "collabAgentToolCall": return this.progress.started(item);
-      case "userMessage":
-      case "agentMessage":
-      case "plan":
-        return [];
+      case "agentMessage": it.asyncAsk = asyncAskQuestions(item) !== null; return [];
+      case "userMessage": case "plan": return [];
       case "reasoning":
         if (it.thinking) return [];
         it.thinking = true;
@@ -493,10 +494,8 @@ export class CodexAdapter implements AgentAdapter {
         return [{ kind: "tool_start", toolUseId: id, name: `${str(item.server, "mcp")}.${str(item.tool, "tool")}`, input: item.arguments, parentToolUseId: null }];
       case "webSearch":
         return [{ kind: "tool_start", toolUseId: id, name: "WebSearch", input: { query: str(item.query) }, parentToolUseId: null }];
-      case "contextCompaction":
-        return [{ kind: "notice", text: "Context compacted", level: "info" }];
       default:
-        return [{ kind: "tool_start", toolUseId: id, name: type || "item", input: item, parentToolUseId: null }];
+        return codexItemStarted(item) ?? [{ kind: "tool_start", toolUseId: id, name: type || "item", input: item, parentToolUseId: null }];
     }
   }
 
@@ -508,10 +507,8 @@ export class CodexAdapter implements AgentAdapter {
     const failed = status !== "completed" && status !== "inProgress";
     switch (type) {
       case "collabAgentToolCall": return this.progress.completed(item, !this.history.active);
-      case "userMessage":
-      case "contextCompaction":
-        return [];
-      case "agentMessage":
+      case "userMessage": return [];
+      case "agentMessage": return asyncAskEvents(item) ?? [{ kind: "text_done", blockId: id, markdown: str(item.text), parentToolUseId: null }];
       case "plan":
         return [{ kind: "text_done", blockId: id, markdown: str(item.text), parentToolUseId: null }];
       case "reasoning":
@@ -532,7 +529,7 @@ export class CodexAdapter implements AgentAdapter {
       case "webSearch":
         return [{ kind: "tool_done", toolUseId: id, content: pretty(item.results ?? item.action ?? ""), isError: false, parentToolUseId: null }];
       default:
-        return [{ kind: "tool_done", toolUseId: id, content: pretty(item), isError: failed, parentToolUseId: null }];
+        return codexItemCompleted(item, !!it) ?? [{ kind: "tool_done", toolUseId: id, content: pretty(item), isError: failed, parentToolUseId: null }];
     }
   }
 
