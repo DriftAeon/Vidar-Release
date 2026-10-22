@@ -370,6 +370,8 @@ mod tests {
     fn spawn_detached_runs_with_a_scrubbed_env_and_the_given_cwd() {
         let dir = std::env::temp_dir().join(format!("vidar-swap-spawn-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
+        // The child reports the long path; a short (8.3) %TEMP% would not match the text.
+        let dir = std::path::PathBuf::from(std::fs::canonicalize(&dir).unwrap().to_string_lossy().trim_start_matches(r"\\?\"));
         let out = dir.join("out.txt");
         let script = dir.join("probe.ps1");
         std::fs::write(

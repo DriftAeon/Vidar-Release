@@ -113,6 +113,8 @@ mod tests {
             let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
             let p = std::env::temp_dir().join(format!("vidar-bare-{tag}-{}-{nanos}", std::process::id()));
             std::fs::create_dir_all(&p).unwrap();
+            // Long form: production canonicalizes, and a short (8.3) %TEMP% would differ in text.
+            let p = PathBuf::from(std::fs::canonicalize(&p).unwrap().to_string_lossy().trim_start_matches(r"\\?\"));
             TempDir(p)
         }
     }

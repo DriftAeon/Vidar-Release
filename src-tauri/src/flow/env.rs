@@ -173,12 +173,23 @@ pub(super) fn apply_env_plan(cmd: &mut Command, plan: &EnvPlan) {
 // cannot spawn a shim directly) lives in which.rs (`find_on_path_exact`), shared with deps.rs.
 // claude.exe comes from the claude pack's dep probe (`deps::claude_exe`, `.exe` entries only).
 
+/// Production: the probe's result as is. Test builds: a placeholder path when none was found, so the
+/// transport tests (flow-fake-sidecar.mjs ignores the claude path) run on a machine with no Claude Code.
+#[cfg(not(test))]
+fn claude_or_test_placeholder(found: Option<PathBuf>) -> Option<PathBuf> {
+    found
+}
+#[cfg(test)]
+fn claude_or_test_placeholder(found: Option<PathBuf>) -> Option<PathBuf> {
+    Some(found.unwrap_or_else(|| PathBuf::from("claude-not-installed.exe")))
+}
+
 /// `Err` names what was looked for, never a value — nothing here is a secret, but the
 /// habit of never interpolating anything but names/paths into an error string is
 /// the same one §4.4's tests hold the env builder to.
 pub(super) fn resolve_executables() -> Result<(PathBuf, PathBuf), String> {
     let node = find_on_path_exact("node.exe").ok_or("node.exe not found on PATH")?;
-    let claude = crate::deps::claude_exe()
+    let claude = claude_or_test_placeholder(crate::deps::claude_exe())
         .ok_or("Claude Code not found on PATH or at the Claude dependency's install paths")?;
     Ok((node, claude))
 }

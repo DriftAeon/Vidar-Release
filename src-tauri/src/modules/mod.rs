@@ -430,7 +430,9 @@ mod tests {
         if regen {
             std::fs::write(golden.join("gateways.json"), &rendered).unwrap();
         }
-        assert_eq!(rendered, std::fs::read(golden.join("gateways.json")).expect("golden gateways.json"), "snapshot differs from the golden file");
+        // A CRLF checkout (core.autocrlf) can turn the golden's LF into CRLF; the snapshot is LF.
+        let golden_bytes: Vec<u8> = std::fs::read(golden.join("gateways.json")).expect("golden gateways.json").into_iter().filter(|b| *b != b'\r').collect();
+        assert_eq!(rendered, golden_bytes, "snapshot differs from the golden file");
     }
 
     /// Trust Current on a pack Changed Since Pinned lists it again, and the rewritten snapshot
