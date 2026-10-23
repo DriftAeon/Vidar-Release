@@ -7,8 +7,8 @@
 //! patch emits `settings-changed` so `src/config.ts` (batch B) can refresh
 //! its cache instead of re-invoking `read_config` on a poll.
 //!
-//! Twelve keys today (the original five plus `agents`, `macros`, `editor`,
-//! `flowGridOpacity`, `primaryAgent`, `jira`, `moduleNames`); a thirteenth key is one `KeySpec` entry, not a new command.
+//! Thirteen keys today (the original five plus `agents`, `macros`, `editor`,
+//! `flowGridOpacity`, `primaryAgent`, `jira`, `moduleNames`, `window`, `characterStage`); a fourteenth key is one `KeySpec` entry, not a new command.
 
 use std::path::Path;
 
@@ -228,7 +228,20 @@ const KEYS: &[KeySpec] = &[
     KeySpec { key: "jira", validate: crate::jira::config::validate_settings, clear_on_empty: true },
     KeySpec { key: "moduleNames", validate: validate_module_names, clear_on_empty: false },
     KeySpec { key: "window", validate: validate_window, clear_on_empty: false },
+    KeySpec { key: "characterStage", validate: validate_character_stage, clear_on_empty: true },
 ];
+
+/// The Character window's stage pick: a stage id (`stages::valid_stage_id`); `""` clears the
+/// key (the built-in default stage). Whether the stage is listed or loads is the webview's
+/// call at load time: a missing one falls back to the default with a note.
+fn validate_character_stage(v: &Value) -> Result<(), String> {
+    let s = v.as_str().ok_or("characterStage must be a string")?;
+    if s.is_empty() || crate::stages::valid_stage_id(s) {
+        Ok(())
+    } else {
+        Err(format!("characterStage \"{s}\" is not a stage id"))
+    }
+}
 
 fn find(key: &str) -> Option<&'static KeySpec> {
     KEYS.iter().find(|k| k.key == key)
@@ -275,6 +288,15 @@ pub fn reload_config() -> crate::settings::schema::ConfigResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn character_stage_takes_a_stage_id_or_empty() {
+        assert!(validate_character_stage(&Value::from("")).is_ok());
+        assert!(validate_character_stage(&Value::from("neon-yard")).is_ok());
+        assert!(validate_character_stage(&Value::from("..\\x")).is_err());
+        assert!(validate_character_stage(&Value::from("Neon")).is_err());
+        assert!(validate_character_stage(&Value::from(3)).is_err());
+    }
 
     #[test]
     fn font_size_accepts_the_in_range_values() {
@@ -522,6 +544,7 @@ mod tests {
             "jira" => serde_json::json!({ "site": "https://example.atlassian.net", "jql": "project = DEMO" }),
             "moduleNames" => serde_json::json!({ "doc": "Docs" }),
             "window" => serde_json::json!({ "closeToTray": true, "summonHotkey": "Ctrl+Alt+V" }),
+            "characterStage" => Value::from("yard"),
             _ => return None,
         })
     }

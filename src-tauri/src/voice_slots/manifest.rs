@@ -162,6 +162,14 @@ struct PackJson {
     #[serde(default)]
     #[allow(dead_code)]
     module: Value,
+    /// Pack release version and the core range it needs; the module registry and `scan_pack`
+    /// both check them (`modules::compat::check_pack_compat`).
+    #[serde(default)]
+    #[allow(dead_code)]
+    release: Value,
+    #[serde(default)]
+    #[allow(dead_code)]
+    requires: Value,
 }
 
 #[derive(Deserialize, Clone)]
@@ -343,9 +351,11 @@ pub fn scan(packs_dir: &Path) -> Scan {
 fn scan_pack(folder: &str, dir: &Path, out: &mut Scan) {
     let pack_file = dir.join("pack.json");
     let broken = |file: &Path, reason: String| Broken { adapter: None, slot: None, file: file.to_path_buf(), reason };
-    let pack = match read_limited(&pack_file, PACK_JSON_BYTES, "pack.json")
-        .and_then(|b| serde_json::from_slice::<PackJson>(&b).map_err(|e| format!("Invalid pack.json: {e}")))
-    {
+    let (pack, raw) = match read_limited(&pack_file, PACK_JSON_BYTES, "pack.json").and_then(|b| {
+        let pack = serde_json::from_slice::<PackJson>(&b).map_err(|e| format!("Invalid pack.json: {e}"))?;
+        let raw = serde_json::from_slice::<Value>(&b).map_err(|e| format!("Invalid pack.json: {e}"))?;
+        Ok((pack, raw))
+    }) {
         Ok(p) => p,
         Err(reason) => {
             let at = if reason == "No pack.json" { dir } else { &pack_file };
@@ -357,6 +367,11 @@ fn scan_pack(folder: &str, dir: &Path, out: &mut Scan) {
     }
     if !valid_id(&pack.id) || pack.id != folder {
         return out.broken.push(broken(&pack_file, format!("Pack id {:?} Does Not Match Folder {folder:?}", pack.id)));
+    }
+    if let Err(reason) =
+        crate::modules::compat::check_pack_compat(&raw, env!("CARGO_PKG_VERSION"), crate::modules::compat::CORE_CONTRACT)
+    {
+        return out.broken.push(broken(&pack_file, reason));
     }
     let limits = &contract().limits;
     for (key, files) in &pack.slots {
@@ -623,6 +638,42 @@ mod tests {
             r#"{{"version":1,"id":"a","slot":"{slot}","label":"A","run":{{"command":"{{vidar}}/x.exe"}}{warm}}}"#
         );
         serde_json::from_str(&json).expect("test manifest parses")
+    }
+
+    #[test]
+    fn pack_json_accepts_release_and_requires() {
+        let json = r#"{"id":"a","version":1,"release":"1.0.0","requires":{"contract":1,"minCore":"0.1.0"}}"#;
+        assert!(serde_json::from_str::<PackJson>(json).is_ok());
+        assert!(serde_json::from_str::<PackJson>(r#"{"id":"a","version":1,"bogus":1}"#).is_err());
+    }
+
+    fn scan_temp_pack(tag: &str, extra: &str) -> Scan {
+        let root = std::env::temp_dir().join(format!("vidar-scan-pack-{}-{tag}", std::process::id()));
+        let dir = root.join("a");
+        std::fs::create_dir_all(dir.join("voice")).expect("temp pack dir");
+        let adapter = r#"{"version":1,"id":"x","slot":"tts","label":"X","run":{"command":"{vidar}/x.exe"}}"#;
+        std::fs::write(dir.join("voice").join("x.json"), adapter).expect("adapter");
+        let pack = format!(r#"{{"id":"a","version":1{extra},"slots":{{"tts":["voice/x.json"]}}}}"#);
+        std::fs::write(dir.join("pack.json"), pack).expect("pack.json");
+        let mut out = Scan::default();
+        scan_pack("a", &dir, &mut out);
+        let _ = std::fs::remove_dir_all(&root);
+        out
+    }
+
+    #[test]
+    fn scan_pack_refuses_a_pack_needing_a_newer_core() {
+        let out = scan_temp_pack("newer", r#","requires":{"contract":1,"minCore":"999.0.0"}"#);
+        assert!(out.adapters.is_empty());
+        assert_eq!(out.broken.len(), 1);
+        assert!(out.broken[0].reason.contains("Needs Vidar 999.0.0 or Newer"), "{}", out.broken[0].reason);
+    }
+
+    #[test]
+    fn scan_pack_loads_a_pack_without_requires() {
+        let out = scan_temp_pack("plain", r#","release":"1.0.0""#);
+        assert!(out.broken.is_empty(), "{:?}", out.broken.first().map(|b| &b.reason));
+        assert_eq!(out.adapters.len(), 1);
     }
 
     #[test]

@@ -59,7 +59,7 @@ Quote the script path: a root with spaces breaks an unquoted one.
   1-65536 bytes, no NUL, on the same card; only a Falcon-hosted agent (Claude) takes one, others get
   `err not a hosted agent` before the card. `--title` names the tab, else the app gives it a themed name. Returns `spawned <id> prompted`, or `err prompt <reason> (spawned <id>)` when the tab
   opened but the prompt did not go in (the tab stays open; do not re-send blindly, `read`/`state` first).
-- `ask` — asks the user `<question>`, shown in your tab and in Relay (an overlay while your tab is on screen), never the approval modal; the first answer wins, from either. Up to 6 `--choice` values (the nth repeatable `--detail "<text>"`, 0-120 printable
+- `ask` — asks the user `<question>`, shown in your tab and in Relay (an overlay while your tab is on screen), not an approval card; the first answer wins, from either. Up to 6 `--choice` values (the nth repeatable `--detail "<text>"`, 0-120 printable
   ASCII, describes the nth choice; needs `--choice`, never more than the choices) and an
   optional `--placeholder`. Without `--pending` it blocks until answered (about 280 s, then `err expired`) and returns `answered choice=<c> comment="<text>"`.
   A hosted Claude tab must use `--pending` or AskUserQuestion, not the blocking form.
@@ -119,9 +119,11 @@ jettisoned one gets `err no requester` (exit 1) on every verb. The client sends 
 with `FALCON_SESSION` when Falcon exported one; a session without it may be refused after the swap
 that introduced it (restart that tab).
 
-`prompt`/`spawn` share one approval-card queue: 3 in flight at a time (`err busy` past that),
-each card self-expires after ~280 s (`err expired`) so an abandoned card cannot wedge the queue.
-An Approve with under 40 s left on the card also answers `err expired` and does nothing.
+`prompt`/`spawn`/`flow start` each open an approval card in the approvals registry, shown in Relay and in
+your tab (a PTY tab or absent asker: Relay only). Up to 3 cards are open at once, one per kind (`ctl-prompt`,
+`ctl-spawn`, `ctl-flow`) and asker (`err busy` for a second of the same kind from the same tab). Every open
+card is answerable, oldest first. Each card self-expires after ~280 s (`err expired`; Rust stamps the deadline)
+so an abandoned card cannot wedge the queue. An Approve with under 40 s left on the card also answers `err expired` and does nothing.
 Approve/Deny on the card returns `denied <comment>` on refusal. After a `spawn` or `prompt`, a
 timeout (exit 2) or `err expired` means check `state` before retrying: the tab or prompt may exist.
 

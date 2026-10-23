@@ -25,6 +25,7 @@ import { skillLabel } from "./skill-label";
 import { boundedCache } from "./loadout-cache";
 import { isGateway } from "../launcher/agent-kind";
 import { moduleOn, onModulesChange } from "../modules/registry";
+import type { AgentId } from "../agents/id";
 
 export interface KbFile {
   path: string;
@@ -136,7 +137,7 @@ export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
   const loadoutCache = boundedCache<LoadedLoadout>(16);
   // rows for a focus about to load: its cached reply, else whatever same-kind rows are already drawn
   // (so the box never drops to "Querying…" between tabs), else null
-  const rowsWhileLoading = (key: string, kind: "claude" | "codex"): LoadedLoadout | null => {
+  const rowsWhileLoading = (key: string, kind: AgentId): LoadedLoadout | null => {
     const cached = loadoutCache.get(key);
     if (cached?.kind === kind) return cached;
     return drawn?.loadout?.kind === kind ? drawn.loadout : null;

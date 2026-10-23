@@ -2,6 +2,7 @@
 // No DOM, no IPC and no runtime imports, so `node --test` loads it: the view binds `BareFlowIo` to the
 // bare_* and rules_import_* commands. States are keys; the view maps them to strings.
 import type { ProgressEvent } from "./progress";
+import type { AgentId } from "../../agents/id";
 
 export type BareFileKind = "rules" | "memory" | "skill" | "agent" | "hook" | "mcp";
 export type BareFileReason =
@@ -16,7 +17,7 @@ export interface BareLocalFile {
   reason?: BareFileReason;
   guard?: BareGuard;
   /** Absent = a Claude row. */
-  agent?: "claude" | "codex";
+  agent?: AgentId;
   /** mcp rows: the hosted server name a pick writes to bareCodexMcp, and its pinned url. */
   hosted?: string; url?: string;
 }
@@ -29,7 +30,7 @@ export interface BareActiveBrick {
 }
 /** Present on a library the agent generated (ipc.md `BareActiveLibraryGenerated`); `source` is null there. */
 export interface BareGeneratedInfo {
-  agent: "claude" | "codex"; model: string; effort: string; date: string;
+  agent: AgentId; model: string; effort: string; date: string;
   inputs: string[]; warnings: string[];
   encodedChars: number | null;
 }
@@ -75,7 +76,7 @@ export interface BareLayerSet {
 
 /** The pinned rules_generate contract (docs/runs/2026-10-17-rune-generator/ipc.md). */
 export interface RulesGenerateArgs {
-  runId: string; rowKey: string; agent: "claude" | "codex"; model: string; effort: string;
+  runId: string; rowKey: string; agent: AgentId; model: string; effort: string;
   mergeEffort?: string;
   paths: string[]; cwd: string | null; budget: number | null;
 }

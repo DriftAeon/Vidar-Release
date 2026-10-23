@@ -1,7 +1,7 @@
 // Flow card and observe listeners, kept out of listen.ts's general verb handler.
 import { listen as ipcListen } from "../ipc";
-import { askGate, cancelAsk, answerAsk } from "../panels/askgate";
-import { postFlowCard, clearFlowCard } from "../relay/source-flow-card";
+import { openApproval } from "../asks/approvals";
+import { APPROVAL_TITLES } from "../asks/approval";
 import { prepareControlFlow, approveControlFlow, saveControlFlow } from "../flow/control-start";
 import { flowCardRows, flowCardMatrix, flowCardDecision } from "./flow-card";
 import { getRun, subscribeRuns } from "../flow/runs-store";
@@ -22,7 +22,6 @@ const reason = (error: unknown) => error instanceof Error ? error.message : Stri
 
 export function handleFlowCard(card: Card, hooks: {
   cardResult: CardReply; label: (r: Requester) => string; problem: (r: Requester) => string | null;
-  live: Set<string>; settle: (id: string) => boolean;
 }): void {
   const { id, cardId, requester, expiresAtMs } = card;
   const result = (ok: boolean, line: string, verdict?: string) => hooks.cardResult(id, cardId, ok, line, verdict);
@@ -32,25 +31,30 @@ export function handleFlowCard(card: Card, hooks: {
       const modes = await resolveRunModes(snapshot);
       if (hooks.problem(requester)) { result(false, "err requester gone"); return; }
       if (Date.now() >= expiresAtMs) { result(false, "err expired"); return; }
-      let timer: ReturnType<typeof setTimeout>;
-      hooks.live.add(cardId);
-      const rows = flowCardRows(snapshot, hooks.label(requester), orderedNodes, modes);
-      const matrix = flowCardMatrix(snapshot, hooks.label(requester), orderedNodes, modes);
-      const answer = askGate({ permission: true, details: rows, matrix, question: "",
-        variant: "ask-spawn", id: cardId, claimedAtMs: card.claimedAtMs, expiresAtMs }, "ctl-flow");
-      // The same card in Relay; the first answer wins and the item goes when the ask settles.
-      postFlowCard({ id: cardId, rows, matrix, sinceMs: card.claimedAtMs, answer: (approved) => answerAsk("ctl-flow", { approved }) });
-      timer = setTimeout(() => {
-        if (cancelAsk("ctl-flow", "expired")) result(false, "err expired");
-      }, Math.max(0, expiresAtMs - Date.now()));
-      const { approved, shown, comment, reason: answerReason } = await answer;
-      clearTimeout(timer);
-      clearFlowCard(cardId);
-      const cancelled = hooks.settle(cardId);
-      const decision = await flowCardDecision(snapshot.id, { approved, shown, comment, reason: answerReason },
-        cancelled, Date.now() >= expiresAtMs, !!hooks.problem(requester), () => approveControlFlow(snapshot, modes));
-      if (decision) result(decision.ok, decision.line, decision.verdict);
-    } catch (error) { clearFlowCard(cardId); result(false, `err ${reason(error)}`); }
+      const label = hooks.label(requester);
+      const rows = flowCardRows(snapshot, label, orderedNodes, modes);
+      const matrix = flowCardMatrix(snapshot, label, orderedNodes, modes);
+      // One record; Relay (or Drive) answers it and the registry settles it once, so approve starts the flow once.
+      const refused = openApproval({
+        id: cardId, origin: "ctl-flow", title: APPROVAL_TITLES["ctl-flow"],
+        asker: { tab: requesterTabId(requester), label, verified: true },
+        rows, matrix, askedAtMs: card.claimedAtMs, expiresAtMs, comment: true, drawInAskerTab: true,
+      }, (outcome) => {
+        void (async () => {
+          try {
+            if (!("comment" in outcome)) { // cancelled or expired
+              if (outcome.verdict === "expired") result(false, "err expired");
+              return;
+            }
+            const decision = await flowCardDecision(snapshot.id,
+              { approved: outcome.verdict === "approve", shown: true, comment: outcome.comment },
+              false, Date.now() >= expiresAtMs, !!hooks.problem(requester), () => approveControlFlow(snapshot, modes));
+            if (decision) result(decision.ok, decision.line, decision.verdict);
+          } catch (error) { result(false, `err ${reason(error)}`); }
+        })();
+      });
+      if (refused) result(false, `err ${refused}`, "failed");
+    } catch (error) { result(false, `err ${reason(error)}`); }
   })();
 }
 

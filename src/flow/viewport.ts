@@ -3,6 +3,9 @@
 // for measuring bounding boxes.
 
 import { S, SCALE_MIN, SCALE_STOPS } from "./state";
+import { createToast } from "../toast";
+import { flowStorage } from "./file-storage";
+import { createViewportMemory } from "./viewport-memory";
 
 /** Next stop strictly past `scale` in the wheel's direction; an off-grid scale snaps to its neighbour. */
 function stepStop(scale: number, zoomIn: boolean): number {
@@ -35,8 +38,30 @@ export function visible(): boolean {
   return S.rootEl.offsetParent !== null;
 }
 
+const memory = createViewportMemory(flowStorage);
+
+/** Applies the open graph's saved pan/zoom; `false` when it has none (unsaved draft included). */
+export function restoreViewport(): boolean {
+  const id = S.activeGraphId;
+  const vp = id ? memory.get(id) : null;
+  if (!vp) return false;
+  S.panX = vp.panX;
+  S.panY = vp.panY;
+  S.scale = vp.scale;
+  applyWorldTransform();
+  return true;
+}
+
+/** A deleted graph's view goes with it. */
+export function forgetViewport(id: string): void {
+  memory.forget(id);
+}
+
 export function applyWorldTransform() {
   S.worldEl.style.transform = `translate(${S.panX}px, ${S.panY}px) scale(${S.scale})`;
+  // Only stored graphs are remembered; an unsaved template draft has no stable id to key by.
+  const id = S.activeGraphId;
+  if (id && S.graphs.some((g) => g.id === id)) memory.set(id, { panX: S.panX, panY: S.panY, scale: S.scale });
   // Wheel zoom and fit-to-view are single events, not a drag,
   // so without this the popover's repositionPopover (riding the same frame loop redrawEdges uses)
   // never ran after either — the card sat still while the graph zoomed/reframed under it.
@@ -63,7 +88,7 @@ export function onWheel(e: WheelEvent) {
 
 /** Frames every node: scale to fit (min of width-fit/height-fit, clamped),
  *  pan so the bounding box centres in the canvas. No-op with an empty graph. */
-export function fitToView() {
+export function fitToView(quiet = false) {
   if (!S.nodes.length) return;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of S.nodes) {
@@ -84,24 +109,15 @@ export function fitToView() {
   S.panX = canvasW / 2 - ((minX + maxX) / 2) * S.scale;
   S.panY = canvasH / 2 - ((minY + maxY) / 2) * S.scale;
   applyWorldTransform();
-  showFlowZoomToast();
+  if (!quiet) showFlowZoomToast();
 }
 
-// Same pattern as sessions/zoom.ts's #zoom-toast: create-once element, then fade after `ms`.
-// A separate element inside .flow-canvas (not body) so it belongs to the Flow tab and
-// positions relative to the graph, not the window. The one Flow toast surface — zoom and
-// a failed-save note (store.ts/runs-store.ts's onSaveFailed, wired in panels/flow.ts) share
-// it rather than each growing their own element (keep it one seam).
+// An element inside .flow-canvas (not body) so it belongs to the Flow tab and positions
+// relative to the graph, not the window. The one Flow toast surface — zoom and a failed-save
+// note (store.ts/runs-store.ts's onSaveFailed, wired in panels/flow.ts) share it.
+const flowToast = createToast({ id: "flow-zoom-toast", host: () => S.canvasEl });
 export function showFlowToast(message: string, ms = 500) {
-  if (!S.flowZoomToast) {
-    S.flowZoomToast = document.createElement("div");
-    S.flowZoomToast.id = "flow-zoom-toast";
-    S.canvasEl.appendChild(S.flowZoomToast);
-  }
-  S.flowZoomToast.textContent = message;
-  S.flowZoomToast.classList.remove("fading");
-  window.clearTimeout(S.flowZoomToastTimer);
-  S.flowZoomToastTimer = window.setTimeout(() => S.flowZoomToast?.classList.add("fading"), ms);
+  flowToast(message, ms);
 }
 
 function showFlowZoomToast() {

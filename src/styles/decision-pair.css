@@ -7,31 +7,31 @@
    sinks it with an inset shadow and drops the label 1px (Unreal PressedButtonMargins) without changing the box
    height; keyboard focus turns the border white; disabled is 0.4 with no shadow. The neutral buttons take the
    same lift in the panel greys. Stops, shadows and contrast ratios: tokens.css new-ui.
-   Must stay below .ask-btn, .flow-approve-btn, relay.css and bar-switches.css, whose equal-specificity base
+   Must stay below .flow-approve-btn, relay.css and bar-switches.css, whose equal-specificity base
    rules would otherwise reset background and border. */
-.ask-approve, .flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add,
-.ask-deny, .flow-approve-deny, .relay-deny, .cx-confirm-pair .cx-yes,
+.flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add,
+.flow-approve-deny, .relay-deny, .cx-confirm-pair .cx-yes,
 .approval-actions button:is(.approval-allow, .approval-deny) {
   color: var(--fg-bright);
   font-weight: var(--weight-strong);
   border-radius: var(--radius-6);
 }
-.ask-approve, .flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add, .approval-actions button.approval-allow {
+.flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add, .approval-actions button.approval-allow {
   background: var(--approve-grad); border-color: var(--approve-edge); box-shadow: var(--approve-shadow);
 }
-.ask-deny, .flow-approve-deny, .relay-deny, .cx-confirm-pair .cx-yes, #flow-delete-confirm .swap-yes, .approval-actions button.approval-deny {
+.flow-approve-deny, .relay-deny, .cx-confirm-pair .cx-yes, #flow-delete-confirm .swap-yes, .approval-actions button.approval-deny {
   background: var(--deny-grad); border-color: var(--deny-edge); box-shadow: var(--deny-shadow);
 }
-.ask-approve:hover, .flow-approve-approve:hover:not(:disabled), .relay-approve:hover:not(:disabled), .swap-yes:hover:not(:disabled),
+.flow-approve-approve:hover:not(:disabled), .relay-approve:hover:not(:disabled), .swap-yes:hover:not(:disabled),
 .release-build__go:hover:not(:disabled), .ws-btn.ws-add:hover:not(:disabled),
 .approval-actions button.approval-allow:hover:not(:disabled) { background: var(--approve-grad-hover); border-color: var(--approve-edge); box-shadow: var(--approve-shadow-hover); }
-.ask-deny:hover, .flow-approve-deny:hover:not(:disabled), .relay-deny:hover:not(:disabled), .cx-confirm-pair .cx-yes:hover:not(:disabled),
+.flow-approve-deny:hover:not(:disabled), .relay-deny:hover:not(:disabled), .cx-confirm-pair .cx-yes:hover:not(:disabled),
 #flow-delete-confirm .swap-yes:hover:not(:disabled),
 .approval-actions button.approval-deny:hover:not(:disabled) { background: var(--deny-grad-hover); border-color: var(--deny-edge); box-shadow: var(--deny-shadow-hover); }
-.ask-approve:active, .flow-approve-approve:active:not(:disabled), .relay-approve:active:not(:disabled), .swap-yes:active:not(:disabled),
+.flow-approve-approve:active:not(:disabled), .relay-approve:active:not(:disabled), .swap-yes:active:not(:disabled),
 .release-build__go:active:not(:disabled), .ws-btn.ws-add:active:not(:disabled),
 .approval-actions button.approval-allow:active:not(:disabled) { background: var(--approve-grad-press); border-color: var(--approve-edge); box-shadow: var(--approve-shadow-press); }
-.ask-deny:active, .flow-approve-deny:active:not(:disabled), .relay-deny:active:not(:disabled), .cx-confirm-pair .cx-yes:active:not(:disabled),
+.flow-approve-deny:active:not(:disabled), .relay-deny:active:not(:disabled), .cx-confirm-pair .cx-yes:active:not(:disabled),
 #flow-delete-confirm .swap-yes:active:not(:disabled),
 .approval-actions button.approval-deny:active:not(:disabled) { background: var(--deny-grad-press); border-color: var(--deny-edge); box-shadow: var(--deny-shadow-press); }
 
@@ -68,7 +68,7 @@
    padding on the buttons, so the centred labels share one centre line. Widths stay content-sized. Was 24 (Relay,
    Swap, Voice Trust), about 28 (ask gate, auto line), about 21 (Flow, 11px) and 28 (Rendered cards).
    Each selector matches or outranks its surface's own sizing rule, and this file loads after all of them. */
-.ask-approve, .ask-deny, .flow-approve-approve, .flow-approve-deny,
+.flow-approve-approve, .flow-approve-deny,
 :is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny, .relay-dismiss), .relay-ask-copy,
 :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) :is(.swap-yes, .swap-no), .cx-confirm-pair :is(.cx-yes, .cx-no),
 .release-build :is(.release-build__go, .release-build__cancel),
@@ -87,7 +87,6 @@
 
 /* Press shifts the label 1px down: every decision button is a fixed --row-28 box, so it takes 2px on top and
    none below and the centred label drops 1px without changing the box height. */
-.ask-approve:active, .ask-deny:active,
 .flow-approve-approve:active:not(:disabled), .flow-approve-deny:active:not(:disabled),
 :is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny, .relay-dismiss):active:not(:disabled),
 :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) :is(.swap-yes, .swap-no):active:not(:disabled), .cx-confirm-pair :is(.cx-yes, .cx-no):active:not(:disabled),
@@ -95,14 +94,14 @@
 .approval-actions button:is(.approval-allow, .approval-deny):active:not(:disabled) { padding-top: var(--space-2); padding-bottom: 0; }
 /* Focus is the border colour alone: the ask-gate :focus ring stays for programmatic focus, the keyboard rings go.
    White, not --btn-focus: blue on the fills reads 1.03:1 (green) / 1.31:1 (red); white reads 4.63 / 6.24. */
-.ask-approve:focus-visible, .flow-approve-approve:focus-visible, .ask-deny:focus-visible, .flow-approve-deny:focus-visible {
+.flow-approve-approve:focus-visible, .flow-approve-deny:focus-visible {
   border-color: var(--fg-bright); outline: none;
 }
 :is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny):focus-visible,
 :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-yes:focus-visible, .cx-confirm-pair .cx-yes:focus-visible, .release-build__go:focus-visible, .ws-btn.ws-add:focus-visible,
 .approval-actions button:is(.approval-allow, .approval-deny):focus-visible { border-color: var(--fg-bright); outline: none; }
 /* disabled: the surfaces' own 0.4 (0.45 / 0.5 on the older two) plus no lift */
-:is(.ask-approve, .ask-deny, .flow-approve-btn, .relay-approve, .relay-deny, .relay-dismiss, .swap-yes, .swap-no,
+:is(.flow-approve-btn, .relay-approve, .relay-deny, .relay-dismiss, .swap-yes, .swap-no,
   .approval-actions button.approval-allow, .approval-actions button.approval-deny):disabled,
 :is(#swap-confirm, .vs-confirm, #flow-delete-confirm) :is(.swap-yes, .swap-no):disabled, .cx-confirm-pair :is(.cx-yes, .cx-no):disabled,
 .release-build :is(.release-build__go, .release-build__cancel):disabled, .ws-btn.ws-add:disabled { box-shadow: none; }

@@ -7,7 +7,8 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": { "@character-addons": ["./src/character/addons-index.ts"] }
   },
   "include": ["src", "tools/ui/bench"]
 }

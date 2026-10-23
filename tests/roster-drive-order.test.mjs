@@ -9,7 +9,6 @@ setupDom({
     "panels/sessions": `export function createSession() {} export function hasArmedAstra() { return false; }
       export function driveSnapshot() { return { tabs: [] }; } export const renderedDrive = {};
       export function sessionContainer() { return null; } export function writeToSession() {}`,
-    "panels/askgate": "export const pendingAsks = new Map();",
     "settings/registry": "export function getRegistry() { return {}; }",
     "deps/state": "export function isAvailable() { return true; } export function depFound() { return true; }",
     "modules/registry": "export function moduleViews() { return []; }",

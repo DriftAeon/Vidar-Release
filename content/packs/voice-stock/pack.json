@@ -1,6 +1,7 @@
 {
   "id": "voice-stock",
   "version": 1,
+  "release": "1.0.0",
   "provides": [],
   "slots": {
     "stt": ["voice/whisper-cli.json", "voice/whisper-cli-vad.json", "voice/parakeet-v2.json"],

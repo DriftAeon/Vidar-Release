@@ -1,7 +1,7 @@
 // prettyModel: known-id table plus idempotency.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prettyModel, prettyTool, toolWords, titleWords, label } from "../src/format.ts";
+import { prettyModel, prettyTool, toolWords, titleWords, label, codexModelLabel } from "../src/format.ts";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom(); // installs the extensionless-import hook rendered/format.ts needs
@@ -13,6 +13,15 @@ test("titleWords and label read UE and LLM as acronyms", () => {
   assert.equal(titleWords("vidar-drive"), "Vidar Drive");
   assert.equal(`Proxy for ${label("ue")}`, "Proxy for UE");
   assert.equal(label("llm"), "LLM");
+});
+
+test("codexModelLabel: Title Case words, GPT upper case, versions kept", () => {
+  for (const [raw, shown] of [
+    ["gpt-6-sol", "GPT 6 Sol"], ["Gpt 6 sol", "GPT 6 Sol"], ["gpt 6 sol", "GPT 6 Sol"],
+    ["gpt-6-luna", "GPT 6 Luna"], ["gpt-6-astra", "GPT 6 Astra"], ["gpt-6-terra", "GPT 6 Terra"],
+    ["gpt-6", "GPT 6"], ["GPT-5.6-Terra", "GPT 5.6 Terra"], ["gpt-5.4-codex-mini", "GPT 5.4 Codex Mini"],
+    ["GPT 6 Sol", "GPT 6 Sol"],
+  ]) assert.equal(codexModelLabel(raw), shown, raw);
 });
 
 test("prettyTool splits camelCase MCP tool names", () => {
@@ -28,8 +37,13 @@ const TABLE = [
   ["claude-opus-5", "Opus 5"],
   ["claude-sonnet-5", "Sonnet 5"],
   ["claude-haiku-4-5-20251001", "Haiku 4.5"],
-  ["gpt-5.6-terra", "GPT-5.6 Terra"],
-  ["gpt-6-astra", "GPT-6 Astra"],
+  ["gpt-5.6-terra", "GPT 5.6 Terra"],
+  ["gpt-6-astra", "GPT 6 Astra"],
+  ["gpt-6-luna", "GPT 6 Luna"],
+  ["gpt-6-sol", "GPT 6 Sol"],
+  ["Gpt 6 sol", "GPT 6 Sol"],
+  ["gpt_6_luna", "GPT 6 Luna"],
+  ["gpt-5.4-codex-mini", "GPT 5.4 Codex Mini"],
 ];
 
 test("prettyModel: known ids map to their display name", () => {
@@ -48,8 +62,9 @@ test("prettyModel: idempotent on every known pretty name", () => {
   }
 });
 
-test("prettyModel: idempotent on the GPT-5.6 Terra name specifically", () => {
-  assert.equal(prettyModel("GPT-5.6 Terra"), "GPT-5.6 Terra");
+test("prettyModel: idempotent on the GPT 5.6 Terra name specifically", () => {
+  assert.equal(prettyModel("GPT 5.6 Terra"), "GPT 5.6 Terra");
+  assert.equal(prettyModel("GPT-5.6 Terra"), "GPT 5.6 Terra");
 });
 
 test("toolSummary: an ask pill shows the header, falling back to Question", () => {

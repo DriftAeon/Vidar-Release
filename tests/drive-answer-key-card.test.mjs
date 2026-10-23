@@ -10,7 +10,6 @@ setupDom({
     "panels/sessions": `export function createSession() {} export function hasArmedAstra() { return false; }
       export function driveSnapshot() { return { tabs: [{ id: "t1", body: "rendered" }] }; } export const renderedDrive = {};
       export function sessionContainer(id) { return id === "t1" ? globalThis.__driveContainer : null; } export function writeToSession() {}`,
-    "panels/askgate": "export const pendingAsks = new Map();",
     "settings/registry": "export function getRegistry() { return {}; }",
     "config": "export async function resolveDefaultCwd() { return null; }",
     "drive/paste": "export async function drivePaste() {}",

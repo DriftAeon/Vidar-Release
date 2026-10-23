@@ -2,6 +2,7 @@
 // Ctrl+wheel/key steps and the readout toast. sessions.ts binds its tab map and refit in.
 import { getPref, setPref } from "../../prefs";
 import type { TerminalSession } from "./types";
+import { createToast } from "../../toast";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
 let refitActive: () => void = () => {};
@@ -43,21 +44,12 @@ export function initZoom(opts?: { fontSize?: number }) {
 
 /* ---- font zoom (all sessions; hidden ones re-fit on next activate) ---- */
 
-let zoomToast: HTMLElement | null = null;
-let zoomToastTimer: number | undefined;
+const sessionsToast = createToast({ id: "zoom-toast", host: () => document.body });
 
 // The terminal area's one transient toast (top-centre): the zoom readout, and
 // sessions.ts's file-link open errors. Holds `ms` after the last call, then fades.
 export function showSessionsToast(message: string, ms = 500) {
-  if (!zoomToast) {
-    zoomToast = document.createElement("div");
-    zoomToast.id = "zoom-toast";
-    document.body.appendChild(zoomToast);
-  }
-  zoomToast.textContent = message;
-  zoomToast.classList.remove("fading");
-  window.clearTimeout(zoomToastTimer);
-  zoomToastTimer = window.setTimeout(() => zoomToast?.classList.add("fading"), ms);
+  sessionsToast(message, ms);
 }
 
 // Transient readout so wheel/key zoom shows where it landed.

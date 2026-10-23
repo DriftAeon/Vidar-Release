@@ -1,5 +1,5 @@
-// The embedded CLUTs are one-dimensional lighting data. Smooth them once at
-// load time, preserving their colors and avoiding extra texture reads per frame.
+// A cel ramp is one-dimensional lighting data (style-toon.ts passes a synthetic one).
+// Smooth it once at load time, preserving its colors and avoiding extra texture reads per frame.
 export function softenCelRamp(row: Uint8ClampedArray): Uint8Array<ArrayBuffer> {
   if (row.length === 0 || row.length % 4 !== 0) throw new Error("Invalid cel ramp.");
   const width = row.length / 4;

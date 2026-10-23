@@ -7,7 +7,7 @@
 import { iconImg, type ColorIcon } from "../icon-img";
 import { invoke } from "../ipc";
 import { getPref } from "../prefs";
-import { isGateway } from "../launcher/agent-kind";
+import { mcpFocus, mcpFocusKey } from "./mcp-focus";
 import { initRack, type McpRack, type RackOptions } from "./rack";
 import { isProxyServer, rackServerId, railServers, type RailServer } from "./rack-modules";
 import { getFocusedSession, type FocusedSession } from "./sessions";
@@ -17,14 +17,11 @@ interface Drawer { close: () => void; btn: HTMLButtonElement; surface: HTMLEleme
 // The same reader the rack uses for this focus (rack.ts rebuild): a Codex tab's own config,
 // else Claude's, with the tab's launch profile selecting its home.
 function readFocused(s: FocusedSession | null): { key: string; read: () => Promise<McpRack> } {
-  const profile = (s?.agent === "claude" || s?.agent === "codex") && s.profile ? s.profile : null;
-  if (s?.agent === "codex") {
-    return { key: JSON.stringify(["codex", s.id, profile]),
-      read: () => invoke("read_codex_mcp_servers", { tab: s.id, profile }) };
-  }
-  const project = s?.agent === "claude" && !isGateway(s.art) && s.cwd ? s.cwd : null;
-  return { key: JSON.stringify(["claude", project, profile]),
-    read: () => invoke("read_mcp_servers", { project, profile }) };
+  const f = mcpFocus(s);
+  const { tab, project, profile } = f;
+  return { key: mcpFocusKey(f), read: f.agent === "codex"
+    ? () => invoke("read_codex_mcp_servers", { tab, profile })
+    : () => invoke("read_mcp_servers", { project, profile }) };
 }
 
 export function initRailStripe(host: HTMLElement, signal: AbortSignal): void {

@@ -17,6 +17,8 @@
 import { invoke } from "../ipc";
 import { iconImg } from "../icon-img";
 import { getPref, setPref } from "../prefs";
+import { openPopover } from "../modules/popover";
+import { placeAbove } from "../modules/place-menu";
 import type { SwapPending, SwapState } from "../ipc-settings";
 
 const FOCUS_THROTTLE_MS = 30_000;
@@ -167,35 +169,26 @@ export function initSwap(btn: HTMLButtonElement, signal: AbortSignal) {
 
   /* ---- popups: the RMB menu and the confirm, fixed on body so the bar never clips them ---- */
   let popup: HTMLElement | null = null;
-  let offAway: (() => void) | null = null;
-  const closePopup = (refocus = false) => {
-    offAway?.(); offAway = null;
-    popup?.remove(); popup = null;
-    btn.setAttribute("aria-expanded", "false");
-    if (refocus && !btn.disabled) btn.focus();
-  };
+  let stopPopup: ((refocus?: boolean) => void) | null = null;
+  const closePopup = (refocus = false) => stopPopup?.(refocus);
   /** Above the bottom bar (gap from the bar's top edge, not the button's), right edge on the button's. */
   const openPopup = (el: HTMLElement, focus: HTMLElement) => {
     closePopup();
-    el.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); closePopup(true); } });
-    document.body.append(el);
     popup = el;
     btn.setAttribute("aria-expanded", "true");
-    const r = btn.getBoundingClientRect();
-    const barTop = (btn.closest<HTMLElement>("#bottombar") ?? btn).getBoundingClientRect().top;
-    el.style.left = `${Math.max(8, Math.min(r.right - el.offsetWidth, window.innerWidth - el.offsetWidth - 8))}px`;
-    el.style.top = `${Math.max(8, barTop - el.offsetHeight - 4)}px`;
-    setTimeout(() => {
-      if (popup !== el) return; // closed before the opening event finished
-      const away = (e: MouseEvent) => { if (!el.contains(e.target as Node) && !btn.contains(e.target as Node)) closePopup(); };
-      const esc = (e: KeyboardEvent) => { if (e.key === "Escape") closePopup(true); };
-      document.addEventListener("mousedown", away);
-      document.addEventListener("keydown", esc);
-      offAway = () => {
-        document.removeEventListener("mousedown", away);
-        document.removeEventListener("keydown", esc);
-      };
-    }, 0);
+    const bar = btn.closest<HTMLElement>("#bottombar") ?? btn;
+    stopPopup = openPopover({
+      el,
+      anchor: btn,
+      place: placeAbove(btn.getBoundingClientRect(), bar.getBoundingClientRect(), "end"),
+      keys: "document",
+      restoreFocus: () => { if (!btn.disabled) btn.focus(); },
+      onClose: () => {
+        if (popup !== el) return; // replaced: the new popup owns the state
+        popup = null; stopPopup = null;
+        btn.setAttribute("aria-expanded", "false");
+      },
+    });
     focus.focus();
   };
 

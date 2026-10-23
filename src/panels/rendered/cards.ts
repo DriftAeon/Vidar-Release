@@ -141,7 +141,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     card.dataset.tool = tool;
     card.dataset.requestId = requestId;
     if (isQuestion) card.dataset.askKey = requestId; // Relay's focus event and the settled event find the card by it
-    card.dataset.summary = toolSummary(tool, input); // a subagent's card repeats it in Relay (subagent-relay.ts)
+    card.dataset.summary = toolSummary(tool, input); // Relay repeats it on the card's approval item (approval-relay.ts)
     const head = shell.head!;
     if (isQuestion) head.prepend(labelledMark("awaiting", "Question"));
     else { const sh = iconImg("shield"); sh.title = "Permission"; head.prepend(sh); }
@@ -228,7 +228,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
       head.appendChild(el("span", "approval-inline", inlineText));
       if (reason) { const w = el("span", "approval-why", reason); w.title = label; head.appendChild(w); }
       const glyph = el("span", `${DRIVE_CLASS.result} ${outcome}`);
-      // an answer from Relay (the flag is set by the handle and subagent-relay before the settle) says so in the tooltip
+      // an answer from Relay (the flag is set by the handle and approval-relay before the settle) says so in the tooltip
       const tip = isQuestion && outcome === "ok" && card.dataset.relayAnswer === "1" ? RELAY_ANSWERED : label;
       glyph.title = tip;
       glyph.setAttribute("aria-label", tip);
@@ -251,7 +251,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
       } else if (!isQuestion) body.remove(); // no pill (a Codex MCP elicitation names no itemId): fold to the head row alone
       if (!silent && !delivered && !S.hydrating) void sendEncoded(S.adapter.encodePermission(requestId, decision));
       refreshState();
-      // an answer from Relay (subagent-relay.ts sets the flag before its click) leaves focus where the user is
+      // an answer from Relay (approval-relay.ts sets the flag before its click) leaves focus where the user is
       const fromRelay = card.dataset.relayAnswer === "1";
       delete card.dataset.relayAnswer;
       if (!S.hydrating && !fromRelay) textarea.focus();

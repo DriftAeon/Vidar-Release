@@ -1,5 +1,5 @@
 //! src-tauri\src\control\ask.rs — `ctl.ask`: a tab asks the **user** a typed
-//! question through the ask-card modal (`askgate.ts`). Validates its own
+//! question through the approval card (`src/control/listen.ts`, `src/asks/approvals.ts`). Validates its own
 //! shape, then hands off to `card::request` the same way `prompt`/`spawn` do.
 //! A bare `app.emit` here would reuse the control
 //! counter as the card id, colliding with real card ids and leaving an
@@ -15,7 +15,7 @@ use super::policy::Requester;
 use crate::open::valid_reason;
 
 /// Up to 6 choices offered as one-click picks alongside the free-text
-/// comment (askgate.ts's own row) — matches the CLI's `--choice a,b,c`.
+/// comment (the approval card's own row) — matches the CLI's `--choice a,b,c`.
 const MAX_CHOICES: usize = 6;
 /// Same bound `open.rs::valid_reason` gives a choice-worthy label: 1-40 chars
 /// keeps a choice button from wrapping the row.

@@ -2,6 +2,7 @@
 // Types only: a source (Notion first, Jira next) maps its rows to `Item`s and hands the shell an `Adapter`.
 
 import type { LucideName } from "../icons";
+import type { ColorIcon } from "../icon-img";
 
 export type Tone ="todo" | "progress" | "review" | "blocked" | "done" | "neutral";
 
@@ -12,8 +13,8 @@ export interface GroupFacet { id: string; value: string }
 
 export interface Group { id: string; label: string; tone: Tone; rank: number; facet?: GroupFacet }
 
-/** A row's leading mark: the page's own emoji, a named glyph (optionally tinted by a class), or a blank slot that keeps titles aligned. */
-export type Lead = { emoji: string } | { glyph: LucideName; cls?: string } | { blank: true };
+/** A row's leading mark: the page's own emoji, a named glyph (optionally tinted by a class), a colour icon image, or a blank slot that keeps titles aligned. */
+export type Lead = { emoji: string } | { glyph: LucideName; cls?: string } | { color: ColorIcon } | { blank: true };
 
 export interface ItemTag { label: string; tone: Tone }
 

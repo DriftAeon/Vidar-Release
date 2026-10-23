@@ -412,7 +412,8 @@ pub fn set_caption_color(
     Ok(())
 }
 
-// Title bar corner icon only. tauri's set_icon lands on tao's set_window_icon,
+// Window icon (WM_SETICON ICON_SMALL), shown at the window's top-left corner; the Vidar-drawn
+// caption row (caption.rs) draws its own icon beside it from a PNG. tauri's set_icon lands on tao's set_window_icon,
 // which sends one WM_SETICON with ICON_SMALL and never touches ICON_BIG
 // (tao 0.35.3 window.rs:882-891) — so the taskbar button, Alt-Tab tile and
 // pinned shortcut keep the exe-resource icon build.rs embeds from icon.ico.

@@ -71,6 +71,7 @@
 
     "content": { "under": "root", "rel": "content" },
     "characters": { "under": "content", "rel": "characters" },
+    "stages": { "under": "content", "rel": "stages" },
     "packs": { "under": "content", "rel": "packs" },
     "vendor": { "under": "content", "rel": "vendor" },
     "whisper": { "under": "vendor", "rel": "whisper" },

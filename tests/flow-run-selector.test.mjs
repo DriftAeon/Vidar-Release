@@ -15,7 +15,7 @@ setupDom({
     "flow/engine": "export const startRun = () => ({ id: 'x' }); export const cancelRun = () => {}; export const heldRunIds = () => globalThis.__held;",
     "flow/runs-store": "export const getRun = (id) => globalThis.__runs.find((r) => r.id === id) ?? null; export const runsForGraph = () => globalThis.__runs;",
     "flow/run-view": "export const paintRun = (r) => { globalThis.__painted = r.id; }; export const clearRunPaint = () => { globalThis.__painted = null; }; export const CANCEL_RUN_TOOLTIP = 'Cancel';",
-    "flow/viewport": "export const showFlowToast = () => {};",
+    "flow/viewport": "export const showFlowToast = () => {}; export const forgetViewport = () => {};",
   },
 });
 const { RUN_WORDS, runWord, runLabel } = await import("../src/flow/run-names.ts");

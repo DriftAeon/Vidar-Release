@@ -1,9 +1,11 @@
 // One dropdown model for the body-appended pickers (Display file picker, Document Open, Flow
-// picker and New): the menu element exists only while open, an outside mousedown (capture
-// phase) closes it, Escape closes and refocuses the button, Tab refocuses the button and then
-// closes so focus moves on natively, ArrowDown on the button opens. Rows, row keys and focus
-// targets stay with each caller. No CSS or Tauri imports: the jsdom tests load its callers
+// picker and New): the popover core (modules/popover.ts) plus button wiring. The menu element
+// exists only while open, an outside mousedown (capture phase) closes it, Escape closes and
+// refocuses the button, Tab refocuses the button and then closes so focus moves on natively,
+// ArrowDown on the button opens. Opening another popover closes this one. Rows, row keys and
+// focus targets stay with each caller. No CSS or Tauri imports: the jsdom tests load its callers
 // (document-open-menu.ts, flow-picker.ts).
+import { openPopover, type ClosePopover } from "../modules/popover";
 
 export interface DropdownOptions {
   button: HTMLButtonElement;
@@ -44,36 +46,10 @@ export function dropdown(o: DropdownOptions): Dropdown {
   button.setAttribute("aria-haspopup", "menu");
   button.setAttribute("aria-expanded", "false");
   let menu: HTMLDivElement | null = null;
-
-  const onOutside = (e: MouseEvent) => {
-    const t = e.target as Node;
-    if (!menu || menu.contains(t) || button.contains(t)) return;
-    if (o.inside?.().some((n) => n.contains(t))) return;
-    close();
-  };
-  const onMenuKey = (e: KeyboardEvent) => {
-    if (!menu) return;
-    if (e.key === "Escape") {
-      if (e.defaultPrevented) return; // a nested menu (Display's row menu) handled it and closes alone
-      e.preventDefault();
-      e.stopPropagation();
-      close();
-      button.focus();
-    } else if (e.key === "Tab") {
-      button.focus(); // let focus move on natively from the button
-      close();
-    } else {
-      o.onKey?.(e, menu);
-    }
-  };
+  let dispose: ClosePopover | null = null;
 
   function close(): void {
-    if (!menu) return;
-    menu.removeEventListener("keydown", onMenuKey);
-    menu.remove();
-    menu = null;
-    button.setAttribute("aria-expanded", "false");
-    document.removeEventListener("mousedown", onOutside, true);
+    dispose?.();
   }
 
   function open(byKey = false): void {
@@ -81,11 +57,28 @@ export function dropdown(o: DropdownOptions): Dropdown {
     const m = document.createElement("div");
     menu = m;
     o.build(m, true);
-    document.body.append(m);
+    // the core does outside mousedown (button exempt as the anchor), Escape and its refocus
+    dispose = openPopover({
+      el: m,
+      anchor: button,
+      inside: o.inside,
+      restoreFocus: button,
+      onKey: (e) => {
+        if (e.key === "Tab") {
+          button.focus(); // let focus move on natively from the button
+          close();
+        } else {
+          o.onKey?.(e, m);
+        }
+      },
+      onClose: () => {
+        menu = null;
+        dispose = null;
+        button.setAttribute("aria-expanded", "false");
+      },
+    });
     button.setAttribute("aria-expanded", "true");
     placeBelow(m, button, typeof o.anchor === "function" ? o.anchor() : o.anchor, o.floor);
-    m.addEventListener("keydown", onMenuKey);
-    document.addEventListener("mousedown", onOutside, true);
     o.enter?.(m, byKey);
   }
 

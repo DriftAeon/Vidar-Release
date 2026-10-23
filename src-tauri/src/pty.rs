@@ -209,8 +209,10 @@ pub(crate) fn codex_bare_prepare<T>(dir: Option<PathBuf>, prepare: impl FnOnce(&
 }
 
 /// Serializes Raw and Codex app-server Bare spawns in-process: two prepares on one home would
-/// otherwise overlap and the second wait on `.vidar-lock` up to 5 s, then refuse. The Falcon-hosted
-/// prepare (`falcon/session_commands.rs`) stays outside it, by design. Lock order: this, then `spawn_lock`.
+/// otherwise overlap and the second wait on `.vidar-lock` up to 5 s, then refuse. Takers: the Raw
+/// spawn here, `agent.rs` (Codex app-server), `codex_models.rs`, and the Falcon-hosted prepares
+/// (`falcon/session_commands.rs`, Claude and Codex Bare). Nothing under `bare::` takes it, so a
+/// taker must not call another. Lock order: this, then `spawn_lock`.
 pub(crate) static BARE_PREPARE: Mutex<()> = Mutex::new(());
 
 /// Runs off the main thread (a Bare prepare reads versions and waits on a home lock), so a

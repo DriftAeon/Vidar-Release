@@ -72,9 +72,6 @@ export const S = {
   rafActive: false,
   fitted: false,
 
-  flowZoomToast: null as HTMLElement | null,
-  flowZoomToastTimer: undefined as number | undefined,
-
   saveTimer: undefined as number | undefined,
 
   // --- additive fields ---

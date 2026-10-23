@@ -3,7 +3,7 @@
   "id": "bare",
   "agent": "claude",
   "binary": { "name": "claude.exe", "resolve": "allowlisted Path" },
-  "verifiedVersion": "2.1.308",
+  "verifiedVersion": "2.1.309",
   "host": { "name": "pwsh.exe", "args": ["-NoProfile", "-Command"] },
   "args": [
     "--setting-sources", "user",

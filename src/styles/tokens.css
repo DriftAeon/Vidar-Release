@@ -96,6 +96,7 @@
   --font-16: 16px;
   --font-18: 18px;
   /* tokens:end */
+  --bar-inset: var(--space-6); /* legacy 6: the left bar's side inset (leftbar.css re-sets it); the caption row reads it */
 
   /* new-ui:start — the only tokens new components use (user-approved 2026-10-03), plus
      --space-2 4 8 12 16 24 32, --radius-2 4 6 (and -full for dots), --font-11 12 13 16, --font-title (titles only),

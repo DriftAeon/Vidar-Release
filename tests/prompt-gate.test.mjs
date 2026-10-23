@@ -23,7 +23,7 @@ test("delivery: not-ready rendered tab is err tab not ready; ready delivers; raw
 test("listen.ts runs the target refusal before the approval card is minted", () => {
   const src = readFileSync(new URL("../src/control/listen.ts", import.meta.url), "utf8");
   const refuse = src.indexOf("promptTargetRefusal(driveSnapshot().tabs, tab)");
-  const card = src.indexOf('"ctl-prompt")');
-  assert.ok(refuse > 0 && card > 0 && refuse < card, "refusal must precede askGate");
+  const card = src.indexOf('origin: "ctl-prompt"');
+  assert.ok(refuse > 0 && card > 0 && refuse < card, "refusal must precede openApproval");
   assert.ok(src.includes("promptDeliveryRefusal(driveSnapshot().tabs, tab, tabPromptReady)"), "delivery check not wired");
 });

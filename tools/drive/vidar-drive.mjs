@@ -29,12 +29,12 @@
 //                                                                     via `state`, never retry (a retry on a hosted
 //                                                                     tab sends the permission response twice)
 //   node tools\drive\vidar-drive.mjs card <id> approve|deny ['<json {choice?, comment?}>']
-//                                                                     answers an ask-gate modal (ctl spawn/prompt/ask
-//                                                                     cards, Astra ask) listed in state.cards; only the
-//                                                                     one with onScreen:true is answerable, the rest
-//                                                                     queue behind it. Fire-once, same as answer
+//                                                                     answers an approval card listed in state.cards
+//                                                                     (ctl spawn/prompt/ask/flow, Astra, review dispatch);
+//                                                                     cards come from the approvals registry, oldest
+//                                                                     first, every entry answerable. Fire-once, same as answer
 //   node tools\drive\vidar-drive.mjs state                           every tab, merged with each rendered tab's drive(),
-//                                                                     plus `cards`: pending ask-gate modals
+//                                                                     plus `cards`: pending approvals
 //                                                                     {id, kind, title, tab, details, onScreen}
 //
 // Run ledger — a smoke ends with these two (drive-ledger.mjs, runtime\bridge\driver\ledger.json):

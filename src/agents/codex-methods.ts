@@ -1,4 +1,4 @@
-// Codex app-server method tables (pinned from the 0.163.0 schema): the
+// Codex app-server method tables (pinned from the 0.164.0 schema): the
 // notifications Vidar knows and fallback answers for server requests
 // (contracts/codex-server-requests.json). Data only; the Codex request handler reads them.
 // Refresh tools/codex-schema/manifest.json with refresh.mjs; the hermetic

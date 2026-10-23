@@ -23,7 +23,7 @@ type RelayView =
   /** any ask as the shared record; `pend` is the stored entry behind a pend ask */
   | { type: "question"; record: QuestionRecord; pend?: RelayAsk }
   /** an approval card shown as label/value rows (the Run Flow card); Approve/Deny answer it */
-  | { type: "card"; rows: [string, string][]; matrix?: NodeMatrix };
+  | { type: "card"; rows: [string, string][]; matrix?: NodeMatrix; comment?: boolean };
 export interface RelayVerdict {
   verdict: "approve" | "deny" | "dismiss";
   comment: string;

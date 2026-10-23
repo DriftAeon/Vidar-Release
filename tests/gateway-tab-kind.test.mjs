@@ -47,8 +47,10 @@ test("pack Raw rows keep their existing tab kinds without gaining Rendered bodie
 test("Loadout and MCP Rack stay empty for gateway tabs (wrapper fence is invisible to read_loadout)", async () => {
   const { readFileSync } = await import("node:fs");
   const loadout = readFileSync(new URL("../src/panels/loadout.ts", import.meta.url), "utf8");
-  const rack = readFileSync(new URL("../src/panels/rack.ts", import.meta.url), "utf8");
+  // the rack's (and rail's) focus derivation lives in mcp-focus.ts
+  const focus = readFileSync(new URL("../src/panels/mcp-focus.ts", import.meta.url), "utf8");
   assert.match(loadout, /focused\.agent !== "claude" \|\| isGateway\(focused\.art\)/);
-  assert.match(rack, /s\?\.agent === "claude" && !isGateway\(s\.art\)/);
+  assert.match(focus, /claude = s\?\.agent === "claude"/);
+  assert.match(focus, /project: claude && !isGateway\(s!\.art\)/);
 });
 

@@ -17,7 +17,7 @@ import { iconImg } from "../icon-img";
 import { paneShell } from "./pane-shell";
 import type { FlowGraph } from "../flow/model";
 import { S, SVG_NS, WORLD_W, WORLD_H } from "../flow/state";
-import { initFrameLoop, scheduleFrame, applyWorldTransform, onWheel, fitToView, beginPan, onPanMove, visible, showFlowToast } from "../flow/viewport";
+import { initFrameLoop, scheduleFrame, applyWorldTransform, onWheel, fitToView, restoreViewport,beginPan, onPanMove, visible, showFlowToast } from "../flow/viewport";
 import { initStore, scheduleGraphSave, cancelPendingGraphSave, flushGraphSave, flushPendingGraphSave, applyTemplateDraft, activeDraft, noGraphOpen, onGraphEdited, onSaveFailed } from "../flow/store";
 import { redrawEdges, onEdgeDragMove, finishEdgeDrag, deleteSelectedEdge } from "../flow/edges";
 import { setSelection, beginMarquee, onMarqueeMove, finishMarquee, keyboardAllowed } from "../flow/selection";
@@ -85,7 +85,7 @@ export function onFlowShown() {
   setFlowVisible(true);
   if (!S.fitted) {
     S.fitted = true;
-    fitToView();
+    if (!restoreViewport()) fitToView();
   }
 }
 
@@ -235,6 +235,9 @@ export function mountFlowView(parent: HTMLElement, openPathInDocument: (path: st
     runControls.updateRunGate();
     renderPopover();
     scheduleFrame();
+    // Each graph keeps its own pan/zoom; one with none saved is framed rather than inheriting
+    // the previous graph's position.
+    if (!noGraphOpen() && !restoreViewport()) fitToView(true);
   }
 
   // Order: flow picker, New, run selector,

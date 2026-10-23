@@ -42,5 +42,9 @@ from other local processes.
   stops generic credential harvesters only; code running as your user can still unwrap them. An
   older build cannot read wrapped tokens. Moving the install folder, or an administrator resetting
   your Windows password, means signing in again.
+- **Update check.** At launch (at most once a day) and on Check Now, Vidar makes one anonymous HTTPS GET
+  to `github.com/DriftAeon/Vidar-Release` for the public release index. The request carries no
+  account, token or install data beyond what any HTTPS request reveals. It only notifies and installs
+  nothing; Settings › General › Check for Updates at Launch turns the launch check off.
 - **Codex Bare tabs.** A Codex Bare tab trusts a project folder only when your own Codex config
   trusts it. Otherwise the tab warns you to trust the folder in your Codex config.

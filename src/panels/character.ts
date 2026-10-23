@@ -6,11 +6,13 @@ import type { CharacterArena } from "../character/arena";
 import type { CharacterId } from "../character/catalog";
 import { characterList, characterRevision, ensureCharacters, onCharactersChanged, setStyleNote } from "../character/packs";
 import { resolveCharacter, type Resolution } from "../character/resolve";
+import { emptyStage } from "../character/empty-stage";
 import type { CharacterActivityDetail, CharacterCompletionDetail, CharacterStatusDetail } from "../character/events";
 import { characterLoop, reduceLowContext } from "../character/behavior";
 import { getFocusedSession, type FocusedSession } from "./sessions";
 import { watchCodexModel } from "./codex-model";
 import type { View } from "../character/view";
+import { openPopover, type ClosePopover } from "../modules/popover";
 
 interface SessionCharacterState {
   agent: string;
@@ -44,12 +46,21 @@ export function initCharacter(
   let active = false;
   let manualCode: string | null = null;
   let panelVisible = true;
+  // The arena (a WebGL context and the Three.js chunk) is created only once the host has been
+  // on screen; a load that comes earlier waits here for the first intersection.
+  let hostSeen = false;
+  let loadWaiting = false;
+  let listFailed = false;
+  let addButton: HTMLButtonElement | undefined;
   // Per-character saved default view (vidar.json `characterViews`), loaded on first use and kept
   // in sync locally on save/delete so a reload of the same character sees its own change right
   // away. A `settings-changed` (another writer, or `reload_config`) drops it for a fresh read.
   let characterViews: Record<string, unknown> = {};
   let viewsLoaded: Promise<void> | null = null;
-  const stopSettings = onSettingsChanged(() => { viewsLoaded = null; });
+  const stopSettings = onSettingsChanged((e) => {
+    viewsLoaded = null;
+    if (e.keys.includes("characterStage")) void applyStage();
+  });
   function ensureViewsLoaded(): Promise<void> {
     if (!viewsLoaded) {
       // A copy: the save/delete below edit this panel's view, not config.ts's shared memo.
@@ -58,6 +69,7 @@ export function initCharacter(
     return viewsLoaded;
   }
   let viewMenu: HTMLDivElement | undefined;
+  let closeMenu: ClosePopover | undefined;
 
   const setControls = (enabled: boolean) => { select.disabled = !enabled; };
   // "Animation Dropdown" flag (right-click menu). Off removes the select from layout, not just
@@ -65,9 +77,72 @@ export function initCharacter(
   const applyDropdown = () => { select.hidden = getPref("character.animationDropdown") === "off"; };
   applyDropdown();
   const canAnimate = () => !reducedMotion.matches && !document.hidden && panelVisible;
+  // The stage fallback note stands whenever the character has nothing to say.
+  let stageNote = "";
+  let lastReport = "";
   function report(message: string): void {
-    status.textContent = message;
-    status.hidden = !message;
+    lastReport = message;
+    status.textContent = message || stageNote;
+    status.hidden = !status.textContent;
+  }
+  // The arena (and its stage) exists from the host's first visible moment, character or not.
+  let arenaReady: Promise<CharacterArena> | null = null;
+  let stageRequest = 0;
+  function ensureArena(): Promise<CharacterArena> {
+    if (arena?.unavailable) { arena.dispose(); arena = undefined; arenaReady = null; }
+    arenaReady ??= (async () => {
+      // The pick resolves alongside the arena import, so a picked pack is the first stage drawn
+      // (no default-dome flash). A failed resolve starts on the default; the note still shows.
+      const request = ++stageRequest;
+      const resolving = resolveStageSafe();
+      const { createCharacterArena } = await import("../character/arena");
+      const resolved = await resolving;
+      if (disposed) {
+        resolved?.factory.discard?.();
+        throw new DOMException("The character panel closed.", "AbortError");
+      }
+      if (arena) {
+        resolved?.factory.discard?.();
+        void applyStage();
+        return arena;
+      }
+      const fresh = resolved && request === stageRequest ? resolved : null;
+      if (resolved && !fresh) resolved.factory.discard?.(); // a newer pick is already resolving
+      arena = createCharacterArena(stage, (message) => { report(message); setControls(false); }, fresh?.factory);
+      if (fresh) {
+        stageNote = fresh.note ?? "";
+        report(lastReport);
+      } else if (!resolved) {
+        void applyStage();
+      }
+      return arena;
+    })();
+    const ready = arenaReady;
+    ready.catch(() => { if (arenaReady === ready) arenaReady = null; });
+    return ready;
+  }
+  type ResolvedStage = Awaited<ReturnType<typeof import("../character/stage-pack").resolveStage>>;
+  async function resolveStageSafe(): Promise<ResolvedStage | null> {
+    try {
+      const { resolveStage } = await import("../character/stage-pack");
+      return await resolveStage();
+    } catch (error) {
+      console.warn("stage: resolve failed", error); // the stage on the arena stands
+      return null;
+    }
+  }
+  /** Puts the vidar.json `characterStage` pick on the arena; the newest call wins. */
+  async function applyStage(): Promise<void> {
+    const target = arena;
+    if (!target || target.unavailable) return;
+    const request = ++stageRequest;
+    const resolved = await resolveStageSafe();
+    if (!resolved) return;
+    const { factory, note } = resolved;
+    if (request !== stageRequest || disposed || arena !== target || target.unavailable) { factory.discard?.(); return; }
+    target.setStage(factory);
+    stageNote = note ?? "";
+    report(lastReport);
   }
   function desiredCharacter(): Resolution {
     const cached = focused ? sessionState.get(focused.id) : undefined;
@@ -113,6 +188,7 @@ export function initCharacter(
     if (disposed) return;
     loading?.abort();
     unload();
+    if (!hostSeen) { loadWaiting = true; return; }
     const request = new AbortController();
     loading = request;
     const res = character;
@@ -128,25 +204,23 @@ export function initCharacter(
     reading?.catch(() => {}); // handled below; avoids an unhandled rejection while imports load
     try {
       report(pack ? `Loading ${pack.name}…` : placeholderNote(res));
-      const [{ createCharacterRenderer }, { createCharacterArena }] = await Promise.all([
-        import("../character/renderer"), import("../character/arena"), ensureViewsLoaded(),
+      const [{ createCharacterRenderer }, onStage] = await Promise.all([
+        import("../character/renderer"), ensureArena(), ensureViewsLoaded(),
       ]);
       request.signal.throwIfAborted();
-      if (arena?.unavailable) { arena.dispose(); arena = undefined; }
-      arena ??= createCharacterArena(stage, (message) => { report(message); setControls(false); });
-      if (!pack || !id || !reading) { arena.render(); return; }
+      if (!pack || !id || !reading) { onStage.render(); return; }
       let bytes: ArrayBuffer;
       try {
         bytes = await reading;
       } catch (error) {
         request.signal.throwIfAborted();
         console.warn(`character ${id}: model load failed`, error);
-        arena.render();
+        onStage.render();
         report(placeholderNote(res));
         return;
       }
       request.signal.throwIfAborted();
-      const created = await createCharacterRenderer(arena, bytes, request.signal, (message) => {
+      const created = await createCharacterRenderer(onStage, bytes, request.signal, (message) => {
         if (!request.signal.aborted) { report(message); setControls(false); }
       }, pack, characterViews[id]);
       // A newer load (another tab, or a revision bump) started while this one was in flight.
@@ -171,7 +245,23 @@ export function initCharacter(
       if (loading === request) { loading = undefined; stage.setAttribute("aria-busy", "false"); }
     }
   }
+  /** Add Character shows only for a loaded list with no packs (a loading or failed list shows none). */
+  function updateEmptyStage(): void {
+    const add = emptyStage(characterList(), listFailed) === "add";
+    if (add && !addButton) {
+      addButton = document.createElement("button");
+      addButton.type = "button";
+      addButton.className = "character-add";
+      addButton.textContent = "Add Character";
+      addButton.addEventListener("click", () => {
+        void import("../settings/modal").then(({ openShortcutsModal }) => openShortcutsModal("characters"));
+      }, { signal: listeners.signal });
+      stage.append(addButton);
+    }
+    if (addButton) addButton.hidden = !add;
+  }
   function reconcileCharacter(): void {
+    updateEmptyStage();
     const next = desiredCharacter();
     const key = stageKey(next);
     if (key === shownKey) {
@@ -194,17 +284,16 @@ export function initCharacter(
     renderer.selectClip(select.value);
   }, { signal: listeners.signal });
 
-  function closeViewMenu(): void { viewMenu?.classList.add("hidden"); }
+  // Outside close and Escape are popover.ts's (capture-phase mousedown). The menu opens on
+  // contextmenu, which follows its own mousedown, so the opening press never closes it.
+  function closeViewMenu(): void { closeMenu?.(); }
   function openViewMenu(x: number, y: number): void {
+    closeMenu?.(); // a second right-click rebuilds the rows at the new point
     if (!viewMenu) {
       viewMenu = document.createElement("div");
       viewMenu.id = "character-view-menu";
       viewMenu.className = "hidden";
       document.body.appendChild(viewMenu);
-      document.addEventListener("click", (e) => {
-        if (!viewMenu!.contains(e.target as Node)) closeViewMenu();
-      }, { signal: listeners.signal });
-      document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeViewMenu(); }, { signal: listeners.signal });
     }
     viewMenu.innerHTML = "";
     const row = (text: string, onPick: () => void) => {
@@ -235,9 +324,11 @@ export function initCharacter(
       setPref("character.animationDropdown", select.hidden ? "on" : "off");
       applyDropdown();
     });
-    viewMenu.classList.remove("hidden");
-    viewMenu.style.left = `${x}px`;
-    viewMenu.style.top = `${Math.min(y, window.innerHeight - viewMenu.offsetHeight - 8)}px`;
+    const close = openPopover({
+      el: viewMenu, persistent: true, keys: "document", place: { x, y },
+      onClose: () => { if (closeMenu === close) closeMenu = undefined; },
+    });
+    closeMenu = close;
   }
   stage.addEventListener("contextmenu", (event) => {
     event.preventDefault();
@@ -253,6 +344,14 @@ export function initCharacter(
   resize.observe(sidebar);
   const visibility = new IntersectionObserver(([entry]) => {
     panelVisible = entry.isIntersecting;
+    if (panelVisible && !hostSeen) {
+      hostSeen = true;
+      // The default stage shows with no character (and behind Add Character with no packs).
+      ensureArena().then((created) => created.render(), (error) => {
+        if (!disposed) report(error instanceof Error ? error.message : String(error));
+      });
+      if (loadWaiting) { loadWaiting = false; void load(); }
+    }
     applyRendererState();
   });
   visibility.observe(stage);
@@ -323,7 +422,7 @@ export function initCharacter(
   }, { signal: listeners.signal });
   document.addEventListener("vidar-character-completion", (event) => {
     const detail = (event as CustomEvent<CharacterCompletionDetail>).detail;
-    if (focused?.id === detail.id && manualCode === null && canAnimate() && !loading) renderer?.playOnce("fq01", 10);
+    if (focused?.id === detail.id && manualCode === null && canAnimate() && !loading) renderer?.playOnce("yes", 10);
   }, { signal: listeners.signal });
   // A raw Codex tab has no statusline: its model arrives as a vidar-character-status from here.
   watchCodexModel(listeners.signal);
@@ -333,7 +432,7 @@ export function initCharacter(
   const stopCharacters = onCharactersChanged(() => { if (!disposed) reconcileCharacter(); });
   void ensureCharacters().then(
     () => { if (!disposed) reconcileCharacter(); },
-    (e) => report(`Characters Not Loaded: ${String(e)}`),
+    (e) => { listFailed = true; updateEmptyStage(); report(`Characters Not Loaded: ${String(e)}`); },
   );
   return () => {
     disposed = true;
@@ -344,6 +443,7 @@ export function initCharacter(
     arena = undefined;
     listeners.abort();
     // The menu lives on document.body, outside the host the registry restores.
+    closeMenu?.(); // drops the popover's document listeners
     viewMenu?.remove();
     viewMenu = undefined;
     resize.disconnect();

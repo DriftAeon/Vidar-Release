@@ -176,7 +176,7 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
     sl.model = model ? prettyModel(model) : "Starting…";
     S.modelHinted = false;
     if (S.switchPending) settleSwitch(null); // a switch can't outlive the process it was sent to
-    sl.mode = modeLabel(S.mode); // the control exists from spawn, not from the first session event
+    sl.mode = modeLabel(S.mode, opts.agent); // the control exists from spawn, not from the first session event
     resetCache(); // a new process has no warm prefix of ours
     redrawStatus();
     try {

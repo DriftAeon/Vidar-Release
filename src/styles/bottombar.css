@@ -19,7 +19,7 @@
    bar's foot (leftbar.css), so the three top lines sit level (on the 6 padding it left a 6px band under it;
    a 36 bar read taller than the morning's, user 2026-10-11) */
 #workbench > #bottombar {
-  margin: 0 calc(-1 * (var(--space-10) + var(--space-6))) calc(-1 * (var(--space-8) + var(--space-6))) calc(-1 * var(--space-10)); /* legacy 10: #workbench's side padding (workbench.css); legacy 6: #view-sessions padding (below) */
+  margin: 0 calc(-1 * (var(--space-10) + var(--space-6))) calc(-1 * (var(--space-8) + var(--space-6))) calc(-1 * var(--space-6)); /* 10 right / 6 left: #workbench's side padding (workbench.css); legacy 6: #view-sessions padding (below) */
 }
 /* in the right pane: the pane gives up the bar's height (fit() and the Rendered column size to what is
    left) and the bar hangs in the freed strip, full pane width */

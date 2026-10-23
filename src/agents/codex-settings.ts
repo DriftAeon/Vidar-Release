@@ -1,7 +1,7 @@
 // Session-only Codex selections and the app-server model catalog (0.162.1 schema).
 // turn/start uses `model` and `effort`; thread/start/resume accept `model`.
 import type { AdapterStart, AgentEvent, Effort } from "./protocol";
-import { titleCase } from "../format";
+import { codexModelLabel } from "../format";
 
 export const CODEX_EFFORT_LEVELS: readonly Effort[] = ["low", "medium", "high", "xhigh"];
 type ModelRow = Extract<AgentEvent, { kind: "models" }>["models"][number];
@@ -36,7 +36,7 @@ export class CodexSettings {
       if (!row || typeof row.model !== "string" || row.hidden) continue;
       const advertised = Array.isArray(row.supportedReasoningEfforts) ? row.supportedReasoningEfforts : [];
       const effortLevels = CODEX_EFFORT_LEVELS.filter((l) => advertised.some((e: { reasoningEffort?: string }) => e?.reasoningEffort === l));
-      this.rows.push({ value: row.model, resolved: row.model, label: titleCase(row.displayName || row.model), effortLevels });
+      this.rows.push({ value: row.model, resolved: row.model, label: codexModelLabel(row.displayName || row.model), effortLevels });
     }
     return [...this.rows];
   }

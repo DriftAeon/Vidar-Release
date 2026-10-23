@@ -15,7 +15,7 @@ import { DASH, firstLine, label, titleWords } from "../format";
 import { renderLmStudioDetail } from "./lmstudio";
 import { detailRow, rackRow, text } from "./rack-row";
 import { skillLabel } from "./skill-label";
-import { isGateway } from "../launcher/agent-kind";
+import { mcpFocus } from "./mcp-focus";
 import { applyOrder, enableReorder } from "./reorder";
 import { getFocusedSession, type FocusedSession } from "./sessions";
 import { getPref, setPref } from "../prefs";
@@ -53,17 +53,8 @@ export interface McpServer {
   approved?: boolean;
 }
 
-// The focused Claude or Codex tab's launch profile ("bare") selects its own home.
-function focusProfile(s: FocusedSession | null): string | null {
-  return (s?.agent === "claude" || s?.agent === "codex") && s.profile ? s.profile : null;
-}
-
-// Configured disable state for the focused tab's project, Claude tabs only: any
-// other agent reads its own config, so the rack says nothing (null = unknown).
-// Denied servers never arrive; mcp.rs drops them.
-function focusProject(s: FocusedSession | null): string | null {
-  return s?.agent === "claude" && !isGateway(s.art) && s.cwd ? s.cwd : null;
-}
+// Which config the focused tab reads (project, profile, Codex tab): mcp-focus.ts, shared with
+// the rail buttons. Denied servers never arrive; mcp.rs drops them.
 
 // The only visible trace of "disabled here" is a dimmed row: no chip, no label
 // Inline because styles.css belongs to another lane; 0.5
@@ -130,11 +121,8 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   // tools/list answers for this mount, keyed by rackToolsKey: a rebuild reuses them
   const toolsCache = new Map<string, Promise<McpTool[]>>();
   const initialFocus = getFocusedSession();
-  let project = focusProject(initialFocus);
-  let profile = focusProfile(initialFocus);
   // seeded as refresh() derives them, so the first vidar-focus for the same tab is a no-op
-  let agent = initialFocus?.agent === "codex" ? "codex" : null;
-  let tab = agent ? initialFocus!.id : null;
+  let { project, profile, agent, tab } = mcpFocus(initialFocus);
   let visibility = "";
   let retryRead = false;
   let disposed = false;
@@ -516,10 +504,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   };
 
   const refresh = (focus: FocusedSession | null) => {
-    const next = focusProject(focus);
-    const nextProfile = focusProfile(focus);
-    const nextAgent = focus?.agent === "codex" ? "codex" : null;
-    const nextTab = nextAgent ? focus!.id : null;
+    const { project: next, profile: nextProfile, agent: nextAgent, tab: nextTab } = mcpFocus(focus);
     const hidden = new Set(getPref("modules.hidden") ?? []);
     const nextVisibility = [...hidden].sort().join("\0");
     if (next === project && nextProfile === profile && nextAgent === agent && nextTab === tab

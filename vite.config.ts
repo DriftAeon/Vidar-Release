@@ -1,8 +1,17 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
+// Character renderer addons (src/character/addons/<id>, gitignored) are reached only through
+// `@character-addons`. The release build sets VIDAR_CHARACTER_ADDONS=off so none of them is
+// bundled into the shipped exe; tsconfig.json maps the specifier to addons-index.ts for tsc,
+// and both index files are type-checked as part of src.
+const characterAddons = process.env.VIDAR_CHARACTER_ADDONS === "off" ? "addons-none.ts" : "addons-index.ts";
+
 export default defineConfig({
   clearScreen: false,
+  resolve: {
+    alias: { "@character-addons": resolve(import.meta.dirname, "src/character", characterAddons) },
+  },
   // strictPort: if 1420 is taken, fail loudly instead of silently incrementing
   // while tauri.conf.json's devUrl still points at 1420.
   server: {

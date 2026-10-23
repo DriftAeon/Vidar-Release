@@ -8,7 +8,6 @@
 // refused by the recorder rather than fought over.
 
 import { cycleTab } from "./panels/sessions";
-import { isAskModalOpen } from "./panels/askgate";
 import { chordOf, matchShortcut } from "./shortcuts-core";
 import {
   addShortcut,
@@ -54,11 +53,6 @@ function onKeyDown(e: KeyboardEvent) {
   }
   // inspect mode owns the keyboard (its own capture listener handles Escape)
   if (document.body.classList.contains("inspect-mode")) return;
-  // The ask gate owns it too. This listener is registered at init and the
-  // dialog's at render, so ours runs FIRST: without this, Ctrl+Tab would reach
-  // cycleTab and focus a terminal behind a modal waiting on a verdict, and the
-  // dialog's own Tab trap would never see the event.
-  if (isAskModalOpen()) return;
   const chord = chordOf(e);
   if (!chord) return;
   const s = matchShortcut(chord, getRegistry(), getCurrent());

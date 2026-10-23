@@ -1,6 +1,7 @@
 // Rule injection, the pure half: what a launch carries (`RulesLaunch`), which agent rows may take
 // rules (`rulesPlan`), and the rewrite of a Raw tab's `-Command` string (`injectRules`). No IPC:
 // src/rules/prepare.ts calls `rules_prepare`, terminal-body.ts applies the rewrite once at spawn.
+import type { AgentId } from "../agents/id";
 
 /** `rules_prepare`'s `codex` field (src-tauri/src/rules/mod.rs `CodexRules`): `value` is a TOML basic string, quotes included. */
 type CodexRules = { mode: "c"; value: string } | { mode: "profile"; name: string } | null;
@@ -13,7 +14,7 @@ export interface RulesLaunch {
   warnings: string[];
 }
 
-export type RulesClient = "claude" | "codex";
+export type RulesClient = AgentId;
 
 /** The slice of an agent row the plan reads (AgentType, config.ts). */
 interface RulesRow { id: string; key?: string; label?: string; rules?: string[] }

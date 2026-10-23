@@ -244,6 +244,10 @@ pub fn usage_ledger_path_in(root: &Path) -> PathBuf {
 pub fn characters_dir() -> PathBuf {
     p("characters")
 }
+/// One stage pack folder per stage (`<id>\stage.json`, data only); gitignored, the user's own.
+pub fn stages_dir() -> PathBuf {
+    p("stages")
+}
 
 // ---- voice.rs ----
 pub fn voice_dir() -> PathBuf {
@@ -446,6 +450,8 @@ mod tests {
         moved(voice_dir(), "bridge\\voice");
         moved(voice_slots_dir(), "bridge\\voice-slots");
         moved_to(packs_dir(), "content", "packs");
+        moved_to(characters_dir(), "content", "characters");
+        moved_to(stages_dir(), "content", "stages");
         moved(gateway_snapshot_path(), "bridge\\gateways.json");
         moved_to(whisper_dir(), "content", "vendor\\whisper");
         moved_to(local_voice_dir(), "content", "local-voice");

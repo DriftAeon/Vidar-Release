@@ -12,7 +12,9 @@
 }
 .jira-pane .wb-actions button.cx-ico { width: var(--row-24); padding: 0; }
 /* Sheen Cap face (workbench.css .wb-actions > button.wb-card-btn) at the bar's 24px size; the face itself is not edited here */
-.jira-pane .cx-head .wb-actions > button.wb-card-btn, .jira-pane .jx-filters > button.wb-card-btn { min-height: var(--row-24); padding: 0 var(--space-8); }
+.jira-pane .cx-head .wb-actions > button.wb-card-btn, .jira-pane .jx-filters > button.wb-card-btn, .jira-pane .jx-scope > button.wb-card-btn {
+  box-sizing: border-box; height: var(--row-24); min-height: 0; padding: 0 var(--space-8);
+}
 .jira-pane .cx-head .wb-actions > button.wb-card-btn.cx-ico { padding: 0; }
 .jira-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 
@@ -50,7 +52,7 @@
 }
 .jx-search-in::placeholder { color: var(--fg-dim); font-family: var(--font-ui); }
 /* Clear Filters is a text button: the Sheen .ws-btn face (settings-modal.css), at the picker row height */
-.jira-pane .jx-filters button.jx-clear { min-height: var(--row-24); height: var(--row-24); }
+.jira-pane .jx-filters button.jx-clear { box-sizing: border-box; min-height: 0; height: var(--row-24); }
 .jx-pop { max-height: calc(var(--row-32) * 8); overflow-y: auto; }
 .jx-pop .jx-opt { gap: var(--space-8); }
 .jx-pop .jx-opt:disabled { opacity: 0.5; cursor: default; }

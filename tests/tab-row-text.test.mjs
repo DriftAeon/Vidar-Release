@@ -14,7 +14,12 @@ test("modelRowName: ids and aliases read as display names", () => {
     ["haiku-4-5", "Haiku 4.5"],
     ["claude-fable-5-1", "Fable 5.1"],
     ["fable-5.1", "Fable 5.1"],
-    ["gpt-5.4-codex", "GPT-5.4 Codex"],
+    ["gpt-5.4-codex", "GPT 5.4 Codex"],
+    ["gpt-6-luna", "GPT 6 Luna"],
+    ["gpt-6-sol", "GPT 6 Sol"],
+    ["gpt-6-astra", "GPT 6 Astra"],
+    ["gpt-5.6-terra", "GPT 5.6 Terra"],
+    ["gpt-5.4-codex-mini", "GPT 5.4 Codex Mini"],
     ["opus[1m]", "Opus 1M"],
     ["claude-opus-5-5[1m]", "Opus 5.5 1M"],
     ["some_new-model", "Some New Model"],
@@ -25,7 +30,7 @@ test("modelRowName: ids and aliases read as display names", () => {
 });
 
 test("modelRowName: idempotent on its own output", () => {
-  for (const n of ["Sonnet 5.5", "GPT-5.4 Codex", "Opus 5.5 1M", "Haiku 4.5"]) assert.equal(modelRowName(n), n);
+  for (const n of ["Sonnet 5.5", "GPT 5.4 Codex", "GPT 6 Sol", "Opus 5.5 1M", "Haiku 4.5"]) assert.equal(modelRowName(n), n);
 });
 
 test("tabTitleCase: words capitalised, short words lower except first", () => {

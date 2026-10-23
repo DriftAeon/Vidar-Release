@@ -208,6 +208,8 @@
 #flow-pick-menu .flow-pick-del:focus-visible { background: var(--bg); outline: none; }
 #flow-pick-menu .flow-pick-del:active { background: var(--bg-selected); }
 #flow-pick-menu .flow-pick-item:is(:hover, :focus-within) .flow-pick-del:disabled { opacity: 0.4; cursor: default; }
+/* Bold template names (menu rows and the face of an unsaved template instance) and the "Run" (none) label (2026-10-23) */
+.flow-pick .nm:is(.is-template, .is-flow), #flow-pick-menu .display-pick-row:is(.is-template, .is-flow) .nm, .flow-run-pick .nm.is-none, #flow-pick-menu .nm.is-none { font-weight: var(--weight-bold); }
 /* the Delete Flow confirm (flow/delete-confirm.ts) is the Swap Confirm card; it rides above the menu (100) */
 #flow-delete-confirm { z-index: 110; }
 

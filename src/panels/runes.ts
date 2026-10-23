@@ -6,6 +6,7 @@
 import { invoke, type BareLaunch } from "../ipc";
 import type { ReplyDoneDetail } from "./reply-events";
 import { iconImg } from "../icon-img";
+import { lucide } from "../icons";
 import { paneShell } from "./pane-shell";
 import { getFocusedSession, renderedSessionId, sessionLaunchInfo, type FocusedSession } from "./sessions/lookup";
 import { mountBareView, type BareViewHandle } from "../runes/bare/view";
@@ -174,11 +175,27 @@ function bareStateLine(f: FocusedSession, res: RunesLoaded | null, err: string |
   return hasLoads(res) ? [f.title, false, true] : ["", false, false];
 }
 
-/** One launch warning, compact: icon and one truncated line, the full text in its tooltip. */
-function warnLine(text: string): HTMLElement {
+/** Launch warnings the user dismissed, as `${tabId}\n${text}`, for the page's life (no persistence). */
+const dismissedWarns = new Set<string>();
+
+/** One launch warning, compact: icon and one truncated line (the full text in its tooltip), then a Dismiss button. */
+function warnLine(text: string, tabId: string): HTMLElement {
   const row = el("div", "runes-err runes-warn-line");
   row.title = text;
-  row.append(iconImg("warning"), el("span", "runes-warn-text", text));
+  const msg = el("span", "runes-warn-text", text);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "cx-ico runes-warn-close";
+  close.title = "Dismiss";
+  close.setAttribute("aria-label", "Dismiss");
+  close.append(lucide("x"));
+  close.addEventListener("click", () => {
+    dismissedWarns.add(`${tabId}\n${text}`);
+    const trace = row.parentElement;
+    row.remove();
+    if (trace && !trace.childElementCount) trace.hidden = true;
+  });
+  row.append(iconImg("warning"), msg, close);
   return row;
 }
 
@@ -189,7 +206,10 @@ export function bareTraceParts(launch: BareLaunch | null, launchErr: string | nu
   if (launchErr) parts.push(el("div", "runes-err", launchErr));
   else if (launch) {
     // the untrusted-folder warning becomes the chat's trust card (Trust Folder, Dismiss) while the tab has an offer
-    for (const w of launch.warnings) parts.push(trust && w === trust.text ? trustCard(tabId, trust) : warnLine(w));
+    for (const w of launch.warnings) {
+      if (trust && w === trust.text) parts.push(trustCard(tabId, trust));
+      else if (!dismissedWarns.has(`${tabId}\n${w}`)) parts.push(warnLine(w, tabId));
+    }
   }
   if (hasLoads(res)) parts.push(...traceParts(res));
   return parts;

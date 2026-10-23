@@ -94,7 +94,7 @@ body.rightbar-resizing #main { pointer-events: none; }
   position: relative;
   width: var(--character-size); height: var(--character-size);
   max-width: 100%; overflow: hidden;
-  background: #0a1418; /* the DSTS viewer stage color */
+  background: #0a1418;
   border: 4px solid var(--border); /* square 4px frame so the viewer sits in the rail (2026-10-04) */
 }
 .character-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -118,14 +118,22 @@ body.rightbar-resizing #main { pointer-events: none; }
 .character-controls button:hover { border-color: var(--accent); }
 .character-controls button:active:not(:disabled) { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
 .character-controls button:disabled, .character-animation:disabled { opacity: 0.5; cursor: default; }
+/* empty stage (no packs): one button centred low on the stage, above the status overlay */
+.character-add {
+  position: absolute; z-index: 2; inset-inline: 0; inset-block-end: var(--space-12); margin-inline: auto; width: max-content;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: var(--radius-4); padding: var(--space-4) var(--space-12); font: inherit; font-size: var(--font-11); cursor: pointer;
+}
+.character-add[hidden] { display: none; }
+.character-add:hover { border-color: var(--accent); }
 /* #tool-options always holds one (hidden) host per tool, so as a flex item it
    would still cost a 10px gap under the button row with nothing armed. Drop it
    entirely then: nothing sits under the button row then. */
 #tool-options:not(:has(.tool-options:not(.hidden))) { display: none; }
 
-/* sharp alert line under the tinted native title bar, with a tight glow */
+/* sharp alert line under the caption row (src/caption.ts), with a tight glow */
 #app::after {
-  content: ""; position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  content: ""; position: fixed; top: var(--caption-h, 0px); left: 0; right: 0; height: 2px;
   pointer-events: none; z-index: 50;
   background: var(--alert);
   box-shadow: 0 1px 6px var(--alert);

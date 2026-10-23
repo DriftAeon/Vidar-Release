@@ -1,0 +1,40 @@
+{
+  "core": {
+    "version": "0.2.0",
+    "page": "https://github.com/DriftAeon/Vidar-Release/releases/tag/vidar-v0.2.0",
+    "assets": {
+      "claude": {
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/vidar-v0.2.0/Vidar-claude-0.2.0.zip",
+        "sha256": "3f1c0a9d5b7e4a2c8d6f1e0b9a7c5d3e2f4a6b8c0d1e3f5a7b9c1d3e5f7a9b1c"
+      },
+      "claude-codex": {
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/vidar-v0.2.0/Vidar-claude-codex-0.2.0.zip",
+        "sha256": "a81e5c3b7d9f1a2c4e6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c"
+      }
+    }
+  },
+  "packs": {
+    "gemini": [
+      {
+        "release": "1.1.0",
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-gemini-v1.1.0/pack-gemini-1.1.0.zip",
+        "sha256": "5d2b8f0a6c4e1d3b5a7c9e1f3b5d7a9c1e3f5b7d9a1c3e5f7b9d1a3c5e7f9b1d",
+        "requires": { "contract": 1, "minCore": "0.2.0" }
+      },
+      {
+        "release": "1.0.0",
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-gemini-v1.0.0/pack-gemini-1.0.0.zip",
+        "sha256": "c4a6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6",
+        "requires": { "contract": 1, "minCore": "0.1.0", "maxCore": "0.1.9" }
+      }
+    ],
+    "voice-stock": [
+      {
+        "release": "1.0.1",
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-voice-stock-v1.0.1/pack-voice-stock-1.0.1.zip",
+        "sha256": "e7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9",
+        "requires": { "contract": 1, "minCore": "0.2.0" }
+      }
+    ]
+  }
+}

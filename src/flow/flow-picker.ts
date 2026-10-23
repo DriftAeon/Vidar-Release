@@ -7,6 +7,7 @@
 import { iconImg } from "../icon-img";
 import type { FlowGraph } from "./model";
 import { S } from "./state";
+import { forgetViewport } from "./viewport";
 import { setActiveGraph, scheduleGraphSave, applyTemplateDraft, activeDraft, deleteGraph } from "./store";
 import { closeDeleteConfirm, deleteConfirmEl, openDeleteConfirm } from "./delete-confirm";
 import { stampGraph, starterDescription } from "./store-core";
@@ -139,6 +140,7 @@ function addUserRow(parent: HTMLElement, graph: FlowGraph, onPick: () => void, o
   const item = document.createElement("div");
   item.className = "flow-pick-item";
   const row = addRow(item, graph.name, graph.id === S.activeGraphId, onPick);
+  row.classList.add("is-flow");
   const del = document.createElement("button");
   del.type = "button";
   del.className = "flow-pick-del";
@@ -265,7 +267,11 @@ export function buildFlowPicker(onSwitched?: (graph: FlowGraph | null) => void):
   button.append(face, caret);
 
   const paintFace = () => {
-    renderName(face, activeGraph()?.name ?? NO_FLOW);
+    const graph = activeGraph();
+    renderName(face, graph?.name ?? NO_FLOW);
+    // an unsaved template instance (the draft) shows its template's name
+    face.classList.toggle("is-template", !!graph && graph === activeDraft());
+    face.classList.toggle("is-flow", !!graph);
   };
 
   const picked = (graph: FlowGraph | null) => {
@@ -285,7 +291,7 @@ export function buildFlowPicker(onSwitched?: (graph: FlowGraph | null) => void):
           picked(openTemplateDraft(template.id));
         }, STARTER_TEMPLATES.some((starter) => starter.id === template.id)
           ? starterDescription(template, wiredModels().map((model) => model.id), modelLabel)
-          : template.description);
+          : template.description).classList.add("is-template");
       }
     }
     addCollapsibleHead(m, "User", userCollapsed, () => {
@@ -313,6 +319,7 @@ export function buildFlowPicker(onSwitched?: (graph: FlowGraph | null) => void):
   const removeGraph = (id: string) => {
     const before = S.activeGraphId;
     if (!deleteGraph(id)) return;
+    forgetViewport(id);
     if (S.activeGraphId !== before) {
       loadGraph({ id: "", name: "", nodes: [], edges: [], updatedAt: "" });
       onSwitched?.(null);
@@ -419,7 +426,7 @@ export function buildNewFlowButton(picker: FlowPicker, onCreated?: (graph: FlowG
         const graph = openTemplateDraft(template.id);
         picker.refresh();
         if (graph) onCreated?.(graph);
-      });
+      }).classList.add("is-template");
     }
   });
   create.addEventListener("click", submit);

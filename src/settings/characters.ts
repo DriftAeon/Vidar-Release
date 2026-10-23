@@ -5,12 +5,14 @@
 // model path is never typed here: Add, Browse and Pin New File run the picker/hash in Rust.
 // Lighting and clip speed are hand-edited in character.json for now.
 import { invoke } from "../ipc";
+import { loadConfig } from "../config";
 import type { CharacterEntry, CharacterList, Claim, ClaimKind, MaterialPreference } from "../character/catalog";
 import {
   addCharacter, characterList, onCharactersChanged, onStyleNotes, refreshCharacters, removeCharacter,
   repinCharacter, setDefaultCharacter, styleNote, updateCharacter,
 } from "../character/packs";
 import { claimsOf, findClashes, normaliseKey, type Clash } from "../character/resolve";
+import { AUTO_RENDERER, findRenderer, renderers } from "../character/renderer-registry";
 import { REVERT_EVENT } from "./modal";
 import { addSettingRow, registerCategory } from "./registry";
 import { iconImg } from "../icon-img";
@@ -165,7 +167,14 @@ function editor(setError: (msg: string) => void): HTMLElement {
       det.appendChild(detailRow("Answers To", chips(entry, clashes, true)));
       const material = el("select", "sc-select ch-material");
       material.setAttribute("aria-label", "Material Style");
-      for (const [value, label] of [["auto", "Auto"], ["cel", "Cel"], ["standard", "Standard"]]) material.add(new Option(label, value));
+      material.add(new Option("Auto", AUTO_RENDERER));
+      for (const r of renderers()) material.add(new Option(r.label, r.id));
+      if (pack.material !== AUTO_RENDERER && !findRenderer(pack.material)) {
+        // Not installed here: show the pack's own id as the current value, greyed out and not pickable.
+        const missing = new Option(`${pack.material} (Not Installed)`, pack.material);
+        missing.disabled = true;
+        material.add(missing);
+      }
       material.value = pack.material;
       material.addEventListener("change", () => run(updateCharacter(entry.target, { material: material.value as MaterialPreference })));
       const note = styleNote(pack.id);
@@ -279,6 +288,39 @@ function defaultPicker(setError: (msg: string) => void): HTMLElement {
   return select;
 }
 
+/** vidar.json `characterStage` through patch_settings; "" (Default Stage) clears the key. A
+ *  broken stage is listed but not pickable, its reason as the tooltip. */
+function stagePicker(setError: (msg: string) => void): HTMLElement {
+  const select = el("select", "sc-select ch-stage");
+  select.setAttribute("aria-label", "Stage");
+  select.add(new Option("Default Stage", ""));
+  select.disabled = true;
+  void Promise.all([invoke("list_stages"), loadConfig()]).then(([list, res]) => {
+    const pick = typeof res.config.characterStage === "string" ? res.config.characterStage : "";
+    for (const entry of list.stages) {
+      // A broken entry with no valid id is listed disabled under its folder name.
+      const option = new Option(entry.stage?.label ?? entry.folder, entry.id ?? entry.folder);
+      if (entry.status !== "ok") {
+        option.disabled = true;
+        option.title = entry.reason ?? "";
+      }
+      select.add(option);
+    }
+    if (pick && !list.stages.some((entry) => entry.id === pick)) {
+      const missing = new Option(`${pick} (Not Installed)`, pick);
+      missing.disabled = true;
+      select.add(missing);
+    }
+    select.value = pick;
+    select.disabled = false;
+  }, (e) => setError(`Stages Not Loaded: ${String(e)}`));
+  select.addEventListener("change", () => {
+    void invoke("patch_settings", { key: "characterStage", value: select.value })
+      .then(() => setError(""), (e) => setError(`Not Saved: ${String(e)}`));
+  });
+  return select;
+}
+
 let registered = false;
 
 /** Adds the Characters page once, after Workspaces and above Keybinds. */
@@ -299,5 +341,11 @@ export function registerCharacterRows(): void {
     tip: "For any tab nothing else matches. None shows the empty stage.",
     category: CHARACTERS_CATEGORY,
     control: defaultPicker,
+  });
+  addSettingRow({
+    name: "Stage",
+    tip: "What the character stands in. Stage packs are folders in content\\stages\\ in the Vidar folder; Default Stage is the built-in dome.",
+    category: CHARACTERS_CATEGORY,
+    control: stagePicker,
   });
 }

@@ -48,9 +48,9 @@ test("lint-copy: placeholder sinks reject Optional and dash qualifiers", () => {
     'a.placeholder = "Optional Notes";',
     'b.setAttribute("placeholder", "Notes — Required Later");',
     'c.innerHTML = `<input placeholder="Optional">`;',
-    'askGate({ placeholder: "Optional — Note" });',
+    'ask({ placeholder: "Optional — Note" });',
     'd.placeholder = "Notes";',
-    'askGate({ placeholder: "Notes" });',
+    'ask({ placeholder: "Notes" });',
     'e.placeholder = "Optional"; // copy-ok: test',
   ].join("\n");
   const hits = scanSource(src).filter((f) => f.sink === "placeholder").map((f) => `${f.line}:${f.text}`);

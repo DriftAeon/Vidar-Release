@@ -148,7 +148,23 @@ fn update(id: &str, version: &str) -> Result<(), String> {
     if after.version != version && super::parse_semver(&after.version) <= super::parse_semver(version) {
         return Err("Updater Did Not Reach the Offered Version (Check Release Channel)".into());
     }
+    if after.npm {
+        // npm can exit 0 after dropping an optional platform dep, leaving a manifest that
+        // reads fine but a CLI that cannot start; only a launch proves the install.
+        let mut probe = Command::new(&after.exe);
+        probe.arg("--version").env("DISABLE_AUTOUPDATER", "1");
+        let ran = process::run(probe, deadline.min(Instant::now() + Duration::from_secs(10)));
+        if !reports_version(ran.as_deref(), &after.version) {
+            return Err("Updated CLI Does Not Start: Reinstall It".into());
+        }
+    }
     Ok(())
+}
+
+/// `--version` output proves the install when it ran at all and names the expected version as
+/// a whole token (CLIs print either `1.2.3` or `name 1.2.3`).
+fn reports_version(output: Option<&str>, expected: &str) -> bool {
+    output.is_some_and(|text| text.split_whitespace().any(|token| token == expected))
 }
 
 #[tauri::command]
@@ -192,6 +208,16 @@ mod tests {
         let fresh = check_with(true, || offer("1.2.0"));
         assert_eq!(fresh[0].latest, "1.2.0");
         assert_eq!(cached_offers().unwrap()[0].latest, "1.2.0");
+    }
+
+    #[test]
+    fn cli_update_proof_needs_the_expected_version_token() {
+        assert!(reports_version(Some("0.164.0\n"), "0.164.0"));
+        assert!(reports_version(Some("codex-cli 0.164.0\r\n"), "0.164.0"));
+        assert!(!reports_version(None, "0.164.0"));
+        assert!(!reports_version(Some(""), "0.164.0"));
+        assert!(!reports_version(Some("codex-cli 0.163.0"), "0.164.0"));
+        assert!(!reports_version(Some("0.164.01"), "0.164.0"));
     }
 
     #[test]

@@ -4,7 +4,8 @@
 import { invoke, listen } from "../ipc";
 import type { FalconSessionSummary as FalconHostedSession } from "../ipc";
 import { sessionTitle, jettisonSession, findTabByFalconSessionHosted, isJettisonBusy, openFalconSessionIds } from "../panels/sessions";
-import { askGate } from "../panels/askgate";
+import { APPROVAL_TITLES, type ApprovalRecord, type ApprovalOutcome } from "../asks/approval";
+import { openApproval } from "../asks/approvals";
 import { depFound } from "../deps/state";
 
 /** How long after initAskGate an unreported `desks` or `codex` dependency (the desks pack gate,
@@ -38,7 +39,7 @@ export interface OpenAskDeps {
 // deadline, so every path below calls open_result exactly once.
 export function initAskGate({ adoptHosted, spawnAstra }: OpenAskDeps) {
   const bootAt = Date.now();
-  listen<{ id: string; kind: string; reason: string; requester: string; session: string | null; claimedAtMs: number }>("open-ask", async (e) => {
+  listen<{ id: string; kind: string; reason: string; requester: string; session: string | null; claimedAtMs: number; expiresAtMs: number }>("open-ask", async (e) => {
     const d = e.payload;
     const report = (ok: boolean, tab: string | null, verdict: string, comment: string, reason: string | null) =>
       invoke("open_result", { id: d.id, ok, tab, verdict, comment, reason }).catch(() => {});
@@ -99,23 +100,34 @@ export function initAskGate({ adoptHosted, spawnAstra }: OpenAskDeps) {
     // Desks pack gate (K2) before the dialog, so the user never sees an ask that cannot succeed.
     if (!(await desksReady(bootAt))) return report(false, null, "failed", "", "Desks Pack Not Set Up");
     const asker = sessionTitle(d.requester) ?? d.requester;
-    const { approved, shown, comment, reason } = await askGate({
-      permission: true,
-      details: [["Asked By",asker], ["Opens", OPENS_ASTRA], ["Request", d.id]],
+    // Anonymous ingress: the requester is self-declared, so the record is unverified.
+    // expiresAtMs is stamped at claim by open.rs.
+    const record: ApprovalRecord & { expiresAtMs: number } = {
+      id: d.id,
+      origin: "astra",
+      title: APPROVAL_TITLES.astra,
+      asker: { tab: d.requester, label: asker, verified: false },
+      rows: [["Asked By", `${asker} (Unverified)`], ["Opens", OPENS_ASTRA], ["Request", d.id]],
       matrix: { nodes: [], fields: [], facts: [
-        { label: "Asked By", icon: "user", value: asker },
+        { label: "Asked By", icon: "user", value: `${asker} (Unverified)` },
         { label: "Opens", icon: "opens", value: OPENS_ASTRA },
         { label: "Request", icon: "request", value: d.id, mono: true },
       ] },
       question: d.reason,
-      claimedAtMs: d.claimedAtMs,
-      id: d.id,
-      tab: d.requester,
-    }, "astra"); // d.kind is "astra" here (checked above)
-    // Deduped or expired: the user never saw it, so this is NOT a denial. The
+      askedAtMs: d.claimedAtMs,
+      expiresAtMs: d.expiresAtMs,
+      comment: true,
+      drawInAskerTab: true,
+    };
+    const outcome = await new Promise<ApprovalOutcome | { verdict: "refused"; reason: string }>((resolve) => {
+      const refusal = openApproval(record, resolve);
+      if (refusal) resolve({ verdict: "refused", reason: refusal });
+    });
+    // Refused, expired or cancelled: the user never answered, so this is NOT a denial. The
     // asker must be able to tell "they said no" from "it never reached them".
-    if (!shown) return report(false, null, "failed", comment, reason ?? "self-answered");
-    if (!approved) return report(false, null, "denied", comment, null);
+    if (!("comment" in outcome)) return report(false, null, "failed", "", outcome.reason || "self-answered");
+    const comment = outcome.comment;
+    if (outcome.verdict === "deny") return report(false, null, "denied", comment, null);
     try {
       const tab = await spawnAstra(d.requester);
       return report(true, tab, "approved", comment, null);

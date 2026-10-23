@@ -115,10 +115,11 @@ function button(doc: Document, cls: string, label: string, onClick: () => void):
 export function renderStartupUpdateRows(
   root: HTMLElement, updates: CliUpdate[], busy: CliUpdateBusy | null, error: string | null,
   actions: { update(u: CliUpdate): void; skip(u: CliUpdate): void; blocked?(u: CliUpdate): string | null },
+  labels: { heading: string; main: string } = { heading: "CLI Updates", main: "Update" },
 ): void {
   const doc = root.ownerDocument;
   root.textContent = "";
-  root.appendChild(el(doc, "div", "swap-confirm-head", "CLI Updates"));
+  root.appendChild(el(doc, "div", "swap-confirm-head", labels.heading));
   const body = el(doc, "div", "swap-confirm-body");
   const rows = el(doc, "div", "deps-rows");
   for (const u of updates) {
@@ -128,7 +129,7 @@ export function renderStartupUpdateRows(
     const head = el(doc, "div", "deps-head");
     head.appendChild(el(doc, "span", "deps-label", u.label));
     const controls = el(doc, "div", "deps-route");
-    const update = button(doc, "deps-update", busy?.id === u.id && busy.label === "Updating…" ? busy.label : "Update", () => actions.update(u));
+    const update = button(doc, "deps-update", busy?.id === u.id && busy.label === "Updating…" ? busy.label : labels.main, () => actions.update(u));
     const skip = button(doc, "deps-skip", busy?.id === u.id && busy.label === "Saving…" ? busy.label : "Skip", () => actions.skip(u));
     update.disabled = skip.disabled = busy !== null;
     // A CLI with an open tab: updating would replace the binary under it, so Update waits.

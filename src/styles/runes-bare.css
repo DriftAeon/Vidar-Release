@@ -21,6 +21,11 @@
 .runes-bare .rp-source[data-kind]:not(.is-ro):focus-visible { border-color: var(--accent); }
 
 /* Generating: one line per source */
+/* heading labels between rune rows: plain text, not clickable, spacing above and no rule; category labels bold and
+   inset 4 past the rows' rounded corners (user, 2026-10-23) */
+.runes-bare-label { margin-top: var(--space-8); padding-left: var(--space-4); font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); pointer-events: none; user-select: none; }
+.runes-bare-label.sub { margin-top: var(--space-4); padding-left: var(--space-12); font-family: var(--font-ui); font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--fg-dim); }
+.runes-tray > .runes-bare-label:first-child { margin-top: 0; }
 .runes-bare-lines { display: flex; flex-direction: column; gap: var(--space-4); }
 .runes-bare-line { display: flex; align-items: baseline; gap: var(--space-8); padding: var(--space-4) 0; border-bottom: var(--border-w) solid var(--border); }
 .runes-bare-line-path { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg-dim); overflow-wrap: anywhere; }
@@ -70,11 +75,13 @@
 .runes-warn-line { display: flex; align-items: center; gap: var(--space-8); font-size: var(--font-12); line-height: var(--line-16); cursor: help; }
 .runes-warn-line .icn { flex: none; width: var(--space-16); height: var(--space-16); }
 .runes-warn-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runes-warn-close { flex: none; margin-left: auto; cursor: pointer; }
 
-/* View rows: the ticked shared items, read-only; the ticked fill's accent tint a fifth stronger (12% → 14%) and the path lifted
-   30% toward --fg, so the dim path clears 4.5:1 (Cobalt 5.6, Onyx 5.2; user, 2026-10-22); the .runes-blk edge, no hover change */
+/* View rows: the ticked shared items, read-only; the fill is a 7% accent tint over --bg, about 60% darker than the old
+   14% over --bg-panel (Cobalt #121a25, was #1d2d41; user, 2026-10-23: too light to read), and the path lifted 30% toward
+   --fg (Cobalt 7.0:1); the .runes-blk edge, no hover change */
 .runes-bare .rp-source.is-ro > .rp-path { color: color-mix(in srgb, var(--fg) 30%, var(--fg-dim)); }
-.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: color-mix(in srgb, var(--accent) 14%, var(--bg-panel)); border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); color: var(--fg); overflow-wrap: anywhere; }
+.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: color-mix(in srgb, var(--accent) 7%, var(--bg)); border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); color: var(--fg); overflow-wrap: anywhere; }
 
 /* View / Modify: seated on the Key's last line at the right; Done takes the accent (it marks the editing state) */
 .runes-mode { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8); font-weight: var(--weight-strong); }
@@ -100,7 +107,8 @@
 .rp-source:focus-visible { outline: none; border-color: var(--accent); }
 /* skill, agent and hook file rows (row-name.ts): bold name left, the full path right as dim mono subtext; the path
    truncates with an ellipsis first, the name never does. Rune rows keep the plain mono text above. */
-.rp-source:has(> .rp-name) { display: flex; align-items: baseline; gap: var(--space-12); }
+/* those rows pad 4 8, half the rune rows' 8 12 (user, 2026-10-23: they don't need as much) */
+.rp-source:has(> .rp-name) { display: flex; align-items: baseline; gap: var(--space-12); padding: var(--space-4) var(--space-8); }
 .rp-source > .rp-name { flex: none; font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); white-space: nowrap; }
 .rp-source > .rp-path { flex: 1 1 auto; min-width: 0; text-align: right; font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rp-actions { display: flex; gap: var(--space-8); }

@@ -228,7 +228,7 @@ test("page icons: the emoji, else a glyph for top-level hits; a blank slot only 
   const pg = hitItem({ id: id(1), kind: "page", title: "Home", url: "u", lastEdited: "", icon: "\u{1F4D8}" });
   const bare = hitItem({ id: id(2), kind: "page", title: "Bare", url: "u", lastEdited: "", icon: "" });
   const db = hitItem({ id: id(3), kind: "source", title: "Tasks", url: "u", lastEdited: "" });
-  assert.deepEqual([pg.lead, bare.lead, db.lead], [{ emoji: "\u{1F4D8}" }, { glyph: "file-text" }, { glyph: "database" }]);
+  assert.deepEqual([pg.lead, bare.lead, db.lead], [{ emoji: "\u{1F4D8}" }, { color: "notion-page" }, { color: "notion-database" }]);
   const plan = planFor(source(BASE));
   assert.deepEqual(rowItem(row({}, { icon: "\u{1F41E}" }), plan, true).lead, { emoji: "\u{1F41E}" });
   assert.deepEqual(rowItem(row({}, { icon: "" }), plan, true).lead, { blank: true });

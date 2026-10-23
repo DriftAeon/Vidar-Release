@@ -61,6 +61,8 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
       return `${mockPath("bridge")}worktrees\\codex-20261022-120000`;
     case "list_characters":
       return { packs: [], default: null };
+    case "list_stages":
+      return { stages: [] };
     case "spawn_pty":
       return spawnMockPty(String(args?.id), Number(args?.ptyGen));
     case "write_pty":

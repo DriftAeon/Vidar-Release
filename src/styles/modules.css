@@ -91,7 +91,6 @@
 }
 /* fixed green (same hue as --ok-green), not a theme accent — the
    dot means "advertised by a live server" in every CAS mode */
-.rack-tool-dot { color: #22c55e; flex-shrink: 0; white-space: pre; }
 .rack-tool-name {
   color: var(--fg);
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
@@ -121,7 +120,7 @@
 .item-btn-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- observation modules (LM Studio, Ports, rack backends) ----
-   Dots are fixed hues like .rack-tool-dot: green = answered / loopback,
+   Dots are fixed hues (state-dot.css module tokens): green = answered / loopback,
    amber = reachable-but-not-usable / bound beyond loopback, dim = down. */
 .mod-head-row { display: flex; align-items: center; justify-content: space-between; }
 /* section headings centred; a head with a right-side control (Ports) keeps space-between */
@@ -145,9 +144,9 @@
 .mod-line { display: flex; align-items: baseline; min-width: 0; font-size: var(--font-12); }
 .mod-line.sub { font-size: var(--font-11); }
 .mod-dot { flex-shrink: 0; white-space: pre; }
-.mod-dot-ok, .rack-tool-dot.mod-dot-ok { color: #22c55e; }
-.mod-dot-warn, .rack-tool-dot.mod-dot-warn { color: #f59e0b; }
-.mod-dot-off { color: var(--fg-dim); }
+.mod-dot-ok { color: var(--dot-ok-module); }
+.mod-dot-warn { color: var(--dot-warn-module); }
+.mod-dot-off { color: var(--dot-off); }
 .mod-toggle {
   align-self: flex-start; background: none; border: none; padding: 0; margin-top: var(--space-4);
   color: var(--fg-dim); font-size: var(--font-11); cursor: pointer; text-decoration: underline dotted;

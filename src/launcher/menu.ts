@@ -12,6 +12,8 @@ import { setRoster, shownKey, shownRoots, typeLabel, setCloseLauncher } from "./
 import { onDepsChange } from "../deps/state";
 import { col, hideColsFrom, hoverOpen, launcherCols, setColumnRoot } from "./columns";
 import { markFor, menuRow, onGatewayMarksChange } from "./menu-rows";
+import { openPopover, placePopover, type ClosePopover } from "../modules/popover";
+import { placeBeside } from "../modules/place-menu";
 
 export interface LauncherMenuDeps {
   openLocations: (t: AgentType, anchor: HTMLElement, locations: Location[]) => void;
@@ -24,7 +26,17 @@ export let launcherMenu: HTMLDivElement;
 // column 0 under its old name: Active and Add-new are modes of it and fill it in place
 export let launcherSub: HTMLElement;
 
+// The open launcher's popover close (popover.ts); null while closed.
+let closeMenu: ClosePopover | null = null;
+
+/** External closers (spawn, hosted rows, a location pick, a dependency redraw) and the ＋ toggle
+ *  all land here; the column teardown runs in the popover's onClose. */
 export function closeLauncher() {
+  if (closeMenu) closeMenu();
+  else teardown();
+}
+
+function teardown() {
   launcherMenu.classList.add("hidden");
   hideColsFrom(0);
   for (const c of launcherMenu.children) c.classList.remove("open");
@@ -83,16 +95,25 @@ onGatewayMarksChange(() => {
 
 // Left click opens the launcher list — picking the shell is the common case,
 // and a bare click that silently spawned powershell was the odd one out.
+// Outside close is popover.ts's capture-phase mousedown: ＋ (the anchor) and the flyout columns
+// (`inside`) are exempt, so a row whose click re-renders its column (Active, ‹ Back) no longer needs
+// stopPropagation to survive a detached click target.
 export function openLauncher() {
   if (onboardingOpen()) return; // onboarding gate: new sessions wait for the overlay
   const r = newBtn.getBoundingClientRect();
   // off the left bar's edge, not the button's: the bar (and a theme's border on it) is wider
-  // than the button, and a button-anchored menu overlapped it by 3px
+  // than the button, and a button-anchored menu overlapped it by 3px. New Session sits under
+  // the tab list, low in the bar: top is clamped to keep the menu on screen.
   const bar = document.getElementById("leftbar")?.getBoundingClientRect();
-  launcherMenu.style.left = `${Math.max(r.right, bar?.right ?? 0) + 6}px`;
-  launcherMenu.classList.remove("hidden");
-  // New Session sits under the tab list, low in the bar: keep the menu on screen
-  launcherMenu.style.top = `${Math.max(8, Math.min(r.top, window.innerHeight - launcherMenu.offsetHeight - 8))}px`;
+  const place = placeBeside(r, bar?.right ?? 0);
+  // already open (a /resume answer, the new-tab chord): re-place only, keep its columns
+  if (closeMenu) { placePopover(launcherMenu, place); return; }
+  const close = openPopover({
+    el: launcherMenu, anchor: newBtn, persistent: true, keys: "document",
+    inside: () => launcherCols, place, restoreFocus: focusActive,
+    onClose: () => { if (closeMenu === close) closeMenu = null; teardown(); },
+  });
+  closeMenu = close;
 }
 
 export function initLauncherMenu(deps: LauncherMenuDeps): void {
@@ -106,9 +127,8 @@ export function initLauncherMenu(deps: LauncherMenuDeps): void {
   document.body.append(launcherMenu);
   setCloseLauncher(closeLauncher);
   setHostedClose(closeLauncher);
-  newBtn.addEventListener("click", (e) => {
-    e.stopPropagation(); // else the document handler below closes it immediately
-    if (!launcherMenu.classList.contains("hidden")) {
+  newBtn.addEventListener("click", () => {
+    if (closeMenu) {
       closeLauncher();
       return;
     }
@@ -118,15 +138,6 @@ export function initLauncherMenu(deps: LauncherMenuDeps): void {
   // others / close to the right / close all). Preventing default stops the
   // WebView2 context menu appearing in the meantime.
   newBtn.addEventListener("contextmenu", (e) => e.preventDefault());
-
-  document.addEventListener("click", (e) => {
-    const t = e.target as Node;
-    if (!launcherMenu.contains(t) && !launcherCols.some((c) => c.contains(t))) closeLauncher();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !launcherMenu.classList.contains("hidden")) {
-      closeLauncher();
-      focusActive(); // a keyboard-opened menu must hand focus back, not drop it on body
-    }
-  });
+  // Escape: popover keys "document", then restoreFocus (focusActive): a keyboard-opened menu must
+  // hand focus back, not drop it on body.
 }

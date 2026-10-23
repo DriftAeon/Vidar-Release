@@ -24,6 +24,8 @@ const { S, notifyPendingApprovalsChanged } = await import("../src/flow/state.ts"
 const store = await import("../src/relay/store.ts");
 const { startFlowApprovalRelay } = await import("../src/flow/approvals-relay.ts");
 const { createCardForm } = await import("../src/relay/card-view.ts");
+const { startApprovalSource } = await import("../src/relay/source-approvals.ts");
+const { liveApprovals } = await import("../src/asks/approvals.ts");
 
 globalThis.__runs = {
   "run-a": { id: "run-a", graphSnapshot: { name: "Review Flow", nodes: [{ id: "n1", title: "Reviewer" }, { id: "n2", title: "Fixer" }] } },
@@ -31,7 +33,8 @@ globalThis.__runs = {
 S.activeRunId = "run-other"; // the run under approval is not the canvas's shown run
 
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
-const cards = () => store.items().filter((i) => i.source === "flow-approvals");
+startApprovalSource();
+const cards = () => store.items().filter((i) => i.source === "approvals" && i.id.startsWith("flow-approval:"));
 function add(id, nodeId = "n1", command = "git status") {
   S.pendingApprovals.set(id, { runId: "run-a", nodeId, attempt: 1, request: { id, toolUseId: null, tool: "Bash", input: { command }, suggestions: [] } });
   notifyPendingApprovalsChanged();
@@ -80,6 +83,22 @@ test("a pending approval from a non-active run is one Relay card and Approve ans
   await item.resolve({ verdict: "approve", comment: "" });
   await tick(5);
   assert.deepEqual(globalThis.__log, ["invoke:perm-1:true"]);
+  assert.equal(cards().length, 0);
+});
+
+test("the Flow producer records origin flow, and approving from Relay sends one permission answer", async () => {
+  reset();
+  add("perm-r");
+  const [entry] = liveApprovals().filter((e) => e.record.id === "flow-approval:perm-r");
+  assert.equal(entry.record.origin, "flow");
+  assert.equal(entry.record.title, "Tool Approval");
+  const [item] = cards();
+  await item.resolve({ verdict: "approve", comment: "" });
+  await tick(5);
+  assert.deepEqual(globalThis.__log, ["invoke:perm-r:true"]);
+  await item.resolve({ verdict: "approve", comment: "" }); // stale: sends nothing more
+  await tick(5);
+  assert.deepEqual(globalThis.__log, ["invoke:perm-r:true"]);
   assert.equal(cards().length, 0);
 });
 

@@ -16,14 +16,7 @@ pub const MAX_KEY_CHARS: usize = 64;
 const MAX_ID_CHARS: usize = 64;
 const MAX_NAME_CHARS: usize = 64;
 const MAX_PLAYRATES: usize = 64;
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Material {
-    Auto,
-    Cel,
-    Standard,
-}
+const MAX_MATERIAL_CHARS: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -59,7 +52,9 @@ pub struct Pack {
     pub id: String,
     pub name: String,
     pub model: ModelPin,
-    pub material: Material,
+    /// A renderer id: `auto`, `standard`, or a webview renderer addon's id (`valid_material`).
+    /// Whether it is installed is the webview's call; an unknown id renders Standard there.
+    pub material: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lighting: Option<Lighting>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -96,6 +91,13 @@ pub fn slug(stem: &str) -> String {
     if out.is_empty() { "character".into() } else { out }
 }
 
+/// `material`: `auto` or a renderer id, 1-32 of lowercase letters, digits and `-`.
+pub fn valid_material(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAX_MATERIAL_CHARS
+        && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 pub fn normalise_key(key: &str) -> String {
     key.trim().to_lowercase()
 }
@@ -113,6 +115,9 @@ pub fn validate(pack: &Pack) -> Result<(), String> {
     let name = pack.name.trim();
     if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
         return Err("name must be 1-64 characters".into());
+    }
+    if !valid_material(&pack.material) {
+        return Err(format!("material \"{}\" must be auto or a renderer id: 1-32 lowercase letters, digits or -", pack.material));
     }
     if pack.model.path.trim().is_empty() {
         return Err("model.path is empty".into());
@@ -255,11 +260,13 @@ mod tests {
     #[test]
     fn an_out_of_range_or_oversize_pack_is_invalid() {
         assert!(parse_value(&pack_json()).is_ok());
-        let cases: [(&str, Value); 6] = [
+        let cases: [(&str, Value); 8] = [
             ("/lighting/ambient", json!(2.5)),
             ("/playrate/bn01", json!(0.01)),
             ("/playrate/bn01", json!(5)),
-            ("/material", json!("toon")),
+            ("/material", json!("Toon")),
+            ("/material", json!("my toon")),
+            ("/material", json!("x".repeat(33))),
             ("/model/bytes", json!(65 * 1024 * 1024)),
             ("/id", json!("../escape")),
         ];
@@ -282,6 +289,19 @@ mod tests {
         dim["lighting"]["ambient"] = json!(2.5);
         let ident = parse_value(&dim).unwrap_err().identity.expect("identity survives");
         assert_eq!((ident.id.as_str(), ident.answers_to.len()), ("sample", 1));
+    }
+
+    #[test]
+    fn material_is_a_renderer_id() {
+        let longest = "x".repeat(32);
+        for ok in ["auto", "cel", "standard", "toon", "my-toon-2", longest.as_str()] {
+            let mut v = pack_json();
+            v["material"] = json!(ok);
+            assert_eq!(parse_value(&v).map(|p| p.material), Ok(ok.to_string()), "{ok} should be valid");
+        }
+        let pack = parse_value(&pack_json()).unwrap();
+        assert_eq!(apply_patch(&pack, &json!({ "material": "toon" })).unwrap().material, "toon");
+        assert!(apply_patch(&pack, &json!({ "material": "Toon Shader" })).is_err());
     }
 
     #[test]

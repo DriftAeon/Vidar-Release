@@ -333,6 +333,7 @@ fn read_pack_bytes(folder: &str, dir: &Path, c: &Contract) -> Result<(ModuleDecl
     if !id_ok(id) {
         return Err(format!("Id {id} Does Not Match {}", c.id_pattern));
     }
+    super::compat::check_pack_compat(&pack, env!("CARGO_PKG_VERSION"), super::compat::CORE_CONTRACT)?;
     let Some(block) = pack.get("module") else {
         let label = pack.pointer("/ui/label").and_then(Value::as_str).unwrap_or(id).to_string();
         let decl = ModuleDecl {
@@ -665,6 +666,26 @@ mod contract_extension_tests {
         let mut no_raw = base;
         no_raw["agent"]["rows"] = json!(["rendered"]);
         assert!(check(no_raw).unwrap_err().contains("Needs An Agent raw Row"));
+    }
+
+    #[test]
+    fn read_pack_applies_requires_and_keeps_absent_keys() {
+        let contract: Contract = serde_json::from_str(include_str!("../../../contracts/modules.json")).unwrap();
+        let root = std::env::temp_dir().join(format!("vidar-pack-compat-{}", std::process::id()));
+        let dir = root.join("acme");
+        std::fs::create_dir_all(&dir).unwrap();
+        let read = |pack: Value| {
+            std::fs::write(dir.join("pack.json"), pack.to_string()).unwrap();
+            read_pack("acme", &dir, &contract).map(|_| ())
+        };
+        assert!(read(json!({ "id": "acme", "version": 1 })).is_ok());
+        let ok = json!({ "id": "acme", "version": 1, "release": "1.0.0", "requires": { "contract": 1, "minCore": "0.0.1" } });
+        assert!(read(ok).is_ok());
+        let new = json!({ "id": "acme", "version": 1, "requires": { "contract": 1, "minCore": "999.0.0" } });
+        assert_eq!(read(new).unwrap_err(), "Needs Vidar 999.0.0 or Newer");
+        let bad = json!({ "id": "acme", "version": 1, "release": "x" });
+        assert!(read(bad).unwrap_err().contains("release"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

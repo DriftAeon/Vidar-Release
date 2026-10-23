@@ -8,10 +8,10 @@
 .ux-status { display: inline-flex; align-items: center; gap: var(--space-4); flex: none; color: var(--fg-dim); }
 .ux-status .icn { width: var(--space-16); height: var(--space-16); }
 /* status dot after the icon, sized as .tab-agent-dot (leftbar.css) and round; signal colours as its states */
-.ux-dot { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--fg-dim); }
-.ux-dot[data-state="ok"] { background: var(--ok-green); }
-.ux-dot[data-state="warn"] { background: var(--approval-amber); }
-.ux-dot[data-state="alert"] { background: var(--alert); }
+.ux-dot { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--dot-off); }
+.ux-dot[data-state="ok"] { background: var(--dot-ok); }
+.ux-dot[data-state="warn"] { background: var(--dot-warn); }
+.ux-dot[data-state="alert"] { background: var(--dot-alert); }
 .unreal-pane .cx-sec > .icn { margin-inline-end: var(--space-4); }
 .unreal-pane .cx-row { min-width: 0; }
 .unreal-pane .cx-row > .icn { color: var(--fg-dim); }

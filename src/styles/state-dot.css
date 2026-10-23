@@ -1,0 +1,10 @@
+/* Dot state vocabulary: every status dot (tab agents, Unreal, modules, onboarding) reads these.
+   Themed values follow the tokens; the module pair keeps its fixed hues (user pick: no on-screen change). */
+:root {
+  --dot-ok: var(--ok-green);
+  --dot-warn: var(--approval-amber);
+  --dot-alert: var(--alert);
+  --dot-off: var(--fg-dim);
+  --dot-ok-module: #22c55e;
+  --dot-warn-module: #f59e0b;
+}

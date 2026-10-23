@@ -2,7 +2,7 @@
 //!
 //! Trust on first use, owned by Rust: add and re-pin open the native `.glb` picker here and
 //! pin what Rust read; the webview never supplies a model path or a digest. `update_character`
-//! takes only name, material, answersTo, lighting and playrate (`pack::apply_patch`).
+//! takes only name, material (a renderer id), answersTo, lighting and playrate (`pack::apply_patch`).
 //! Split: `pack.rs` schema and limits, `store.rs` folders and `vidar.json` `characters`,
 //! `pin.rs` hashing and status.
 
@@ -14,7 +14,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 pub use pack::ModelPin;
-use pack::{Claim, Material, Pack};
+use pack::{Claim, Pack};
 use pin::Status;
 
 #[derive(Serialize)]
@@ -110,7 +110,7 @@ pub async fn add_character(window: tauri::WebviewWindow) -> Result<Option<String
             id: id.clone(),
             name: if name.is_empty() { id.clone() } else { name },
             model: pin,
-            material: Material::Auto,
+            material: "auto".into(),
             lighting: None,
             playrate: Default::default(),
             answers_to: Vec::new(),

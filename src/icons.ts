@@ -185,9 +185,59 @@ const PATHS = {
   ],
   "list-checks": ["m3 17 2 2 4-4", "m3 7 2 2 4-4", "M13 6h8", "M13 12h8", "M13 18h8"],
   database: ["M3 5a9 3 0 1 0 18 0a9 3 0 1 0-18 0", "M3 5V19A9 3 0 0 0 21 19V5", "M3 12A9 3 0 0 0 21 12"],
+  // Rendered transcript set (merged from rendered/icons.ts). <rect 3,3,18,18 rx2> is written as the
+  // equivalent rounded-rect path (the square-* glyphs and calendar); other circles/rects likewise.
+  "square-chart-gantt": ["M9 8h7", "M8 12h6", "M11 16h5", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  "square-chevron-right": ["m10 8 4 4-4 4", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  "square-terminal": ["m7 11 2-2-2-2", "M11 13h4", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  // square-pen's frame is open at the top right so the pen can cross it; it is not the shared outline
+  "square-pen": [
+    "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",
+    "M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z",
+  ],
+  // search-code's lens (circle cx11 cy11 r8) is written as a two-arc path
+  "search-code": ["m13 13.5 2-2.5-2-2.5", "m21 21-4.3-4.3", "M9 8.5 7 11l2 2.5", "M19 11a8 8 0 1 1-16 0 8 8 0 1 1 16 0z"],
+  "book-open": [
+    "M12 5v16",
+    "M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z",
+  ],
+  // cpu: the 12 pin strokes verbatim; its two rects are written as rounded-rect paths
+  cpu: [
+    "M12 20v2", "M12 2v2", "M17 20v2", "M17 2v2", "M2 12h2", "M2 17h2", "M2 7h2",
+    "M20 12h2", "M20 17h2", "M20 7h2", "M7 20v2", "M7 2v2",
+    "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    "M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z",
+  ],
+  "chevron-right": ["m9 18 6-6-6-6"],
+  braces: [
+    "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1",
+    "M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1",
+  ],
+  globe: ["M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20", "M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0z"],
+  "folder-search": [
+    "M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1",
+    "m21 21-1.9-1.9",
+    "M20 17a3 3 0 1 1-6 0 3 3 0 1 1 6 0z",
+  ],
+  bot: [
+    "M12 8V4H8",
+    "M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z",
+    "M2 14h2", "M20 14h2", "M15 13v2", "M9 13v2",
+  ],
+  clock: ["M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0z", "M12 6v6l4 2"],
+  calendar: ["M8 2v3", "M16 2v3", "M3 9h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  shield: [
+    "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+  ],
 } as const;
 
 export type LucideName = keyof typeof PATHS;
+
+/** The glyph's path data for a name, or undefined. Own keys only, so a name arriving from the
+ *  agent stream (`constructor`, `__proto__`) never resolves to an inherited value. */
+export function lucidePath(name: string): readonly string[] | undefined {
+  return Object.hasOwn(PATHS, name) ? PATHS[name as LucideName] : undefined;
+}
 
 /** A 24-unit Lucide glyph sized by the `.icn` rule (or the caller's class). */
 export function lucide(name: LucideName, className = "icn"): SVGSVGElement {

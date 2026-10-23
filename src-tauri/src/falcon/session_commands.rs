@@ -164,11 +164,15 @@ fn falcon_spawn_blocking(
             crate::bare::admit_rendered(p, Some("codex"), rules_file.as_deref())?;
             let row_key = crate::bare::admit_row_key(row_key.clone(), Some(p), None)?;
             let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), ..Default::default() };
+            // Serialised with the Raw and in-process prepares (`pty::BARE_PREPARE`); released at the
+            // end of this arm, before the host is asked to spawn.
+            let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
             Some(BareLaunch::Codex(crate::bare::prepare_codex_hosted(p, &opts, &cwd)?))
         }
         Some(p) => {
             crate::bare::admit_hosted(p, rules_file.as_deref(), gateway.as_deref())?;
             let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), ..Default::default() };
+            let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
             Some(BareLaunch::Claude(crate::bare::prepare_hosted_for(p, &opts)?))
         }
         None => None,

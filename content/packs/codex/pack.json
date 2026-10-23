@@ -1,6 +1,7 @@
 {
   "id": "codex",
   "version": 1,
+  "release": "1.0.0",
   "provides": [],
   "slots": { "rewrite": ["voice/codex-exec.json"] },
   "ui": { "label": "Codex" },

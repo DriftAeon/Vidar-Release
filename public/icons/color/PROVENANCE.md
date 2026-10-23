@@ -117,5 +117,7 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | sun-low.svg | fluent-color/svg/ic_fluent_weather_sunny_low_24_color.svg | Fluent Color, MIT |
 | clipboard-edit.svg | fluent-color/svg/ic_fluent_clipboard_text_edit_24_color.svg | Fluent Color, MIT |
 | books.svg | noto-emoji/svg/emoji_u1f4da.svg | Noto Emoji, Apache-2.0 |
+| notion-database.svg | fluent-color/svg/ic_fluent_book_database_24_color.svg | Fluent Color, MIT; Notion default database icon |
+| notion-page.svg | fluent-color/svg/ic_fluent_document_24_color.svg | Fluent Color, MIT; Notion default page icon |
 
 Loaded by `src/icon-img.ts` (`iconImg(name)`).

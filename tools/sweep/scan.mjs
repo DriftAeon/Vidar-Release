@@ -1,4 +1,4 @@
-// Weekly sweep: runs the lint/dep/dead-code lanes and diffs them against the newest snapshot.
+// Weekly sweep: runs the lint/dep/dead-code/systems lanes (systems: lanes-systems.mjs, sys-* ids) and diffs them against the newest snapshot.
 // Plan: docs/runs/2026-10-09-weekly-sweep/plan.md. Report-only; never wired into gate.mjs.
 //
 // Usage:
@@ -21,10 +21,11 @@ import { pathToFileURL } from "node:url";
 import { resolve as resolveId } from "../lib/paths.mjs";
 import { LANES as DEPS_LANES } from "./lanes-deps.mjs";
 import { LANES as CODE_LANES } from "./lanes-code.mjs";
+import { LANES as SYSTEMS_LANES } from "./lanes-systems.mjs";
 const REPO = path.resolve(path.join(import.meta.dirname, "..", ".."));
 const LIST_CAP = 200;
 
-export const ALL_LANES = [...CODE_LANES, ...DEPS_LANES];
+export const ALL_LANES = [...CODE_LANES, ...SYSTEMS_LANES, ...DEPS_LANES];
 
 /** Real exec: spawnSync with shell:true, as tools/gate/gate.mjs. */
 export function makeExec(root) {

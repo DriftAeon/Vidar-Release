@@ -4,7 +4,9 @@
 // imports, so `node --test` loads it directly: settings/agents.ts binds the two sources at boot
 // (`setPrimarySources`), and every consumer reads `effectivePrimary()` at use time.
 
-export type PrimaryAgent = "codex" | "claude";
+import type { AgentId } from "./id";
+
+export type PrimaryAgent = AgentId;
 
 /** The slice of a module row the resolver reads (structural, so registry rows fit). */
 export interface PrimaryModule {

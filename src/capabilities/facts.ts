@@ -111,7 +111,8 @@ export function settle(deadlineMs: number): Settle {
   // A settled detection (report or error) needs no wait; otherwise share the in-flight run
   // main.ts started (loadDeps starts one only if none ran).
   const deps = depsReport() || depsError() ? Promise.resolve() : loadDeps().then(() => {});
-  // Fails closed: the panel stays hidden, so its "Characters Not Loaded" line never shows.
+  // No module gates on this today (the Character window is always on); the fact stays declared.
+  // A failed list shows the panel's own "Characters Not Loaded" line.
   const chars = ensureCharacters().then(() => {});
   return {
     deps: bounded(deps, "dependency detection"),

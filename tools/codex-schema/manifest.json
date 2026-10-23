@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "codexVersion": "0.163.0",
+  "codexVersion": "0.164.0",
   "experimental": true,
   "clientRequests": [
     {
@@ -187,6 +187,11 @@
       "method": "externalAgentConfig/import/recordHistory",
       "paramsType": "ExternalAgentConfigImportHistoryRecordParams",
       "paramsSha256": "8b37123116a7b6c0e49ede26bad2c03e7ac587611261e5443e7e30390daae61f"
+    },
+    {
+      "method": "feedback/save",
+      "paramsType": "FeedbackSaveParams",
+      "paramsSha256": "c0bad1a211f8f7e0f6aabb8c95dacec7d60630ce1664535f608fd90cccab22e2"
     },
     {
       "method": "feedback/upload",
@@ -591,7 +596,7 @@
     {
       "method": "thread/fork",
       "paramsType": "ThreadForkParams",
-      "paramsSha256": "3162610bba0cc4602ea4309ccf8cdfa9fec89d6936821d5dfa1b68c9e4c297ca"
+      "paramsSha256": "084d7e59a2850ea86e2f7fded18f671a59a0d43c91138073ce75f2566019bf48"
     },
     {
       "method": "thread/goal/clear",
@@ -721,7 +726,7 @@
     {
       "method": "thread/realtime/start",
       "paramsType": "ThreadRealtimeStartParams",
-      "paramsSha256": "03e9f764b89fc366dda60084cb7eb85bab52ed9a3d3f2ef0eb35b15f941f81f5"
+      "paramsSha256": "fcbd71972571dc0356dc51d520c481130276b4d3c0999e8481ad5583af7d6074"
     },
     {
       "method": "thread/realtime/stop",
@@ -737,6 +742,16 @@
       "method": "thread/revert",
       "paramsType": "ThreadRevertParams",
       "paramsSha256": "7ab9c67056c18b648b6026cc9f606e5079f3b6393b5d70328a2cb5e6c9c41fd6"
+    },
+    {
+      "method": "thread/sample",
+      "paramsType": "ThreadSampleParams",
+      "paramsSha256": "b651202b4fde0835fd72dab46834c3d0b70fee2700bec22321b3e6d77555be9b"
+    },
+    {
+      "method": "thread/sample/cancel",
+      "paramsType": "ThreadSampleCancelParams",
+      "paramsSha256": "fc0ef88de770ef394f4bd8c0488e94d63d99d91978a32f528511e13500025cf2"
     },
     {
       "method": "thread/search",
@@ -821,12 +836,12 @@
     {
       "method": "turn/start",
       "paramsType": "TurnStartParams",
-      "paramsSha256": "9c64152a0b5a8d916743ac9b701a9c2bc4c10d23afbca174dcc70f8e72bb45c0"
+      "paramsSha256": "82d3476f6f8e5f9ecd69ae09bf8cba6e2781f85ef55794741b0c18bfa2884fa4"
     },
     {
       "method": "turn/steer",
       "paramsType": "TurnSteerParams",
-      "paramsSha256": "f85544af7ee775f7c76a6ba508b6ecaaef04c2badb4a703424312bebc5d2ff6a"
+      "paramsSha256": "5a11e61caa0d2410f6c92184cc2d4d88df589a91aa03e383848115e326f5f7e3"
     },
     {
       "method": "userVerification/cancel",
@@ -1826,12 +1841,12 @@
     {
       "method": "account/rateLimits/updated",
       "paramsType": "AccountRateLimitsUpdatedNotification",
-      "paramsSha256": "be5f424cdc4363436295fb852e975551d61f07b686e894f9b717af32e0b99d37"
+      "paramsSha256": "00e271ece5d1ecc93f8b88fc301878a34a906319815252e761b0c1861894be1a"
     },
     {
       "method": "account/updated",
       "paramsType": "AccountUpdatedNotification",
-      "paramsSha256": "2d9ab119a9a5f9f8210c4494465592299ebee3e4144937fb89c04f67d830b748"
+      "paramsSha256": "37c9ccdd069011516d23a76239901a20d6607908a057b107f1133cac3541cddd"
     },
     {
       "method": "app/list/updated",
@@ -1896,12 +1911,12 @@
     {
       "method": "hook/completed",
       "paramsType": "HookCompletedNotification",
-      "paramsSha256": "898c4fbabdf0bd5948f013581052cdac9deddfb061b210d794bb040819c774df"
+      "paramsSha256": "27225af471640f802be835f314b4215dca90d1945e5c6067029714d7f0f83e4c"
     },
     {
       "method": "hook/started",
       "paramsType": "HookStartedNotification",
-      "paramsSha256": "202ec7479913eef97970ff63145e526d10b093f5a0bcd4f74670c6d19c859a8f"
+      "paramsSha256": "f20e26a0f9a76bc1d7efab00aefd1027175e3c1eaa120a6fbc0aa76543bc01f8"
     },
     {
       "method": "item/agentMessage/delta",
@@ -1931,7 +1946,7 @@
     {
       "method": "item/completed",
       "paramsType": "ItemCompletedNotification",
-      "paramsSha256": "8a4ef7c2987f3a96603f326b8153ae98a15b6b59cfb31d2d0974b523a6dfe20b"
+      "paramsSha256": "c9356dbc8380993cfeeecff5ce0f2e3169e89ddfd0ac3ad26a72449b3e064446"
     },
     {
       "method": "item/fileChange/outputDelta",
@@ -1971,7 +1986,7 @@
     {
       "method": "item/started",
       "paramsType": "ItemStartedNotification",
-      "paramsSha256": "aa96d2931d9bc0e7d5f3cf426915ae6e11c7ee9802f4c910f63c94efb8a7b3ab"
+      "paramsSha256": "0858ae0b225e0bf48c3436763b01213c4399263cd04ed31541536ba84601e43c"
     },
     {
       "method": "mcpServer/event/stream/notification",
@@ -2181,7 +2196,7 @@
     {
       "method": "thread/started",
       "paramsType": "ThreadStartedNotification",
-      "paramsSha256": "6e6b6db5de82f10a7f5486ba7227b733bdebf19f32a905759427cc43cbac0102"
+      "paramsSha256": "98c9863c8359d7e92ba8c03a1725e5a28ed5b9c3484230049a41770e5fb20e0c"
     },
     {
       "method": "thread/status/changed",
@@ -2201,7 +2216,7 @@
     {
       "method": "turn/completed",
       "paramsType": "TurnCompletedNotification",
-      "paramsSha256": "bcdf39e069938de814610b4b636a61b95a650d7327115bd7e45edc1b40e6d82a"
+      "paramsSha256": "eaef91d86fa336c7af637ca94f73c648a73bdf3e44b2b281ccfb919bf51ff82c"
     },
     {
       "method": "turn/diff/updated",
@@ -2221,7 +2236,7 @@
     {
       "method": "turn/started",
       "paramsType": "TurnStartedNotification",
-      "paramsSha256": "0389d90d45cc36ae5fff1c7f04f98063914852172f8e6688054eea897cc5c462"
+      "paramsSha256": "447e9c57c02621eb4413f466d8db9aeaa07227e7be6a20f503597ce2a67b343b"
     },
     {
       "method": "warning",

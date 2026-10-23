@@ -6,6 +6,8 @@
 // (saved, else defaultRootOrder, primary agent first) in `orderRoots`; the Falcon row's parent in
 // `falconRowParent`.
 
+import type { AgentId } from "../agents/id";
+
 export interface ShownRow {
   key?: string;
   id: string;
@@ -46,9 +48,9 @@ const defaultRootOrder = (): string[] => {
 /** The root id the Falcon row mounts under: the primary agent's root when the launcher shows it,
  *  else the other agent's, else none. Null too when Falcon is unavailable (its dependency lives in
  *  the Claude pack). An unknown primary (null) keeps Claude first, as before the setting. */
-export function falconRowParent(primary: string | null, shownRootIds: readonly string[], falconAvailable: boolean): "claude" | "codex" | null {
+export function falconRowParent(primary: string | null, shownRootIds: readonly string[], falconAvailable: boolean): AgentId | null {
   if (!falconAvailable) return null;
-  const order: ("claude" | "codex")[] = primary === "codex" ? ["codex", "claude"] : ["claude", "codex"];
+  const order: AgentId[] = primary === "codex" ? ["codex", "claude"] : ["claude", "codex"];
   return order.find((id) => shownRootIds.includes(id)) ?? null;
 }
 

@@ -120,7 +120,9 @@
     "rack": {"source":"flat-color-icons/svg/business.svg","note":"MCP Rack settings row"},
     "sun-low": {"source":"fluent-color/svg/ic_fluent_weather_sunny_low_24_color.svg"},
     "clipboard-edit": {"source":"fluent-color/svg/ic_fluent_clipboard_text_edit_24_color.svg"},
-    "books": {"source":"noto-emoji/svg/emoji_u1f4da.svg"}
+    "books": {"source":"noto-emoji/svg/emoji_u1f4da.svg"},
+    "notion-database": {"source":"fluent-color/svg/ic_fluent_book_database_24_color.svg","note":"Notion default database icon"},
+    "notion-page": {"source":"fluent-color/svg/ic_fluent_document_24_color.svg","note":"Notion default page icon"}
   },
   "tools": {
     "Thought": "thought",

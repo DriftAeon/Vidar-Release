@@ -91,7 +91,7 @@
       "label": "Character",
       "level": "core",
       "kind": "capability",
-      "when": { "facts": ["characters"] },
+      "when": {},
       "dependsOn": [],
       "capability": { "host": "character" }
     },

@@ -7,7 +7,7 @@
     "script": "node_modules/@openai/codex/bin/codex.js",
     "package": "node_modules/@openai/codex/package.json"
   },
-  "verifiedVersion": "0.163.0",
+  "verifiedVersion": "0.164.0",
   "host": { "name": "node.exe" },
   "args": ["app-server"],
   "rawArgs": ["--no-daemon", "--no-alt-screen"],

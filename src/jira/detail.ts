@@ -96,7 +96,7 @@ export function buildDetail(h: DetailHooks): DetailHost {
     const mine = gen;
     return {
       openUrl: (url) => h.openUrl(url),
-      loadChildren: () => Promise.resolve({ error: { title: "Not Available", message: "Jira has no child blocks." } }),
+      loadChildren: () => Promise.resolve({ error: { title: "No Child Blocks", message: "Jira has no child blocks." } }),
       alive: () => !disposed && gen === mine,
     };
   }

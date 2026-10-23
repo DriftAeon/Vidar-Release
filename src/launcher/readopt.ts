@@ -8,6 +8,7 @@
 // in `falcon_list` order; held views get no priority. No runtime imports, so the predicates
 // are testable under plain node.
 import type { FalconHeldView, FalconSessionSummary } from "../ipc";
+import type { AgentId } from "../agents/id";
 
 /** Client name Vidar negotiates with (src-tauri/src/falcon.rs `CLIENT_NAME`). */
 const VIDAR_CLIENT = "vidar";
@@ -31,7 +32,7 @@ export function hostedCodexOn(): boolean {
 }
 
 /** The agent an adopted session's tab runs: Codex only with the gate on, else Claude (today's). */
-export function adoptAgent(s: Pick<FalconSessionSummary, "agent">): "claude" | "codex" {
+export function adoptAgent(s: Pick<FalconSessionSummary, "agent">): AgentId {
   return hostedCodex && s.agent === "codex" ? "codex" : "claude";
 }
 

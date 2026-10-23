@@ -116,6 +116,11 @@ of this done differently, it will change; open an issue to reach the maintainer.
 
 Report problems as described in `SECURITY.md`, which also lists known limits.
 
+Update check: at launch (at most once a day) and on Check Now, Vidar fetches a
+public release index from this repository's releases and tells you when a newer build or pack exists. It
+never downloads or installs anything; Settings › General › Check for Updates at Launch turns the launch
+check off.
+
 ## Licence
 
 Apache-2.0. See `LICENSE.txt` and `NOTICE`.

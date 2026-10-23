@@ -14,7 +14,7 @@ import { menuHost } from "./menu";
 import type { Adapter, Browser, Facet, Item, RenderCtx } from "./types";
 import { parseWhen } from "./when";
 
-const NO_CHILDREN = { error: { title: "Not Available", message: "This source has no child blocks." } } as const;
+const NO_CHILDREN = { error: { title: "No Child Blocks", message: "This source has no child blocks." } } as const;
 
 function readSelection(source: string): Selection {
   return cleanFilters(getPref("browser.filters"))[source] ?? {};

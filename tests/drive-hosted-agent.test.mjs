@@ -10,13 +10,13 @@ setupDom({
     "panels/sessions": `export function createSession() {} export function hasArmedAstra() { return false; }
       export function driveSnapshot() { return { tabs: [] }; } export const renderedDrive = {};
       export function sessionContainer() { return null; } export function writeToSession() {}`,
-    "panels/askgate": "export const pendingAsks = new Map();",
     "settings/registry": "export function getRegistry() { return {}; }",
     "config": "export async function resolveDefaultCwd() { return null; }",
     "drive/paste": "export async function drivePaste() {}",
   },
 });
-const { initDrive, hostedRenderedAgent, driveOpenTab } = await import("../src/drive/drive.ts");
+const { initDrive, hostedRenderedAgent, driveOpenTab, driveSnapshot } = await import("../src/drive/drive.ts");
+const { openApproval, cancelApproval } = await import("../src/asks/approvals.ts");
 const { setHostedCodexGate } = await import("../src/launcher/readopt.ts");
 
 let launcherTypes = [];
@@ -77,4 +77,20 @@ test("an agent with no rendered row refuses", () => {
   setHostedCodexGate(true);
   assert.equal(hostedRenderedAgent("codex"), false);
   assert.equal(hostedRenderedAgent("claude"), false);
+});
+
+test("state.cards lists the imperative approvals and card answers through the registry", async () => {
+  const outcomes = [];
+  const rec = (id, origin, rows) => ({ id, origin, title: "T", asker: { tab: "req", label: "Req", verified: true }, rows,
+    askedAtMs: Date.now(), expiresAtMs: Date.now() + 60_000, comment: true, drawInAskerTab: true });
+  openApproval(rec("c1", "ctl-prompt", [["Asked By", "Req"], ["Tab", "Title · t7"], ["Text", "hi"]]), (o) => outcomes.push(o));
+  openApproval(rec("c2", "flow", [["Tool", "Bash"]]), () => {});
+  const cards = driveSnapshot().cards;
+  assert.deepEqual(cards.map((c) => c.id), ["c1"], "snapshot-derived origins are not drive cards");
+  assert.deepEqual(cards[0], { id: "c1", kind: "ctl-prompt", title: "T", tab: "t7", details: { "Asked By": "Req", Tab: "Title · t7", Text: "hi" }, onScreen: true });
+  const done = await window.__vidarDrive.card("c1", "deny", { comment: "nope" });
+  assert.equal(done.decision, "deny");
+  assert.deepEqual(outcomes, [{ verdict: "deny", comment: "nope", where: "Drive" }]);
+  assert.deepEqual(driveSnapshot().cards, []);
+  cancelApproval("c2", "done");
 });

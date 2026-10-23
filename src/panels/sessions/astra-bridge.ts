@@ -2,7 +2,8 @@
 // review-dispatch handler. sessions.ts binds its tab map and write seam in (no import of ../sessions).
 import { invoke } from "../../ipc";
 import { listen } from "../../ipc";
-import { askGate, cancelAsk } from "../askgate";
+import { APPROVAL_TITLES, type ApprovalRecord, type ApprovalOutcome } from "../../asks/approval";
+import { openApproval } from "../../asks/approvals";
 import { depsReport } from "../../deps/state";
 import { rel } from "../../paths";
 import { sandboxBlocker } from "./astra-sandbox";
@@ -108,27 +109,31 @@ async function handleDispatch(d: DispatchEvent) {
   const codexUp = () => invoke("pty_has_descendant", { id, exe: "codex.exe" }).catch(() => false);
   if (!(await codexUp())) return refuse("astra tab isn't running codex");
   // The user approves the exact bytes typed; the requester is only what the file claims.
-  let expiry: ReturnType<typeof setTimeout> | undefined;
-  const card = askGate({
-    permission: true,
-    details: [
+  const tabTitle = sessions.get(id)?.container.dataset.title ?? id;
+  const record: ApprovalRecord & { expiresAtMs: number } = {
+    id: d.id,
+    origin: "review-dispatch",
+    title: APPROVAL_TITLES["review-dispatch"],
+    asker: { tab: id, label: tabTitle, verified: false },
+    rows: [
       ["Asked By", `${d.requester} (Unverified)`],
-      ["Tab", sessions.get(id)?.container.dataset.title ?? id],
+      ["Tab", tabTitle],
       ["Text", d.text],
     ],
-    question: "",
-    claimedAtMs: d.claimedAtMs,
+    askedAtMs: d.claimedAtMs,
     expiresAtMs: d.expiresAtMs,
-    id: d.id,
-    tab: id,
-  }, "review-dispatch");
-  expiry = setTimeout(() => { cancelAsk("review-dispatch", "expired"); }, Math.max(0, d.expiresAtMs - Date.now()));
-  const { approved, shown, comment, reason: why } = await card;
-  clearTimeout(expiry);
-  // Not shown (deduped, or stale before it rendered) is not a denial: the requester must see the difference.
-  if (!shown) return refuse(`err ${why ?? "self-answered"}`);
-  if (why === "expired") return refuse("expired");
-  if (!approved) return refuse(`denied ${comment}`);
+    comment: true,
+    drawInAskerTab: false,
+  };
+  const outcome = await new Promise<ApprovalOutcome | { verdict: "refused"; reason: string }>((resolve) => {
+    const refusal = openApproval(record, resolve);
+    if (refusal) resolve({ verdict: "refused", reason: refusal });
+  });
+  // Refused or cancelled (never answered) is not a denial: the requester must see the difference.
+  if (!("comment" in outcome)) {
+    return refuse(outcome.verdict === "expired" ? "expired" : `err ${outcome.reason || "self-answered"}`);
+  }
+  if (outcome.verdict === "deny") return refuse(`denied ${outcome.comment}`);
   // The card can sit for minutes: the arm and the process are facts to re-read, not carry over.
   if (armedId !== id) return refuse("astra tab went away before approval");
   const late = armBlocker(id);

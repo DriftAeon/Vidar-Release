@@ -200,8 +200,8 @@ fn library(env: &ActivesEnv, name: Option<&str>, rules_library: Option<&str>, se
             .iter()
             .map(|id| {
                 let r = dir.as_deref().and_then(|d| rune_in(d, id));
-                let section = r.as_ref().map(|(_, r)| r.description.clone()).filter(|d| !d.is_empty()).into_iter().collect();
-                ActiveBrick::new(id, section, studs(r.as_ref().map(|(_, r)| r.body.trim_matches('\n')).unwrap_or("")), true, r.as_ref())
+                // no import.json means no headings: the description belongs to the card, not the heading path
+                ActiveBrick::new(id, vec![], studs(r.as_ref().map(|(_, r)| r.body.trim_matches('\n')).unwrap_or("")), true, r.as_ref())
             })
             .collect();
         return ActiveLibrary { library: label, source: None, scope: "global", source_gone: false, bricks, generated: None, sets: Vec::new() };
@@ -534,7 +534,7 @@ mod tests {
                         { "set": "row-claude-bare", "editable": true, "skills": [tidy], "agents": [], "guards": [], "codexSkills": [tidy], "warnings": [] }
                     ]},
                     { "library": "vidar-recall", "source": null, "scope": "global", "sourceGone": false, "bricks": [
-                        { "id": "recall-first-1", "section": ["Recall"], "studs": 3, "on": true, "path": file("vidar-recall", "recall-first-1"),
+                        { "id": "recall-first-1", "section": [], "studs": 3, "on": true, "path": file("vidar-recall", "recall-first-1"),
                           "kind": "rule", "activate": "always", "description": "Recall", "body": "Search the notes first." }
                     ], "sets": [
                         { "set": "recall", "editable": true, "skills": [], "agents": [], "guards": [], "codexSkills": [], "warnings": [] }
@@ -556,6 +556,19 @@ mod tests {
         // A row with no sets: no libraries; a blank key refuses.
         assert!(read(&env, "claude-rendered-bare").unwrap().libraries.is_empty());
         assert!(read(&env, " ").is_err());
+    }
+
+    #[test]
+    fn no_import_json_sends_an_empty_section() {
+        let t = TempDir::new("nosection");
+        let (root, home, config) = fixture(&t);
+        let imports = root.join("imports");
+        let index = imports.join("rowlib.json");
+        let env = ActivesEnv { config: &config, root: &root, imports: &imports, index: &index, home: Some(&home) };
+        let v = serde_json::to_value(&read(&env, "claude-bare").unwrap().libraries[1].bricks).unwrap();
+        // the rune has description "Recall"; it must not ride in the heading path
+        assert_eq!(v[0]["description"], "Recall");
+        assert_eq!(v[0]["section"], json!([]));
     }
 
     #[test]

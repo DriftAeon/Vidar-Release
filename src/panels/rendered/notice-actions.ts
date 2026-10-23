@@ -7,6 +7,7 @@ import { invoke } from "../../ipc";
 import { lucide } from "../../icons";
 import { el } from "./dom";
 import { FIX_UNAVAILABLE, fixAvailable, requestFix } from "./fix-seam";
+import type { AgentId } from "../../agents/id";
 
 /** What `codex_trust_offer` returns for a tab whose launch folder the user's Codex config does not trust. */
 export interface TrustOffer {
@@ -17,7 +18,7 @@ export interface TrustOffer {
 /** What the cards close over in a Rendered body. */
 export interface NoticeHost {
   tabId: string;
-  agent: "claude" | "codex";
+  agent: AgentId;
   /** the tab's launch folder */
   cwd: string;
   append: (node: HTMLElement) => void;

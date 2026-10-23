@@ -15,6 +15,7 @@ const ACRONYMS: Record<string, string> = {
   cwd: "CWD",
   ue: "UE",
   llm: "LLM",
+  gpt: "GPT",
 };
 
 /** "—": every empty state and count 0 ("(none)", "No X" and scope notes are never shown instead). */
@@ -40,6 +41,14 @@ export const titleWords = (v: string): string => v.split(/[-_]+/).filter(Boolean
 
 /** "http" → "HTTP", "sse" → "SSE", "local" → "Local". Use for any config value shown as a label. */
 export const label = (v: string): string => ACRONYMS[v.toLowerCase()] ?? titleCase(v);
+
+/** Codex catalog name to a picker label: "gpt-6-sol" and "gpt 6 sol" → "GPT 6 Sol", "gpt-5.4-codex-mini" →
+ *  "GPT 5.4 Codex Mini". Every word Title Case, acronyms upper case, versions kept. Display only. */
+export const codexModelLabel = (name: string): string => {
+  const words = name.trim().split(/[-_\s]+/).filter(Boolean);
+  if (!words.length) return name;
+  return words.map((w) => (/^[A-Z0-9.]+$/.test(w) && !ACRONYMS[w.toLowerCase()] ? w : label(w.toLowerCase()))).join(" ");
+};
 
 // Tool names the camel-case split would mangle. Everything else falls through to the
 // heuristic, so a tool we have never met still reads as words.
@@ -77,12 +86,12 @@ const MODEL_NAMES: ReadonlyMap<string, string> = new Map([
   ["claude-sonnet-5-5", "Sonnet 5.5"],
   ["claude-haiku-5-5", "Haiku 5.5"],
   ["claude-haiku-4-5-20251001", "Haiku 4.5"],
-  ["gpt-5.6-terra", "GPT-5.6 Terra"],
-  ["gpt-6-astra", "GPT-6 Astra"],
+  ["gpt-5.6-terra", "GPT 5.6 Terra"],
+  ["gpt-6-astra", "GPT 6 Astra"],
 ]);
 
 /** Left-bar row model line: any id or alias to a Title Case display name. "claude-sonnet-5-5" and
- *  "sonnet-5.5" → "Sonnet 5.5", "gpt-5.4-codex" → "GPT-5.4 Codex", "opus-5.5[1m]" → "Opus 5.5 1M".
+ *  "sonnet-5.5" → "Sonnet 5.5", "gpt-5.4-codex" → "GPT 5.4 Codex", "opus-5.5[1m]" → "Opus 5.5 1M".
  *  Numeric tokens join with dots; unknown words get Title Case; idempotent on its own output. */
 export const modelRowName = (id: string): string => {
   const tokens = id.trim().replace(/\[1m\]$/i, " 1M").replace(/^claude[-_ ]/i, "").split(/[-_\s]+/)
@@ -91,7 +100,7 @@ export const modelRowName = (id: string): string => {
   const isVer = (t: string) => /^\d+(\.\d+)*$/.test(t);
   const ver = tokens.filter(isVer).join(".");
   const words = tokens.filter((t) => !isVer(t)).map((t) => (/^[A-Z0-9]+$/.test(t) ? t : label(t.toLowerCase())));
-  if (words[0]?.toLowerCase() === "gpt") return [ver ? `GPT-${ver}` : "GPT", ...words.slice(1)].join(" ");
+  if (words[0]?.toLowerCase() === "gpt") return ["GPT", ver, ...words.slice(1)].filter(Boolean).join(" ");
   return [words[0], ver, ...words.slice(1)].filter(Boolean).join(" ");
 };
 
@@ -99,10 +108,12 @@ export const modelRowName = (id: string): string => {
  *  an already-pretty name, so display names can be passed through unchanged). */
 export const prettyModel = (id: string): string => {
   // Normalize spaces to dashes before the lookup: a pretty name fed back in
-  // (e.g. "GPT-5.6 Terra") lowercases to "gpt-5.6 terra", which otherwise
+  // (e.g. "GPT 5.6 Terra") lowercases to "gpt 5.6 terra", which otherwise
   // misses the "gpt-5.6-terra" map key and breaks idempotency.
   const known = MODEL_NAMES.get(id.toLowerCase().replace(/\s+/g, "-"));
   if (known) return known;
+  // any GPT id (case, - _ or space separated) reads like the Codex picker row
+  if (/^gpt[-_\s]/i.test(id.trim())) return codexModelLabel(id);
   // settings aliases: "opus[1m]" → "Opus 1M"
   const parts = id.replace(/\[1m\]$/i, "-1M").replace(/^claude-/, "").split("-").filter((p) => !/^\d{8}$/.test(p));
   if (!parts.length) return id;

@@ -135,7 +135,7 @@ test("a failed full read keeps the summary visible and exports nothing from Copy
   assert.deepEqual(copied, [], "Copy must not export the summary");
   assert.deepEqual(written, [], "Open must not export the summary");
   assert.deepEqual(opened, []);
-  assert.match(S.flowZoomToast.textContent, /Couldn't Read Full Output/);
+  assert.match(document.getElementById("flow-zoom-toast").textContent, /Couldn't Read Full Output/);
   closeCard(parent);
 });
 

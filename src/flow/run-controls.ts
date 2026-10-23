@@ -99,6 +99,7 @@ export function buildRunControls(): {
 
   function paintFace(): void {
     const run = selectedId ? runs.find((r) => r.id === selectedId) : undefined;
+    face.classList.toggle("is-none", !run);
     if (run) paintRunName(face, runPick, run);
     else {
       face.textContent = NO_RUN;
@@ -114,7 +115,10 @@ export function buildRunControls(): {
     const nm = document.createElement("span");
     nm.className = "nm";
     if (run) paintRunName(nm, row, run);
-    else nm.textContent = NO_RUN;
+    else {
+      nm.textContent = NO_RUN;
+      nm.classList.add("is-none");
+    }
     row.append(nm);
     row.addEventListener("click", () => {
       menu.close();

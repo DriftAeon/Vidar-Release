@@ -14,6 +14,7 @@ import {
 import { attachedCount, setAttachments } from "./set-attach";
 import { setCard, setHead } from "../set-card";
 import { genLabel } from "./gen-label";
+import { rowLabels } from "./labels";
 import { isFileRow, nameAndPath } from "./row-name";import { doneGate, startView } from "./view-entry";
 export { genLabel };
 import { TIP_GENERATING, btn, createAgentView, el, type GenCtx } from "./agent-view";
@@ -259,7 +260,9 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
     const rowBusy = rowGenerating(ctx.rowKey);
     const locked = !flow.editable || (lib.source === null && !lib.generated) || lib.sourceGone || rowBusy;
     const tray = el("div", "runes-tray");
-    for (const b of bricks) {
+    const labels = rowLabels(bricks.map((b) => b.section), lib.bricks.map((b) => b.section));
+    for (const [i, b] of bricks.entries()) {
+      for (const l of labels[i]) tray.appendChild(el("div", l.depth ? "runes-bare-label sub" : "runes-bare-label", l.text));
       // the switch: its own chip, so a click on the card opens it as in the ordinary view
       const sw = el("button", "runes-chip runes-bare-switch");
       sw.type = "button";

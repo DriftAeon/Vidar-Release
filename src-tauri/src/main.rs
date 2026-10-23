@@ -8,6 +8,7 @@ mod bridge;
 mod bridge_golden;
 mod build_guard;
 mod build_stamp;
+mod caption;
 mod changes;
 mod characters;
 mod chrome;
@@ -53,6 +54,7 @@ mod procs;
 mod pty;
 mod recent_meta;
 mod release_build;
+mod release_check;
 mod review;
 mod rules;
 mod runlog;
@@ -60,6 +62,7 @@ mod settings;
 mod slack;
 mod state;
 mod speak;
+mod stages;
 mod status;
 mod stt_warm;
 mod swap_button;
@@ -242,6 +245,8 @@ fn main() {
             characters::update_character,
             characters::remove_character,
             characters::set_default_character,
+            stages::list_stages,
+            stages::read_stage_asset,
             bridge::list_documents,
             bridge::read_document,
             bridge::stat_document,
@@ -257,8 +262,10 @@ fn main() {
             bridge::archive_display_file,
             bridge::delete_display_file,
             chrome::set_caption_color,
+            caption::caption_metrics,
             chrome::open_url,
             build_stamp::build_stamp,
+            release_check::check_release,
             config::read_config,
             config::read_default_cwd,
             codex_cwd::codex_cwd_refused,
@@ -451,6 +458,8 @@ fn main() {
             if let Some(win) = app.get_webview_window("main") {
                 chrome::set_titlebar_icon(&win);
                 state::restore(&win, no_activate);
+                // After restore: its outer-minus-inner chrome is measured on the native frame.
+                caption::install(&win);
             }
             // After main exists: a failed tray leaves close behaviour unchanged.
             if let Err(error) = tray::install(&handle, config::load().config.window) {

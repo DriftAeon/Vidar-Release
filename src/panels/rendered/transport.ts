@@ -5,9 +5,10 @@ import { invoke } from "../../ipc";
 import type { Effort, PermissionMode } from "../../agents/protocol";
 import { AGENT_PROFILE } from "./agent-profile";
 import type { RulesLaunch } from "../../rules/inject";
+import type { AgentId } from "../../agents/id";
 import { codexThreadHolder, refreshRawCodexThreads } from "../sessions/lookup";
 
-export type RenderedAgent = "claude" | "codex";
+export type RenderedAgent = AgentId;
 
 /** Everything a backend needs to start a process for one tab. */
 interface AgentSpawnParams {

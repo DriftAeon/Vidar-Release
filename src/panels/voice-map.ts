@@ -18,6 +18,7 @@ import type { ListenApi } from "./listen";
 import type { SpeakApi, SpeakState } from "./speak";
 import { use } from "../capabilities/registry";
 import { centerOn } from "../modules/place-menu";
+import { openPopover, type ClosePopover } from "../modules/popover";
 import { iconImg, type ColorIcon } from "../icon-img";
 
 type Tint = "green" | "orange" | "red" | "grey";
@@ -186,27 +187,38 @@ function build() {
   root.append(cfgStrip);
 
   document.body.append(root);
-  document.addEventListener("click", (e) => { if (root && !root.classList.contains("hidden") && !root.contains(e.target as Node)) close(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+}
+
+// Outside close and Escape are popover.ts's (capture-phase mousedown). No `anchor`: the map opens on
+// contextmenu, after its own mousedown, and a left click on the mic/speaker/switch must still close it.
+let closeMap: ClosePopover | null = null;
+
+function teardown() {
+  if (timer) { clearInterval(timer); timer = null; }
+  if (unlistenState) { unlistenState(); unlistenState = null; }
 }
 
 function close() {
-  if (!root) return;
-  root.classList.add("hidden");
-  if (timer) { clearInterval(timer); timer = null; }
-  if (unlistenState) { unlistenState(); unlistenState = null; }
+  if (closeMap) closeMap(); // hides, then onClose runs teardown
+  else teardown();
 }
 
 export function openVoiceMap(anchor: HTMLElement): void {
   if (!root) build();
   close(); // a second RMB while open re-anchors; without this the old listener and timer would leak
+  const closeThis = openPopover({
+    el: root!, persistent: true, keys: "document",
+    onClose: () => { if (closeMap === closeThis) closeMap = null; teardown(); },
+  });
+  closeMap = closeThis;
   rewriteRow = undefined;
   void invoke("voice_slots_status_one", { slot: "rewrite" })
     .then((row) => { rewriteRow = row; })
     .catch(() => { rewriteRow = null; })
     .finally(() => { if (!root!.classList.contains("hidden")) { buildConfigStrip(); void poll(); } });
   buildConfigStrip();
-  root!.classList.remove("hidden"); // shown first so offsetWidth measures the popup
+  // shown by openPopover above, so offsetWidth measures the popup; bottom-anchored here, not
+  // through `place`, so a strip that fills in later grows the popup upward
   const r = anchor.getBoundingClientRect();
   root!.style.left = `${centerOn(r.left + r.width / 2, root!.offsetWidth, window.innerWidth)}px`;
   root!.style.bottom = `${window.innerHeight - r.top + 8}px`;

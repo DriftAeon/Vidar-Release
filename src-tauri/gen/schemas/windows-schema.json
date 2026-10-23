@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-rules-generate-toggle`\n- `allow-bare-local-sources`\n- `allow-bare-actives`\n- `allow-bare-layer-set`\n- `allow-bare-set-layer-write`\n- `allow-bare-launch`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-archive-display-file`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-loadout`\n- `allow-read-codex-loadout`\n- `allow-file-kb`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-permission-modes`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`",
+          "description": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-rules-generate-toggle`\n- `allow-bare-local-sources`\n- `allow-bare-actives`\n- `allow-bare-layer-set`\n- `allow-bare-set-layer-write`\n- `allow-bare-launch`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-codex-trust-offer`\n- `allow-codex-trust-folder`\n- `allow-vidar-worktree-open`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-stages`\n- `allow-read-stage-asset`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-archive-display-file`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-caption-metrics`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-check-release`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-loadout`\n- `allow-read-codex-loadout`\n- `allow-file-kb`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-permission-modes`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`",
           "type": "string",
           "const": "main-all",
-          "markdownDescription": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-rules-generate-toggle`\n- `allow-bare-local-sources`\n- `allow-bare-actives`\n- `allow-bare-layer-set`\n- `allow-bare-set-layer-write`\n- `allow-bare-launch`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-archive-display-file`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-loadout`\n- `allow-read-codex-loadout`\n- `allow-file-kb`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-permission-modes`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`"
+          "markdownDescription": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-rules-generate-toggle`\n- `allow-bare-local-sources`\n- `allow-bare-actives`\n- `allow-bare-layer-set`\n- `allow-bare-set-layer-write`\n- `allow-bare-launch`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-codex-trust-offer`\n- `allow-codex-trust-folder`\n- `allow-vidar-worktree-open`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-stages`\n- `allow-read-stage-asset`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-archive-display-file`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-caption-metrics`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-check-release`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-loadout`\n- `allow-read-codex-loadout`\n- `allow-file-kb`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-permission-modes`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`"
         },
         {
           "description": "Enables the add_character command without any pre-configured scope.",
@@ -261,6 +261,12 @@
           "markdownDescription": "Enables the build_stamp command without any pre-configured scope."
         },
         {
+          "description": "Enables the caption_metrics command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-caption-metrics",
+          "markdownDescription": "Enables the caption_metrics command without any pre-configured scope."
+        },
+        {
           "description": "Enables the changes_act command without any pre-configured scope.",
           "type": "string",
           "const": "allow-changes-act",
@@ -295,6 +301,12 @@
           "type": "string",
           "const": "allow-check-cli-updates",
           "markdownDescription": "Enables the check_cli_updates command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the check_release command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-release",
+          "markdownDescription": "Enables the check_release command without any pre-configured scope."
         },
         {
           "description": "Enables the claim_pending_ask command without any pre-configured scope.",
@@ -355,6 +367,18 @@
           "type": "string",
           "const": "allow-codex-skew",
           "markdownDescription": "Enables the codex_skew command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the codex_trust_folder command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-codex-trust-folder",
+          "markdownDescription": "Enables the codex_trust_folder command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the codex_trust_offer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-codex-trust-offer",
+          "markdownDescription": "Enables the codex_trust_offer command without any pre-configured scope."
         },
         {
           "description": "Enables the colour_sample command without any pre-configured scope.",
@@ -669,6 +693,12 @@
           "markdownDescription": "Enables the list_recent_sessions command without any pre-configured scope."
         },
         {
+          "description": "Enables the list_stages command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-stages",
+          "markdownDescription": "Enables the list_stages command without any pre-configured scope."
+        },
+        {
           "description": "Enables the list_workbench_entries command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-workbench-entries",
@@ -967,6 +997,12 @@
           "type": "string",
           "const": "allow-read-session-meta",
           "markdownDescription": "Enables the read_session_meta command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the read_stage_asset command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-read-stage-asset",
+          "markdownDescription": "Enables the read_stage_asset command without any pre-configured scope."
         },
         {
           "description": "Enables the read_state command without any pre-configured scope.",
@@ -1311,6 +1347,12 @@
           "markdownDescription": "Enables the update_cli command without any pre-configured scope."
         },
         {
+          "description": "Enables the vidar_worktree_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-vidar-worktree-open",
+          "markdownDescription": "Enables the vidar_worktree_open command without any pre-configured scope."
+        },
+        {
           "description": "Enables the voice_devices command without any pre-configured scope.",
           "type": "string",
           "const": "allow-voice-devices",
@@ -1461,6 +1503,12 @@
           "markdownDescription": "Denies the build_stamp command without any pre-configured scope."
         },
         {
+          "description": "Denies the caption_metrics command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-caption-metrics",
+          "markdownDescription": "Denies the caption_metrics command without any pre-configured scope."
+        },
+        {
           "description": "Denies the changes_act command without any pre-configured scope.",
           "type": "string",
           "const": "deny-changes-act",
@@ -1495,6 +1543,12 @@
           "type": "string",
           "const": "deny-check-cli-updates",
           "markdownDescription": "Denies the check_cli_updates command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_release command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-release",
+          "markdownDescription": "Denies the check_release command without any pre-configured scope."
         },
         {
           "description": "Denies the claim_pending_ask command without any pre-configured scope.",
@@ -1555,6 +1609,18 @@
           "type": "string",
           "const": "deny-codex-skew",
           "markdownDescription": "Denies the codex_skew command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the codex_trust_folder command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-codex-trust-folder",
+          "markdownDescription": "Denies the codex_trust_folder command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the codex_trust_offer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-codex-trust-offer",
+          "markdownDescription": "Denies the codex_trust_offer command without any pre-configured scope."
         },
         {
           "description": "Denies the colour_sample command without any pre-configured scope.",
@@ -1869,6 +1935,12 @@
           "markdownDescription": "Denies the list_recent_sessions command without any pre-configured scope."
         },
         {
+          "description": "Denies the list_stages command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-stages",
+          "markdownDescription": "Denies the list_stages command without any pre-configured scope."
+        },
+        {
           "description": "Denies the list_workbench_entries command without any pre-configured scope.",
           "type": "string",
           "const": "deny-list-workbench-entries",
@@ -2167,6 +2239,12 @@
           "type": "string",
           "const": "deny-read-session-meta",
           "markdownDescription": "Denies the read_session_meta command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the read_stage_asset command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-read-stage-asset",
+          "markdownDescription": "Denies the read_stage_asset command without any pre-configured scope."
         },
         {
           "description": "Denies the read_state command without any pre-configured scope.",
@@ -2509,6 +2587,12 @@
           "type": "string",
           "const": "deny-update-cli",
           "markdownDescription": "Denies the update_cli command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the vidar_worktree_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-vidar-worktree-open",
+          "markdownDescription": "Denies the vidar_worktree_open command without any pre-configured scope."
         },
         {
           "description": "Denies the voice_devices command without any pre-configured scope.",

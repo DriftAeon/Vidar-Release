@@ -32,6 +32,9 @@ target-staging/
 # from Settings › Characters. The old compiled-in catalogue stays ignored too.
 # Anchored: unanchored, it also hid src-tauri/src/characters/ (the Rust pack store).
 /content/characters/
+# Local-only character renderer addons and stage assets: never in the public tree.
+src/character/addons/
+/content/stages/
 src/character/catalog.json
 # Lucide picking library stays local; an icon is tracked only once copied to public/icons/<name>.svg in use.
 public/icons/lucide/

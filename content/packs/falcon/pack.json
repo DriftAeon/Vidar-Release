@@ -1,6 +1,7 @@
 {
   "id": "falcon",
   "version": 1,
+  "release": "1.0.0",
   "provides": [],
   "ui": { "label": "Falcon" },
   "module": {

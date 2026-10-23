@@ -46,7 +46,8 @@ export function hitItem(h: NotionHit): Item {
   return {
     id: h.id, key: "", title: titleOf(h.title), status: "", updated: h.lastEdited,
     group: { ...BANDS[h.kind === "source" ? "source" : "page"] },
-    lead: h.icon ? { emoji: h.icon } : h.iconName ? nativeLead(h.iconName, h.iconColor, kindGlyph) : { glyph: kindGlyph },
+    lead: h.icon ? { emoji: h.icon } : h.iconName ? nativeLead(h.iconName, h.iconColor, kindGlyph)
+      : { color: h.kind === "source" ? "notion-database" : "notion-page" },
     ...(h.kind === "source" ? { tip: DATABASE_TIP } : {}),
     facets: { [EDITED]: h.lastEdited ? [h.lastEdited] : [] },
     fields: [edited(h.lastEdited)],

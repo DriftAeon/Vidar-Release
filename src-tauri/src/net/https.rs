@@ -1,6 +1,8 @@
 //! One HTTPS request through WinHTTP: no new crate, the system certificate store and the system
 //! proxy, port 443 only, redirects never followed. Jira, Notion and Slack send through it. The header block is the caller's, passed as a `Secret` so no
-//! `{:?}`, test failure or error string can carry a token.
+//! `{:?}`, test failure or error string can carry a token. `get_public` is the one exception for
+//! unauthenticated GETs (the release check): it follows exactly one redirect whose `Location` host is
+//! on `REDIRECT_HOSTS` (GitHub's release-asset CDN); any other host or a second redirect is an error.
 
 use std::ffi::c_void;
 use std::time::{Duration, Instant};
@@ -12,8 +14,8 @@ use windows::Win32::Networking::WinHttp::{
     WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption,
     WinHttpSetTimeouts, INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
     WINHTTP_FLAG_SECURE, WINHTTP_OPTION_RECEIVE_RESPONSE_TIMEOUT, WINHTTP_OPTION_REDIRECT_POLICY,
-    WINHTTP_OPTION_REDIRECT_POLICY_NEVER, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_RETRY_AFTER,
-    WINHTTP_QUERY_STATUS_CODE,
+    WINHTTP_OPTION_REDIRECT_POLICY_NEVER, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_LOCATION,
+    WINHTTP_QUERY_RETRY_AFTER, WINHTTP_QUERY_STATUS_CODE,
 };
 
 use super::Secret;
@@ -32,6 +34,10 @@ const CODE_TIMEOUT: i32 = 12002;
 const CODES_CONNECT: [i32; 2] = [12007, 12029];
 /// Wide chars read for `Retry-After`; a seconds value is far shorter.
 const RETRY_AFTER_CHARS: usize = 64;
+/// Wide chars read for `Location`; GitHub's signed CDN URLs run past 1 000 characters.
+const LOCATION_CHARS: usize = 8 * 1024;
+/// The only hosts `get_public` follows a redirect to: GitHub's release-asset CDN.
+pub const REDIRECT_HOSTS: [&str; 2] = ["objects.githubusercontent.com", "release-assets.githubusercontent.com"];
 
 /// One HTTPS request to `host:443`. Holds no header text: that is the caller's `Secret`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,8 +170,83 @@ fn retry_after(request: &Handle) -> Option<u64> {
     parse_retry_after(&String::from_utf16(&buf[..chars]).ok()?)
 }
 
+/// The `Location` header of a 3xx; missing, over `LOCATION_CHARS` or unreadable is `None`.
+fn location(request: &Handle) -> Option<String> {
+    let mut buf = vec![0u16; LOCATION_CHARS];
+    let mut len = (buf.len() * 2) as u32;
+    // SAFETY: request has a response; buf is writable for `len` bytes and WinHTTP writes at
+    // most that many, reporting the bytes written (without the NUL) in len.
+    let read = unsafe {
+        WinHttpQueryHeaders(
+            request.0,
+            WINHTTP_QUERY_LOCATION,
+            PCWSTR::null(),
+            Some(buf.as_mut_ptr() as *mut c_void),
+            &mut len,
+            std::ptr::null_mut(),
+        )
+    };
+    read.ok()?;
+    let chars = (len as usize / 2).min(LOCATION_CHARS);
+    String::from_utf16(&buf[..chars]).ok()
+}
+
+fn is_redirect(status: u16) -> bool {
+    matches!(status, 301 | 302 | 303 | 307 | 308)
+}
+
+/// Splits an absolute `https://host/path` Location into host and path when the host is on
+/// `REDIRECT_HOSTS`. A port, userinfo, another scheme or another host is refused.
+pub fn redirect_target(location: &str) -> Result<(String, String), SendError> {
+    let rest = location.strip_prefix("https://").ok_or_else(|| SendError::Io("redirect is not https".to_string()))?;
+    let (host, path) = match rest.find(['/', '?', '#']) {
+        Some(i) => (&rest[..i], &rest[i..]),
+        None => (rest, "/"),
+    };
+    let host = host.to_ascii_lowercase();
+    if !REDIRECT_HOSTS.contains(&host.as_str()) {
+        let shown: String = host.chars().take(64).collect();
+        return Err(SendError::Io(format!("redirect to {shown} refused")));
+    }
+    let path = if path.starts_with('/') { path.to_string() } else { format!("/{path}") };
+    Ok((host, path))
+}
+
+/// One hop at most: a first 3xx is resent to its allowlisted Location through `again`; a 3xx
+/// from that second request is an error, never followed.
+fn follow_once(
+    first: (Reply, Option<String>),
+    again: impl FnOnce(&str, &str) -> Result<(Reply, Option<String>), SendError>,
+) -> Result<Reply, SendError> {
+    let (reply, loc) = first;
+    if !is_redirect(reply.status) {
+        return Ok(reply);
+    }
+    let loc = loc.ok_or_else(|| SendError::Io(format!("redirect {} without a location", reply.status)))?;
+    let (host, path) = redirect_target(&loc)?;
+    let (second, _) = again(&host, &path)?;
+    if is_redirect(second.status) {
+        return Err(SendError::Io("second redirect refused".to_string()));
+    }
+    Ok(second)
+}
+
+/// An unauthenticated GET that follows one allowlisted redirect (see `follow_once`).
+pub fn get_public(host: &str, path: &str, limits: Limits) -> Result<Reply, SendError> {
+    let none = Secret::new(String::new());
+    let get = |host: &str, path: &str| {
+        send_reading_location(&Request { method: "GET", host: host.to_string(), path: path.to_string(), body: None }, &none, limits)
+    };
+    follow_once(get(host, path)?, get)
+}
+
 /// Sends `req` with the caller's header block (CRLF-separated lines) and reads the whole reply.
 pub fn send(req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, SendError> {
+    send_reading_location(req, headers, limits).map(|(reply, _)| reply)
+}
+
+/// `send`, plus the `Location` header when the status is a redirect.
+fn send_reading_location(req: &Request, headers: &Secret, limits: Limits) -> Result<(Reply, Option<String>), SendError> {
     let agent = wide("Vidar");
     // SAFETY: agent is a NUL-terminated UTF-16 buffer alive for the call; the proxy name and
     // bypass are null, as AUTOMATIC_PROXY requires.
@@ -235,6 +316,7 @@ pub fn send(req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, Se
     )?;
     let status = u16::try_from(status).map_err(|_| SendError::Io(format!("status {status} out of range")))?;
     let retry_after = retry_after(&request);
+    let location = if is_redirect(status) { location(&request) } else { None };
 
     let mut body = Vec::new();
     let mut chunk = vec![0u8; READ_CHUNK];
@@ -252,7 +334,7 @@ pub fn send(req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, Se
         let read = (read as usize).min(READ_CHUNK);
         take_chunk(&mut body, &chunk[..read], &limits, sent_at, Instant::now())?;
     }
-    Ok(Reply { status, retry_after, body })
+    Ok((Reply { status, retry_after, body }, location))
 }
 
 #[cfg(test)]
@@ -285,6 +367,61 @@ mod tests {
         assert_eq!(classify("WinHttpReadData", 12030), SendError::Io("WinHttpReadData failed (12030)".into()));
         let e = windows::core::Error::from_hresult(windows::core::HRESULT(0x8007_2EE2_u32 as i32));
         assert_eq!(win(Err(e), "WinHttpSendRequest"), Err(SendError::Timeout));
+    }
+
+    #[test]
+    fn redirect_target_allows_only_the_release_cdn() {
+        assert_eq!(
+            redirect_target("https://objects.githubusercontent.com/a/b?sig=1").unwrap(),
+            ("objects.githubusercontent.com".to_string(), "/a/b?sig=1".to_string())
+        );
+        assert_eq!(
+            redirect_target("https://Release-Assets.githubusercontent.com").unwrap(),
+            ("release-assets.githubusercontent.com".to_string(), "/".to_string())
+        );
+        for bad in [
+            "http://objects.githubusercontent.com/a",
+            "https://evil.example/a",
+            "https://objects.githubusercontent.com.evil.example/a",
+            "https://objects.githubusercontent.com:8443/a",
+            "https://user@objects.githubusercontent.com/a",
+            "/relative/path",
+        ] {
+            assert!(redirect_target(bad).is_err(), "{bad}");
+        }
+        // The refusal echoes at most 64 characters of the host.
+        let long = format!("https://{}.example/a", "h".repeat(500));
+        match redirect_target(&long) {
+            Err(SendError::Io(m)) => assert!(m.len() < 100, "{}", m.len()),
+            other => panic!("not refused: {other:?}"),
+        }
+    }
+
+    fn reply(status: u16) -> Reply {
+        Reply { status, retry_after: None, body: b"x".to_vec() }
+    }
+
+    #[test]
+    fn follow_once_takes_one_hop_and_refuses_a_second() {
+        // Not a redirect: returned as-is, no second request.
+        let r = follow_once((reply(200), None), |_, _| panic!("no second request")).unwrap();
+        assert_eq!(r.status, 200);
+        // One allowlisted hop: the second reply comes back, sent to the parsed host and path.
+        let r = follow_once((reply(302), Some("https://objects.githubusercontent.com/p".into())), |h, p| {
+            assert_eq!((h, p), ("objects.githubusercontent.com", "/p"));
+            Ok((reply(200), None))
+        })
+        .unwrap();
+        assert_eq!(r.status, 200);
+        // A second redirect is an error, even to an allowlisted host.
+        let e = follow_once((reply(302), Some("https://objects.githubusercontent.com/p".into())), |_, _| {
+            Ok((reply(302), Some("https://objects.githubusercontent.com/q".into())))
+        });
+        assert_eq!(e, Err(SendError::Io("second redirect refused".into())));
+        // Another host, or no Location: refused before any second request.
+        let e = follow_once((reply(301), Some("https://evil.example/".into())), |_, _| panic!("no second request"));
+        assert_eq!(e, Err(SendError::Io("redirect to evil.example refused".into())));
+        assert!(follow_once((reply(307), None), |_, _| panic!("no second request")).is_err());
     }
 
     #[test]

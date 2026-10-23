@@ -38,7 +38,7 @@ export function eyedropperTool(): Tool {
         notice = "Nothing to Sample Here";
         noticeUntil = Date.now() + 900;
       }
-      noteEl.textContent = error ? "Pixel Sampling Failed. Retrying."
+      noteEl.textContent = error ? "Pixel Sampling Failed, Retrying"
         : Date.now() < noticeUntil ? notice : "";
       if (pick && current.picked) {
         const value = hex(current.picked);

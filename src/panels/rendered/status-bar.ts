@@ -2,8 +2,8 @@
 // effort), the permission-mode, model and effort pickers with their commit-on-ack setters.
 
 import type { Effort, PermissionMode } from "../../agents/protocol";
-import { codexEffort } from "../../agents/codex-settings";
-import { AGENT_PROFILE } from "./agent-profile";
+import { AGENT_IDS, type AgentId } from "../../agents/id";
+import { AGENT_PROFILE, MODE_LABELS } from "./agent-profile";
 import { titleCase, prettyModel } from "../../format";
 import { currentModelIndex, groupModels, menuLabel } from "./model-groups";
 import { createCommandCabinet } from "./command-cabinet";
@@ -16,8 +16,8 @@ import type { RenderedState, StatusLine } from "./state";
 import type { LoginReach } from "./login";
 import { NOT_LOGGED_IN } from "./state-chip";
 
-export const modeLabel = (m: string, agent?: string) => m === "auto" && agent === "codex" ? "Auto Review" :
-  ({ default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" } as Record<string, string>)[m] ?? m;
+export const modeLabel = (m: string, agent?: string) =>
+  ((agent && AGENT_IDS.includes(agent as AgentId) ? AGENT_PROFILE[agent as AgentId].modeLabels : MODE_LABELS) as Record<string, string>)[m] ?? m;
 
 /** What the status bar closes over in createRenderedBody. */
 export interface StatusBarDeps {
@@ -40,7 +40,7 @@ export interface StatusBarDeps {
 export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
   const { opts, send, noticeBlock, refreshState, emitCharacterStatus, openStMenu, textarea } = deps;
   // the command cabinet button sits right of the effort segments (Claude only)
-  const cabinet = opts.agent === "claude" ? createCommandCabinet(S, { textarea }) : null;
+  const cabinet = AGENT_PROFILE[opts.agent].commandCabinet ? createCommandCabinet(S, { textarea }) : null;
   // Status bar: dir, model pill, effort segments, then Con / 5H / 7D readouts as chunk bars
   // (status-readouts.ts), same colour thresholds as Claude Code's own statusline
   // (the user's statusline-command.ps1). Headless Claude never runs the
@@ -71,7 +71,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
   // Claude takes a mode change mid-turn (the CLI's Shift+Tab path; it applies from the next tool
   // call), so only an open permission card blocks it there (2026-10-06: accept-edits locked
   // the button through a long tool run). Codex applies per turn, so it keeps the whole-turn block.
-  const modeBtnBlocked = () => !S.isAlive || (S.inTurn && opts.agent !== "claude") || !!S.pendingApproval || S.switchPending || sl.model === "Starting…";
+  const modeBtnBlocked = () => !S.isAlive || (S.inTurn && profile.busyBlocksMode) || !!S.pendingApproval || S.switchPending || sl.model === "Starting…";
   function settleSwitch(confirmed: PermissionMode | null) {
     if (S.switchTimer !== undefined) { clearTimeout(S.switchTimer); S.switchTimer = undefined; }
     S.switchPending = false;
@@ -96,7 +96,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     void send(line).then((ok) => {
       if (!S.switchPending) return;
       if (!ok) settleSwitch(null);
-      else if (opts.agent === "codex") settleSwitch(next);
+      else if (profile.settlesOnSend) settleSwitch(next);
     });
     S.switchTimer = window.setTimeout(() => {
       if (!S.switchPending) return;
@@ -121,8 +121,8 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
       S.characterModelLive = true;
       if (!S.hydrating) emitCharacterStatus(true);
       // the new model may not offer the level showing: Codex clamps to the nearest it does
-      if (opts.agent === "codex" && !S.hydrating && sl.effort) {
-        const clamped = codexEffort(sl.effort as Effort, effortLevels());
+      if (profile.perModelEffort && !S.hydrating && sl.effort) {
+        const clamped = profile.clampEffort(sl.effort as Effort, effortLevels());
         if (clamped && clamped !== sl.effort) { redrawStatus(); setEffort(sl.effort as Effort); return; }
       }
     }
@@ -132,7 +132,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
   function setModel(want: string) {
     if (modelBtnBlocked()) return;
     const line = S.adapter.encodeSetModel(want);
-    if (line === null && opts.agent !== "codex") return;
+    if (line === null && !profile.stagedLocally) return;
     S.modelWant = want;
     S.modelPending = sl.model; // remember the label to revert to (already pretty; prettyModel is idempotent enough)
     if (line === null) {
@@ -144,7 +144,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     void send(line).then((ok) => {
       if (S.modelPending === null) return;
       if (!ok) settleModel(null);
-      else if (opts.agent === "codex") settleModel(want); // the host's Applied (Claude settles on its model_set ack)
+      else if (profile.settlesOnSend) settleModel(want); // the host's Applied (Claude settles on its model_set ack)
     });
     S.modelTimer = window.setTimeout(() => {
       if (S.modelPending === null) return;
@@ -188,29 +188,27 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
     }));
     const first = currentModelIndex(rows, S.characterModel, S.characterModelLive, S.pickedModel);
     const marked = rows.map((r, i) => ({ label: menuLabel(r.label), value: r.value, resolved: r.resolved, current: i === first }));
-    const items = opts.agent === "codex" ? marked : groupModels(marked);
+    const items = profile.groupModels ? groupModels(marked) : marked;
     openStMenu(S.modelBtn, items, setModel);
   }
   /* -- Session-scoped effort: Claude uses applyFlagSettings and reports its applied level;
         Codex stages turn/start.effort locally. Both survive Retry/Resume in the body. -- */
   let effortBtn: EffortGroup | null = null;
   let effortPending = false;
-  const effortLevels = () => opts.agent === "codex"
+  const effortLevels = () => profile.perModelEffort
     ? S.models.find((m) => m.value === S.characterModel)?.effortLevels ?? profile.effortLevels : profile.effortLevels;
   const effortBlocked = () => effortDead() || effortPending;
   // segments disable only when the agent cannot take a pick; a pick in flight leaves them enabled
   // (setEffort's effortBlocked() guard drops a second pick) so the row does not dim and focus stays put
-  const effortDead = () => !S.isAlive || sl.model === "Starting…" || (opts.agent === "codex" && S.inTurn);
+  const effortDead = () => !S.isAlive || sl.model === "Starting…" || (profile.busyBlocksEffort && S.inTurn);
   function setEffort(level: Effort) {
     if (effortBlocked()) return;
-    if (opts.agent === "codex") {
-      const selected = codexEffort(level, effortLevels());
-      if (!selected) return;
-      level = selected;
-    }
+    const selected = profile.clampEffort(level, effortLevels());
+    if (!selected) return;
+    level = selected;
     const line = S.adapter.encodeSetEffort(level);
     if (line === null) {
-      if (opts.agent !== "codex") return;
+      if (!profile.stagedLocally) return;
       sl.effort = level;
       S.liveEffort = level;
       opts.effort = level;
@@ -223,7 +221,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
       effortPending = false;
       if (ok) {
         opts.effort = level;
-        if (opts.agent === "codex") { sl.effort = level; S.liveEffort = level; } // the host's Applied
+        if (profile.settlesOnSend) { sl.effort = level; S.liveEffort = level; } // the host's Applied
       }
       redrawStatus();
     });

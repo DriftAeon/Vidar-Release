@@ -20,6 +20,15 @@ export function createCardForm(host: HTMLElement, item: RelayItem, opts: { onNot
     row.append(el("span", "ask-label", label), el("span", "ask-value", value));
     form.append(row);
   }
+  let commentEl: HTMLTextAreaElement | null = null;
+  if (item.view.comment) {
+    commentEl = el("textarea", "q-other relay-ask-comment");
+    commentEl.rows = 3;
+    commentEl.maxLength = 4000;
+    commentEl.placeholder = "Additional Info";
+    commentEl.setAttribute("aria-label", "Additional Info");
+    form.append(commentEl);
+  }
   const actions = el("div", "relay-ask-actions");
   let sending = false;
   const decide = async (verdict: "approve" | "deny") => {
@@ -27,12 +36,14 @@ export function createCardForm(host: HTMLElement, item: RelayItem, opts: { onNot
     sending = true;
     approve.disabled = true;
     deny.disabled = true;
+    if (commentEl) commentEl.disabled = true;
     try {
-      await item.resolve({ verdict, comment: "" });
+      await item.resolve({ verdict, comment: (commentEl?.value ?? "").trim() });
     } catch (e) {
       opts.onNote?.(e instanceof Error ? e.message : String(e));
       approve.disabled = false;
       deny.disabled = false;
+      if (commentEl) commentEl.disabled = false;
       sending = false;
     }
   };

@@ -69,7 +69,7 @@ const VISUAL_FILE = /\.(svg|html|png)$/i;
 /** `reveal` opens the pane on this tab (the dev fixture runner needs it on screen). */
 export function mountDocumentView(parent: HTMLElement, note: (msg: string) => void, reveal: () => void = () => {}): HTMLElement {
   noteFn = note;
-  const shell = paneShell({ id: "doc-view", head: { id: "doc-bar" }, frame: { id: "doc-scroll" } });
+  const shell = paneShell({ id: "doc-view", head: { id: "doc-bar" }, frame: { id: "doc-scroll" }, scroll: true });
   root = shell.root;
   shell.head.innerHTML = `
     <button id="doc-open" type="button" class="pick-face" aria-label="Open Document"> </button>

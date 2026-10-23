@@ -8,6 +8,7 @@ import { paintRelayRow } from "./sessions/tab-row-paint";
 import { startDisplaySource, refresh } from "../relay/source-display";
 import { startAskSource, refresh as refreshAsks } from "../relay/source-asks";
 import { startCtlAskSource } from "../relay/source-ctl-asks";
+import { startApprovalSource } from "../relay/source-approvals";
 import { setAskVisible } from "../relay/ask-view";
 import { mountRelayStack, paintRelayStack } from "../relay/stack";
 import { mountRelayLarge, openLarge, largeId, syncLarge } from "../relay/large";
@@ -69,6 +70,7 @@ export function mountRelayTab(parent: HTMLElement, notify: (unseen: boolean) => 
     startDisplaySource();
     startAskSource();
     startCtlAskSource();
+    startApprovalSource();
   }
   apply(relayItems());
   return el;

@@ -29,7 +29,7 @@ test("the fetch runs once per launch and saves the catalog", async () => {
   dom.ipc.answers.codex_list_models = [[row("gpt-a", ["high"])]];
   await Promise.all([ensureCodexModels(), ensureCodexModels()]);
   assert.equal(fetches(), 1, "two callers share one run");
-  assert.deepEqual(getPref("codexModels"), [{ value: "gpt-a", label: "Gpt-a", effortLevels: ["high"] }]);
+  assert.deepEqual(getPref("codexModels"), [{ value: "gpt-a", label: "GPT A", effortLevels: ["high"] }]);
   setPref("codexModels", undefined);
   await ensureCodexModels();
   assert.equal(fetches(), 1, "never twice in one launch, even after the pref empties");

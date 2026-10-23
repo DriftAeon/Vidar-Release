@@ -2,6 +2,7 @@
    A new panel sheet goes in src/styles/ and is appended as its own line.
    tokens.css stays first: every later sheet reads its custom properties. */
 @import "./styles/tokens.css";
+@import "./styles/state-dot.css";
 @import "./styles/base.css";
 @import "./styles/controls.css";
 @import "./styles/layout.css";
@@ -65,3 +66,4 @@
 @import "./styles/onboarding-theme.css";
 @import "./styles/onboarding-modules.css";
 @import "./styles/onboarding-runes.css";
+@import "./styles/caption.css";

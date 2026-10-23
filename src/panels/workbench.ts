@@ -283,7 +283,7 @@ export function mountWorkbench(parent: HTMLElement, on: { open: () => void; coll
     console.error("flow view failed to mount", err);
     const flowViewEl = document.createElement("div");
     flowViewEl.className = "flow-mount-error";
-    flowViewEl.textContent = `${benchLabel("flow")} Couldn't Load. Details Are in the DevTools Console.`;
+    flowViewEl.textContent = `${benchLabel("flow")} couldn't load. Details are in the DevTools console.`;
     (bodyEl.parentElement ?? root).appendChild(flowViewEl);
     tabViews.set("flow", { element: flowViewEl, display: "flex", onShown: onFlowShown, onHidden: onFlowHidden });
   }
@@ -490,7 +490,7 @@ function mountOptionalError(id: OptionalTab, err: unknown) {
   console.error(`${id} view failed to mount`, err);
   const element = document.createElement("div");
   element.className = "flow-mount-error";
-  element.textContent = `${benchLabel(id)} Couldn't Load. Details Are in the DevTools Console.`;
+  element.textContent = `${benchLabel(id)} couldn't load. Details are in the DevTools console.`;
   (bodyEl.parentElement ?? root).appendChild(element);
   keepAboveBar(element);
   tabViews.set(id, { element, display: "flex" });

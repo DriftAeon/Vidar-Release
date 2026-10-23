@@ -2,7 +2,7 @@
    z-index 150 with inspect: above the 100 menu ceiling, so the backdrop
    covers the launcher/settings menus if one is still open. */
 #shortcuts-backdrop {
-  position: fixed; inset: 0; z-index: 150;
+  position: fixed; inset: var(--caption-h, 0px) 0 0 0; z-index: 150; /* the caption row is not dimmed */
   background: var(--bg); opacity: 0.6;
 }
 #shortcuts-modal {

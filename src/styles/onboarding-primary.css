@@ -50,8 +50,8 @@ button.ob-half:disabled { opacity: 0.45; cursor: default; }
 .ob-setup-val { color: var(--fg-dim); font-size: var(--font-12); }
 .ob-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ob-setup-text.ob-mono { font-size: var(--font-12); color: var(--fg-dim); }
-.ob-dot { flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--ok-green); }
-.ob-dot.warn { background: var(--approval-amber); }
+.ob-dot { flex: none; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--dot-ok); }
+.ob-dot.warn { background: var(--dot-warn); }
 .ob-error { color: var(--alert); font-size: var(--font-12); }
 
 /* Use X outside the footer bar share its buttons (onboarding-shell.css styles .ob-bar .ob-btn only) */

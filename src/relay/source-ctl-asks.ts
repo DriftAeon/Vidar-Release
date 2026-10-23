@@ -1,4 +1,4 @@
-// `ctl.ask` as Relay question items (origin "ctl-ask"): the blocking ask no longer opens the askGate modal.
+// `ctl.ask` as Relay question items (origin "ctl-ask"): the blocking ask has no modal.
 // listen.ts hands over the Rust card (id, deadline); the caller's reply line is written once, by `finish()`,
 // whichever of answer, dismiss, expiry or cancel gets there first.
 
@@ -30,7 +30,7 @@ interface Flight {
 const flights = new Map<string, Flight>();
 let cancelListening = false;
 
-/** The message `askGate` gave a second ask of the same kind, so the caller's err line is unchanged. */
+/** The refusal text for a second ask of the same kind, so the caller's err line is unchanged. */
 export const CTL_ASK_BUSY = 'an ask for "ctl-ask" is already on screen or queued; only one at a time is useful';
 /** Hard steer: a hosted Claude tab has AskUserQuestion and `pending`, so a blocking ask is refused. */
 export const CTL_ASK_STEER = "err use --pending or AskUserQuestion";

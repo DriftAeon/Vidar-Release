@@ -1,18 +1,20 @@
-export type CharacterLoop = "bn01" | "bn02" | "br01" | "f002";
+/** Behaviour roles; which clip plays each is the model's clip map (renderer-registry.ts). */
+export type CharacterLoop = "idle" | "tired" | "run" | "rest";
+export type CharacterOnce = "yes";
 const LOW_CONTEXT_ENTER = 80;
 const LOW_CONTEXT_LEAVE = 75;
 const CHARACTER_ACTIVITY_ARM_MS = 350;
 export const CHARACTER_ACTIVITY_QUIET_MS = 900;
 
 /* Which character a tab shows comes from the user's packs (resolve.ts). Under AUTO
-   (no fixed model pinned) the ordinary Idle (bn01) is replaced with Clip F002 as the
+   (no fixed model pinned) the ordinary idle is replaced with the rest role as the
    idle-equivalent — the same character body, a different resting pose to tell the two apart
    at a glance. */
-const IDLE_OVERRIDES = new Map<string, CharacterLoop>([["auto", "f002"]]);
+const IDLE_OVERRIDES = new Map<string, CharacterLoop>([["auto", "rest"]]);
 
 function idleLoopForModel(model: string | null | undefined): CharacterLoop {
   const key = model?.trim().toLowerCase();
-  return (key ? IDLE_OVERRIDES.get(key) : undefined) ?? "bn01";
+  return (key ? IDLE_OVERRIDES.get(key) : undefined) ?? "idle";
 }
 
 export function reduceLowContext(current: boolean, percentage: number | null, fresh: boolean): boolean {
@@ -20,12 +22,12 @@ export function reduceLowContext(current: boolean, percentage: number | null, fr
   return current ? percentage >= LOW_CONTEXT_LEAVE : percentage >= LOW_CONTEXT_ENTER;
 }
 
-/* Run (`br01`) is off: a running character in the rail is distracting
+/* Run is off: a running character in the rail is distracting
    while the activity signal is still coarse. Active tabs sit on Idle until that is fixed;
    `active` stays in the signature so the arm/quiet plumbing and its tests keep their shape
    and flipping Run back on is a one-line change. */
 export function characterLoop(_active: boolean, lowContext: boolean, model?: string | null): CharacterLoop {
-  return lowContext ? "bn02" : idleLoopForModel(model);
+  return lowContext ? "tired" : idleLoopForModel(model);
 }
 
 /* Raw pty tabs have no turn boundaries, so the character reads output as work. That only
@@ -64,7 +66,7 @@ export function reduceOutputPulse(state: OutputActivityState | undefined, now: n
 }
 
 /* Per-character, per-clip playrate overrides: `playrate` in a character pack maps
-   a clip code ("bn01") to a multiplier. Anything missing, non-finite or non-positive plays at 1. */
+   a clip code (the part of a clip name after its last "_") to a multiplier. Anything missing, non-finite or non-positive plays at 1. */
 export type PlayrateOverrides = Readonly<Record<string, number>>;
 
 export function clipCode(clipName: string): string {

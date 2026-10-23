@@ -9,6 +9,7 @@ import type { Effort, PermissionMode } from "./agents/protocol";
 import type { Macro } from "./panels/macros";
 import type { VoiceCfg } from "./voice";
 import type { WakewordCfg } from "./panels/listen";
+import type { AgentId } from "./agents/id";
 
 // WHAT a tab runs. `id` is the SessionAgent kind (tab colour, agent-scoped
 // controls); gateway pack ids are `claude`, anything else is treated as a plain shell.
@@ -74,7 +75,7 @@ export interface VidarConfig {
   /** App for Open Externally on a document (an .exe); absent = the Windows default app. */
   documentApp?: string;
   /** Primary agent (agents/primary.ts); absent or invalid = unset. */
-  primaryAgent?: "codex" | "claude";
+  primaryAgent?: AgentId;
   /** Flow canvas grid-line opacity, whole percent 0-100; absent = 55 (src/flow/grid-opacity.ts). */
   flowGridOpacity?: number;
   agents?: AgentType[];
@@ -97,6 +98,9 @@ export interface VidarConfig {
    *  JSON — character/view.ts validates shape before applying one. Written by
    *  `save_character_view`, which does not emit settings-changed. */
   characterViews?: Record<string, unknown>;
+  /** Character window stage: a `content\stages\` id; absent = the built-in default stage.
+   *  Untrusted (opaque in Rust's read): character/stage-pick.ts `chooseStage` decides. */
+  characterStage?: unknown;
   /** Capability overlay: `false` switches a capability off; any other value is ignored,
    *  so it can never turn on what the registry's facts leave off (capabilities/registry.ts). */
   capabilities?: Record<string, unknown>;

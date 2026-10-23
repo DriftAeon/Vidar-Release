@@ -12,7 +12,7 @@
 //   html        inside any literal (and in index.html): text of <button|label|option|th|span|p|a|
 //               summary|legend|h1-6|strong|em|b> and title= / aria-label= / placeholder= values
 //   label       `"label": "…"` in contracts/*.json
-//   key         object-literal `placeholder: "…"` (askGate options); judged for Title Case too
+//   key         object-literal `placeholder: "…"` (dialog options); judged for Title Case too
 // Placeholder rule (2026-10-11): in the prop, attr, html (placeholder=) and key sinks a value
 // containing "optional" (any case) or " — " is a finding (sink `placeholder`); copy-ok suppresses it.
 // Not seen (false negatives by design): strings built from variables or helpers outside the sinks,

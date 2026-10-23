@@ -1,6 +1,7 @@
 {
   "id": "agent-profiles",
   "version": 1,
+  "release": "1.0.0",
   "provides": [],
   "ui": { "label": "Agent Profiles" },
   "module": {

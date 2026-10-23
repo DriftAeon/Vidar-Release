@@ -183,6 +183,10 @@ pub struct VidarConfig {
     /// Per-character saved default camera view: id -> `{ position, target, zoom }`.
     /// Opaque JSON — the frontend validates shape/finiteness before ever applying one.
     pub character_views: Option<HashMap<String, Value>>,
+    /// Character window stage pick: a stage id from `content\stages\` (`patch_settings`
+    /// validates it); absent = the built-in default stage. Opaque here so a hand-edited wrong
+    /// type cannot fail the whole parse; the webview falls back to the default.
+    pub character_stage: Option<Value>,
     /// Capability overlay: id -> `false` switches a capability off in the webview's
     /// registry (src/capabilities/registry.ts). Opaque here; passed through so the key
     /// reaches `read_config`, which would otherwise drop it. Any JSON shape is accepted: a

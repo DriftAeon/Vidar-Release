@@ -1,14 +1,13 @@
 import * as T from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { CharacterArena } from "./arena";
-import { DOME_RADIUS } from "./home-sphere";
 import { collectResources, type ModelResources } from "./materials";
-import { chooseMaterialStyle, type StyleHandle } from "./material-style";
+import { chooseMaterialStyle, clipForRole, clipLabelFor, clipMapFor, type RendererHandle } from "./renderer-registry";
 import { modelDigest, tagModel } from "./model-cache";
 import { characterRevision } from "./packs";
-import { clipLabel, validateCharacterModel } from "./model";
+import { validateCharacterModel } from "./model";
 import { lightingFor, type CharacterPack } from "./catalog";
-import { clipPlayrate } from "./behavior";
+import { clipPlayrate, type CharacterLoop, type CharacterOnce } from "./behavior";
 import { validateView, type View } from "./view";
 
 export interface CharacterRenderer {
@@ -19,8 +18,8 @@ export interface CharacterRenderer {
   /** Set when the pack's material preference could not be honoured (Settings row note). */
   styleNote: string | null;
   selectClip(name: string): void;
-  setLoop(code: "bn01" | "bn02" | "br01" | "f002"): void;
-  playOnce(code: "fq01", priority: number): void;
+  setLoop(role: CharacterLoop): void;
+  playOnce(role: CharacterOnce, priority: number): void;
   setPlaying(playing: boolean): void;
   resetView(): void;
   captureView(): View;
@@ -35,10 +34,10 @@ export async function createCharacterRenderer(
   validateCharacterModel(bytes, pack.name);
   signal.throwIfAborted();
   const resources: ModelResources = { materials: new Set(), textures: new Set(), geometries: new Set(), skeletons: new Set() };
-  const { host, renderer, controls, scene, camera, homeSphere, clock } = arena;
+  const { host, renderer, controls, scene, camera, clock } = arena;
   let mixer: T.AnimationMixer | undefined;
   let root: T.Group | undefined;
-  let style: StyleHandle | undefined;
+  let style: RendererHandle | undefined;
   let resizeObserver: ResizeObserver | undefined;
   let intersectionObserver: IntersectionObserver | undefined;
   let frame = 0;
@@ -96,12 +95,14 @@ export async function createCharacterRenderer(
     root = gltf.scene;
     collectResources(root, resources);
     signal.throwIfAborted();
-    // Material style slot: cel or standard is decided here once; from now on the
-    // renderer only drives the handle (reveal progress, settle, dispose).
+    // Renderer slot (renderer-registry.ts), decided here once; from now on this loop only
+    // drives the handle (reveal progress, settle, dispose).
     const chosen = await chooseMaterialStyle(pack.material, gltf, resources);
     signal.throwIfAborted();
-    style = await chosen.style.apply({ gltf, resources, lighting: lightingFor(pack), scene });
-    style.materialize(0); // resize() renders before the driver's first tick
+    const applied = await chosen.style.apply({ gltf, resources, lighting: lightingFor(pack), scene });
+    style = applied;
+    const reveal = (value: number) => chosen.style.materialize(applied, value);
+    reveal(0); // resize() renders before the driver's first tick
     signal.throwIfAborted();
 
     if (arena.unavailable) throw new Error("The character arena is unavailable.");
@@ -117,7 +118,8 @@ export async function createCharacterRenderer(
     scene.add(root);
     const clips = gltf.animations.filter((clip) => Number.isFinite(clip.duration) && clip.duration > 0);
     // A still model (no timed animations) sits in its rest pose with an empty clip list.
-    const initial: T.AnimationClip | null = clips.find((clip) => clip.name.endsWith("_bn01")) ?? clips[0] ?? null;
+    const clipMap = clipMapFor(chosen.style, clips.map((clip) => clip.name));
+    const initial: T.AnimationClip | null = clipForRole(clipMap, "idle", clips);
     let selected: T.AnimationClip | null = initial;
     let currentLoop: T.AnimationClip | null = initial;
     let manual = false;
@@ -136,17 +138,14 @@ export async function createCharacterRenderer(
     if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) throw new Error("The model has invalid bounds.");
     const radius = sphere.radius;
     camera.near = radius * 0.01;
-    // Never inside the home-sphere dome: a clipped dome leaves the canvas transparent, and
-    // the additive motes then composite as flicker against the panel background.
-    camera.far = Math.max(radius * 100, DOME_RADIUS * 2);
+    // Far plane (never inside the stage) and closest orbit come from the active stage (arena.ts).
+    arena.fitSubject(radius);
     camera.zoom = 1;
     camera.updateProjectionMatrix();
     const distance = radius / Math.sin(T.MathUtils.degToRad(camera.fov / 2)) * 1.08;
     camera.position.copy(sphere.center).add(new T.Vector3(0, radius * 0.12, distance));
     controls.target.copy(sphere.center);
-    controls.minDistance = radius * 0.4;
-    // Home-sphere orbit clamp (arena.ts): no view from under the floor, no drifting
-    // past the platform's edge. Left as-is rather than the previous radius-derived values.
+    // The stage's orbit clamp (arena.ts) stands rather than radius-derived values.
     controls.enableDamping = false;
     controls.mouseButtons = { LEFT: T.MOUSE.ROTATE, MIDDLE: T.MOUSE.PAN, RIGHT: null };
     controls.update();
@@ -175,7 +174,7 @@ export async function createCharacterRenderer(
         // Motes must also advance on this renderer's own animation tick
         // (below), not only arena.render's controls/resize path. Same clock as arena.ts,
         // one call site, still no second RAF loop.
-        homeSphere.tick(clock.getElapsedTime());
+        arena.tickStage(clock.getElapsedTime());
         renderer!.render(scene, camera);
       }
     }
@@ -213,7 +212,7 @@ export async function createCharacterRenderer(
       if (disposed || contextLost || !materializeStart) return;
       const linear = Math.min((now - materializeStart) / MATERIALIZE_MS, 1);
       const eased = linear * linear * (3 - 2 * linear);
-      style!.materialize(eased);
+      reveal(eased);
       if (linear >= 1) style!.settle();
       render();
       if (linear < 1) materializeFrame = requestAnimationFrame(driveMaterialize);
@@ -258,18 +257,16 @@ export async function createCharacterRenderer(
       reactionPriority = -Infinity;
       playSelected(true);
     }
-    function resolveLoop(code: "bn01" | "bn02" | "br01" | "f002"): T.AnimationClip | null {
-      return clips.find((clip) => clip.name.endsWith(`_${code}`))
-        ?? clips.find((clip) => clip.name.endsWith("_bn01"))
-        ?? initial;
+    function resolveLoop(role: CharacterLoop): T.AnimationClip | null {
+      return clipForRole(clipMap, role, clips) ?? initial;
     }
-    function startOnce(code: "fq01", priority: number): void {
+    function startOnce(role: CharacterOnce, priority: number): void {
       if (!playing || manual || (reaction && reactionPriority >= priority)) return;
-      const clip = clips.find((item) => item.name.endsWith(`_${code}`));
+      const clip = clipForRole(clipMap, role, clips);
       if (!clip) {
-        if (!missingOnce.has(code)) {
-          missingOnce.add(code);
-          if (clips.length) console.warn(`${pack.name} is missing animation ${code}.`);
+        if (!missingOnce.has(role)) {
+          missingOnce.add(role);
+          if (clips.length) console.warn(`${pack.name} has no ${role} animation.`);
         }
         return;
       }
@@ -286,7 +283,7 @@ export async function createCharacterRenderer(
       const rect = renderer!.domElement.getBoundingClientRect();
       raycaster.setFromCamera(new T.Vector2((x - rect.left) / rect.width * 2 - 1, -(y - rect.top) / rect.height * 2 + 1), camera);
       if (!raycaster.intersectObject(root!, true).length) return;
-      startOnce("fq01", 0);
+      startOnce("yes", 0);
     };
     renderer.domElement.addEventListener("pointerdown", (event) => {
       down = event.button === 0 && event.isPrimary
@@ -307,7 +304,7 @@ export async function createCharacterRenderer(
     materializeStart = performance.now();
     materializeFrame = requestAnimationFrame(driveMaterialize);
     return {
-      clips: clips.map((clip) => ({ name: clip.name, label: clipLabel(clip.name) })), initialClip: initial?.name ?? "",
+      clips: clips.map((clip) => ({ name: clip.name, label: clipLabelFor(clipMap, clip.name) })), initialClip: initial?.name ?? "",
       styleNote: chosen.note,
       selectClip(name) {
         if (disposed) return;
@@ -319,13 +316,13 @@ export async function createCharacterRenderer(
           playSelected(true);
         }
       },
-      setLoop(code) {
+      setLoop(role) {
         if (disposed) return;
         manual = false;
-        selected = resolveLoop(code);
+        selected = resolveLoop(role);
         if (!reaction) playSelected();
       },
-      playOnce(code, priority) { if (!disposed) startOnce(code, priority); },
+      playOnce(role, priority) { if (!disposed) startOnce(role, priority); },
       setPlaying(value) {
         if (!disposed) {
           playing = value;

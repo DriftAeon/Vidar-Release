@@ -10,7 +10,7 @@ import { DRIVE_CLASS } from "../rendered-drive";
 import { setItems, type RelayItem, type RelayVerdict } from "../../relay/store";
 import type { QuestionHandle } from "./cards";
 import type { ToolRecord } from "./state";
-import { agentText, ownerOf } from "./subagent-relay";
+import { agentText, ownerOf } from "./approval-relay";
 
 const SOURCE = "card-questions";
 export const QUESTION_TITLE = "Question";

@@ -54,6 +54,7 @@ import {
   syncCaption,
 } from "./theme";
 import { initCasDial } from "./cas-dial";
+import { initCaption } from "./caption";
 import { getPref, initPrefs, onPrefsError } from "./prefs";
 import { initFlowStorage } from "./flow/file-storage";
 
@@ -105,6 +106,7 @@ function setViewClasses(name: ViewName) {
 
 initTheme();
 syncCaption();
+initCaption();
 onThemeChange(() => setTerminalTheme());
 
 initCasDial();

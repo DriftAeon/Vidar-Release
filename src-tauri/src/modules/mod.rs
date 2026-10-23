@@ -14,6 +14,7 @@
 //! `pack_deps` feeds deps.rs the active packs' `deps[]` (read-only: records no pins).
 //! A release set beside the exe (`set`) leaves its excluded non-core modules out of every listing.
 
+pub(crate) mod compat;
 mod manifest;
 mod scan;
 mod set;

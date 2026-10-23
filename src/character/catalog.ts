@@ -13,7 +13,9 @@ export interface CharacterLighting {
   fill: number;
 }
 
-export type MaterialPreference = "auto" | "cel" | "standard";
+/** A renderer id (renderer-registry.ts): "auto", "standard", or an addon's id (`[a-z0-9-]+`,
+ *  at most 32). Rust validates the shape; whether it is installed is the registry's call. */
+export type MaterialPreference = string;
 export type ClaimKind = "model" | "role" | "agent";
 export interface Claim { kind: ClaimKind; key: string }
 
@@ -51,7 +53,7 @@ export interface CharacterList {
   default: string | null;
 }
 
-/** A pack's lighting, or these defaults (tuned for the cel shader). */
+/** A pack's lighting, or these defaults. */
 const DEFAULT_LIGHTING: CharacterLighting = { ambient: 0.65, key: 0.4, fill: 0.06 };
 
 export function lightingFor(pack: CharacterPack): CharacterLighting {

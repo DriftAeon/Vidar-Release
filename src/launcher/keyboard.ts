@@ -20,7 +20,7 @@ let openLauncher!: () => void;
    Open as if ＋ was clicked, land on row 0, then arrows walk the list:
    Down/Up within a column, Right/Enter into the locations flyout, Left back
    out, Enter on a location spawns (native button activation). Escape closes
-   via the document handler in launcher/menu.ts (initLauncherMenu). */
+   through the popover core (modules/popover.ts), opened by launcher/menu.ts. */
 
 // True from a keyboard open until the pointer genuinely moves; gates the
 // hover-opens-flyout behaviour so a synthetic mouseenter can't retarget it.

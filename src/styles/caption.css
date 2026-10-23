@@ -1,0 +1,28 @@
+/* Vidar-drawn caption row (src/caption.ts). --caption-h and --caption-buttons-w come from
+   caption_metrics in CSS px; --caption-bg / --caption-fg are the colours syncCaption sends DWM.
+   The row drags the window (WebView2 non-client regions): drag, double-click maximize, system menu. */
+#caption {
+  display: none;
+  box-sizing: border-box;
+  height: var(--caption-h);
+  /* the icon sits --space-4 right of the left column's --bar-inset (user, 2026-10-23); --bar-inset is
+     also defined on :root (tokens.css) */
+  padding-left: calc(var(--bar-inset) + var(--space-4));
+  padding-right: var(--caption-buttons-w); /* the title never runs under DWM's buttons */
+  align-items: center;
+  gap: var(--space-8);
+  background: var(--caption-bg, var(--bg));
+  color: var(--caption-fg, var(--fg));
+  font: var(--font-12) var(--font-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  app-region: drag;
+}
+#caption[data-ready] { display: flex; }
+/* restored: the top --caption-band px are DWM's resize band, so icon and title centre below it */
+#caption[data-ready]:not([data-maximized]) { padding-top: var(--caption-band, 0px); }
+.caption-icon { flex: none; width: var(--space-16); height: var(--space-16); pointer-events: none; }
+.caption-title { overflow: hidden; text-overflow: ellipsis; }
+/* the grid fills what the row leaves */
+#caption[data-ready] ~ #app { height: calc(100% - var(--caption-h)); }

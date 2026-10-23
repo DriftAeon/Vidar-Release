@@ -156,7 +156,7 @@ async function refresh(reloadCatalog: boolean) {
 }
 
 export function mountLabView(parent: HTMLElement, noteFn: (msg: string) => void): HTMLElement {
-  const shell = paneShell({ id: "lab-view", head: { cls: "lab-head" }, frame: { cls: "lab-body" } });
+  const shell = paneShell({ id: "lab-view", head: { cls: "lab-head" }, frame: { cls: "lab-body" }, scroll: true });
   viewEl = shell.root;
   catalog = null;
   catalogErr = null;

@@ -20,7 +20,17 @@ import { hostedCodexOn } from "../launcher/readopt";
 import { rulesPlan } from "../rules/inject";
 import { DRIVE_CLASS as C } from "../panels/rendered-drive";
 import { API_KEY_CARD } from "../panels/rendered/api-key-card";
-import { pendingAsks } from "../panels/askgate";
+/** One in-flight approval as `state.cards` lists it. */
+interface PendingAsk {
+  id: string;
+  kind: string | null;
+  title: string;
+  tab: string | null;
+  details: Record<string, string>;
+  /** always true: the registry shows every record at once */
+  onScreen: boolean;
+}
+import { liveApprovals } from "../asks/approvals";
 import { items as relayItems } from "../relay/store";
 import { getRegistry } from "../settings/registry";
 import { drivePaste, type DrivePastePayload, type DrivePasteResult, type DrivePasteTarget } from "./paste";
@@ -181,8 +191,8 @@ async function driveAnswer(
 }
 
 /** Combined snapshot: the session list plus each rendered tab's own chips and
- *  pending cards, and `cards`: the ask-gate modals in flight (ctl spawn/prompt/
- *  ask, Astra ask; those live outside any tab). Sync, so `falconSession` is set on
+ *  pending cards, and `cards`: the approvals registry's imperative asks (ctl spawn/prompt/
+ *  flow, Astra, review dispatch; those live outside any tab). Sync, so `falconSession` is set on
  *  adopted tabs only; backs `ctl.state` (whose projection in control\listen.ts drops
  *  everything but tab names) and `driveStateHosted`. */
 export function driveSnapshot() {
@@ -190,8 +200,26 @@ export function driveSnapshot() {
   return {
     activeId: snap.activeId,
     tabs: snap.tabs.map((t) => (t.body === "rendered" ? { ...t, ...renderedDrive(t.id) } : t)),
-    cards: pendingAsks(),
+    cards: registryCards(),
   };
+}
+
+const IMPERATIVE_ORIGINS: readonly string[] = ["ctl-prompt", "ctl-spawn", "ctl-flow", "astra", "review-dispatch"];
+
+/** The imperative approvals as `state.cards` entries. ctl-prompt's `tab` is its target tab (the Tab row's
+ *  trailing id), as the ask-gate entry carried it; the registry shows every record at once, so onScreen is true. */
+function registryCards(): PendingAsk[] {
+  // Oldest first, as the ask-gate queue listed them (the registry lists newest first).
+  return [...liveApprovals()].reverse().filter((e) => IMPERATIVE_ORIGINS.includes(e.record.origin)).map((e) => {
+    const r = e.record;
+    const tabRow = r.origin === "ctl-prompt" ? r.rows.find(([k]) => k === "Tab")?.[1] : undefined;
+    const cut = tabRow?.lastIndexOf(" · ") ?? -1;
+    return {
+      id: r.id, kind: r.origin, title: r.title,
+      tab: tabRow === undefined ? null : cut >= 0 ? tabRow.slice(cut + 3) : tabRow,
+      details: Object.fromEntries(r.rows), onScreen: true,
+    };
+  });
 }
 
 /** `window.__vidarDrive.state()`: `driveSnapshot()` with `falconSession` filled on spawned
@@ -204,10 +232,8 @@ async function driveStateHosted() {
   return { ...snap, tabs };
 }
 
-// Answers the ask-gate modal by its own buttons, same principle as driveAnswer:
-// the buttons are the user's contract. Only the card on screen is answerable —
-// a queued one has no DOM yet, and resolving it past the queue would skip the
-// order the user sees.
+// Answers an approval card (ctl spawn/prompt/ask/flow, Astra, review dispatch) through
+// the same registry entry Relay uses; every listed card is answerable, first answer wins.
 function driveCard(id: string, decision: string, opts: { choice?: string; comment?: string } = {}) {
   if (decision !== "approve" && decision !== "deny") throw new Error(`decision must be approve or deny, got "${decision}"`);
   // A ctl.ask is a Relay question item, not a modal; it answers through the item's own resolve.
@@ -218,25 +244,14 @@ function driveCard(id: string, decision: string, opts: { choice?: string; commen
     return q.resolve({ verdict: decision === "approve" ? "approve" : "deny", comment: opts.comment ?? "", choice: opts.choice, reply })
       .then(() => ({ id, kind: "ctl-ask", title: q.title, decision }));
   }
-  const asks = pendingAsks();
-  const ask = asks.find((a) => a.id === id);
-  if (!ask) throw new Error(`no pending gate card "${id}"; pending: ${asks.map((a) => a.id).join(", ") || "none"}`);
-  if (!ask.onScreen) throw new Error(`card "${id}" is queued behind "${asks.find((a) => a.onScreen)?.id ?? "?"}"; answer that one first`);
-  const modal = document.getElementById("ask-modal");
-  if (!modal || modal.classList.contains("hidden")) throw new Error("the ask modal is not on screen");
-  if (opts.choice !== undefined) {
-    const pick = [...modal.querySelectorAll<HTMLButtonElement>(".ask-choice")].find((b) => b.textContent === opts.choice);
-    if (!pick) throw new Error(`no choice "${opts.choice}" on card "${id}"`);
-    pick.click();
+  // The imperative approvals answer through the registry, the same entry Relay uses: first answer wins.
+  const entry = liveApprovals().find((e) => e.record.id === id && IMPERATIVE_ORIGINS.includes(e.record.origin));
+  if (entry) {
+    return entry.answer({ verdict: decision === "approve" ? "approve" : "deny", comment: opts.comment ?? "", where: "Drive" })
+      .then(() => ({ id, kind: entry.record.origin, title: entry.record.title, decision }));
   }
-  if (opts.comment !== undefined) {
-    const box = modal.querySelector<HTMLInputElement>(".ask-comment");
-    if (box) box.value = opts.comment;
-  }
-  const btn = modal.querySelector<HTMLButtonElement>(decision === "approve" ? ".ask-approve" : ".ask-deny");
-  if (!btn) throw new Error(`no ${decision} button on the ask modal`);
-  btn.click();
-  return { id, kind: ask.kind, title: ask.title, decision };
+  const pending = registryCards().map((c) => c.id);
+  throw new Error(`no pending card "${id}"; pending: ${pending.join(", ") || "none"}`);
 }
 
 // Runs a registered shortcut's action by id, skipping the key-matching layer

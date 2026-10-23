@@ -9,7 +9,9 @@ const { AGENT_PROFILE } = await import("../src/panels/rendered/agent-profile.ts"
 const { toolClass } = await import("../src/panels/rendered/tool-class.ts");
 
 const FIELDS = ["label", "newAdapter", "permissionModes", "resumeNoun", "inProcess", "falconHosted",
-  "effortLevels", "modelMenu", "localCommands", "askUserQuestion", "subagents", "resumeCommand", "loginTip", "loginCheck"];
+  "effortLevels", "modelMenu", "localCommands", "askUserQuestion", "subagents", "resumeCommand", "loginTip", "loginCheck",
+  "modeLabels", "settlesOnSend", "stagedLocally", "groupModels", "perModelEffort", "busyBlocksEffort", "busyBlocksMode",
+  "clampEffort", "commandCabinet"];
 
 test("every agent row is complete and builds an adapter", () => {
   assert.deepEqual(Object.keys(AGENT_PROFILE).sort(), ["claude", "codex"]);

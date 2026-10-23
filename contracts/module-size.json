@@ -32,8 +32,8 @@
     ],
     "paths": [
       {
-        "path": "src/character/vendor",
-        "reason": "vendored: upstream dsts-viewer, per-file sha256 in src/character/vendor/dsts/provenance.json, MIT LICENSE beside it"
+        "path": "src/character/addons/cel/vendor",
+        "reason": "vendored upstream code in a local, gitignored renderer addon: per-file sha256 in its provenance.json, MIT LICENSE beside it"
       }
     ]
   },

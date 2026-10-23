@@ -101,8 +101,8 @@ pub fn request<R: Runtime>(
 
 /// The `ctl-card` event body. `claimedAtMs` is stamped when the card is minted,
 /// not by the frontend at receipt, and `expiresAtMs` is that instant plus
-/// `CARD_TTL`: the frontend's expiry timers (`askgate.ts::askGate`,
-/// `control/listen.ts`) read it instead of carrying their own copy of the TTL.
+/// `CARD_TTL`: the frontend's expiry timers (`src/control/listen.ts`,
+/// `src/asks/approvals.ts`) read it instead of carrying their own copy of the TTL.
 fn card_payload(
     control_id: &str,
     card_id: &str,

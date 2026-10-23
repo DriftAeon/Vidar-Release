@@ -6,6 +6,9 @@ export interface PaneShellOpts {
   id: string;
   head: { id?: string; cls?: string };
   frame: { id?: string; cls?: string };
+  /** The frame itself scrolls: the framed box is an outer element and `frame` is the scroller inside it,
+   *  so its scrollbar can sit past the box's border, in #workbench's right gutter. */
+  scroll?: boolean;
 }
 
 export interface PaneShell {
@@ -26,7 +29,14 @@ export function paneShell(o: PaneShellOpts): PaneShell {
   root.id = o.id;
   root.className = "wb-pane";
   const head = part("wb-pane-head", o.head);
-  const frame = part("wb-pane-frame", o.frame);
-  root.append(head, frame);
+  const frame = part(o.scroll ? "wb-pane-scroll" : "wb-pane-frame", o.frame);
+  if (o.scroll) {
+    const box = document.createElement("div");
+    box.className = "wb-pane-frame wb-pane-box";
+    box.append(frame);
+    root.append(head, box);
+  } else {
+    root.append(head, frame);
+  }
   return { root, head, frame };
 }

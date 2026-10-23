@@ -7,7 +7,8 @@
 
 import { listen as ipcListen, invoke } from "../ipc";
 import { sessionTitle } from "../panels/sessions";
-import { askGate, cancelAsk } from "../panels/askgate";
+import { openApproval, cancelApproval, liveApprovals } from "../asks/approvals";
+import { APPROVAL_TITLES } from "../asks/approval";
 import {
   driveSnapshot, showDocument, showDisplay, focusTarget, resolveTab, requesterTabId, readTranscript, promptTab, spawnTab, hasRenderedAgent,
   hostedTab, tabPromptReady, tabBusy, tabDead, sendPromptTo, laneToast, hostedRenderedAgent,
@@ -193,32 +194,22 @@ function laneSlot(
 }
 
 // Each card carries its own deadline, `expiresAtMs` (card.rs::card_payload: minted
-// instant + CARD_TTL). The frontend's expiry timers below run to it, since the Rust sweep
+// instant + CARD_TTL). The approval registry's own timer runs to it, since the Rust sweep
 // only runs inside card::request — a card with no later Act verb behind it would otherwise
 // sit rendered forever.
 
-// A card that expired server-side (`card.rs::expire_pending` sweep) before
-// the user acted on it (Approve on a stale modal
-// would still run `promptTab`/`spawnTab`). Fed by `ctl-card-cancel`;
-// consulted right before each Approve branch acts. Only cards with an ask in
-// flight (`live`) are recorded, and settleCard removes both entries when that
-// ask resolves (answered, self-answered or expired), so neither set can grow
-// from cards nobody answers.
-const live = new Set<string>();
-const cancelled = new Set<string>();
+// A card that expired server-side (`card.rs::expire_pending` sweep) before the user acted on it:
+// `ctl-card-cancel` settles its open record as cancelled, so a stale Approve cannot reach
+// `promptTab`/`spawnTab` (the registry settles each record once).
 ipcListen<{ cardId: string }>("ctl-card-cancel", (e) => {
-  const { cardId } = e.payload;
-  if (live.has(cardId)) cancelled.add(cardId);
+  // Settles the open record as cancelled: no reply, the lease is released by the record's callback.
+  // Only a ctl-* record: a card id naming another origin's record is not ours to cancel.
+  const live = liveApprovals().find((a) => a.record.id === e.payload.cardId);
+  if (live && live.record.origin.startsWith("ctl-")) cancelApproval(e.payload.cardId, "cancelled");
 });
-/** The card's ask resolved: forget it; true if it was cancelled server-side meanwhile. */
-function settleCard(cardId: string): boolean {
-  live.delete(cardId);
-  return cancelled.delete(cardId);
-}
 
-// Shared by `prompt`/`spawn`/`flow`/`ask`: one event; all but `ask` use one modal shape
-// (`askGate`, the same component the Astra ask card uses), branching on
-// `verb` only for what Approve does with the details.
+// Shared by `prompt`/`spawn`/`flow`/`ask`: one event; all but `ask` open one approval record
+// (`openApproval`, answered in Relay), branching on `verb` only for what Approve does with the details.
 ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; details: Record<string, unknown>; claimedAtMs: number; expiresAtMs: number }>(
   "ctl-card",
   async (e) => {
@@ -226,7 +217,7 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
     const problem = requesterProblem(requester);
     if (problem) { cardResult(id, cardId, false, `err ${problem}`); return; }
     if (verb === "flow") {
-      handleFlowCard(e.payload, { cardResult, label: requesterLabel, problem: requesterProblem, live, settle: settleCard });
+      handleFlowCard(e.payload, { cardResult, label: requesterLabel, problem: requesterProblem });
       return;
     }
     if (verb === "prompt") {
@@ -243,27 +234,24 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
       const slot = laneSlot(details, laneDeliverTo(details.deliver_to, () => requesterTabId(requester)), tab);
       if (typeof slot === "string") { cardResult(id, cardId, false, `err ${slot}`); return; }
       const { lease } = slot; // frozen with the approved values; released on every non-arming exit
-      let promptTimer: ReturnType<typeof setTimeout>;
-      live.add(cardId);
-      void askGate({
-        permission: true,
-        // Full text, never cut; the lane rows only when a subscription was asked for.
-        details: [["Asked By",requesterLabel(requester)], ["Tab", `${sessionTitle(tab) ?? tab} · ${tab}`], ["Text", text], ...(lease ? slot.rows : [])],
-        question: "",
+      const promptLabel = requesterLabel(requester);
+      const busy = openApproval({
         id: cardId, // drive's state.cards / `card <id>` name it by this
-        tab,
-        claimedAtMs,
-        expiresAtMs,
-      }, "ctl-prompt").then(({ approved, shown, comment, reason }) => {
-        clearTimeout(promptTimer);
-        const wasCancelled = settleCard(cardId);
-        if (!shown || reason === "expired" || wasCancelled || !approved) lanes.release(lease);
-        if (!shown) { cardResult(id, cardId, false, `err ${reason ?? "self-answered"}`); return; }
-        // The expiry timer below already sent the "err expired" reply.
-        if (reason === "expired") return;
-        if (wasCancelled) return;
-        if (!approved) { cardResult(id, cardId, false, `denied ${comment}`); return; }
+        origin: "ctl-prompt", title: APPROVAL_TITLES["ctl-prompt"],
+        asker: { tab: requesterTabId(requester), label: promptLabel, verified: true },
+        // Full text, never cut; the lane rows only when a subscription was asked for.
+        rows: [["Asked By", promptLabel], ["Tab", `${sessionTitle(tab) ?? tab} · ${tab}`], ["Text", text], ...(lease ? slot.rows : [])],
+        askedAtMs: claimedAtMs, expiresAtMs, comment: true, drawInAskerTab: true,
+      }, (outcome) => {
+       try {
+        if (!("comment" in outcome)) { // cancelled or expired
+          lanes.release(lease);
+          if (outcome.verdict === "expired") cardResult(id, cardId, false, "err expired");
+          return;
+        }
+        if (outcome.verdict === "deny") { lanes.release(lease); cardResult(id, cardId, false, `denied ${outcome.comment}`); return; }
         if (expiresAtMs - Date.now() < LATE_APPROVE_MS) { lanes.release(lease); cardResult(id, cardId, false, "err expired"); return; }
+        if (requesterProblem(requester)) { lanes.release(lease); cardResult(id, cardId, false, "err requester gone"); return; }
         // --notify: one composer-less send that arms the subscription; else the composer path as before.
         // Checked first: a not-ready write leaves the text unsent in the composer, and a caller
         // retrying on that err would type it twice.
@@ -277,10 +265,9 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
             : cardResult(id, cardId, true, `delivered ${tab}${lease ? " notify" : ""}`),
           (err) => cardResult(id, cardId, false, `err ${errText(err)}`),
         );
-      }).catch(() => { settleCard(cardId); lanes.release(lease); });
-      promptTimer = setTimeout(() => {
-        if (cancelAsk("ctl-prompt", "expired")) cardResult(id, cardId, false, "err expired");
-      }, Math.max(0, expiresAtMs - Date.now()));
+       } catch { lanes.release(lease); }
+      });
+      if (busy) { lanes.release(lease); cardResult(id, cardId, false, `err ${busy}`); }
       return;
     }
     if (verb === "spawn") {
@@ -311,44 +298,40 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
         ...(cwd ? [["Cwd", cwd] as [string, string]] : []),
         ...(title ? [["Title", title] as [string, string]] : []),
       ];
-      // Same kind + claimedAtMs requirement as "prompt" above.
-      let spawnTimer: ReturnType<typeof setTimeout>;
-      live.add(cardId);
-      void askGate({
-        permission: true,
-        details: [
+      // The agent process starts only on Approve; every other outcome releases the lease and starts nothing.
+      const spawnLabel = requesterLabel(requester);
+      const refused = openApproval({
+        id: cardId, origin: "ctl-spawn", title: APPROVAL_TITLES["ctl-spawn"],
+        asker: { tab: requesterTabId(requester), label: spawnLabel, verified: true },
+        rows: [
           // agent, model and effort read as one value (2026-10-10: lean card, no row per field)
-          ["Asked By", requesterLabel(requester)], ["Agent", [titleCase(agent), model, effort && titleCase(effort)].filter(Boolean).join(" · ")],
+          ["Asked By", spawnLabel], ["Agent", [titleCase(agent), model, effort && titleCase(effort)].filter(Boolean).join(" · ")],
           ...optionalRows, ...promptRows,
         ],
-        question: "",
-        variant: "ask-spawn",
-        id: cardId,
-        claimedAtMs,
-        expiresAtMs,
-      }, "ctl-spawn").then(({ approved, shown, comment, reason }) => {
-        clearTimeout(spawnTimer);
-        const wasCancelled = settleCard(cardId);
-        if (!shown || reason === "expired" || wasCancelled || !approved) lanes.release(lease);
-        if (!shown) { cardResult(id, cardId, false, `err ${reason ?? "self-answered"}`); return; }
-        if (reason === "expired") return;
-        if (wasCancelled) return;
-        if (!approved) { cardResult(id, cardId, false, `denied ${comment}`); return; }
-        if (expiresAtMs - Date.now() < LATE_APPROVE_MS) { lanes.release(lease); cardResult(id, cardId, false, "err expired"); return; }
-        void spawnTab({ agent, model, effort, cwd, title }).then(
-          (tabId) => {
-            // One send once the new tab's transport takes it; never retried after it resolved.
-            void lanes.promptOnce(tabId, text, lease).then(
-              () => cardResult(id, cardId, true, `spawned ${tabId} prompted${lease ? " notify" : ""}`),
-              (err) => cardResult(id, cardId, false, `err prompt ${errText(err)} (spawned ${tabId})`),
-            );
-          },
-          (err) => { lanes.release(lease); cardResult(id, cardId, false, `err ${errText(err)}`); },
-        );
-      }).catch(() => { settleCard(cardId); lanes.release(lease); });
-      spawnTimer = setTimeout(() => {
-        if (cancelAsk("ctl-spawn", "expired")) cardResult(id, cardId, false, "err expired");
-      }, Math.max(0, expiresAtMs - Date.now()));
+        askedAtMs: claimedAtMs, expiresAtMs, comment: true, drawInAskerTab: true,
+      }, (outcome) => {
+        try {
+          if (!("comment" in outcome)) { // cancelled or expired
+            lanes.release(lease);
+            if (outcome.verdict === "expired") cardResult(id, cardId, false, "err expired");
+            return;
+          }
+          if (outcome.verdict === "deny") { lanes.release(lease); cardResult(id, cardId, false, `denied ${outcome.comment}`); return; }
+          if (expiresAtMs - Date.now() < LATE_APPROVE_MS) { lanes.release(lease); cardResult(id, cardId, false, "err expired"); return; }
+          if (requesterProblem(requester)) { lanes.release(lease); cardResult(id, cardId, false, "err requester gone"); return; }
+          void spawnTab({ agent, model, effort, cwd, title }).then(
+            (tabId) => {
+              // One send once the new tab's transport takes it; never retried after it resolved.
+              void lanes.promptOnce(tabId, text, lease).then(
+                () => cardResult(id, cardId, true, `spawned ${tabId} prompted${lease ? " notify" : ""}`),
+                (err) => cardResult(id, cardId, false, `err prompt ${errText(err)} (spawned ${tabId})`),
+              );
+            },
+            (err) => { lanes.release(lease); cardResult(id, cardId, false, `err ${errText(err)}`); },
+          );
+        } catch { lanes.release(lease); }
+      });
+      if (refused) { lanes.release(lease); cardResult(id, cardId, false, `err ${refused}`); }
       return;
     }
     if (verb === "ask") {

@@ -65,6 +65,7 @@ function lead(item: Item): HTMLElement | null {
   el.setAttribute("aria-hidden", "true");
   if ("emoji" in l) el.textContent = l.emoji;
   else if ("glyph" in l) el.appendChild(lucide(l.glyph, l.cls ? `icn ${l.cls}` : "icn"));
+  else if ("color" in l) el.appendChild(iconImg(l.color));
   return el;
 }
 

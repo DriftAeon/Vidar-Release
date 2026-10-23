@@ -30,3 +30,30 @@ test("a menu reopened after a row pick survives a click on its anchor", async ()
   await tick();
   assert.equal(S.stMenu, null);
 });
+
+test("an anchor click while open closes the menu once and does not reopen it", async () => {
+  const S = { stMenu: null };
+  const { openStMenu } = createStMenu(S);
+  const anchor = document.createElement("button");
+  document.body.appendChild(anchor);
+  anchor.addEventListener("click", () => openStMenu(anchor, [{ label: "One", value: "one" }], () => {}));
+  anchor.click();
+  assert.ok(S.stMenu);
+  anchor.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); // exempt: only the click toggles
+  assert.ok(S.stMenu);
+  anchor.click();
+  assert.equal(S.stMenu, null);
+  assert.equal(document.querySelector(".st-menu"), null);
+});
+
+test("Escape closes the menu and refocuses the anchor", () => {
+  const S = { stMenu: null };
+  const { openStMenu } = createStMenu(S);
+  const anchor = document.createElement("button");
+  document.body.appendChild(anchor);
+  openStMenu(anchor, [{ label: "One", value: "one" }], () => {});
+  assert.ok(S.stMenu);
+  S.stMenu.querySelector("button").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  assert.equal(S.stMenu, null);
+  assert.equal(document.activeElement, anchor);
+});

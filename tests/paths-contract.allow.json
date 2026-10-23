@@ -151,6 +151,10 @@
     "count": 0,
     "reason": "call sites move in W2C/W2D"
   },
+  "stages": {
+    "count": 0,
+    "reason": "stage packs (content/stages), reached only through paths.rs stages_dir"
+  },
   "state": {
     "count": 48,
     "reason": "common word and control-bus verb name (verbs.mjs, tools/mcp); `state` is a header key in tools/runes/header.mjs, src-tauri/src/rules/rune.rs and its KEYS twin in src-tauri/src/rules/generate/render.rs, not a path; only a few are the state dir"

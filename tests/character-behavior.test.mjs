@@ -20,30 +20,30 @@ test('context health uses 80/75 hysteresis and stale samples cannot newly assert
   assert.equal(reduceLowContext(true, null, false), true);
 });
 
-test('Run is off: activity never leaves Idle, low context still shows Low HP', () => {
-  assert.equal(characterLoop(false, false), 'bn01');
-  assert.equal(characterLoop(false, true), 'bn02');
-  assert.equal(characterLoop(true, false), 'bn01');
-  assert.equal(characterLoop(true, true), 'bn02');
+test('Run is off: activity never leaves the idle role, low context still shows tired', () => {
+  assert.equal(characterLoop(false, false), 'idle');
+  assert.equal(characterLoop(false, true), 'tired');
+  assert.equal(characterLoop(true, false), 'idle');
+  assert.equal(characterLoop(true, true), 'tired');
 });
 
 test('per-clip playrate: keyed by clip code, 1 when missing or invalid', () => {
-  assert.equal(clipCode('chr702_bn01'), 'bn01');
-  assert.equal(clipCode('chr702'), 'chr702');
-  const overrides = { bn01: 0.75, br01: 0, fq01: Number.NaN, bn02: -2 };
-  assert.equal(clipPlayrate(overrides, 'chr702_bn01'), 0.75);
-  assert.equal(clipPlayrate(overrides, 'chr702_bn02'), 1);
-  assert.equal(clipPlayrate(overrides, 'chr702_br01'), 1);
-  assert.equal(clipPlayrate(overrides, 'chr702_fq01'), 1);
-  assert.equal(clipPlayrate(overrides, 'chr702_e002'), 1);
-  assert.equal(clipPlayrate(undefined, 'chr702_bn01'), 1);
+  assert.equal(clipCode('hero_idle'), 'idle');
+  assert.equal(clipCode('hero'), 'hero');
+  const overrides = { idle: 0.75, run: 0, yes: Number.NaN, tired: -2 };
+  assert.equal(clipPlayrate(overrides, 'hero_idle'), 0.75);
+  assert.equal(clipPlayrate(overrides, 'hero_tired'), 1);
+  assert.equal(clipPlayrate(overrides, 'hero_run'), 1);
+  assert.equal(clipPlayrate(overrides, 'hero_yes'), 1);
+  assert.equal(clipPlayrate(overrides, 'hero_wave'), 1);
+  assert.equal(clipPlayrate(undefined, 'hero_idle'), 1);
 });
 
-test('AUTO swaps terriermon Idle for Clip F002, low context still wins', () => {
-  assert.equal(characterLoop(false, false, 'auto'), 'f002');
-  assert.equal(characterLoop(true, false, 'Auto'), 'f002');
-  assert.equal(characterLoop(false, true, 'auto'), 'bn02');
-  assert.equal(characterLoop(false, false, 'opus'), 'bn01');
+test('AUTO swaps the idle role for rest, low context still wins', () => {
+  assert.equal(characterLoop(false, false, 'auto'), 'rest');
+  assert.equal(characterLoop(true, false, 'Auto'), 'rest');
+  assert.equal(characterLoop(false, true, 'auto'), 'tired');
+  assert.equal(characterLoop(false, false, 'opus'), 'idle');
 });
 
 test('activity needs two nearby pulses and becomes quiet without per-pulse timer work', () => {

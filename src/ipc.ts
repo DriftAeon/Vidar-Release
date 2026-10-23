@@ -21,6 +21,7 @@ import type { InvokeArgs, InvokeOptions } from "@tauri-apps/api/core";
 import { listen as tauriListen } from "@tauri-apps/api/event";
 import { getCurrentWebview as tauriGetCurrentWebview } from "@tauri-apps/api/webview";
 import type { ConfigResult, Location } from "./config";
+import type { AgentId } from "./agents/id";
 import type { WakewordCfg } from "./panels/listen";
 import type { DocEntry } from "./panels/document";
 import type { CommentsFile } from "./panels/comments";
@@ -39,6 +40,7 @@ import type { NotionCommands } from "./notion/ipc";
 import type { SlackCommands } from "./slack/ipc";
 import type { SettingsCommands } from "./ipc-settings";
 import type { CharacterList } from "./character/catalog";
+import type { StageList, StagePart } from "./character/stage-pick";
 import type { DepReport } from "./deps/types";
 import type { COMMAND_HOSTS } from "./ipc-hosts";
 import { mockInvoke, mockListen } from "./ipc-mock";
@@ -120,7 +122,7 @@ export interface RulesImportScan { library: string; bricks: RulesImportBrick[] }
 export interface RulesImportApplied { library: string; written: number; rows: string[] }
 /** src-tauri/src/rules/generate/commands.rs (run 2026-10-17-rune-generator ipc.md). */
 export interface RulesGenerateArgs {
-  runId: string; rowKey: string; agent: "claude" | "codex"; model: string; effort: string;
+  runId: string; rowKey: string; agent: AgentId; model: string; effort: string;
   mergeEffort?: string;
   paths: string[]; cwd: string | null; budget: number | null;
 }
@@ -137,7 +139,7 @@ export interface BareLocalFile {
     | "tooLarge" | "shadowed" | "summaryOnly" | "notHosted" | "stdio";
   guard?: { event: string; matcher?: string; run: string[] };
   /** Absent = a Claude row; mcp rows carry the hosted server name and its pinned url. */
-  agent?: "claude" | "codex"; hosted?: string; url?: string;
+  agent?: AgentId; hosted?: string; url?: string;
 }
 export interface BareLocalSources { files: BareLocalFile[]; memoryDir: string | null; guardsKey: boolean }
 /** A row's actives (src-tauri/src/bare/actives.rs; fold.md § Pinned shapes). `source` null: not imported, read-only. */
@@ -151,7 +153,7 @@ export interface BareActiveLibrary {
   }[];
   /** Absent for import libraries (run 2026-10-17-rune-generator, ipc.md). */
   generated?: {
-    agent: "claude" | "codex"; model: string; effort: string; date: string;
+    agent: AgentId; model: string; effort: string; date: string;
     inputs: string[]; warnings: string[]; encodedChars: number | null;
   };
   /** Each set the row names here, with its layer sidecar (actives.rs `ActiveSetLayer`, run 2026-10-20-rune-sets W4). */
@@ -230,6 +232,9 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   update_character: Cmd<{ target: string; patch: Record<string, unknown> }, void>;
   remove_character: Cmd<{ target: string }, void>;
   set_default_character: Cmd<{ id: string | null }, void>;
+  // stages (src-tauri\src\stages): data-only stage packs; the file name comes from the stage.json Rust read
+  list_stages: Cmd<undefined, StageList>;
+  read_stage_asset: Cmd<{ id: string; part: StagePart }, ArrayBuffer>;
   // bridge: documents and comments
   list_documents: Cmd<undefined, DocEntry[]>;
   read_document: Cmd<{ path: string }, { name: string; bytes: number; mtimeMs: number; text: string; lossy: boolean }>;
@@ -273,7 +278,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   // the refused-Vidar-folder card's Open in Worktree (vidar_worktree.rs): the new folder's path
   vidar_worktree_open: Cmd<undefined, string>;
   // rules (src-tauri/src/rules/mod.rs `RulesPrepared`, camelCase)
-  rules_prepare: Cmd<{ key: string; ids: string[]; client: "claude" | "codex" }, {
+  rules_prepare: Cmd<{ key: string; ids: string[]; client: AgentId }, {
     file: string | null;
     codex: { mode: "c"; value: string } | { mode: "profile"; name: string } | null;
     warnings: string[];
@@ -319,8 +324,10 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   open_document: Cmd<{ path: string }, string | null>;
   open_in_browser: Cmd<{ path: string }, void>;
   set_caption_color: Cmd<{ r: number; g: number; b: number; tr: number; tg: number; tb: number }, void>;
+  // Physical pixels; caption.ts divides by devicePixelRatio.
+  caption_metrics: Cmd<undefined, { height: number; band: number; buttonsWidth: number; maximized: boolean; dpi: number }>;
   open_url: Cmd<{ url: string }, void>;
-  build_stamp: Cmd<undefined, { head: string; dirty: boolean; builtUtc: string; local: boolean } | null>;
+  build_stamp: Cmd<undefined, { head: string; dirty: boolean; builtUtc: string; local: boolean; set: string | null; version: string } | null>;
   open_in_editor: Cmd<{ path: string; line: number }, void>;
   // falcon (falcon.rs; the dock_* four only exist in the Falcon shell)
   falcon_available: Cmd<undefined, boolean>;
@@ -368,6 +375,8 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   module_trust_current: Cmd<{ folder: string }, import("./modules/types").ModulesList>;
   check_cli_updates: Cmd<{ fresh?: boolean }, import("./startup-updates/core").CliUpdate[]>;
   update_cli: Cmd<{ id: string; version: string }, void>;
+  // notify-only Vidar and pack update check against the release index (release_check.rs)
+  check_release: Cmd<{ skip: string | null; seen: Record<string, string> }, import("./startup-updates/release").ReleaseReply>;
   // hosted vs new-tab Codex versions when they differ (deps/updates/skew.rs)
   codex_skew: Cmd<undefined, import("./startup-updates/codex-skew").CodexSkew | null>;
   // ocr
@@ -395,7 +404,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
 /** protocol.rs `Agent` (lowercase). falcon_spawn without one spawns Claude; a "codex" spawn or a
  *  codex adopt is refused, before any child, by a host that did not list `codex_turns`
  *  (falcon/ops.rs `agent_refusal`; the error contains "cannot run hosted Codex"). */
-export type FalconAgent = "claude" | "codex";
+export type FalconAgent = AgentId;
 /** One entry of falcon_list: src-falcon/src/protocol.rs `SessionSummary` (no rename_all, so
  *  snake_case; `degraded` is skip_serializing_if None, so absent rather than null; `last_holder` is absent from an older host, launcher/readopt.ts). */
 export interface FalconSessionSummary {

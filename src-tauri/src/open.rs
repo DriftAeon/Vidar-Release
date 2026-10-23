@@ -54,6 +54,40 @@ fn bridge() -> Bridge {
 const KINDS: [&str; 3] = ["astra", "dock", "jettison"];
 pub(crate) const MAX_REASON: usize = 200;
 
+/// How long a claimed ask stays answerable, stamped here as `expiresAtMs` so
+/// the frontend holds no TTL constant. The jettison TTL is stamped but nothing
+/// reads it yet (the jettison branch in `open-ask.ts` builds no approval
+/// record); `tools\falcon\jettison.ps1`'s `--timeout` follows `-TimeoutSec`,
+/// not this constant. Every other kind gets 120 s.
+const OPEN_TTL_MS: u64 = 120_000;
+const JETTISON_TTL_MS: u64 = 30_000;
+
+fn ttl_ms(kind: &str) -> u64 {
+    if kind == "jettison" { JETTISON_TTL_MS } else { OPEN_TTL_MS }
+}
+
+/// Kinds admitted on the bus topic `ask.open`. `dock` stays on the files: the
+/// shell that writes it has no bus client and its handoff is a file.
+fn bus_kind_allowed(kind: &str) -> bool {
+    matches!(kind, "astra" | "jettison")
+}
+
+/// The `open-ask` event payload for a claimed ask, with its expiry stamped.
+fn ask_payload(
+    id: &str,
+    kind: &str,
+    reason: &str,
+    requester: &str,
+    session: &Option<String>,
+    claimed_at_ms: u64,
+) -> Value {
+    serde_json::json!({
+        "id": id, "kind": kind, "reason": reason,
+        "requester": requester, "session": session,
+        "claimedAtMs": claimed_at_ms, "expiresAtMs": claimed_at_ms + ttl_ms(kind)
+    })
+}
+
 #[derive(Default)]
 pub struct OpenState {
     ready: AtomicBool,
@@ -85,6 +119,17 @@ const BUS_PENDING_TTL: Duration = Duration::from_secs(300);
 /// rule can be unit tested without a clock dependency.
 fn purge_expired_pending<T>(pending: &mut HashMap<String, (T, Instant)>, now: Instant) {
     pending.retain(|_, (_, inserted_at)| now.saturating_duration_since(*inserted_at) < BUS_PENDING_TTL);
+}
+
+/// Records `reply` under `id` unless a live entry already holds it (after the TTL purge); false
+/// means refused, with the first entry untouched so its requester still gets the verdict.
+fn claim_pending<T>(pending: &mut HashMap<String, (T, Instant)>, id: &str, reply: T, now: Instant) -> bool {
+    purge_expired_pending(pending, now);
+    if pending.contains_key(id) {
+        return false;
+    }
+    pending.insert(id.to_string(), (reply, now));
+    true
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -198,9 +243,8 @@ pub fn handle_bus_ask(app: &AppHandle, frame: &Value) {
             return;
         }
     };
-    // Only `astra` is on the bus path; `dock`/`jettison` stay
-    // file-only.
-    if ask.kind != "astra" {
+    // `astra` and `jettison` are on the bus path; `dock` stays file-only.
+    if !bus_kind_allowed(&ask.kind) {
         publish_bus_reply(
             app,
             &reply_to,
@@ -212,15 +256,21 @@ pub fn handle_bus_ask(app: &AppHandle, frame: &Value) {
 
     let claimed_at_ms = now_ms();
     let state = app.state::<OpenState>();
-    if let Ok(mut pending) = state.bus_pending.lock() {
-        purge_expired_pending(&mut pending, Instant::now());
-        pending.insert(ask.id.clone(), (PendingReply { reply_to, msg_id }, Instant::now()));
-    }
+    let claimed = match state.bus_pending.lock() {
+        Ok(mut pending) => {
+            let reply = PendingReply { reply_to: reply_to.clone(), msg_id: msg_id.clone() };
+            claim_pending(&mut pending, &ask.id, reply, Instant::now())
+        }
+        // A poisoned map keeps the old behaviour: the card still shows, nothing is recorded.
+        Err(_) => true,
+    };
     drop(state);
-    let tab_payload = serde_json::json!({
-        "id": ask.id, "kind": ask.kind, "reason": ask.reason,
-        "requester": ask.requester, "session": ask.session, "claimedAtMs": claimed_at_ms
-    });
+    if !claimed {
+        publish_bus_reply(app, &reply_to, &msg_id, serde_json::json!({ "ok": false, "reason": "ask id already pending" }));
+        return;
+    }
+    let tab_payload =
+        ask_payload(&ask.id, &ask.kind, &ask.reason, &ask.requester, &ask.session, claimed_at_ms);
     let _ = app.emit("open-ask", tab_payload);
 }
 
@@ -233,10 +283,7 @@ fn accept(open_dir: &Path, d: OpenAsk, stem: &str) -> Result<Accepted<Value>, St
         "id": d.id, "kind": d.kind, "reason": d.reason,
         "requester": d.requester, "session": d.session, "claimed_at_ms": claimed_at_ms
     });
-    let payload = serde_json::json!({
-        "id": d.id, "kind": d.kind, "reason": d.reason,
-        "requester": d.requester, "session": d.session, "claimedAtMs": claimed_at_ms
-    });
+    let payload = ask_payload(&d.id, &d.kind, &d.reason, &d.requester, &d.session, claimed_at_ms);
     Ok(Accepted { id: d.id.clone(), pending, payload })
 }
 
@@ -394,6 +441,66 @@ mod tests {
         purge_expired_pending(&mut pending, now);
         assert!(!pending.contains_key("old"), "older than TTL should be dropped");
         assert!(pending.contains_key("new"), "just inserted should survive");
+    }
+
+    #[test]
+    fn claim_pending_refuses_a_live_id_and_keeps_the_first_entry() {
+        let base = Instant::now();
+        let mut pending: HashMap<String, (String, Instant)> = HashMap::new();
+        assert!(claim_pending(&mut pending, "ask1", "first".into(), base));
+        assert!(!claim_pending(&mut pending, "ask1", "second".into(), base + Duration::from_secs(1)));
+        assert_eq!(pending.get("ask1").map(|(r, _)| r.as_str()), Some("first"), "first requester's slot still answers");
+        assert_eq!(pending.remove("ask1").map(|(r, _)| r), Some("first".to_string()));
+        // An expired entry no longer blocks the id.
+        assert!(claim_pending(&mut pending, "ask2", "old".into(), base));
+        assert!(claim_pending(&mut pending, "ask2", "new".into(), base + BUS_PENDING_TTL + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn bus_refuses_dock() {
+        assert!(!bus_kind_allowed("dock"));
+        assert!(!bus_kind_allowed("launch"));
+        assert!(!bus_kind_allowed(""));
+    }
+
+    #[test]
+    fn bus_admits_astra_and_jettison() {
+        assert!(bus_kind_allowed("astra"));
+        assert!(bus_kind_allowed("jettison"));
+    }
+
+    /// A claimed file ask carries `expiresAtMs` = claim + the kind's TTL:
+    /// 120 s for `astra`, 30 s for `jettison`.
+    #[test]
+    fn claimed_ask_payload_stamps_expires_at_ms() {
+        use crate::dispatch_bridge::tests::temp_bridge;
+        let b = temp_bridge("open-expiry");
+        fs::write(b.dispatch.join("0123abcd.json"), ask_json("astra", "please").to_string()).unwrap();
+        let mut jettison = ask_json("jettison", "script-driven jettison to Falcon");
+        jettison["id"] = "4567cdef".into();
+        jettison["session"] = "abc-session".into();
+        fs::write(b.dispatch.join("4567cdef.json"), jettison.to_string()).unwrap();
+        let mut emitted: Vec<Value> = Vec::new();
+        b.scan(|d, stem| accept(&b.root, d, stem), |p: Value| emitted.push(p));
+        assert_eq!(emitted.len(), 2);
+        for p in &emitted {
+            let claimed = p["claimedAtMs"].as_u64().unwrap();
+            let expires = p["expiresAtMs"].as_u64().unwrap();
+            let want = if p["kind"] == "jettison" { 30_000 } else { 120_000 };
+            assert_eq!(expires - claimed, want, "{p}");
+        }
+        let _ = fs::remove_dir_all(&b.root);
+    }
+
+    /// The bus path builds its payload with the same stamp.
+    #[test]
+    fn bus_ask_payload_stamps_expires_at_ms() {
+        let ask = validate_ask(&ask_json("astra", "you asked for a review")).unwrap();
+        let p = ask_payload(&ask.id, &ask.kind, &ask.reason, &ask.requester, &ask.session, 1_000);
+        assert_eq!(p["claimedAtMs"], 1_000);
+        assert_eq!(p["expiresAtMs"], 121_000);
+        let p = ask_payload("4567cdef", "jettison", "r", "s0-jettison", &Some("x".into()), 1_000);
+        assert_eq!(p["expiresAtMs"], 31_000);
     }
 
     fn ask_json(kind: &str, reason: &str) -> serde_json::Value {

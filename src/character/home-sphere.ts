@@ -1,6 +1,8 @@
 import * as T from "three";
+import type { StageFactory } from "./stage";
 
 /**
+ * The built-in default stage (`defaultStage`, the stage slot in stage.ts).
  * The "Cyber home" environment: an inside-out gridded dome, a faded platform with a
  * faint cell overlay, slow-rising motes, and a slow floor ripple (softened). The rest is ported from an earlier mock (`gridDome()`,
  * `homeFloor()`, `sparkles()`); this module owns every resource it creates and
@@ -10,7 +12,7 @@ import * as T from "three";
 const GRID_FN = "float gridLine(float p, float w) { return 1.0 - min(abs(fract(p - 0.5) - 0.5) / (fwidth(p) * w), 1.0); }";
 
 const NAVY = { top: 0x0b1f45, bottom: 0x06122a, line: 0x2a6cff };
-export const DOME_RADIUS = 200;
+const DOME_RADIUS = 200;
 const FLOOR_RADIUS = 40;
 const FLOOR_COLOR = 0x0a1a38;
 const OVERLAY = { color: 0x3c8cff, alpha: 0.26, cell: 1.25 };
@@ -97,8 +99,8 @@ function homeFloor(): { group: T.Group; overlayMaterial: T.ShaderMaterial; dispo
   disposables.push(fade);
   const baseGeometry = new T.CircleGeometry(FLOOR_RADIUS, 128);
   disposables.push(baseGeometry);
-  // MeshBasic, not the mock's MeshLambertMaterial: the character's cel lighting is baked
-  // into its own materials (materials.ts), not real scene lights that would reach the floor.
+  // MeshBasic, not the mock's MeshLambertMaterial: the character renderer's lighting is
+  // baked into its own materials (see renderer-registry.ts), not real scene lights that would reach the floor.
   const baseMaterial = new T.MeshBasicMaterial({ color: FLOOR_COLOR, alphaMap: fade, transparent: true, depthWrite: false });
   disposables.push(baseMaterial);
   const base = new T.Mesh(baseGeometry, baseMaterial);
@@ -189,7 +191,23 @@ void main() { float a = pow(smoothstep(0.5, 0.0, length(gl_PointCoord - 0.5)), 2
   return { points: new T.Points(geometry, material), disposables: [geometry, material] };
 }
 
-export function createHomeSphere(scene: T.Scene) {
+/** The built-in default stage. Far bound: never inside the dome, since a clipped dome leaves
+ *  the canvas transparent and the additive motes then composite as flicker against the panel
+ *  background. Orbit clamp: no view from under the floor, no drifting past the platform's edge. */
+export const defaultStage: StageFactory = {
+  create(scene) {
+    const sphere = createHomeSphere(scene);
+    return {
+      far: DOME_RADIUS * 2,
+      orbit: { minPolarAngle: 0.01, maxPolarAngle: 1.5, maxDistance: 12 },
+      tick: sphere.tick,
+      resize: sphere.resize,
+      dispose: sphere.dispose,
+    };
+  },
+};
+
+function createHomeSphere(scene: T.Scene) {
   const dome = gridDome();
   const floor = homeFloor();
   const moteField = motes();

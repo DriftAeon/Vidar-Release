@@ -18,8 +18,8 @@
 .runes-mark[data-art="pi"] { background-image: url("../assets/pi.png"); }
 .runes-mark[data-art="local"] { background-image: url("../assets/local.png"); }
 .runes-err { color: var(--alert); overflow-wrap: anywhere; }
-.runes-body { display: flex; flex-direction: column; overflow: hidden; }
-.runes-scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.runes-body { display: flex; flex-direction: column; } /* no overflow clip: the list's scrollbar lies past the frame, in the workbench gutter (workbench.css) */
+.runes-scroll { flex: 1; min-height: 0; overflow-y: auto; } /* scrollbar-gutter, margin and padding: workbench.css */
 .runes-list { display: flex; flex-direction: column; gap: var(--space-16); }
 /* Key: one 24px strip pinned under the scrolling list, a Sheen label plus icon-only items per group; names in the tooltip (2026-10-18) */
 .runes-key { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-8); margin-top: var(--space-8); padding-top: var(--space-8); border-top: var(--border-w) solid var(--border); font-size: var(--font-11); color: var(--fg-dim); }
@@ -86,7 +86,14 @@
 .runes-set-head:hover { background: color-mix(in srgb, var(--set-hue) 24%, var(--bg-panel)); }
 .runes-set-head:focus-visible, .runes-blk.card:focus-visible, button.runes-chip:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
 /* a set nested in a library (Kit > Skills) sits inset like the tray's cards and takes their edge (2026-10-22) */
-.runes-set > .runes-set { margin: var(--space-4) var(--space-4) 0 var(--space-4); border: var(--border-w) solid color-mix(in srgb, var(--set-hue) 55%, var(--border)); }
+/* Frame and head are one colour, like the Notion group bands (notion.css): the head merges into the border on
+   the left, right and top and the body sits inside it. The colour is the card head's earlier fill, 26% hue over
+   --bg-panel (34% on hover); 30% over --border read greyed out (user, 2026-10-23: "depressingly sadder") */
+.runes-set { --set-frame: color-mix(in srgb, var(--set-hue) 26%, var(--bg-panel)); }
+.runes-set:has(> .runes-set-head:hover) { --set-frame: color-mix(in srgb, var(--set-hue) 34%, var(--bg-panel)); }
+.runes-set > .runes-set, .runes-card { border: var(--border-w) solid var(--set-frame); }
+.runes-set > .runes-set > .runes-set-head, .runes-card > .runes-set-head { background: var(--set-frame); }
+.runes-set > .runes-set { margin: var(--space-4) var(--space-4) 0 var(--space-4); }
 .runes-set > .runes-set > .runes-tray { padding-right: var(--space-4); } /* rows sit 4 in from each side of the nested card (2026-10-22) */
 .runes-set > summary + .runes-set { margin-top: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
 .runes-tray + .runes-set { margin-top: 0; }
@@ -97,11 +104,7 @@
 .runes-card { background: transparent; }
 .runes-card > .runes-set-head {
   box-sizing: border-box; padding: var(--space-6) var(--space-12); /* legacy space-6: the bigger name and icon take back the 8px pad's height (user, 2026-10-22) */
-  background: color-mix(in srgb, var(--set-hue) 26%, var(--bg-panel));
-  border: var(--border-w) solid color-mix(in srgb, var(--set-hue) 55%, var(--border)); border-radius: var(--radius-4);
 }
-.runes-card > .runes-set-head:hover { background: color-mix(in srgb, var(--set-hue) 34%, var(--bg-panel)); border-color: var(--set-hue); }
-.runes-card > .runes-set-head:focus-visible { border-color: var(--accent); }
 .runes-card > .runes-set-head .runes-sn { font-family: var(--font-title); font-size: var(--font-16); }
 .runes-card > .runes-set-head .runes-scp .icn { width: var(--space-16); height: var(--space-16); }
 .runes-scp { display: flex; }
