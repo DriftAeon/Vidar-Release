@@ -37,6 +37,16 @@ test("resume uses the thread's model, falling back only when its metadata has no
   }
 });
 
+test("resume passes no set pick: the vault comes from the thread's session record (spawnFrom)", async () => {
+  for (const sets of [[{ library: "team", set: "docs" }], [], undefined]) {
+    resetRecentCache();
+    state.rows = [{ ...row("saved-model"), ...(sets === undefined ? {} : { sets }) }];
+    state.calls = []; state.open = []; state.column = document.createElement("div");
+    await openCodexRecent(rendered, rendered, { label: "Work", cwd: "C:/location" }, document.createElement("button"), 1, () => false);
+    state.column.querySelector("button").click();
+    assert.equal(state.calls[0][6], undefined);
+  }
+});
 test("a held thread renders inert before it can spawn", async () => {
   resetRecentCache();
   state.rows = [row("saved-model")]; state.calls = []; state.open = ["thread"];

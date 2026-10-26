@@ -18,9 +18,9 @@ pub(super) fn params(resume: Option<&str>) -> SpawnParams {
         tab_name: None,
         gateway: None,
         profile: None,
-        payload_file: None,
-        row_key: None,
-        set_plugin_dirs: Vec::new(),
+        payload_file: None, mcp_file: None,
+        row_key: None, sets: None,
+        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
     }
 }
 

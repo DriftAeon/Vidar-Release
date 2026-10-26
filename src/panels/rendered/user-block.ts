@@ -1,8 +1,7 @@
-// Which block a user prompt draws as: a Relay answer, a /catapult hop row, or the plain text row.
+// Which block a user prompt draws as: a Relay answer or the plain text row.
 
 import { el } from "./dom";
 import { parseRelayAnswer, relayAnswerBlock } from "./relay-answer";
-import { parseCatapult, catapultBlock } from "./catapult-block";
 import { iconImg } from "../../icon-img";
 
 // Same string as MARK in src/voice-mark.ts; not imported there because that module pulls in panels/sessions (cycle).
@@ -23,8 +22,6 @@ export function userText(host: HTMLElement, text: string): void {
 export function userBlockFor(text: string): HTMLElement {
   const relay = parseRelayAnswer(text);
   if (relay) return relayAnswerBlock(relay);
-  const hop = parseCatapult(text);
-  if (hop !== null) return catapultBlock(hop);
   const host = el("div", "blk blk-user");
   userText(host, text);
   return host;

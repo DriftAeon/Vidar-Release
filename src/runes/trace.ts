@@ -57,7 +57,7 @@ export const isPluginTarget = (s: RuneSet): boolean => (s.tier as number) === 5 
 export const canLoad = (t: TracedSet): boolean => !(t.state === "Not Loaded" && (t.set.tier === 1 || t.set.tier === 4));
 
 export function traceRunes(catalog: RunesCatalog, loaded: RunesLoaded | null, repoRoot: string | null): RunesTrace {
-  const known = loaded?.source === "transcript";
+  const known = !!loaded && loaded.source !== "none";
   const files = known ? loaded!.files : [];
   const byPath = new Map<string, "start" | "touch">();
   for (const f of files) if (!byPath.has(normPath(f.path))) byPath.set(normPath(f.path), f.when);

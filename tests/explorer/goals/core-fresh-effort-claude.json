@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-effort-claude",
+  "title": "Lower the Effort on a Fresh Claude Tab",
+  "style": "changes-mind",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab"],
+  "tags": ["effort", "fresh"],
+  "realModel": true,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Claude chat tab" },
+    { "intent": "before typing anything, set effort to high, then change my mind and set it to low" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows low effort" }
+  ]
+}

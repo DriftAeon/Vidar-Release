@@ -39,12 +39,17 @@ export function visible(): boolean {
 }
 
 const memory = createViewportMemory(flowStorage);
+// The graph whose camera the live transform belongs to: set once its saved view is restored or it
+// is framed. Until then a transform (the mount's default 0/0/1, a switch before restore) must not
+// be recorded, or it overwrites the saved view before restoreViewport reads it.
+let boundGraphId: string | null = null;
 
 /** Applies the open graph's saved pan/zoom; `false` when it has none (unsaved draft included). */
 export function restoreViewport(): boolean {
   const id = S.activeGraphId;
   const vp = id ? memory.get(id) : null;
   if (!vp) return false;
+  boundGraphId = id;
   S.panX = vp.panX;
   S.panY = vp.panY;
   S.scale = vp.scale;
@@ -61,7 +66,7 @@ export function applyWorldTransform() {
   S.worldEl.style.transform = `translate(${S.panX}px, ${S.panY}px) scale(${S.scale})`;
   // Only stored graphs are remembered; an unsaved template draft has no stable id to key by.
   const id = S.activeGraphId;
-  if (id && S.graphs.some((g) => g.id === id)) memory.set(id, { panX: S.panX, panY: S.panY, scale: S.scale });
+  if (id && id === boundGraphId && S.graphs.some((g) => g.id === id)) memory.set(id, { panX: S.panX, panY: S.panY, scale: S.scale });
   // Wheel zoom and fit-to-view are single events, not a drag,
   // so without this the popover's repositionPopover (riding the same frame loop redrawEdges uses)
   // never ran after either — the card sat still while the graph zoomed/reframed under it.
@@ -89,6 +94,8 @@ export function onWheel(e: WheelEvent) {
 /** Frames every node: scale to fit (min of width-fit/height-fit, clamped),
  *  pan so the bounding box centres in the canvas. No-op with an empty graph. */
 export function fitToView(quiet = false) {
+  // A fit is a deliberate framing of the open graph, so later pans are its own.
+  boundGraphId = S.activeGraphId;
   if (!S.nodes.length) return;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of S.nodes) {

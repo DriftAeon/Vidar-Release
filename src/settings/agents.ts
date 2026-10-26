@@ -12,7 +12,6 @@
 import { invoke } from "../ipc";
 import { getPref } from "../prefs";
 import { plainRowsControl, plainRowsOn } from "./plain-rows";
-import { registerGuardsRow } from "./bare-guards-row";
 import { loadConfig, onConfigReloaded, onSettingsChanged, type VidarConfig } from "../config";
 import { overlayAgents } from "../config-agents";
 import { builtinAgents, setPlainRowsSource } from "../launcher/roster";
@@ -414,7 +413,6 @@ export function registerAgentRows(): void {
     keywords: () => "plain claude codex bare escape hatch rows launcher",
     control: () => plainRowsControl(refreshAll),
   });
-  registerGuardsRow(AGENTS_CATEGORY);
   addSettingRow({
     name: "Built-In Agents",
     description: "Model applies to Rendered tabs only.", // note-ok: user, 2026-10-01 (scope limit the name doesn't state)

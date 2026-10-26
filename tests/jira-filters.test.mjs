@@ -42,7 +42,7 @@ async function open({ saved = SAVED, scope = "mine", types = TYPES, projects = P
   await settle();
   if (scope === "all") { scopeBtn("All").click(); await settle(); }
 }
-const scopeBtn = (label) => [...root.querySelectorAll(".jx-scope button")].find((b) => b.textContent === label);
+const scopeBtn = (label) => [...root.querySelectorAll(".jx-scope button")].find((b) => b.getAttribute("aria-label") === label);
 const pick = (label) => [...root.querySelectorAll(".jx-pick")].find((b) => b.querySelector(".jx-pick-label").textContent === label);
 const visible = () => [...root.querySelectorAll(".jx-pick")].filter((b) => !b.hidden).map((b) => b.querySelector(".jx-pick-label").textContent);
 const pop = () => document.querySelector(".jx-pop");
@@ -140,7 +140,8 @@ test("a pick reloads page 1 with the filters", async () => {
   await settle();
   assert.equal(issueCalls.length, before + 1);
   assert.deepEqual(lastFilters().categories, [4]);
-  assert.equal(pick("Status").querySelector(".jx-n").textContent, "1");
+  assert.equal(pick("Status").querySelector(".jx-n").hidden, true, "no count after the label");
+  assert.ok(pick("Status").classList.contains("set"), "the accent edge marks the set pick");
 });
 
 test("Search fires 400 ms after typing stops, and at once on Enter", async () => {

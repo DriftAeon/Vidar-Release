@@ -1,30 +1,39 @@
 //! src-tauri\src\rules\generate\render.rs — a checked envelope as a rune library (plan D3): one file per rune
 //! in its kind's folder (`rules/`, `facts/`), headers written here with `import/write.rs` quoting (the agent never
 //! writes header syntax), `origin` from the first citation; a rune holding the user-profile path or `{{` is
-//! written `state: draft` and left out of the row set (Off), the profile-path one also scoped `"!bare"`.
-//! `sets/row-<rowKey>.md` holds the sections as `##` headings and the On runes as slots in section order;
-//! `set_text` is the one writer of it, for the toggle as well. `generate.json` records the provenance.
+//! written `state: draft` and left out of the set (Off), the profile-path one also scoped `"!bare"`.
+//! `sets/generated-<yyyymmdd>.md` holds the sections as `##` headings and the On runes as slots in section order;
+//! `named_set_text` writes it (`set_text` keeps the toggle's older call shape). Ticked local skills, agents and
+//! hooks (`items.rs`) land as item runes in their kind folders, slotted under a last `Items` section.
+//! `generate.json` records the provenance. No launcher row is named anywhere (model R5).
 
 use serde::{Deserialize, Serialize};
 
 use super::envelope::{Dropped, Envelope, RuneOut, Section, Source};
+use super::items::{self, ItemSpec};
 use super::Input;
 use crate::rules::import::{split::sha256_hex, write::quote};
 use crate::rules::rune::{check_id, CONTEXTS, KINDS};
 
 /// Header keys of the frozen subset, in `tools/runes/header.mjs` order. Twin of its `KEYS`; a test keeps the two
 /// equal.
-pub const KEYS: [&str; 11] =
-    ["name", "kind", "scope", "state", "activate", "description", "version", "paths", "origin", "closes-when", "enforced-by"];
+pub const KEYS: [&str; 13] =
+    ["name", "kind", "scope", "state", "activate", "description", "version", "paths", "origin", "closes-when", "why", "example", "enforced-by"];
 
 /// `generate.json` layout version.
 pub const VERSION: u32 = 1;
 
-/// Who generated the library and for which row.
+/// The heading the item runes are slotted under.
+pub const ITEMS_HEADING: &str = "Items";
+
+/// Who generated the library and what it holds beside the agent's runes.
 pub struct Meta<'a> {
-    /// `gen-<rowKey>-<8 hex>`: the folder name and every rune's scope.
+    /// `gen-<runId>`: the folder name and every rune's scope.
     pub library: &'a str,
-    pub row_key: &'a str,
+    /// `generated-<yyyymmdd>`: the one set the library writes.
+    pub set: &'a str,
+    /// Ticked local skills, agents and hooks (`items::resolve`).
+    pub items: &'a [ItemSpec],
     /// `claude` or `codex`.
     pub agent: &'a str,
     pub model: &'a str,
@@ -43,6 +52,8 @@ pub struct Meta<'a> {
 pub struct GenerateJson {
     pub version: u32,
     pub library: String,
+    /// Written by older, row-bound generations; new ones leave it empty and it is not written.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub row_key: String,
     pub agent: String,
     pub model: String,
@@ -111,7 +122,13 @@ pub fn rune_text(r: &RuneOut, meta: &Meta, locked: bool, not_bare: bool) -> Stri
     let scope = if not_bare { format!("{}, \"!bare\"", meta.library) } else { meta.library.to_string() };
     let mut h = format!("---\nname: {}\nkind: {}\nscope: [{scope}]\n", r.id, r.kind);
     h.push_str(if locked { "state: draft\n" } else { "state: active\n" });
-    h.push_str("activate: always\n");
+    h.push_str(&format!("activate: {}\n", r.activate.as_deref().unwrap_or("always")));
+    if let Some(paths) = &r.paths {
+        h.push_str("paths:\n");
+        for path in paths {
+            h.push_str(&format!("  - {}\n", quote(path)));
+        }
+    }
     h.push_str(&format!("description: {}\n", quote(r.description.trim())));
     if let Some(s) = r.sources.first() {
         h.push_str(&format!("origin: {}\n", quote(&format!("{} {}:{}", meta.date, s.path, s.line))));
@@ -121,9 +138,9 @@ pub fn rune_text(r: &RuneOut, meta: &Meta, locked: bool, not_bare: bool) -> Stri
     h
 }
 
-/// `sets/row-<rowKey>.md`: each section with an On rune as a `##` heading, its On runes as `- ` slots, in
+/// `sets/<set>.md`: each section with an On rune as a `##` heading, its On runes as `- ` slots, in
 /// section order. Nothing On gives the header alone (which builds empty).
-pub fn set_text(library: &str, row_key: &str, sections: &[Section], on: &[String]) -> String {
+pub fn named_set_text(library: &str, set: &str, sections: &[Section], on: &[String]) -> String {
     let mut body: Vec<String> = Vec::new();
     for s in sections {
         let ids: Vec<&String> = s.ids.iter().filter(|id| on.contains(id)).collect();
@@ -138,14 +155,15 @@ pub fn set_text(library: &str, row_key: &str, sections: &[Section], on: &[String
         body.extend(ids.iter().map(|id| format!("- <?rune {id}?>")));
     }
     let body = if body.is_empty() { String::new() } else { body.join("\n") + "\n" };
-    format!("---\nname: row-{row_key}\nkind: set\nscope: [{library}]\n---\n{body}")
+    format!("---\nname: {set}\nkind: set\nscope: [{library}]\n---\n{body}")
 }
 
 pub fn generate_json_text(g: &GenerateJson) -> String {
     serde_json::to_string_pretty(g).unwrap_or_default() + "\n"
 }
 
-/// Render a checked envelope. `Err` only for a library name or row key outside the id grammar.
+/// Render a checked envelope plus `meta.items`. `Err` for a library or set name outside the id grammar, or an
+/// item id the envelope also uses.
 pub fn render(env: &Envelope, inputs: &[Input], meta: &Meta) -> Result<Rendered, Vec<String>> {
     let mut errs = Vec::new();
     if let Err(e) = check_id(meta.library) {
@@ -153,8 +171,11 @@ pub fn render(env: &Envelope, inputs: &[Input], meta: &Meta) -> Result<Rendered,
     } else if CONTEXTS.contains(&meta.library) {
         errs.push(format!("library name: `{}` is a scope context name", meta.library));
     }
-    if let Err(e) = check_id(&format!("row-{}", meta.row_key)) {
-        errs.push(format!("row key: {e}"));
+    if let Err(e) = check_id(meta.set) {
+        errs.push(format!("set name: {e}"));
+    }
+    for i in meta.items.iter().filter(|i| env.runes.iter().any(|r| r.id == i.id)) {
+        errs.push(format!("item `{}`: id is also a generated rune", i.id));
     }
     if !errs.is_empty() {
         return Err(errs);
@@ -175,14 +196,22 @@ pub fn render(env: &Envelope, inputs: &[Input], meta: &Meta) -> Result<Rendered,
     if !errs.is_empty() {
         return Err(errs);
     }
-    for s in &env.sections {
+    let mut sections = env.sections.clone();
+    if !meta.items.is_empty() {
+        for i in meta.items {
+            files.push((format!("{}/{}.md", items::folder(i.kind), i.id), items::item_text(i, meta.library)));
+            runes.push(GenRune { id: i.id.clone(), kind: i.kind.into(), locked: false, sources: Vec::new() });
+        }
+        sections.push(Section { heading: ITEMS_HEADING.into(), ids: meta.items.iter().map(|i| i.id.clone()).collect() });
+    }
+    for s in &sections {
         on.extend(s.ids.iter().filter(|id| !locked.contains(id)).cloned());
     }
-    files.push((format!("sets/row-{}.md", meta.row_key), set_text(meta.library, meta.row_key, &env.sections, &on)));
+    files.push((format!("sets/{}.md", meta.set), named_set_text(meta.library, meta.set, &sections, &on)));
     let manifest = GenerateJson {
         version: VERSION,
         library: meta.library.into(),
-        row_key: meta.row_key.into(),
+        row_key: String::new(),
         agent: meta.agent.into(),
         model: meta.model.into(),
         effort: meta.effort.into(),
@@ -190,7 +219,7 @@ pub fn render(env: &Envelope, inputs: &[Input], meta: &Meta) -> Result<Rendered,
         date: meta.date.into(),
         inputs: inputs.iter().map(|i| GenInput { path: i.path.clone(), sha256: sha256_hex(&i.text), lines: i.lines().len() }).collect(),
         runes,
-        sections: env.sections.clone(),
+        sections,
         dropped: env.dropped.clone(),
         warnings: Vec::new(),
         encoded_chars: None,
@@ -246,8 +275,9 @@ mod tests {
     fn kind_folders_and_header_quoting() {
         assert_eq!((folder("rule"), folder("fact"), folder("procedure")), (Some("rules"), Some("facts"), Some("procedures")));
         let meta = Meta {
-            library: "gen-x-0a1b2c3d",
-            row_key: "x",
+            library: "gen-0a1b2c3d",
+            set: "generated-20261017",
+            items: &[],
             agent: "claude",
             model: "m",
             effort: "e",
@@ -261,11 +291,38 @@ mod tests {
             description: r#"Say "hi" \ bye"#.into(),
             body: "\r\nBody.\r\n\r\n".into(),
             sources: vec![Source { path: r"~\a.md".into(), line: 2 }],
+            ..Default::default()
         };
         let text = rune_text(&r, &meta, false, false);
         let parsed = crate::rules::rune::parse(&text).unwrap();
         assert_eq!((parsed.description.as_str(), parsed.body.as_str()), (r#"Say "hi" \ bye"#, "\nBody.\n"));
         assert!(text.contains("origin: \"2026-10-17 ~\\\\a.md:2\"\n"), "{text}");
-        assert_eq!(set_text("gen-x-0a1b2c3d", "x", &[Section { heading: "A".into(), ids: vec!["q".into()] }], &[]), "---\nname: row-x\nkind: set\nscope: [gen-x-0a1b2c3d]\n---\n");
+        assert!(text.contains("activate: always\n"), "{text}");
+        let mut picked = r.clone();
+        picked.activate = Some("paths".into());
+        picked.paths = Some(vec!["src/**/*.rs".into()]);
+        let text = rune_text(&picked, &meta, false, false);
+        let parsed = crate::rules::rune::parse(&text).unwrap();
+        assert_eq!((parsed.activate.as_str(), parsed.paths.as_slice()), ("paths", ["src/**/*.rs".to_string()].as_slice()));
+        picked.activate = Some("recall".into());
+        picked.paths = None;
+        assert!(rune_text(&picked, &meta, false, false).contains("activate: recall\n"));
+        assert_eq!(named_set_text("gen-x-0a1b2c3d", "row-x", &[Section { heading: "A".into(), ids: vec!["q".into()] }], &[]), "---\nname: row-x\nkind: set\nscope: [gen-x-0a1b2c3d]\n---\n");
+        let a = Section { heading: "A".into(), ids: vec!["q".into()] };
+        assert_eq!(named_set_text("gen-0a1b2c3d", "generated-20261017", &[a], &["q".into()]), "---\nname: generated-20261017\nkind: set\nscope: [gen-0a1b2c3d]\n---\n## A\n\n- <?rune q?>\n");
+    }
+
+    #[test]
+    fn a_new_generate_json_names_no_row() {
+        let env = Envelope { runes: Vec::new(), sections: Vec::new(), dropped: Vec::new() };
+        let item = ItemSpec { id: "s".into(), kind: "skill", description: "D".into(), source: Some(r"~\s".into()), hook: None, agent: None };
+        let meta = Meta { library: "gen-0a1b2c3d", set: "generated-20261017", items: std::slice::from_ref(&item), agent: "claude", model: "m", effort: "e", skill_sha256: "00", date: "2026-10-17", profile: None };
+        let r = render(&env, &[], &meta).unwrap();
+        let text = generate_json_text(&r.manifest);
+        assert!(!text.contains("rowKey"), "{text}");
+        let paths: Vec<&str> = r.files.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(paths, ["skills/s.md", "sets/generated-20261017.md"]);
+        assert!(r.files[1].1.contains("## Items\n\n- <?rune s?>\n"), "{}", r.files[1].1);
+        assert_eq!(r.on, ["s"]);
     }
 }

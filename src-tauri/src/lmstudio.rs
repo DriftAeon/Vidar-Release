@@ -115,9 +115,19 @@ fn probe() -> LmStatus {
         st.detail = "configured origin is not loopback; not queried".into();
         return st;
     }
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_millis(1500)).build();
-    match agent.get(&format!("{origin}/api/v0/models")).call() {
-        Ok(resp) => match resp.into_string().ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| models_from(&v)) {
+    query(&mut st, &origin);
+    st
+}
+
+/// The models call itself, split from `probe` so a test can aim it at a local listener.
+fn query(st: &mut LmStatus, origin: &str) {
+    let agent = crate::mcp::loopback_agent(Duration::from_millis(1500));
+    match agent.get(format!("{origin}/api/v0/models")).call() {
+        Ok(resp) if crate::mcp::redirect_status(&resp).is_some() => {
+            st.state = "unsupported".into();
+            st.detail = format!("redirect refused (HTTP {}) from /api/v0/models", resp.status().as_u16());
+        }
+        Ok(mut resp) => match resp.body_mut().read_to_string().ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| models_from(&v)) {
             Some(models) => {
                 st.state = "up".into();
                 st.models = models;
@@ -127,17 +137,20 @@ fn probe() -> LmStatus {
                 st.detail = "reply had no data[] — a different API version?".into();
             }
         },
-        Err(ureq::Error::Status(code, _)) => {
+        Err(ureq::Error::StatusCode(code)) => {
             st.state = "unsupported".into();
             st.detail = format!("HTTP {code} from /api/v0/models");
         }
         Err(e) => {
-            let text = e.to_string();
-            st.state = if text.contains("timed out") { "timeout".into() } else { "down".into() };
-            st.detail = text;
+            let timed_out = match &e {
+                ureq::Error::Timeout(_) => true,
+                ureq::Error::Io(io) => io.kind() == std::io::ErrorKind::TimedOut,
+                _ => false,
+            };
+            st.state = if timed_out { "timeout".into() } else { "down".into() };
+            st.detail = e.to_string();
         }
     }
-    st
 }
 
 /// Async: the HTTP call runs off the webview's main thread.
@@ -181,5 +194,19 @@ mod tests {
         assert!(is_loopback_http("http://127.0.0.1:1234"));
         assert!(!is_loopback_http("http://10.0.0.5:1234"));
         assert!(!is_loopback_http("https://127.0.0.1:1234"));
+    }
+
+    #[test]
+    fn models_query_refuses_redirect() {
+        use crate::mcp::tests::{redirect_server, RedirectTarget};
+        let target = RedirectTarget::new();
+        let (origin, server) = redirect_server(target.url("/api/v0/models"));
+        let mut st = LmStatus { origin: origin.clone(), source: "test".into(), state: "down".into(), models: vec![], detail: String::new() };
+        query(&mut st, &origin);
+        server.join().unwrap();
+        assert_eq!(st.state, "unsupported");
+        assert!(st.detail.starts_with("redirect refused (HTTP 302)"), "{}", st.detail);
+        assert!(st.models.is_empty());
+        target.assert_untouched();
     }
 }

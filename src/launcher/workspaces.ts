@@ -15,10 +15,12 @@ export function setWorkspaces(list: Location[]) {
 /** Writes the whole list to vidar.json (Rust validates each folder), then adopts it. Refuses
  *  while vidar.json reports a read error: a partial load skipped bad entries, and writing the
  *  filtered list back would delete them (same rule as Settings › Agents / Macros). */
-export async function saveWorkspaces(next: Location[]): Promise<void> {
+export async function saveWorkspaces(change: Location[] | ((fresh: Location[]) => Location[])): Promise<void> {
   invalidateConfig();
-  const { error } = await loadConfig();
+  const { config, error } = await loadConfig();
   if (error) throw saveRefusal(error);
+  // A function edits the list just read from the file, so a hand edit is never written back stale.
+  const next = typeof change === "function" ? change(config.locations ?? []) : change;
   await invoke("save_locations", { locations: next });
   setWorkspaces(next);
 }

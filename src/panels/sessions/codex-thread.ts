@@ -50,6 +50,7 @@ export interface RawThreadTab {
   id: string;
   cwd: string;
   profile: string | null;
+  row?: string | null;
   /** epoch ms of its PTY spawn */
   spawnedMs: number;
   launchThread: string | null;
@@ -61,7 +62,7 @@ export interface RolloutThread {
 }
 
 /** The rollout list a tab reads: one per (home, cwd), so a Bare tab never sees default-home rows. */
-export const rolloutKey = (profile: string | null, cwd: string): string => JSON.stringify([profile ?? "", cwd]);
+export const rolloutKey = (profile: string | null, cwd: string, row?: string | null): string => JSON.stringify([profile ?? "", cwd, row ?? ""]);
 
 /** A rollout written this long before a spawn still counts as the tab's (mtime granularity). */
 const SPAWN_SLACK_MS = 1000;
@@ -78,7 +79,7 @@ export function pickRawThreads(
   const claimed = new Set(held);
   const out = new Map<string, string | null>();
   for (const t of [...tabs].sort((a, b) => a.spawnedMs - b.spawnedMs)) {
-    const rows = rollouts.get(rolloutKey(t.profile, t.cwd)) ?? [];
+    const rows = rollouts.get(rolloutKey(t.profile, t.cwd, t.row)) ?? [];
     const pick = rows.find((r) => r.mtimeMs >= t.spawnedMs - SPAWN_SLACK_MS && !claimed.has(r.id))?.id
       ?? (t.launchThread && !claimed.has(t.launchThread) ? t.launchThread : null);
     if (pick) claimed.add(pick);

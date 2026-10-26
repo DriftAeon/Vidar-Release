@@ -53,14 +53,22 @@ pub async fn read_codex_mcp_servers(
     app: AppHandle,
     tab: Option<String>,
     profile: Option<String>,
+    row: Option<String>,
 ) -> Result<McpRack, String> {
-    tauri::async_runtime::spawn_blocking(move || read_codex_mcp_servers_now(&app, tab, profile))
+    tauri::async_runtime::spawn_blocking(move || read_codex_mcp_servers_row_now(&app, tab, profile, row))
         .await
         .map_err(|e| e.to_string())
 }
 
 pub(super) fn read_codex_mcp_servers_now(app: &AppHandle, tab: Option<String>, profile: Option<String>) -> McpRack {
-    let home = codex_config::home_for(app, tab.as_deref(), profile.as_deref());
+    read_codex_mcp_servers_row_now(app, tab, profile, None)
+}
+
+fn read_codex_mcp_servers_row_now(app: &AppHandle, tab: Option<String>, profile: Option<String>, row: Option<String>) -> McpRack {
+    read_codex_mcp_servers_home(codex_config::home_for_row(app, tab.as_deref(), profile.as_deref(), row.as_deref()))
+}
+
+fn read_codex_mcp_servers_home(home: Home) -> McpRack {
     let read = match &home {
         Home::Live(path) | Home::Profile(path) | Home::Default(Some(path)) => {
             codex_config::read(path)
@@ -73,8 +81,34 @@ pub(super) fn read_codex_mcp_servers_now(app: &AppHandle, tab: Option<String>, p
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn selected_row_home_supplies_mcp_servers() {
+        let path = std::env::temp_dir().join(format!("vidar-codex-mcp-row-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        let legacy = path.join("legacy");
+        let picked = path.join("picked");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::create_dir_all(&picked).unwrap();
+        std::fs::write(legacy.join("config.toml"), "[mcp_servers.legacy]\ncommand = 'legacy'\n").unwrap();
+        std::fs::write(picked.join("config.toml"), "[mcp_servers.picked]\ncommand = 'picked'\n").unwrap();
+        let home = codex_config::resolve_row(
+            None, Some("bare"), Some("codex-rendered-bare"),
+            |_| Ok(legacy.clone()),
+            |_, row| {
+                assert_eq!(row, "codex-rendered-bare");
+                Ok(picked.clone())
+            },
+            None,
+        );
+        let rack = read_codex_mcp_servers_home(home);
+        assert_eq!(rack.servers.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["picked"]);
+        std::fs::remove_dir_all(path).unwrap();
+    }
 
     #[test]
     fn maps_stdio_and_http_servers_and_disabled_state() {

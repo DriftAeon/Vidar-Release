@@ -16,7 +16,7 @@ export function watchCodexModel(signal: AbortSignal): void {
 
   async function read(tab: FocusedSession): Promise<void> {
     if (document.hidden) return;
-    const limits = await invoke("read_codex_limits", { cwd: tab.cwd, tab: tab.id, profile: tab.profile ?? null }).catch(() => null);
+    const limits = await invoke("read_codex_limits", { cwd: tab.cwd, tab: tab.id, profile: tab.profile ?? null, row: tab.rowKey ?? null }).catch(() => null);
     // A focus change while the native call was in flight makes this stale.
     if (signal.aborted || !limits || target?.id !== tab.id) return;
     // status.ts renders the entry and is the one dispatcher of its character status.

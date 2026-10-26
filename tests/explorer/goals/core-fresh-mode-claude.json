@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-mode-claude",
+  "title": "Switch Permission Mode on a Fresh Claude Tab",
+  "style": "keyboard-first",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab"],
+  "tags": ["mode", "fresh"],
+  "realModel": false,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Claude chat tab" },
+    { "intent": "before typing anything, switch to a different permission mode with the keyboard" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the mode I picked" }
+  ]
+}

@@ -12,7 +12,7 @@ whole set is sectioned. You write no files and run no tools: your whole reply is
 
 ## Input
 
-`Target agent`, `Budget` (characters, or `none`), then one line per rune:
+`Target agent`, then one line per rune:
 `<id> | <kind> | <source paths> | <body>`.
 
 ## The contract
@@ -21,20 +21,17 @@ whole set is sectioned. You write no files and run no tools: your whole reply is
   condition). Keep both when one adds a condition. Never merge two different rules because they share a topic.
 - A merge names the rune that stays (`into`), the runes it absorbs (`from`) and the merged `body`. Never soften:
   keep every never, must, always and do not. Prefer the words of the clearest copy. Sources are joined for you.
-- Each rune id appears at most once across all `into`, `from` and `drop`: no chains, no rune merged twice.
-- `drop` is only for a stated budget the bodies exceed after merging: drop the least load-bearing runes, each
-  as `{ "id", "reason" }` with a short reason. With `Budget: none`, `drop` is empty.
-- `sections`: every remaining rune (not absorbed, not dropped) in exactly one section; headings are 1 to 4 words,
+- Each rune id appears at most once across all `into` and `from`: no chains, no rune merged twice.
+- `sections`: every remaining rune (not absorbed) in exactly one section; headings are 1 to 4 words,
   Title Case, grouping by what the rule governs, global layer before project layer where it makes sense.
 
 ## Reply
 
-Exactly one JSON object, no prose, no fence, keys exactly `merge`, `drop`, `sections`:
+Exactly one JSON object, no prose, no fence, keys exactly `merge`, `sections`:
 
 ```json
 {
   "merge": [{ "into": "no-force-push", "from": ["never-force-master"], "body": "Never force-push to master." }],
-  "drop": [],
   "sections": [{ "heading": "Git", "ids": ["no-force-push", "test-before-commit"] }]
 }
 ```

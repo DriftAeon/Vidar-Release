@@ -8,7 +8,7 @@ license = "Apache-2.0"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.11", features = ["tray-icon"] }
+tauri = { version = "2.12", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: save_locations round-trips vidar.json as a generic tree and
 # must not reorder the author's keys.
@@ -16,7 +16,7 @@ serde_json = { version = "1", features = ["preserve_order"] }
 portable-pty = "0.9"
 # The rack's tools/list call — Vidar's only HTTP client, loopback-only, blocking
 # (one small JSON-RPC round trip per expand). No TLS: it never leaves the machine.
-ureq = { version = "2", default-features = false }
+ureq = { version = "3", default-features = false }
 url = "2"
 base64 = "0.22"
 # Already in Cargo.lock via Tauri; modules/manifest.rs compiles the contract's gateway
@@ -37,8 +37,8 @@ sha2 = "=0.10.9"
 # capture. Transcription is an external whisper-cli process, deliberately not in-process.
 tauri-plugin-global-shortcut = "2"
 cpal = "0.18"
-# Already a transitive dep of tauri at this exact version — only the feature
-# flags are new. GDI for the screen grab, WinRT Media.Ocr for recognition.
+# Pinned at 0.61, separate from the windows 0.62 that tauri pulls in; HWNDs
+# crossing the tauri boundary are rewrapped with HWND(h.0). GDI for the screen grab, WinRT Media.Ocr for recognition.
 windows = { version = "0.61", features = [
   "Foundation",
   "Foundation_Collections",
@@ -88,7 +88,12 @@ windows = { version = "0.61", features = [
 # hand `card::request` without a real window; Cargo unifies this with the
 # plain `tauri` dependency above, so `test` is enabled for test/dev builds
 # only, never the shipped binary.
-tauri = { version = "2.11", features = ["test"] }
+tauri = { version = "2.12", features = ["test"] }
+
+[features]
+# Rune Vault acceptance gate (bare/vault_gate_tests.rs): compiles only once the vault lanes land
+# the API it calls; `cargo test --features vault-gate -- vault_gate_tests`.
+vault-gate = []
 
 [profile.dev]
 incremental = true

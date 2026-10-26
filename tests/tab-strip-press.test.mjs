@@ -73,6 +73,11 @@ document.body.appendChild(host);
 strip.initTabStrip(host);
 const button = strip.buildTabButton("t1", undefined, 1);
 const closeX = button.querySelector(".session-close");
+test("the close X is a labelled button", () => {
+  assert.equal(closeX.getAttribute("role"), "button");
+  assert.equal(closeX.getAttribute("aria-label"), "Close Tab");
+  assert.equal(closeX.title, "Close Tab");
+});
 const fire = (el, type, init = {}) => {
   const ev = new window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...init });
   el.dispatchEvent(ev);

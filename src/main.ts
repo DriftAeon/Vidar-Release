@@ -8,7 +8,7 @@ import { restoreCodexTabs } from "./launcher/codex-restore";
 import { initDrive } from "./drive/drive";
 import "./control/listen";
 import { initAskGate } from "./control/open-ask";
-import { loadConfig, onSettingsChanged } from "./config";
+import { loadConfig, onSettingsChanged, reloadConfig, type VidarConfig } from "./config";
 import { overlayAgents } from "./config-agents";
 import { setLauncherLead } from "./launcher/body-order";
 import { builtinAgents, setGatewayModules, spawnFrom, spawnAstra, rosterView, shownRoots, shownVariants } from "./launcher/roster";
@@ -16,7 +16,7 @@ import { createFixOpener } from "./launcher/fix-tab";
 import { setFixOpener } from "./panels/rendered/fix-seam";
 import { showSessionsToast } from "./panels/sessions/zoom";
 import { gatewayKey, gatewayModules } from "./launcher/gateways";
-import { initLauncherMenu, launcherMenu, launcherSub, buildTypeMenu, openLauncher } from "./launcher/menu";
+import { initLauncherMenu, launcherMenu, launcherSub, buildTypeMenu, noteBuilt, openLauncher } from "./launcher/menu";
 import { launcherCols, col } from "./launcher/columns";
 import { adoptHosted } from "./launcher/hosted";
 import { hostedNames } from "./launcher/hosted-names-pref";
@@ -124,7 +124,12 @@ setViewClasses("sessions");
 
 /* ---- launcher menu ---- */
 
-initLauncherMenu({ openLocations });
+/** Build the type rows and workspace list from a config read, and note what they came from. */
+function buildMenuFrom(c: VidarConfig, warnings?: string[]): void {
+  buildTypeMenu(overlayAgents(builtinAgents(), c.agents, warnings), c.locations ?? []);
+  noteBuilt(c);
+}
+initLauncherMenu({ openLocations, reload: reloadConfig, rebuild: (c) => buildMenuFrom(c as VidarConfig) });
 initRecent();
 bindReopenInWorkspace(reopenInWorkspace, reopenHere, reopenInWorktree);
 initLauncherKeyboard({ launcherMenu, launcherSub, launcherCols, col, openLauncher });
@@ -178,7 +183,7 @@ void (async () => {
   const agentWarnings: string[] = [];
   setLauncherLead(cfg.launcherLead);
   setModuleNames(cfg.moduleNames);
-  buildTypeMenu(overlayAgents(builtinAgents(), cfg.agents, agentWarnings), cfg.locations ?? []);
+  buildMenuFrom(cfg, agentWarnings);
   for (const w of agentWarnings) console.warn(w);
   // Gateway rows follow the module set: rebuild when a gateway module appears or goes.
   let gatewaysSeen = gatewayKey();
@@ -189,7 +194,7 @@ void (async () => {
     if (now === gatewaysSeen && primary === primarySeen) return;
     gatewaysSeen = now;
     primarySeen = primary;
-    void loadConfig().then(({ config: c }) => buildTypeMenu(overlayAgents(builtinAgents(), c.agents), c.locations ?? []));
+    void loadConfig().then(({ config: c }) => buildMenuFrom(c));
   });
   // Toolbench init is config-gated: log roots are the tool's only authority to
   // read anything, so it must not mount before they land.
@@ -205,11 +210,11 @@ void (async () => {
   // Live apply: Settings › Agents writes through patch_settings; the launcher and the macro
   // strip rebuild from the fresh file without a restart. initMacros clears the strip itself.
   onSettingsChanged(({ keys }) => {
-    if (!keys.includes("agents") && !keys.includes("macros")) return;
+    if (!keys.includes("agents") && !keys.includes("locations") && !keys.includes("macros")) return;
     void loadConfig().then(({ config: c }) => {
-      if (keys.includes("agents")) {
+      if (keys.includes("agents") || keys.includes("locations")) {
         const w: string[] = [];
-        buildTypeMenu(overlayAgents(builtinAgents(), c.agents, w), c.locations ?? []);
+        buildMenuFrom(c, w);
         for (const m of w) console.warn(m);
         // The notice follows the live overlay: fixing the entry in Settings clears it.
         if (!cfgError) {
@@ -286,6 +291,7 @@ void (async () => {
         resume: rec.threadId ?? undefined, title: rec.title, art: rec.art, background: true,
         tabKey: rec.tabKey, restoreSlot: true,
         ...(rec.profile ? { profile: rec.profile, ...(rec.rowKey ? { rowKey: rec.rowKey } : {}) } : {}),
+        ...(rec.profile && rec.vault ? { vault: rec.vault } : rec.sets !== undefined ? { sets: rec.sets } : {}),
       }),
       // A Bare tab whose row was deleted or renamed stays saved and unopened, with a note.
       resolves: (rec) => shownRoots().flatMap((r) => [r, ...shownVariants(r)])

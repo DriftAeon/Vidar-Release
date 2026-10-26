@@ -33,16 +33,24 @@ def log(msg: str) -> None:
     print(f"[rewrite-claude] {msg}", file=sys.stderr, flush=True)
 
 
+# CLAUDE_*/CLAUDECODE: the CLI's nested-session guard fires off them when this runs under a
+# Claude session. VIDAR_*/FALCON_*: a hosted tab's control identity (VIDAR_CTL_SECRET,
+# FALCON_SESSION) reaches speak.ps1's env; rewriting needs none of it, and the child reads
+# text it did not write.
+CHILD_ENV_DROP = ("CLAUDE_", "CLAUDECODE", "VIDAR_", "FALCON_")
+
+
+def child_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items() if not k.upper().startswith(CHILD_ENV_DROP)}
+
+
 def _chat(system: str, user: str, model: str, effort: str) -> str:
     claude = shutil.which("claude")
     if not claude:
         raise RuntimeError(
             "claude not found on PATH: install the Claude Code CLI, or pick another rewrite adapter"
         )
-    # A nested-session guard in the CLI can fire off inherited CLAUDE_*/CLAUDECODE env
-    # vars from this being spawned underneath a running Claude session; strip them so
-    # the child starts clean.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE_") and not k.startswith("CLAUDECODE")}
+    env = child_env()
     cmd = [
         claude, "-p", "--model", model, "--effort", effort,
         "--no-session-persistence", "--output-format", "text",

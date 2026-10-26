@@ -46,7 +46,6 @@
     "grp-projects": {"source":"noto-emoji/svg/emoji_u1f4fd.svg"},
     "grp-reference": {"source":"noto-emoji/svg/emoji_u2139.svg"},
     "grp-shelf": {"source":"fatcow/32x32/bookshelf.png","note":"PNG, loaded as `.png` by `iconImg`"},
-    "catapult": {"source":"noto-emoji/svg/emoji_u1f680.svg"},
     "comments": {"source":"flat-color-icons/svg/comments.svg","note":"recoloured: fill #8AB15C changed to #2764E7, the blue of link.svg"},
     "document-edit": {"source":"fluent-color/svg/ic_fluent_document_edit_24_color.svg","credit":"Fluent UI Emoji/Color icons, MIT; also Rendered chain Write"},
     "set-characters": {"source":"fluent-color/svg/ic_fluent_bot_24_color.svg"},
@@ -86,7 +85,7 @@
     "globe": {"source":"flat-color-icons/svg/globe.svg"},
     "swap": {"source":"noto-emoji/svg/emoji_u1f6e0.svg","note":"Swap button, bottom bar"},
     "toolbox": {"source":"noto-emoji/svg/emoji_u1f9f0.svg"},
-    "question": {"source":"noto-emoji/svg/emoji_u2754.svg"},
+    "question": {"source":"own/question_dark.svg","note":"recoloured: all fills flattened to #0F0F13 (the --bg ink of the count chips) so the question chip reads dark on amber"},
     "runelib": {"source":"own/carved_rune_stone.png","note":"(Carved rune stone, 2026-10-12)"},
     "lab": {"source":"noto-emoji/svg/emoji_u1f9ea.svg"},
     "floppy": {"source":"noto-emoji/svg/emoji_u1f4be.svg"},
@@ -122,7 +121,9 @@
     "clipboard-edit": {"source":"fluent-color/svg/ic_fluent_clipboard_text_edit_24_color.svg"},
     "books": {"source":"noto-emoji/svg/emoji_u1f4da.svg"},
     "notion-database": {"source":"fluent-color/svg/ic_fluent_book_database_24_color.svg","note":"Notion default database icon"},
-    "notion-page": {"source":"fluent-color/svg/ic_fluent_document_24_color.svg","note":"Notion default page icon"}
+    "notion-page": {"source":"fluent-color/svg/ic_fluent_document_24_color.svg","note":"Notion default page icon"},
+    "person": {"source":"fluent-color/svg/ic_fluent_person_24_color.svg"},
+    "people-community": {"source":"fluent-color/svg/ic_fluent_people_community_24_color.svg"}
   },
   "tools": {
     "Thought": "thought",

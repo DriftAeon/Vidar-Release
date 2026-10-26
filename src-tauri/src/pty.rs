@@ -231,9 +231,11 @@ pub async fn spawn_pty(
     profile: Option<String>,
     agent: Option<String>,
     row_key: Option<String>,
+    sets: Option<Vec<crate::bare::LaunchSetRef>>,
+    vault: Option<String>,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        spawn_pty_blocking(&app, id, cols, rows, shell, cwd, args, tab_name, pty_gen, profile, agent, row_key)
+        spawn_pty_blocking(&app, id, cols, rows, shell, cwd, args, tab_name, pty_gen, profile, agent, row_key, sets, vault)
     })
     .await
     .map_err(|e| format!("spawn task failed: {e}"))?
@@ -253,8 +255,14 @@ fn spawn_pty_blocking(
     profile: Option<String>,
     agent: Option<String>,
     row_key: Option<String>,
+    sets: Option<Vec<crate::bare::LaunchSetRef>>,
+    vault: Option<String>,
 ) -> Result<(), String> {
     let state = app.state::<PtyManager>();
+    let vault = vault.map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    if vault.is_some() && profile.is_none() {
+        return Err("A Rune Vault rides only a Bare spawn; spawn refused".into());
+    }
     // Held for the whole body when the spawn is profiled (see BARE_PREPARE).
     let _bare_prepare = profile
         .is_some()
@@ -278,7 +286,10 @@ fn spawn_pty_blocking(
     // Home, settings and spawn line for a profiled tab; any failure refuses, never a default launch.
     // Before spawn_lock: the version read and the home lock wait must not stall every other spawn
     // and the PTY reader threads' exit path, which take that lock too.
-    let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), config: None, claude_json: None };
+    // A named vault is the whole loadout (model R2); the transition pick is read only without one.
+    // Raw locks at spawn (`bare::vault_spawn::lock_at_spawn`).
+    let custom_sets = if vault.is_some() { None } else { sets.as_deref() };
+    let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), custom_sets, vault: vault.as_deref(), ..Default::default() };
     let mut bare = match profile.as_deref() {
         None => None,
         Some(p) if codex_bare => {

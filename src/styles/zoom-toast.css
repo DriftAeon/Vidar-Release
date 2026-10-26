@@ -11,4 +11,11 @@
 /* flow's toast lives inside .flow-canvas (position: relative), bottom-right
    instead of the fixed top-centre the terminal's font-zoom toast uses */
 #flow-zoom-toast { position: absolute; top: auto; left: auto; bottom: 10px; right: 10px; margin: 0; }
+/* on a focused Rendered tab (zoom.ts toastHost) the toast mirrors the agent pill in the
+   opposite corner: same top, height and type, flush right (rendered.css .blk-agent-pill) */
+.rendered-host > #zoom-toast {
+  position: absolute; top: 0; left: auto; right: 0; margin: 0;
+  font-size: var(--font-12); line-height: var(--line-20); padding: var(--space-2) var(--space-8);
+  border: 0; border-bottom: var(--border-w) solid var(--accent); border-radius: 0 var(--radius-4) 0 0;
+}
 

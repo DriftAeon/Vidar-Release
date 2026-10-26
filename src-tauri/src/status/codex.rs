@@ -38,7 +38,7 @@ pub async fn read_codex_model(app: AppHandle, cwd: String, tab: Option<String>) 
 }
 
 /// A raw Codex tab's model and account meters from its newest rollout, one read per poll
-/// (`rollout_index::cached_limits`). The home is the tab's own (`codex_config::home_for`: a live
+/// (`rollout_index::cached_limits`). The home is the tab's own (`codex_config::home_for_row`: a live
 /// session, else the Bare `profile`'s home, else the default); a Bare profile that cannot resolve
 /// reads nothing, never the user's home. Without a rollout only the config model comes back,
 /// stamped now; with neither, None. Off the main thread.
@@ -48,8 +48,9 @@ pub async fn read_codex_limits(
     cwd: String,
     tab: Option<String>,
     profile: Option<String>,
+    row: Option<String>,
 ) -> Option<RolloutLimits> {
-    let home = home_path(crate::codex_config::home_for(&app, tab.as_deref(), profile.as_deref()))?;
+    let home = home_path(crate::codex_config::home_for_row(&app, tab.as_deref(), profile.as_deref(), row.as_deref()))?;
     tauri::async_runtime::spawn_blocking(move || limits_for(&home, &cwd)).await.ok().flatten()
 }
 
@@ -124,12 +125,20 @@ fn rollout_threads(home: &std::path::Path, cwd: &str) -> Vec<RolloutThread> {
 
 /// The threads recorded for `cwd` in a Raw Codex tab's own home (`profile`: its Bare profile),
 /// newest rollout first: the tab's live thread is resolved from these when its launch line names
-/// none or a stale one (src/panels/sessions/codex-thread.ts). Reads rollout names and first lines
-/// only; never creates a home. Off the main thread.
+/// none or a stale one (src/panels/sessions/codex-thread.ts). A `tab` whose session recorded a Codex
+/// home (its Rune Vault record, `vault::session::find`) reads that home; otherwise the profile's.
+/// Reads rollout names and first lines only; never creates a home. Off the main thread.
 #[tauri::command]
-pub async fn codex_rollout_threads(cwd: String, profile: Option<String>) -> Result<Vec<RolloutThread>, String> {
+pub async fn codex_rollout_threads(cwd: String, profile: Option<String>, tab: Option<String>) -> Result<Vec<RolloutThread>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let home = rollout_home(profile.as_deref(), crate::bare::codex_home_for_profile, codex_home)?;
+        let recorded = tab.as_deref().map(str::trim).filter(|t| !t.is_empty())
+            .and_then(|t| crate::bare::vault::session::find(&crate::paths::root(), t, None, None).ok().flatten())
+            .filter(|r| r.agent == "codex")
+            .map(|r| std::path::PathBuf::from(r.home));
+        let home = match recorded {
+            Some(h) => Some(h),
+            None => rollout_home(profile.as_deref(), crate::bare::codex_home_for_profile, codex_home)?,
+        };
         Ok(home.map(|h| rollout_threads(&h, &cwd)).unwrap_or_default())
     })
     .await

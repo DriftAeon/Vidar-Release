@@ -7,6 +7,7 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
 const { setSection, runeIconKey } = await import("../src/runes/cards.ts");
+const { runeLedger } = await import("../src/runes/ledger.ts");
 
 const rune = (id, o = {}) => ({ id, kind: "rule", scope: ["global"], state: "active", activate: "always",
   description: `About ${id}`, path: `C:/lib/rules/${id}.md`, body: `Body of ${id}.`, ...o });
@@ -57,4 +58,32 @@ test("an opened card builds the same frontmatter bar and body, once", () => {
 test("the ordinary key reads Global and Vidar", () => {
   const scope = runeIconKey().querySelectorAll(".runes-key-group")[1];
   assert.deepEqual([...scope.querySelectorAll(".runes-key-item")].map((i) => i.title), ["Global", "Vidar"]);
+});
+
+test("a classic skill-file read undims its card and adds one load tooltip line", () => {
+  const loaded = { source: "transcript", files: [], runeReads: ["check-facts"], truncated: false };
+  const ledger = runeLedger(T, loaded);
+  const card = setSection(T, T.sets[0], CTX, ledger).querySelectorAll(".runes-rn")[1];
+  assert.equal(card.classList.contains("is-dim"), false);
+  assert.equal(card.querySelector("summary").title, "check-facts\nAbout check-facts\nRecall: pointer line only\nLoaded: Recall");
+  assert.equal(card.querySelectorAll(".runes-chips .runes-chip").length, 2, "no load chip");
+});
+
+test("opened page shows populated provenance and markdown, omitting empty values", () => {
+  const full = { ...RUNES[1], origin: "Design note", closesWhen: "Retired", why: "**Because** it matters", example: "`Try this`" };
+  const traced = { ...T, lib: { ...T.lib, runes: [RUNES[0], full, RUNES[2]] } };
+  const card = setSection(traced, traced.sets[0], CTX).querySelectorAll(".runes-rn")[1];
+  card.open = true; toggle(card);
+  const fields = Object.fromEntries([...card.querySelectorAll(".runes-fm")].map((f) =>
+    [f.querySelector(".runes-fk").textContent, f.querySelector(".runes-fv").textContent]));
+  assert.equal(fields.Origin, "Design note");
+  assert.equal(fields["Closes When"], "Retired");
+  assert.deepEqual([...card.querySelectorAll(".runes-rt h4")].map((h) => h.textContent), ["Why", "Example"]);
+  assert.match(card.querySelector(".runes-rbody").textContent, /Because it matters.*Try this/s);
+  const empty = { ...T, lib: { ...T.lib, runes: [RUNES[0], { ...full, origin: " ", closesWhen: "", why: "", example: " " }, RUNES[2]] } };
+  const emptyCard = setSection(empty, empty.sets[0], CTX).querySelectorAll(".runes-rn")[1];
+  emptyCard.open = true; toggle(emptyCard);
+  assert.equal(emptyCard.querySelector(".runes-fmbar").textContent.includes("Origin"), false);
+  assert.equal(emptyCard.querySelector(".runes-fmbar").textContent.includes("Closes When"), false);
+  assert.equal(emptyCard.querySelectorAll(".runes-rt h4").length, 0);
 });

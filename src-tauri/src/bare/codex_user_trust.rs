@@ -16,14 +16,8 @@ pub(super) fn user_config_path() -> Option<PathBuf> {
     Some(home.join("config.toml"))
 }
 
-/// True when the user's Codex config trusts `cwd`, its git root, or (for a worktree) the main repo.
-/// A missing or unreadable config, or one that does not parse, trusts nothing.
-#[cfg_attr(test, allow(dead_code))]
-pub(super) fn user_trusts(cwd: &str) -> bool {
-    user_config_path().is_some_and(|p| config_trusts(&p, cwd))
-}
-
-/// `user_trusts` against an explicit config file.
+/// True when the Codex config at `config` trusts `cwd`, its git root, or (for a worktree) the main
+/// repo. A missing or unreadable config, or one that does not parse, trusts nothing.
 pub(super) fn config_trusts(config: &Path, cwd: &str) -> bool {
     let Ok(text) = std::fs::read_to_string(config) else { return false };
     let Ok(doc) = crate::fsx::strip_bom(&text).parse::<toml::Table>() else { return false };

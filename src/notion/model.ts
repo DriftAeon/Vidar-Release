@@ -28,7 +28,7 @@ const edited = (iso: string): Field => {
   return f;
 };
 
-/** Notion's built-in icon names -> Lucide glyphs; a name not listed falls back to the kind glyph, still tinted. */
+/** Notion's built-in icon names -> Lucide glyphs; a name not listed falls back to the file glyph, still tinted. */
 const NATIVE: Record<string, LucideName> = {
   checklist: "list-checks", checkmark: "check", document: "file-text", folder: "folder", bookmark: "bookmark",
   bug: "bug", lock: "lock", bolt: "zap", lightning: "zap", person: "user", people: "users", hashtag: "hash",
@@ -41,13 +41,16 @@ function nativeLead(name: string, color: string, fallback: LucideName): Lead {
   return { glyph: Object.hasOwn(NATIVE, name) ? NATIVE[name] : fallback, ...(cls ? { cls } : {}) };
 }
 
+/** A database hit always shows the book-database icon, even when Notion gave it an emoji or built-in icon. */
 export function hitItem(h: NotionHit): Item {
-  const kindGlyph: LucideName = h.kind === "source" ? "database" : "file-text";
+  const lead: Lead = h.kind === "source" ? { color: "notion-database" }
+    : h.icon ? { emoji: h.icon }
+    : h.iconName ? nativeLead(h.iconName, h.iconColor, "file-text")
+    : { color: "notion-page" };
   return {
     id: h.id, key: "", title: titleOf(h.title), status: "", updated: h.lastEdited,
     group: { ...BANDS[h.kind === "source" ? "source" : "page"] },
-    lead: h.icon ? { emoji: h.icon } : h.iconName ? nativeLead(h.iconName, h.iconColor, kindGlyph)
-      : { color: h.kind === "source" ? "notion-database" : "notion-page" },
+    lead,
     ...(h.kind === "source" ? { tip: DATABASE_TIP } : {}),
     facets: { [EDITED]: h.lastEdited ? [h.lastEdited] : [] },
     fields: [edited(h.lastEdited)],

@@ -1,7 +1,7 @@
 // src\launcher\columns.ts — the launcher's flyout columns: creation, open, placement, hide. Split
 // from menu.ts; the root menu element arrives once through setColumnRoot (called by
 // initLauncherMenu), so this module never imports menu.ts.
-import { colKeydown, kbNav } from "./keyboard";
+import { colKeydown, kbNav, kbPointerMove } from "./keyboard";
 
 let root: HTMLElement | null = null;
 /** Registered once by initLauncherMenu with the root launcher menu element. */
@@ -17,7 +17,7 @@ export const launcherCols: HTMLElement[] = [];
 
 // Hover intent: moving from an open row to a sibling waits HOVER_SWITCH_MS, so a diagonal
 // glide toward the open flyout does not flip it. One pending switch for the whole launcher.
-export const HOVER_SWITCH_MS = 150;
+export const HOVER_SWITCH_MS = 80;
 let pending: { row: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
 function clearPending(): void {
   if (pending) clearTimeout(pending.timer);
@@ -53,6 +53,7 @@ export function col(depth: number): HTMLElement {
     d.className = "launcher-col hidden";
     d.dataset.depth = String(launcherCols.length);
     d.addEventListener("keydown", colKeydown);
+    d.addEventListener("mousemove", kbPointerMove); // a real move here ends keyboard mode too
     // hovering a leaf row (Raw, Rendered, a shell location…) closes whatever a
     // sibling had opened beside it, as a menu does; has-sub rows open their own
     const depth = launcherCols.length;

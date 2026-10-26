@@ -1,6 +1,6 @@
 // Following the bottom of a Rendered transcript: an eased glide while output streams, an
 // instant jump for replay/hydrate/resume and explicit resets. One concern: where scrollTop goes
-// while the view is stuck to the bottom. The stick flag itself stays in rendered.ts's scroll
+// while the view is stuck to the bottom. The stick flag itself stays in stick-scroll.ts's scroll
 // handler, which asks programmatic() before un-sticking from position alone.
 //
 // Motion is a critically damped spring on scrollTop, retargeted every frame to the live bottom,

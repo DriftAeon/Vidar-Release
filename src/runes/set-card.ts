@@ -10,7 +10,7 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?:
 }
 
 /** The set head: icon slot, name, condition slot, count. A null count leaves `.runes-sc` empty. */
-export function setHead(name: string, count: number | null, icon: ColorIcon | null, cond?: HTMLElement): HTMLElement {
+export function setHead(name: string, count: number | string | null, icon: ColorIcon | null, cond?: HTMLElement): HTMLElement {
   const sum = node("summary", "runes-set-head");
   const scp = node("span", "runes-scp");
   if (icon) scp.appendChild(iconImg(icon));

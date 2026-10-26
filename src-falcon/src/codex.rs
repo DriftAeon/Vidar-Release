@@ -207,6 +207,9 @@ impl CodexRuntime {
         if params.rules_file.is_some() {
             return Err("rules_file is not supported for Codex sessions".into());
         }
+        if params.mcp_file.is_some() {
+            return Err("mcp_file is not supported for Codex sessions".into());
+        }
         let base = || -> Result<SpawnRequest, String> {
             let cwd = plain_path(&PathBuf::from(&params.cwd));
             if !cwd.is_dir() {
@@ -220,10 +223,16 @@ impl CodexRuntime {
                 env_base: EnvBase::Inherit,
             })
         };
+        if params.claude_config_dir.is_some() {
+            return Err("claude_config_dir is not supported for Codex sessions".into());
+        }
         let Some(profile) = params.profile.as_deref() else {
             // A payload replaces a profile's static one: without a profile there is none to replace.
             if params.payload_file.is_some() {
                 return Err("a payload file needs a launch profile".into());
+            }
+            if params.codex_home.is_some() {
+                return Err("a Codex home needs a launch profile".into());
             }
             return Ok(CodexSpawn { request: base()?, bare: None });
         };
@@ -242,8 +251,8 @@ impl CodexRuntime {
         }
         let mut request = base()?;
         let root = root.ok_or("a profiled Codex spawn needs the Vidar root")?;
-        let BareHome { home, mut env, shims, package } =
-            bare_codex(root, local_app_data, profile, inherited)?;
+        let BareHome { home, mut env, shims, package, combo } =
+            bare_codex(root, local_app_data, profile, params.codex_home.as_deref(), inherited)?;
 
         // Admitted and read once before anything runs; no length cap, because it rides the
         // `thread/start` params rather than the argv.
@@ -286,6 +295,7 @@ impl CodexRuntime {
                     source: source.into(),
                     version,
                     pwsh: pwsh.map(|p| p.to_string_lossy().into_owned()),
+                    codex_home: combo,
                 },
             }),
         })
@@ -298,17 +308,22 @@ struct BareHome {
     env: crate::bare_env::Env,
     shims: Vec<String>,
     package: String,
+    /// The admitted set-combination home the spawn asked for, as the child's `CODEX_HOME`.
+    combo: Option<String>,
 }
 
 /// The Bare home and env from `<root>\profiles\<profile>\codex.json`: the home is Vidar's own
 /// placement (`bare_home::resolve_for`), the env `bare_env::codex` over the profile's `overlay`
-/// with `{{root}}`/`{{home}}` filled. Refuses a profile that is not the Codex one, carries a
-/// `sharedLogin`, sets `CODEX_HOME` outside the home, or a home Vidar has not prepared (no
-/// `CODEX_HOME\config.toml`): Codex would otherwise create the home itself.
+/// with `{{root}}`/`{{home}}` filled. A `codex_home` (`SpawnParams.codex_home`) is admitted under
+/// that home by `codex_payload::admit_codex_home` and replaces the overlay's `CODEX_HOME` and
+/// `VIDAR_AGENT_HOME`. Refuses a profile that is not the Codex one, carries a `sharedLogin`, sets
+/// `CODEX_HOME` outside the home, or a home Vidar has not prepared (no `CODEX_HOME\config.toml`):
+/// Codex would otherwise create the home itself.
 fn bare_codex(
     root: &Path,
     local_app_data: Option<&Path>,
     profile: &str,
+    codex_home: Option<&str>,
     inherited: Vec<(OsString, OsString)>,
 ) -> Result<BareHome, String> {
     let lad = local_app_data
@@ -323,7 +338,7 @@ fn bare_codex(
         return Err(format!("launch profile {} is not the Codex {profile:?} profile", path.display()));
     }
     if doc.get("sharedLogin").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
-        return Err(format!("launch profile {profile:?}: sharedLogin is not wired for Codex; spawn refused"));
+        return Err(format!("launch profile {profile:?}: a Codex profile takes no sharedLogin entry (auth.json is shared outside the profile); spawn refused"));
     }
     let (root_s, home_s) = (root.to_string_lossy().into_owned(), home.to_string_lossy().into_owned());
     // `{{localappdata}}` is Falcon's own (the same `lad` that placed the home): the Codex process
@@ -337,6 +352,16 @@ fn bare_codex(
             overlay.insert(k.clone(), fill(v));
         }
     }
+    let combo = match codex_home {
+        Some(raw) => {
+            let admitted = crate::codex_payload::admit_codex_home(raw, &home).map_err(|e| format!("{e}; spawn refused"))?;
+            let s = plain_path(&admitted).to_string_lossy().into_owned();
+            overlay.insert("CODEX_HOME".into(), s.clone());
+            overlay.insert("VIDAR_AGENT_HOME".into(), s.clone());
+            Some(s)
+        }
+        None => None,
+    };
     let env = crate::bare_env::codex(inherited, &overlay)?;
     let codex_home = PathBuf::from(overlay.get("CODEX_HOME").cloned().unwrap_or_default());
     let parts = |p: &Path| -> Vec<String> {
@@ -363,7 +388,7 @@ fn bare_codex(
         .and_then(Value::as_str)
         .ok_or_else(|| format!("launch profile {profile:?} binary block names no package"))?
         .to_string();
-    Ok(BareHome { home, env, shims, package })
+    Ok(BareHome { home, env, shims, package, combo })
 }
 
 /// The first folder on the env's Path holding `name`.
@@ -554,8 +579,10 @@ mod tests {
             gateway: None,
             profile: None,
             payload_file: None,
+            mcp_file: None,
             row_key: None,
-            set_plugin_dirs: Vec::new(),
+            sets: None,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
         }
     }
 
@@ -572,6 +599,14 @@ mod tests {
         p.rules_file = Some(r"C:\v\runtime\rules\built\0123456789ab.md".into());
         let error = runtime.spawn_request(&p, "s1").unwrap_err();
         assert!(error.contains("not supported for Codex"), "{error}");
+    }
+
+    #[test]
+    fn mcp_file_is_refused_for_codex() {
+        let runtime = CodexRuntime { executable: PathBuf::from("codex") };
+        let mut p = params(None);
+        p.mcp_file = Some("mcp-0123456789ab.json".into());
+        assert!(runtime.spawn_request_in(&p, "s1", None, None, Vec::new()).unwrap_err().contains("mcp_file is not supported"));
     }
 
     // ---- Bare (profiled) spawns ------------------------------------------------------------
@@ -820,6 +855,63 @@ mod tests {
         // Inside the layer but tampered: the name's hash no longer matches.
         std::fs::write(&inside, "y\n").unwrap();
         assert!(b.spawn(&bare_params(Some(&inside)), &[]).unwrap_err().contains("hash in its name"));
+    }
+
+    /// A prepared set-combination home, as `bare/agent_homes.rs` lays it out.
+    fn combo_home(home: &Path, name: &str) -> PathBuf {
+        let dir = home.join(crate::codex_payload::CODEX_HOMES_DIR).join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.toml"), "").unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_combination_codex_home_is_the_childs_codex_home_and_is_echoed() {
+        let b = bare_fixture();
+        let combo = combo_home(&b.home, "0123456789ab");
+        let mut p = bare_params(None);
+        p.codex_home = Some(combo.to_string_lossy().into_owned());
+        let spawn = b.spawn(&p, &[]).unwrap();
+        let canon = std::fs::canonicalize(&combo).unwrap();
+        for name in ["CODEX_HOME", "VIDAR_AGENT_HOME"] {
+            let v = env_of(&spawn.request, name).unwrap();
+            assert!(!v.starts_with(r"\\?\"), "{v}");
+            assert_eq!(std::fs::canonicalize(v).unwrap(), canon, "{name}");
+        }
+        let echoed = spawn.bare.unwrap().spawn.codex_home.unwrap();
+        assert_eq!(std::fs::canonicalize(&echoed).unwrap(), canon);
+        // None asked: the profile's own home, nothing echoed.
+        let spawn = b.spawn(&bare_params(None), &[]).unwrap();
+        assert_eq!(env_of(&spawn.request, "CODEX_HOME"), Some(&*b.home.join("codex-home").to_string_lossy()));
+        assert_eq!(spawn.bare.unwrap().spawn.codex_home, None);
+    }
+
+    #[test]
+    fn a_codex_home_outside_the_bare_home_or_unprepared_is_refused() {
+        let b = bare_fixture();
+        let other = crate::bare_home::resolve_for(&b.root.path().join("other-root"), &b.lad);
+        let cases = [
+            combo_home(&other, "0123456789ab"),
+            combo_home(b.root.path(), "0123456789ab"),
+            b.home.join("codex-home"),
+            b.home.clone(),
+            combo_home(&b.home, "NOT-A-HASH12"),
+        ];
+        for dir in cases {
+            let mut p = bare_params(None);
+            p.codex_home = Some(dir.to_string_lossy().into_owned());
+            let e = b.spawn(&p, &[]).unwrap_err();
+            assert!(e.contains("spawn refused"), "{}: {e}", dir.display());
+        }
+        let bare = combo_home(&b.home, "ba9876543210");
+        std::fs::remove_file(bare.join("config.toml")).unwrap();
+        let mut p = bare_params(None);
+        p.codex_home = Some(bare.to_string_lossy().into_owned());
+        assert!(b.spawn(&p, &[]).unwrap_err().contains("not prepared"));
+        // Without a profile there is no home to replace.
+        let mut p = params(None);
+        p.codex_home = Some(combo_home(&b.home, "0123456789ab").to_string_lossy().into_owned());
+        assert!(b.spawn(&p, &[]).unwrap_err().contains("needs a launch profile"));
     }
 
     // ---- Runtime resolution ---------------------------------------------------------------

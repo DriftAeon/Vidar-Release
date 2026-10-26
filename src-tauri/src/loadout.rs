@@ -22,9 +22,10 @@ pub mod codex;
 // home-rooted lookup below is skipped, not joined onto an empty PathBuf —
 // that used to resolve to a path relative to Vidar's own cwd, which could
 // silently pick up an unrelated file of the same name.
-// The tab's launch profile picks the dir (bare/claude_dir.rs): None = the user's own.
-fn claude_dir(profile: Option<&str>) -> Option<PathBuf> {
-    crate::bare::claude_dir::claude_dir_for(profile)
+// The tab's launch profile picks the dir (bare/claude_dir.rs): None = the user's own; a Bare
+// tab reads the config dir its session runs on (`home_of_session`, one combination home).
+fn claude_dir(profile: Option<&str>, tab: Option<&str>, session: Option<&str>, row: Option<&str>) -> Option<PathBuf> {
+    crate::bare::claude_dir::home_of_session(profile, tab, session, row)
 }
 
 fn kb(len: u64) -> f64 {
@@ -131,10 +132,10 @@ fn handoff_slug(cwd: &str) -> String {
     out
 }
 
-fn instructions_chain(cwd: &str, profile: Option<&str>) -> Vec<KbFile> {
+fn instructions_chain(cwd: &str, home: Option<&Path>) -> Vec<KbFile> {
     let mut out = Vec::new();
 
-    if let Some(dir) = claude_dir(profile) {
+    if let Some(dir) = home {
         if let Some(f) = kb_file(&dir.join("CLAUDE.md"), false) {
             out.push(f);
         }
@@ -177,8 +178,8 @@ fn instructions_chain(cwd: &str, profile: Option<&str>) -> Vec<KbFile> {
     out
 }
 
-fn memory_and_handoff(cwd: &str, profile: Option<&str>) -> (String, usize, String, Option<String>) {
-    let Some(dir) = claude_dir(profile) else {
+fn memory_and_handoff(cwd: &str, home: Option<&Path>) -> (String, usize, String, Option<String>) {
+    let Some(dir) = home else {
         // No home directory: nothing to look up rather than a path relative
         // to Vidar's own cwd.
         return (String::new(), 0, String::new(), None);
@@ -331,20 +332,29 @@ fn permissions_from(root: &Value) -> (usize, Vec<String>) {
 /// instruction files, so a slow or unreachable share must not stall Tauri's main thread (as
 /// read_codex_loadout).
 #[tauri::command]
-pub async fn read_loadout(cwd: String, settings_paths: Vec<String>, plugin_dir: Option<String>, profile: Option<String>) -> Result<Loadout, String> {
-    tauri::async_runtime::spawn_blocking(move || read_loadout_now(cwd, settings_paths, plugin_dir, profile))
-        .await
-        .map_err(|e| e.to_string())
+pub async fn read_loadout(
+    app: tauri::AppHandle,
+    cwd: String,
+    settings_paths: Vec<String>,
+    plugin_dir: Option<String>,
+    profile: Option<String>,
+    tab: Option<String>,
+    row: Option<String>,
+) -> Result<Loadout, String> {
+    let session = crate::bare::claude_dir::hosted_session_of(&app, tab.as_deref());
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = claude_dir(profile.as_deref(), tab.as_deref(), session.as_deref(), row.as_deref());
+        read_loadout_now(cwd, settings_paths, plugin_dir, home)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
-fn read_loadout_now(cwd: String, settings_paths: Vec<String>, plugin_dir: Option<String>, profile: Option<String>) -> Loadout {
+fn read_loadout_now(cwd: String, settings_paths: Vec<String>, plugin_dir: Option<String>, home_dir: Option<PathBuf>) -> Loadout {
     let mut notes = Vec::new();
-    let profile = profile.as_deref();
 
-    let instructions = instructions_chain(&cwd, profile);
-    let (memory_path, memory_entries, handoff_path, handoff_newest) = memory_and_handoff(&cwd, profile);
-
-    let home_dir = claude_dir(profile);
+    let instructions = instructions_chain(&cwd, home_dir.as_deref());
+    let (memory_path, memory_entries, handoff_path, handoff_newest) = memory_and_handoff(&cwd, home_dir.as_deref());
 
     let mut skills = Vec::new();
     if let Some(dir) = &home_dir {

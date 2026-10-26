@@ -127,7 +127,7 @@ export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
   let focused: FocusedSession | null = null;
   // what load() reads from the session: a change in any of them refetches, the rest only redraws
   let lastLoadKey: string | null = null;
-  const loadKey = (s: FocusedSession | null) => (s ? JSON.stringify([s.id, s.agent, s.cwd, s.profile ?? null, s.launchArgs ?? null]) : null);
+  const loadKey = (s: FocusedSession | null) => (s ? JSON.stringify([s.id, s.agent, s.cwd, s.profile ?? null, s.rowKey ?? null, s.launchArgs ?? null]) : null);
   let loadGen = 0;
   // cached so a same-id vidar-focus (title/model changed, id didn't) redraws
   // without a spurious "Querying…" flash or a wasted re-fetch
@@ -366,6 +366,7 @@ export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
         const loadout = await invoke("read_codex_loadout", {
           tab: target.id,
           profile: target.profile ?? null,
+          row: target.rowKey ?? null,
           cwd: target.cwd,
         });
         if (gen !== loadGen || focused?.id !== target.id || focused.agent !== "codex" || !moduleOn("codex") || signal?.aborted) return;
@@ -413,6 +414,9 @@ export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
         settingsPaths,
         pluginDir: parsed.pluginDir,
         profile: target.profile ?? null,
+        // a Bare tab reads the combination home its own session runs on
+        tab: target.profile ? target.id : null,
+        row: target.profile ? target.rowKey ?? null : null,
       });
       if (gen !== loadGen || focused?.id !== target.id || !moduleOn("claude") || signal?.aborted) return;
       const fresh: LoadedLoadout = { kind: "claude", data: loadout };

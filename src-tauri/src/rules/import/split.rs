@@ -64,6 +64,31 @@ pub struct Split {
     pub parts: Vec<Part>,
     /// One line per `not_bare` brick, naming its id and section.
     pub warnings: Vec<String>,
+    /// Globs from a source's `paths:` front matter, when present.
+    pub paths: Option<Vec<String>>,
+    /// The source was a memory library folder.
+    pub memory: bool,
+}
+
+fn front_paths(lines: &[&str]) -> Option<Vec<String>> {
+    if lines.first() != Some(&"---") {
+        return None;
+    }
+    let end = (1..lines.len()).find(|&i| lines[i] == "---")?;
+    let at = (1..end).find(|&i| lines[i].starts_with("paths:"))?;
+    let value = lines[at]["paths:".len()..].trim();
+    let items: Vec<&str> = if value.is_empty() {
+        lines[at + 1..end]
+            .iter()
+            .take_while(|line| line.starts_with([' ', '\t']))
+            .filter_map(|line| line.trim_start().strip_prefix("- "))
+            .collect()
+    } else if value.starts_with('[') && value.ends_with(']') {
+        value[1..value.len() - 1].split(',').collect()
+    } else {
+        vec![value]
+    };
+    Some(items.into_iter().map(|s| s.trim().trim_matches(['\'', '"']).to_string()).filter(|s| !s.is_empty()).collect())
 }
 
 /// The spawn's own path norm (`bare::home::norm`): lower-cased, `/` to `\`, and an MSYS `/c/Users/...` read as
@@ -341,6 +366,7 @@ pub fn split(raw: &str, taken: &[String], profile: &str) -> Split {
     let profile = norm_path(profile);
     let text = normalise(raw);
     let lines: Vec<&str> = if text.is_empty() { Vec::new() } else { text.trim_end_matches('\n').split('\n').collect() };
+    let paths = front_paths(&lines);
     let mut p = Parser { lines, parts: Vec::new(), literal: Vec::new(), raws: Vec::new(), stack: Vec::new(), section_at: 0 };
     p.run();
 
@@ -404,5 +430,5 @@ pub fn split(raw: &str, taken: &[String], profile: &str) -> Split {
         })
         .collect();
     let sha256 = sha256_hex(&text);
-    Split { text, sha256, bricks, parts, warnings }
+    Split { text, sha256, bricks, parts, warnings, paths, memory: false }
 }

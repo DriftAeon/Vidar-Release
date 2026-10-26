@@ -811,6 +811,10 @@ pub(super) fn start_event_reader(
             for ask in catalog.as_mut().map(CodexQueries::start).unwrap_or_default() {
                 let _ = connection.write_frame(&ask);
             }
+            // The session record takes this session's thread id once (model R4: resume finds the
+            // vault by it); only live lines, since a re-adopt's replayed history was seen before.
+            #[cfg(not(falcon_shell))]
+            let mut thread_known = false;
             loop {
                 if reader_thread.is_cancelled() {
                     let _ = connection.request(
@@ -879,6 +883,20 @@ pub(super) fn start_event_reader(
                             "agent-event",
                             json!({ "id": tab, "gen": generation, "line": text }),
                         );
+                        #[cfg(not(falcon_shell))]
+                        if !thread_known {
+                            if let Some(thread) = crate::bare::vault::session::thread_id_in_line(line) {
+                                thread_known = true;
+                                if let Err(error) = crate::bare::vault::session::append_thread_id(
+                                    &crate::paths::root(),
+                                    &tab,
+                                    Some(&session),
+                                    thread,
+                                ) {
+                                    eprintln!("falcon {session}: session record thread id: {error}");
+                                }
+                            }
+                        }
                         for ask in catalog
                             .as_mut()
                             .map(|catalog| catalog.on_line(line))

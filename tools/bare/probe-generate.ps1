@@ -378,7 +378,7 @@ function Run-Codex {
   Say "`n== codex =="
   $src = Cred-Source 'codex'
   $facts = Cred-Facts $src
-  Rec 6 codex 'UNKNOWN' "Bare home credential (how held): $facts. Login sharing is Claude-only: bare/mod.rs refuses a Codex profile with sharedLogin ('not wired for Codex yet'), so a Codex login would be copied, not linked."
+  Rec 6 codex 'UNKNOWN' "Bare home credential (how held): $facts. Codex login sharing is built by login_link::sync_codex (auth.json), not read from the profile: bare/mod.rs refuses a Codex profile that carries a sharedLogin entry."
   $haveCred = $src -and (Test-Path -LiteralPath $src)
   if (-not $haveCred -and -not $DryRun) { Rec 6 codex 'FAIL' 'no Codex auth.json found (Bare codex-home empty); pass -CodexAuth <file> or log in first'; return }
   $stdin = "$FakeSkill`n`n---`n$GenPrompt"

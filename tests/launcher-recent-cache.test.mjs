@@ -18,7 +18,7 @@ const dom = setupDom({ stubs: {
   "launcher/roster": `export const agentKind = () => "claude"; export const launcherTypes = []; export const variantsOf = new Map();
     export const shownRoots = () => []; export const shownVariants = () => [];
     export function spawnFrom(...a) { globalThis.__rc.spawns.push(a); return Promise.resolve("tab"); }`,
-  "launcher/codex-recent": "export async function openCodexRecent() {}",
+  "launcher/codex-recent": `export async function openCodexRecent() {}`,
   "launcher/workspaces": "export const workspaces = [];",
   "launcher/menu-rows": `export function twoLineRow(parent, label, sub, title) {
       const b = document.createElement("button"); b.textContent = label;
@@ -79,4 +79,19 @@ test("two clicks on one row spawn once", async () => {
   await dom.flush();
   await dom.flush();
   assert.equal(rc.spawns.length, 1);
+  assert.equal(rc.spawns[0][6], undefined, "a session in the user's own .claude carries no pick");
+});
+
+test("a Bare session resumes with no set pick (spawnFrom reads its vault from the session record)", async () => {
+  resetRecentCache();
+  rc.spawns.length = 0;
+  dom.ipc.answers.list_recent_sessions = () => [{ ...session("dddddddd"), sets: ["lib/alpha"] }];
+  dom.ipc.answers.read_session_meta = () => ({ model: null, effort: null });
+  await openRecent(t, rendered, { label: "D", cwd: "C:\\d" }, anchor, 2);
+  rc.cols[2].querySelector("button").click();
+  await dom.flush();
+  await dom.flush();
+  assert.equal(rc.spawns.length, 1);
+  assert.equal(rc.spawns[0][3], "dddddddd");
+  assert.equal(rc.spawns[0][6], undefined);
 });

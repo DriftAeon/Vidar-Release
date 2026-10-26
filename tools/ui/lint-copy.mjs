@@ -49,11 +49,14 @@
 // Note literals are also judged for Title Case (copy-ok suppresses only that part). Note findings
 // are never baselined, never read from a baseline. Every run prints the dim set and the note-ok lines.
 //
+// Path list: repo-relative files after the flags restrict the scan to those the full walk covers (none = whole
+// tree); --staged then judges each file's staged blob (`git show :path`). Both are refused with --update-baseline.
 // Baseline: tools/ui/copy-baseline.json, a multiset keyed by file, sink, normalised text → count.
 // Flags: --root <dir> (tree scanned; default repo), --update-baseline (refused with --root, and
 // refused before writing while any note finding exists), --all.
 // Exit: 1 if any finding is printed (new ones, or any with --all), else 0.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -438,23 +441,53 @@ function walk(dir, out = []) {
   return out;
 }
 
-function collect(root, dim, noteOks = []) {
+// True when the whole-tree scan would cover this repo-relative path.
+export function covers(relPath) {
+  const p = relPath.split("\\").join("/");
+  if (p === "index.html") return true;
+  if (/^contracts\/[^/]+\.json$/.test(p)) return true;
+  if (!p.startsWith("src/")) return false;
+  const parts = p.split("/");
+  if (parts.slice(0, -1).some((s) => SKIP_DIRS.has(s) || s.startsWith("."))) return false;
+  const n = parts[parts.length - 1];
+  return !n.startsWith(".") && SRC_EXT.test(n) && !SKIP_FILE.test(n);
+}
+
+// Staged blob text (`git show :path`); null when nothing is staged at that path (a deletion).
+function stagedText(rel) {
+  const r = spawnSync("git", ["show", `:${rel}`], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 28 });
+  return r.status === 0 ? r.stdout : null;
+}
+
+// only: null = whole tree, else repo-relative paths restricting the scan; staged reads each file's staged blob.
+function collect(root, dim, noteOks = [], only = null, staged = false) {
   const findings = [];
   const rel = (path) => relative(root, path).split("\\").join("/");
   const add = (path, list) => {
     const file = rel(path);
     for (const f of list) findings.push({ file, ...f });
   };
-  for (const p of walk(join(root, "src")).sort()) {
-    const src = readFileSync(p, "utf8");
+  const read = (p) => (only && staged ? stagedText(rel(p)) : readFileSync(p, "utf8"));
+  const sel = only ? new Set(only.filter(covers).map((p) => p.split("\\").join("/"))) : null;
+  const srcFiles = sel ? [...sel].filter((p) => p.startsWith("src/")).map((p) => join(root, p)) : walk(join(root, "src"));
+  for (const p of srcFiles.sort()) {
+    const src = read(p);
+    if (src === null) continue;
     add(p, scanSource(src, dim, { root, file: rel(p) }));
     for (const o of noteOkLines(src)) noteOks.push({ file: rel(p), ...o });
   }
   const html = join(root, "index.html");
-  try { add(html, scanHtml(readFileSync(html, "utf8"))); } catch { /* no index.html */ }
+  if (!sel || sel.has("index.html")) {
+    try { const t = read(html); if (t !== null) add(html, scanHtml(t)); } catch { /* no index.html */ }
+  }
   let contracts = [];
-  try { contracts = readdirSync(join(root, "contracts")).filter((n) => n.endsWith(".json")).sort(); } catch { /* none */ }
-  for (const n of contracts) { const p = join(root, "contracts", n); add(p, scanContract(readFileSync(p, "utf8"))); }
+  if (sel) contracts = [...sel].filter((p) => p.startsWith("contracts/")).map((p) => p.slice("contracts/".length)).sort();
+  else try { contracts = readdirSync(join(root, "contracts")).filter((n) => n.endsWith(".json")).sort(); } catch { /* none */ }
+  for (const n of contracts) {
+    const p = join(root, "contracts", n);
+    const t = read(p);
+    if (t !== null) add(p, scanContract(t));
+  }
   return findings;
 }
 
@@ -497,14 +530,20 @@ function writeBaseline(findings) {
 
 // ---------- main ----------
 function main() {
-  const a = { root: REPO, update: false, all: false };
+  const a = { root: REPO, update: false, all: false, paths: [], staged: false };
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--root") a.root = resolve(argv[++i]);
     else if (k === "--update-baseline") a.update = true;
     else if (k === "--all") a.all = true;
-    else { console.error(`lint:copy: unknown argument ${k}`); return 2; }
+    else if (k === "--staged") a.staged = true;
+    else if (k.startsWith("--")) { console.error(`lint:copy: unknown argument ${k}`); return 2; }
+    else a.paths.push(k);
+  }
+  if (a.update && a.paths.length) {
+    console.error("lint:copy: --update-baseline is refused with a path list (it would drop the other files' entries)");
+    return 2;
   }
   if (a.update && a.root !== REPO) {
     console.error("lint:copy: --update-baseline is refused with a non-default --root (it would baseline fixtures)");
@@ -512,7 +551,7 @@ function main() {
   }
   const dim = dimClasses(a.root);
   const noteOks = [];
-  const findings = collect(a.root, dim, noteOks);
+  const findings = collect(a.root, dim, noteOks, a.paths.length ? a.paths : null, a.staged);
   console.log(`lint:copy: dim classes (${dim.size} from CSS + tokens ${DIM_TOKENS.join(" ")}): ${[...dim].sort().join(" ")}`);
   for (const o of noteOks) console.log(`lint:copy: note-ok ${o.file}:${o.line}  ${o.text}`);
   console.log(`lint:copy: ${noteOks.length} note-ok lines`);

@@ -8,6 +8,7 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 const LOOKUP = `
 export const getFocusedSession = () => globalThis.__focus ?? null;
 export const renderedSessionId = () => null;
+export const renderedBody = () => null;
 export const sessionLaunchInfo = () => null;`;
 
 const dom = setupDom({ stubs: { "panels/sessions/lookup": LOOKUP } });

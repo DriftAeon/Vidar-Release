@@ -21,6 +21,8 @@ const RUN: &str = "0a1b2c3d";
 struct Fx {
     base: PathBuf,
     root: PathBuf,
+    /// The fixture's own usage ledger, under `base`: generator calls never log into the repo's.
+    ledger: PathBuf,
     imports: PathBuf,
     index: PathBuf,
     home: PathBuf,
@@ -29,6 +31,8 @@ struct Fx {
     skill: PathBuf,
     merge_skill: PathBuf,
     guard: Guard,
+    /// The local files the run offers for item picks.
+    offered: Vec<LocalFile>,
 }
 
 impl Fx {
@@ -53,6 +57,7 @@ impl Fx {
         let merge_skill = root.join("profiles").join("bare").join("rune-create").join("MERGE.md");
         let fx = Fx {
             config: base.join("config.json"),
+            ledger: base.join("usage-ledger.jsonl"),
             index: imports.join("gen-index.json"),
             guard: Guard { user_profile: Some(r"C:\Users\testuser".into()), username: Some("testuser".into()) },
             base,
@@ -62,13 +67,14 @@ impl Fx {
             bare,
             skill,
             merge_skill,
+            offered: Vec::new(),
         };
         fx.write_config(json!([]));
         fx
     }
 
     fn land(&self) -> LandEnv<'_> {
-        LandEnv { config: &self.config, root: &self.root, imports: &self.imports, index: &self.index, home: Some(&self.home), cwd: None, primary: "claude" }
+        LandEnv { config: &self.config, imports: &self.imports, home: Some(&self.home), cwd: None }
     }
 
     fn write_config(&self, sets: Value) {
@@ -82,9 +88,12 @@ impl Fx {
 
     fn with<R>(&self, f: impl FnOnce(&Ctx) -> R) -> R {
         let land = self.land();
+        let offered = || self.offered.clone();
         f(&Ctx {
+            offered: &offered,
             land: &land,
             root: &self.root,
+            ledger: &self.ledger,
             bare_home: &self.bare,
             skill: &self.skill,
             merge_skill: &self.merge_skill,
@@ -105,14 +114,18 @@ impl Drop for Fx {
 fn request(agent: &str) -> Request {
     Request {
         run_id: RUN.into(),
-        row_key: if agent == "claude" { ROW } else { CODEX_ROW }.into(),
         agent: agent.into(),
         model: if agent == "claude" { "sonnet" } else { "gpt-5.5" }.into(),
         effort: "medium".into(),
         merge_effort: None,
         paths: vec![PATH.into()],
-        budget: (agent == "codex").then_some(9000),
+        items: vec![],
     }
+}
+
+/// The library every run in these tests lands as.
+fn gen_lib() -> String {
+    format!("gen-{RUN}")
 }
 
 /// Three files, which `chunk::split` cuts into two chunks: CLAUDE.md with a.md, then b.md.
@@ -127,6 +140,7 @@ fn rune_in(path: &str, id: &str, body: &str, line: usize) -> RuneOut {
         description: format!("About {id}"),
         body: body.into(),
         sources: vec![Source { path: path.into(), line }],
+        ..Default::default()
     }
 }
 
@@ -157,7 +171,6 @@ fn reply_second() -> String {
 fn reply_merge() -> String {
     json!({
         "merge": [{ "into": "shared", "from": ["shared-2"], "body": "Run the tests always." }],
-        "drop": [],
         "sections": [{ "heading": "Rules", "ids": ["keep-a", "shared", "only-b"] }],
     })
     .to_string()
@@ -223,20 +236,33 @@ fn a_claude_run_lands_the_library_and_frees_the_slot() {
         assert!(s.cwd.is_dir(), "the empty cwd exists while the agent runs");
         Ok(claude_raw(&reply()))
     };
+    let before = fx.config_text();
     let out = fx.with(|ctx| generate_at(ctx, &slot, &runner(&claude_exe, &run), &request("claude"), &silent)).unwrap();
-    assert_eq!(out.library, format!("gen-{ROW}-{RUN}"));
+    assert_eq!((out.library.as_str(), out.set.as_str()), (gen_lib().as_str(), "generated-20261017"));
     assert_eq!((out.runes, out.on), (3, 2));
     assert_eq!((out.cost_usd, out.input_tokens, out.output_tokens), (Some(0.01), Some(100), Some(50)));
     assert_eq!(out.encoded_chars, None);
     let (args, stdin, cwd, env) = seen.lock().unwrap().take().unwrap();
     assert!(args.windows(2).any(|w| w[0] == "--system-prompt-file" && w[1].ends_with("skill.md")), "{args:?}");
-    assert!(stdin.starts_with("Target agent: claude\nBudget: none\n") && stdin.contains("=== FILE ~\\.claude\\CLAUDE.md (3 lines)"), "{stdin}");
+    assert!(stdin.starts_with("Target agent: claude\n") && stdin.contains("=== FILE ~\\.claude\\CLAUDE.md (3 lines)"), "{stdin}");
     assert!(env.iter().any(|k| k == "CLAUDE_CONFIG_DIR") && !env.iter().any(|k| k == "CLAUDE_CODE_OAUTH_TOKEN"), "{env:?}");
     assert!(!cwd.exists(), "the working folder is removed after the run");
-    let cfg = fx.config_text();
-    assert!(cfg.contains(&out.library), "{cfg}");
+    assert_eq!(fx.config_text(), before, "vidar.json is never written");
+    assert!(!fx.index.exists(), "no gen-index entry");
     assert!(fx.imports.join(&out.library).join("generate.json").is_file());
+    assert!(fx.imports.join(&out.library).join("sets").join("generated-20261017.md").is_file());
     assert!(slot.begin("ffffffff").is_ok(), "the slot is free");
+}
+
+#[test]
+fn a_run_logs_to_the_fixture_ledger_and_not_the_repos() {
+    let fx = Fx::new("ledger");
+    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| Ok(claude_raw(&reply()));
+    fx.with(|ctx| generate_at(ctx, &Slot::new(), &runner(&claude_exe, &run), &request("claude"), &silent)).unwrap();
+    assert!(fx.ledger.starts_with(std::env::temp_dir()), "{:?}", fx.ledger);
+    assert_ne!(fx.ledger, crate::paths::usage_ledger_path_in(&fx.root));
+    let text = std::fs::read_to_string(&fx.ledger).unwrap();
+    assert!(text.contains("\"source\":\"rune-gen\""), "{text}");
 }
 
 #[test]
@@ -246,17 +272,17 @@ fn a_codex_run_puts_skill_and_input_on_stdin_and_reports_the_size() {
     let seen: Mutex<Option<(PathBuf, Vec<String>, String)>> = Mutex::new(None);
     let run = |s: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| {
         *seen.lock().unwrap() = Some((s.program.clone(), s.args.clone(), s.stdin.clone()));
-        Ok(codex_raw(&reply().replace(ROW, CODEX_ROW)))
+        Ok(codex_raw(&reply()))
     };
     let out = fx.with(|ctx| generate_at(ctx, &slot, &runner(&codex_exe, &run), &request("codex"), &silent)).unwrap();
-    assert_eq!(out.library, format!("gen-{CODEX_ROW}-{RUN}"));
+    assert_eq!(out.library, gen_lib());
     assert_eq!((out.cost_usd, out.input_tokens), (None, Some(200)));
     assert!(out.encoded_chars.is_some_and(|n| n > 0 && n < 12000), "{:?}", out.encoded_chars);
     let (program, args, stdin) = seen.lock().unwrap().take().unwrap();
     assert_eq!(program, PathBuf::from("node.exe"));
     assert_eq!(args[..2], ["codex.js", "exec"]);
     assert_eq!(args.last().map(String::as_str), Some("-"));
-    assert!(stdin.contains("\n\n---\nTarget agent: codex\nBudget: 9000 characters\n"), "{}", &stdin[stdin.len().min(200)..]);
+    assert!(stdin.contains("\n\n---\nTarget agent: codex\n"), "{}", &stdin[stdin.len().min(200)..]);
 }
 
 #[test]
@@ -271,16 +297,16 @@ fn a_multi_chunk_run_lands_the_merged_library_with_summed_cost_and_ordered_event
     let events: Mutex<Vec<Event>> = Mutex::new(Vec::new());
     let emit = |e: Event| events.lock().unwrap().push(e);
     let out = fx.with(|ctx| generate_at(ctx, &slot, &runner(&claude_exe, &run), &multi_request(), &emit)).unwrap();
-    assert_eq!((out.runes, out.library.as_str()), (3, format!("gen-{ROW}-{RUN}").as_str()));
+    assert_eq!((out.runes, out.library.as_str()), (3, gen_lib().as_str()));
     // Two chunk calls and the merge call, each reporting $0.01 and 100 + 50 tokens.
     assert!(out.cost_usd.is_some_and(|c| (c - 0.03).abs() < 1e-9), "{:?}", out.cost_usd);
     assert_eq!((out.input_tokens, out.output_tokens), (Some(300), Some(150)));
     assert!(!out.warnings.iter().any(|w| w.starts_with("Merge pass failed")), "{:?}", out.warnings);
-    assert!(fx.config_text().contains(&out.library));
+    assert!(fx.imports.join(&out.library).is_dir());
 
     let stdins = stdins.into_inner().unwrap();
     assert_eq!(stdins.len(), 3);
-    assert!(stdins.iter().filter(|s| s.contains("=== FILE")).all(|s| s.starts_with("Target agent: claude\nBudget: none\n")));
+    assert!(stdins.iter().filter(|s| s.contains("=== FILE")).all(|s| s.starts_with("Target agent: claude\n")));
     let merge_in = stdins.iter().find(|s| !s.contains("=== FILE")).unwrap();
     assert!(merge_in.contains("shared | rule |") && merge_in.contains("shared-2 | rule |"), "{merge_in}");
 
@@ -375,7 +401,7 @@ fn a_cancel_mid_run_ends_every_registered_job_and_lands_nothing() {
     assert_eq!(err, "cancelled");
     assert_eq!((started.load(Ordering::SeqCst), ended.load(Ordering::SeqCst)), (2, 2), "both children ended by the cancel, not the timeout");
     assert_eq!(fx.config_text(), before);
-    assert!(!fx.imports.join(format!("gen-{ROW}-{RUN}")).exists());
+    assert!(!fx.imports.join(gen_lib()).exists());
 }
 
 fn empty_envelope() -> String {
@@ -443,7 +469,7 @@ fn one_chunk_holding_runes_lands_without_a_merge_call() {
     assert_eq!(out.runes, 2);
     assert_eq!(merges.load(Ordering::SeqCst), 0);
     assert!(!events.into_inner().unwrap().iter().any(|e| matches!(e.event, ProgressEvent::Merge { .. })));
-    assert!(fx.config_text().contains(&out.library));
+    assert!(fx.imports.join(&out.library).is_dir());
 }
 
 #[test]
@@ -529,7 +555,7 @@ fn a_cancel_before_commit_ends_the_run_and_lands_nothing() {
     let err = fx.with(|ctx| generate_at(ctx, &slot, &runner(&claude_exe, &run), &request("claude"), &silent)).unwrap_err();
     assert_eq!(err, "cancelled");
     assert_eq!(fx.config_text(), before);
-    assert!(!fx.imports.join(format!("gen-{ROW}-{RUN}")).exists());
+    assert!(!fx.imports.join(gen_lib()).exists());
     assert!(slot.begin("ffffffff").is_ok(), "the slot is free");
 }
 
@@ -565,17 +591,67 @@ fn a_cancel_that_got_in_first_stops_the_commit() {
     assert_eq!(slot.enter_commit(), Err("cancelled".to_string()));
 }
 
+/// An offered local skill folder under the fixture home, with a header description.
+fn offered_skill(fx: &mut Fx) -> String {
+    let dir = fx.home.join(".claude").join("skills").join("keep-a");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("SKILL.md"), "---\nname: keep-a\ndescription: Keep things tidy\n---\nBody.\n").unwrap();
+    let path = dir.to_string_lossy().into_owned();
+    fx.offered = vec![LocalFile {
+        path: path.clone(),
+        shown: r"~\.claude\skills\keep-a".into(),
+        kind: "skill",
+        library: None,
+        section: None,
+        scope: "global",
+        ticked: false,
+        pickable: true,
+        reason: None,
+        guard: None,
+        codex_supported: None,
+        agent: None,
+        hosted: None,
+        url: None,
+    }];
+    path
+}
+
 #[test]
-fn a_row_that_changed_during_the_run_is_stale_and_unchanged() {
-    let fx = Fx::new("stale");
-    let slot = Slot::new();
-    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| {
-        fx.write_config(json!([{ "library": "added-meanwhile", "set": "x" }]));
-        Ok(claude_raw(&reply()))
-    };
-    let err = fx.with(|ctx| generate_at(ctx, &slot, &runner(&claude_exe, &run), &request("claude"), &silent)).unwrap_err();
-    assert!(err.starts_with("stale: "), "{err}");
-    assert!(!fx.config_text().contains(&format!("gen-{ROW}-{RUN}")));
+fn an_items_only_run_lands_item_runes_without_calling_the_agent() {
+    let mut fx = Fx::new("items-only");
+    let path = offered_skill(&mut fx);
+    let before = fx.config_text();
+    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| -> Result<Raw, String> { panic!("must not spawn") };
+    let req = Request { paths: vec![], items: vec![Pick { kind: "skill".into(), path }], ..request("claude") };
+    let out = fx.with(|ctx| generate_at(ctx, &Slot::new(), &runner(&claude_exe, &run), &req, &silent)).unwrap();
+    assert_eq!((out.library.as_str(), out.runes), (gen_lib().as_str(), 1));
+    assert_eq!(fx.config_text(), before);
+    let lib = fx.imports.join(gen_lib());
+    let rune = std::fs::read_to_string(lib.join("skills").join("keep-a.md")).unwrap();
+    assert!(rune.contains("kind: skill") && rune.contains(r#"source: "~\\.claude\\skills\\keep-a""#) && rune.contains("Keep things tidy"), "{rune}");
+    let set = std::fs::read_to_string(lib.join("sets").join("generated-20261017.md")).unwrap();
+    assert!(set.contains("keep-a"), "{set}");
+}
+
+#[test]
+fn an_item_id_that_clashes_with_a_text_rune_is_renamed() {
+    let mut fx = Fx::new("items-clash");
+    let path = offered_skill(&mut fx);
+    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| Ok(claude_raw(&reply()));
+    let req = Request { items: vec![Pick { kind: "skill".into(), path }], ..request("claude") };
+    let out = fx.with(|ctx| generate_at(ctx, &Slot::new(), &runner(&claude_exe, &run), &req, &silent)).unwrap();
+    assert_eq!(out.runes, 4);
+    assert!(fx.imports.join(gen_lib()).join("skills").join("keep-a-2.md").is_file());
+}
+
+#[test]
+fn an_unoffered_item_is_invalid_and_lands_nothing() {
+    let fx = Fx::new("items-bad");
+    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| -> Result<Raw, String> { panic!("must not spawn") };
+    let req = Request { paths: vec![], items: vec![Pick { kind: "skill".into(), path: r"C:\nowhere".into() }], ..request("claude") };
+    let err = fx.with(|ctx| generate_at(ctx, &Slot::new(), &runner(&claude_exe, &run), &req, &silent)).unwrap_err();
+    assert!(err.starts_with("invalid: "), "{err}");
+    assert!(!fx.imports.join(gen_lib()).exists());
 }
 
 #[test]
@@ -610,7 +686,6 @@ fn bad_requests_are_invalid_before_anything_runs() {
     let bad = [
         Request { run_id: "XYZ".into(), ..ok.clone() },
         Request { run_id: "0A1B2C3D".into(), ..ok.clone() },
-        Request { row_key: "Row_1".into(), ..ok.clone() },
         Request { agent: "gemini".into(), ..ok.clone() },
         Request { model: "a\"b".into(), ..ok.clone() },
         Request { model: String::new(), ..ok.clone() },

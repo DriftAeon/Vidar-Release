@@ -97,6 +97,21 @@ test("-Cwd naming astra-reports creates that folder; the script still exits on t
   }
 });
 
+test("common caller wording loses its duplicate marker and report sentence, then gets the script's own", { skip }, async () => {
+  const v = fakeVidar();
+  try {
+    const report = join(v.tmp, "runtime", "bridge", "display", "r.md").replaceAll("\\", "/");
+    const text = "Read and follow the brief at bench-codex-arm\\brief.md. Work only in reports\\bench-codex-arm. Report to runtime\\bridge\\astra-reports\\eadcd251-report.md, then end with ASTRA-DONE eadcd251.";
+    const r = await run(v.script, ["-Id", "eadcd251", "-Text", text, "-Requester", "t", "-Report", report, "-WaitSeconds", "1"]);
+    assert.equal(r.status, 2, r.out + r.err);
+    const req = JSON.parse(readFileSync(join(v.tmp, "runtime", "bridge", "review", "eadcd251", "request.json"), "utf8"));
+    const sent = JSON.parse(readFileSync(join(v.dispatch, "stale", readdirSync(join(v.dispatch, "stale")).find((f) => f.endsWith("-eadcd251.json"))), "utf8"));
+    assert.equal(sent.text, `Follow Brief: bench-codex-arm\\brief.md | Work in: reports\\bench-codex-arm | Write Report: ${report.replaceAll("/", "\\")} | End Reply: ASTRA-DONE eadcd251`, req.id);
+  } finally {
+    rmSync(v.tmp, { recursive: true, force: true });
+  }
+});
+
 // codex-notify.ps1 done path: done.json only from the tab Vidar typed into (tabCwd in dispatch-result.json).
 async function notifyScenario({ tabCwd, eventCwd, withRequest = true }) {
   const v = fakeVidar();

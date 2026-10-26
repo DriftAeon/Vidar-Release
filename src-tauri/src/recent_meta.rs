@@ -56,8 +56,9 @@ fn read_meta(path: &Path) -> SessionMeta {
 fn transcript(cwd: &str, session_id: &str, profile: Option<&str>) -> Option<PathBuf> {
     // the id becomes a file name: refuse anything that is not a plain id
     if session_id.is_empty() || !session_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') { return None; }
-    let claude = crate::bare::claude_dir::claude_dir_for(profile)?;
-    Some(claude.join("projects").join(crate::status::project_slug(cwd)).join(format!("{session_id}.jsonl")))
+    // Every config dir of the profile: a Bare session's transcript sits in its combination's home.
+    let homes = crate::bare::claude_dir::homes_for(profile);
+    crate::bare::claude_dir::transcript_in(&homes, &crate::status::project_slug(cwd), session_id)
 }
 
 /// Off the main thread: a transcript runs to megabytes. `profile`: the tab's launch profile.
@@ -91,9 +92,8 @@ mod tests {
     }
 
     #[test]
-    fn transcript_follows_the_profile() {
-        let bare = transcript("C:\\r\\x", "abc-1", Some("bare")).unwrap();
-        assert!(bare.to_string_lossy().contains("claude-config\\projects\\C--r-x\\abc-1.jsonl"), "{bare:?}");
+    fn transcript_refuses_unknown_profiles_and_bad_ids() {
+        // The lookup across homes is `claude_dir::transcript_in` (its tests use temp homes).
         assert_eq!(transcript("C:\\r\\x", "abc-1", Some("other")), None);
         assert_eq!(transcript("C:\\r\\x", "../x", None), None);
     }

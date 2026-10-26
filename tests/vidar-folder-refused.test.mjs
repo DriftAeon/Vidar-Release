@@ -38,7 +38,7 @@ test("the refusal draws the card with Open in Worktree and Dismiss, no notice an
   await f.spawn();
   assert.deepEqual(f.notices, []);
   const card = f.root.querySelector(".blk-notice-card");
-  assert.equal(card.querySelector(".blk-notice").textContent, "Codex can't run in Vidar's own folder: its sandbox could write Vidar's launch files.");
+  assert.equal(card.querySelector(".blk-notice").textContent, "Codex can't run in Vidar's Folder");
   assert.deepEqual(labels(f.root), ["Open in Worktree", "Dismiss"]);
   const b = card.querySelector("button");
   assert.ok(b.classList.contains("wb-card-btn-primary") && b.classList.contains("notice-trust"));

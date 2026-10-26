@@ -8,7 +8,7 @@
 // exact and never drops a permission request). No network of its own. One
 // OPT-IN file write of its own: with `statuslineMirror: true` in vidar.json it
 // mirrors ~\.claude\statusline\<session_id>.json on every top-level assistant
-// message, best-effort, so context-gate.mjs has a source in Rendered/headless
+// message, best-effort, so outside readers have a context source in Rendered/headless
 // bodies where the terminal statusline script never runs (see observeStatusline).
 // Off (the default) it writes nothing under ~\.claude and removes any mirror file
 // it marked as its own. A --profile (bare) tab writes only inside its own agent home: the mirror,

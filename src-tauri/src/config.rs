@@ -109,7 +109,15 @@ fn partial_error(bad: &[String]) -> String {
 }
 
 pub fn load() -> ConfigResult {
-    load_from(&crate::paths::config_path())
+    let mut r = load_from(&crate::paths::config_path());
+    // A failed Rune Vault migration run names its plan.txt here; main.ts shows `notice` as the config notice.
+    if let Some(n) = crate::bare::vault::migrate::notice() {
+        r.notice = Some(match r.notice.take() {
+            Some(o) => format!("{o}; {n}"),
+            None => n,
+        });
+    }
+    r
 }
 
 /// `load()`'s body over an explicit path — the seam its tests use so a v0

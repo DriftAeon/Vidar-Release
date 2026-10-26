@@ -144,21 +144,21 @@ fn parts_keep_source_line_numbers_header_and_context() {
     let text = "# Top\n## Git\n### Push\n- Never force-push.\n- Rebase first.\n## Test\n- Run tests.\n";
     let inputs = vec![input("~\\a.md", text)];
     // Part 4-5 starts under "Top > Git > Push".
-    let part = chunk_text(&inputs, &[span("~\\a.md", 4, 5, 7)], "claude", None);
+    let part = chunk_text(&inputs, &[span("~\\a.md", 4, 5, 7)], "claude");
     assert_eq!(
         part,
-        "Target agent: claude\nBudget: none\n\n=== FILE ~\\a.md (lines 4-5 of 7)\nContext: Top \u{203a} Git \u{203a} Push\n\
+        "Target agent: claude\n\n=== FILE ~\\a.md (lines 4-5 of 7)\nContext: Top \u{203a} Git \u{203a} Push\n\
          L4: - Never force-push.\nL5: - Rebase first.\n=== END\n"
     );
     // A part opening on a heading is not under it, only under its parents.
-    let part = chunk_text(&inputs, &[span("~\\a.md", 6, 7, 7)], "codex", Some(9000));
-    assert!(part.contains("Budget: 9000 characters\n"));
+    let part = chunk_text(&inputs, &[span("~\\a.md", 6, 7, 7)], "codex");
+    assert!(part.contains("Target agent: codex\n"));
     assert!(part.contains("=== FILE ~\\a.md (lines 6-7 of 7)\nContext: Top\nL6: ## Test\nL7: - Run tests.\n"), "{part}");
     // A part from the top has no Context line; a whole file renders as input_text does.
-    let top = chunk_text(&inputs, &[span("~\\a.md", 1, 3, 7)], "claude", None);
+    let top = chunk_text(&inputs, &[span("~\\a.md", 1, 3, 7)], "claude");
     assert!(top.contains("(lines 1-3 of 7)\nL1: # Top\n"), "{top}");
-    let whole = chunk_text(&inputs, &[Span::whole(&inputs[0])], "claude", None);
-    assert_eq!(whole, input_text(&inputs, "claude", None));
+    let whole = chunk_text(&inputs, &[Span::whole(&inputs[0])], "claude");
+    assert_eq!(whole, input_text(&inputs, "claude"));
     assert!(whole.contains("=== FILE ~\\a.md (7 lines)\nL1: # Top\n"));
 }
 
@@ -166,8 +166,8 @@ fn parts_keep_source_line_numbers_header_and_context() {
 fn whole_file_text_is_unchanged() {
     let inputs = vec![input("~\\a.md", "# A\n\n- x  \n"), input("~\\b.md", "")];
     assert_eq!(
-        input_text(&inputs, "claude", Some(500)),
-        "Target agent: claude\nBudget: 500 characters\n\n=== FILE ~\\a.md (3 lines)\nL1: # A\nL2:\nL3: - x\n=== END\n\n=== FILE ~\\b.md (0 lines)\n=== END\n"
+        input_text(&inputs, "claude"),
+        "Target agent: claude\n\n=== FILE ~\\a.md (3 lines)\nL1: # A\nL2:\nL3: - x\n=== END\n\n=== FILE ~\\b.md (0 lines)\n=== END\n"
     );
 }
 
@@ -180,7 +180,7 @@ fn crlf_input_splits_and_renders_like_lf() {
     let limit = 200;
     assert_eq!(split(&a, limit), split(&b, limit));
     let spans = &split(&b, limit)[1];
-    let text = chunk_text(&b, spans, "claude", None);
+    let text = chunk_text(&b, spans, "claude");
     assert!(!text.contains('\r'));
-    assert_eq!(text, chunk_text(&a, spans, "claude", None));
+    assert_eq!(text, chunk_text(&a, spans, "claude"));
 }

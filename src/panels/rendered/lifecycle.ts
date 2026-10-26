@@ -3,6 +3,7 @@
 
 import type { AgentAdapter, AgentEvent, PermissionMode } from "../../agents/protocol";
 import { prettyModel } from "../../format";
+import { runeGuardCard, runeGuardRefusal } from "./rune-guard-error";
 import type { AgentTransport } from "./transport";
 import { registerRoute, releaseRoute, routeOf, type HostPayload, type Live } from "./host-router";
 import { btn, el } from "./dom";
@@ -117,7 +118,7 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
    *  Jettison). The route's exit is latched for the kill window, so an exit fired before the
    *  kill resolves never reaches onExit; the route is dropped once the kill succeeds. If the
    *  host refuses, the exit is restored and a latched exit is replayed before rethrowing. */
-  async function stopAgent(detach = false): Promise<void> {
+  async function stopAgent(detach = false, held = false): Promise<void> {
     // a spawn still resolving has not assigned `gen` yet; killing before it lands
     // targets the previous process and orphans this one
     if (S.spawning) { try { await S.spawning; } catch { /* it failed; there is nothing to kill */ } }
@@ -127,7 +128,9 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
     // deny can block up to its 40 s request timeout, so Close and /clear wait 2 s at most.
     if (!detach && S.pendingApproval && denyPending) await denyWithin(denyPending);
     if (!detach && S.inTurn) {
-      await sendEncoded(S.adapter.encodeInterrupt());
+      // under a respawn's send hold (`held`) the interrupt skips the queue it would otherwise wait in forever
+      const stop = S.adapter.encodeInterrupt();
+      await (held ? (stop === null ? true : sendNow(stop)) : sendEncoded(stop));
       await waitForTurnEnd(5000); // give the interrupted tool call a beat to wind down before the kill
     }
     const g = S.gen;
@@ -226,10 +229,20 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
       root.classList.add("dead");
       const openWt = opts.onOpenWorktree;
       const vidarCard = openWt && String(e).includes(VIDAR_CWD_REFUSED);
-      if (!vidarCard) noticeBlock(`Failed to Start: ${String(e)}`, "error");
+      const runeRefusal = runeGuardRefusal(e);
+      if (!vidarCard && !runeRefusal) noticeBlock(`Failed to Start: ${String(e)}`, "error");
       sl.model = "—"; // never spawned, so "Starting…" is a claim about a process that does not exist
       redrawStatus();
       refreshState(); // the chip is still on "Starting…" without this
+      if (runeRefusal) {
+        append(runeGuardCard(opts.tabId, runeRefusal, async (fresh) => {
+          // A variant moved the tab: a resume would load the old thread's vault, so start a fresh session
+          if (fresh) { S.sessionId = null; sl.ctxTokens = 0; sl.ctxPct = null; resetTranscript(); }
+          await spawn();
+        }));
+        opts.onDead();
+        return;
+      }
       if (vidarCard && openWt) {
         // Retry fails the same way here; the card opens a worktree and replaces this tab
         append(vidarFolderCard(openWt));
@@ -254,7 +267,36 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
       opts.onDead();
     }
   }
+  /** Sends hold while a respawn or a spawn has no generation yet (D-d): a line sent then would reach the old
+   *  process, or no process. `holdSends` returns the release; send() re-checks after every release. */
+  let nextGen: Promise<void> | null = null;
+  function holdSends(): () => void {
+    let release!: () => void;
+    const p = new Promise<void>((r) => { release = r; });
+    nextGen = p;
+    return () => { if (nextGen === p) nextGen = null; release(); };
+  }
+  /** A fresh session in this tab through the /clear route (a Rune Vault edit, D-d): open cards are denied, the
+   *  agent stops, the transcript and context clear, and a new process spawns with no resume. Sends made meanwhile
+   *  wait for the new generation; a send that still cannot go returns false, so the composer keeps its text. */
+  async function respawnFresh(): Promise<void> {
+    if (S.disposed) return;
+    if (S.pendingApproval && denyPending) await denyWithin(denyPending); // before the hold: the deny is a send
+    const release = holdSends();
+    try {
+      await stopAgent(false, true);
+      S.sessionId = null;
+      sl.ctxTokens = 0;
+      sl.ctxPct = null;
+      resetTranscript();
+      await spawn();
+    } finally { release(); }
+  }
   async function send(line: string): Promise<boolean> {
+    while (nextGen) await nextGen;
+    return sendNow(line);
+  }
+  async function sendNow(line: string): Promise<boolean> {
     if (!S.isAlive || S.hydrating || S.disconnected || S.disposed) return false;
     try {
       await transport.send(opts.tabId, S.gen, line);
@@ -264,5 +306,5 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
       return false;
     }
   }
-  return { send, spawn, stopAgent, onExit };
+  return { send, spawn, stopAgent, onExit, respawnFresh };
 }

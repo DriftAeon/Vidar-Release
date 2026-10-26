@@ -1,9 +1,16 @@
 #Requires -Version 7.5
 # Sandbox launch of a Vidar zip: extract it, give it a fake user profile (no ~\.claude, no AppData of
 # the real user) and a fresh-logon environment (tools\release\clean-env.ps1), then start vidar.exe.
-# Who runs it: the user, in a normal terminal outside any agent session (stop S5). Agents run -DryRun only.
+# Who runs it: the user, in a normal terminal outside any agent session (stop S5), or the main thread
+# (clean-env start). Subagents run -DryRun only.
 #
 # Usage: pwsh -File tools/sandbox/launch.ps1 -Zip <zip> [-Base <dir>] [-LiveRoot <dir>] [-Port <n>] [-Seed <set>] [-DryRun]
+#        pwsh -File tools/sandbox/launch.ps1 -From <folder> [-Base <dir>] [-Port <n>] [-SeedBundle <dir>] [-ArgumentList <string>] [-DryRun]
+#   -From      a staged install folder (vidar.exe inside) instead of a zip: no zip check, every other refusal
+#              stays. The folder is copied, never moved or changed; one holding a runtime\ folder is refused.
+#   -SeedBundle  a Falcon bundle folder copied (never linked; a link inside it is refused) to
+#              <app>\runtime\bridge\falcon\bundles\<its name>, with current.json pointing at the copy.
+#   -ArgumentList  command-line text appended to the vidar.exe start (e.g. --no-activate).
 #        pwsh -File tools/sandbox/launch.ps1 -SeedOnly -Seed <set> -Base <sandbox> [-DryRun]
 #   -Zip       release zip (local-zip.ps1 output). Checked by check-zip.ps1 first; a failing zip is refused.
 #   -Base      sandbox folder. Omitted: a new %TEMP%\vidar-sandbox-<stamp>. Given and already a sandbox
@@ -27,6 +34,18 @@
 #              only its canary server merged in (a home login survives; the pre-P3 `canary` entry is
 #              removed). With -DryRun: prints the plan, plants nothing. An unknown set is refused (exit 2)
 #              before anything is read or written.
+#              `runes-e2e` runs node tools/sandbox/runes-seed.mjs --to <base> (the runes fixture, tests/fixtures/
+#              runes-e2e) after the app wipe and copy and before the start; -DryRun passes --dry-run. A seeder
+#              exit 1 (failed) or 2 (refused) stops the launch with that code. A later start without -Seed removes
+#              what that seed left (app\runtime\runes and the manifest's files).
+#              `explorer` runs node tools/sandbox/explorer-seed.mjs --to <base> --deny-root <real profile>: cheap model
+#              and low effort defaults, the Claude deny list, prefer_mxc in both Codex homes, the git fixture project
+#              (tests/fixtures/explorer); a later start without -Seed explorer runs its --revert.
+#              `sample-project` / `sample-project-instructions` run node tools/sandbox/sample-seed.mjs --to <base> --set
+#              <set>: the toy slugkit project (tests/fixtures/sample-project) as a git repo at <base>\work\<set>, set as
+#              vidar.json defaultCwd and a saved workspace, so the first tab opens in it. The first has no CLAUDE.md,
+#              AGENTS.md or .claude/; the second adds them plus one skill. A later start without a sample set removes
+#              the folder (its --revert).
 #   -SeedOnly  plant -Seed into an existing sandbox's profile (-Base, holding .vidar-sandbox) and stop: no
 #              zip, no extraction, no vidar.exe, no run record. Tokens are re-minted; the sweep reads the map.
 #   -DryRun    everything except starting vidar.exe: extract, build the child env, run the refusals.
@@ -43,6 +62,9 @@
 # %TEMP%\vidar-sandbox-runs.jsonl for traced-run.ps1; -DryRun writes none.
 param(
   [string]$Zip,
+  [string]$From,
+  [string]$SeedBundle,
+  [string]$ArgumentList = "",
   [string]$Base,
   [string]$LiveRoot,
   [int]$Port = 0,
@@ -75,7 +97,10 @@ function Stop-Refused([string]$msg) { [Console]::Error.WriteLine("REFUSED: $msg"
 # quote nor obey any of them; a default Claude tab in the same sandbox does (positive control).
 $canarySpecPath = Join-Path $PSScriptRoot "..\bare\canaries.json"
 $canarySpec = if (Test-Path -LiteralPath $canarySpecPath) { Get-Content -LiteralPath $canarySpecPath -Raw | ConvertFrom-Json }
-$seedSets = @(if ($canarySpec) { $canarySpec.set })
+$runesSeedSet = "runes-e2e"   # not a canary set: tools/sandbox/runes-seed.mjs plants tests/fixtures/runes-e2e/seed.json
+$explorerSeedSet = "explorer" # tools/sandbox/explorer-seed.mjs: cheap model defaults, Claude deny list, prefer_mxc, fixture project
+$sampleSeedSets = @("sample-project", "sample-project-instructions")   # tools/sandbox/sample-seed.mjs: toy project as the first tab's cwd
+$seedSets = @(if ($canarySpec) { $canarySpec.set }) + $runesSeedSet + $explorerSeedSet + $sampleSeedSets
 if ($PSBoundParameters.ContainsKey("Seed") -and $Seed -notin $seedSets) {
   Stop-Refused "unknown -Seed set '$Seed' (known: $($seedSets -join ', '); from $canarySpecPath)."
 }
@@ -153,6 +178,40 @@ function Invoke-SeedPlan($plan, [string]$prof) {
   Write-Utf8 $plan.map ((ConvertTo-Json -Depth 10 -InputObject $map) + "`n")
 }
 function Invoke-Seed([string]$prof) {
+  if ($Seed -eq $runesSeedSet) {
+    # The seeder owns its guards and manifest; its exit code is ours (2 refused, 1 failed).
+    $seeder = Join-Path $PSScriptRoot "runes-seed.mjs"
+    $sbase = Split-Path -Parent $prof
+    $seedArgs = @($seeder, "--to", $sbase) + @(if ($DryRun) { "--dry-run" })
+    "seed ${Seed}: node $seeder --to $sbase$(if ($DryRun) { ' --dry-run (nothing written)' })"
+    $out = & node @seedArgs 2>&1
+    $code = $LASTEXITCODE
+    foreach ($l in $out) { "  $l" }
+    if ($code -ne 0) { [Console]::Error.WriteLine("runes-seed.mjs exited $code; launch stopped."); exit $code }
+    return
+  }
+  if ($Seed -eq $explorerSeedSet) {
+    $seeder = Join-Path $PSScriptRoot "explorer-seed.mjs"
+    $sbase = Split-Path -Parent $prof
+    $seedArgs = @($seeder, "--to", $sbase, "--deny-root", $realProfile) + @(if ($DryRun) { "--dry-run" })
+    "seed ${Seed}: node $seeder --to $sbase$(if ($DryRun) { ' --dry-run (nothing written)' })"
+    $out = & node @seedArgs 2>&1
+    $code = $LASTEXITCODE
+    foreach ($l in $out) { "  $l" }
+    if ($code -ne 0) { [Console]::Error.WriteLine("explorer-seed.mjs exited $code; launch stopped."); exit $code }
+    return
+  }
+  if ($Seed -in $sampleSeedSets) {
+    $seeder = Join-Path $PSScriptRoot "sample-seed.mjs"
+    $sbase = Split-Path -Parent $prof
+    $seedArgs = @($seeder, "--to", $sbase, "--set", $Seed) + @(if ($DryRun) { "--dry-run" })
+    "seed ${Seed}: node $seeder --to $sbase --set $Seed$(if ($DryRun) { ' --dry-run (nothing written)' })"
+    $out = & node @seedArgs 2>&1
+    $code = $LASTEXITCODE
+    foreach ($l in $out) { "  $l" }
+    if ($code -ne 0) { [Console]::Error.WriteLine("sample-seed.mjs exited $code; launch stopped."); exit $code }
+    return
+  }
   $plan = Get-SeedPlan $Seed $prof
   $verb = if ($DryRun) { "would plant" } else { "planted" }
   "seed ${Seed}: $verb $($plan.rows.Count) canaries$(if ($DryRun) { ' (tokens re-minted on a real run)' })"
@@ -171,9 +230,19 @@ if ($SeedOnly) {
   Invoke-Seed (Join-Path $Base "profile")
   exit 0
 }
-if (-not $Zip) { Stop-Refused "-Zip <zip> is required (or -SeedOnly)." }
-if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) { Stop-Refused "no zip at $Zip" }
-$Zip = (Resolve-Path -LiteralPath $Zip).Path
+if ($From -and $Zip) { Stop-Refused "-Zip and -From are exclusive." }
+if (-not $Zip -and -not $From) { Stop-Refused "-Zip <zip> or -From <folder> is required (or -SeedOnly)." }
+. (Join-Path $PSScriptRoot "..\lib\Paths.ps1")
+if ($From) {
+  if (-not (Test-Path -LiteralPath $From -PathType Container)) { Stop-Refused "no folder at $From" }
+  $From = (Resolve-Path -LiteralPath $From).Path
+  if (-not (Test-Path -LiteralPath (Join-Path $From "vidar.exe") -PathType Leaf)) { Stop-Refused "no vidar.exe in $From" }
+  if (Test-Path -LiteralPath (Join-Path $From (Get-VidarRel -Id runtime))) { Stop-Refused "$From holds a runtime\ folder; a staged build never carries one." }
+} else {
+  if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) { Stop-Refused "no zip at $Zip" }
+  $Zip = (Resolve-Path -LiteralPath $Zip).Path
+}
+if ($SeedBundle -and -not (Test-Path -LiteralPath $SeedBundle -PathType Container)) { Stop-Refused "no bundle folder at $SeedBundle" }
 
 # Protected roots: this repo (worktree or checkout), the main checkout, the live install.
 $protected = [ordered]@{}
@@ -207,8 +276,10 @@ if (Test-Path -LiteralPath $Base -PathType Container) {
 }
 
 # The zip passes check-zip.ps1 or nothing is extracted.
-& (Join-Path $PSScriptRoot "check-zip.ps1") -Zip $Zip
-if ($LASTEXITCODE -ne 0) { Stop-Refused "check-zip.ps1 failed for $Zip (exit $LASTEXITCODE)." }
+if (-not $From) {
+  & (Join-Path $PSScriptRoot "check-zip.ps1") -Zip $Zip
+  if ($LASTEXITCODE -ne 0) { Stop-Refused "check-zip.ps1 failed for $Zip (exit $LASTEXITCODE)." }
+}
 
 $app = Join-Path $Base "app"
 $prof = Join-Path $Base "profile"
@@ -277,30 +348,87 @@ if ($bad.Count) { Stop-Refused ("unsatisfied redirect: " + ($bad -join '; ')) }
 New-Item -ItemType Directory -Force -Path $Base | Out-Null
 Set-Content -LiteralPath (Join-Path $Base $marker) -Value "Vidar sandbox made by tools/sandbox/launch.ps1" -Encoding utf8NoBOM
 $incoming = Join-Path $Base ("incoming-" + (Get-Date -Format "yyyyMMddHHmmss"))
-Expand-Archive -LiteralPath $Zip -DestinationPath $incoming
-$srcExe = Get-ChildItem -LiteralPath $incoming -Recurse -Filter vidar.exe -File | Select-Object -First 1
-if (-not $srcExe) { Remove-Item -LiteralPath $incoming -Recurse -Force; Stop-Refused "no vidar.exe in $Zip" }
+if ($From) {
+  $srcDir = $From
+} else {
+  Expand-Archive -LiteralPath $Zip -DestinationPath $incoming
+  $srcExe = Get-ChildItem -LiteralPath $incoming -Recurse -Filter vidar.exe -File | Select-Object -First 1
+  if (-not $srcExe) { Remove-Item -LiteralPath $incoming -Recurse -Force; Stop-Refused "no vidar.exe in $Zip" }
+  $srcDir = $srcExe.DirectoryName
+}
 New-Item -ItemType Directory -Force -Path $app | Out-Null
-. (Join-Path $PSScriptRoot "..\lib\Paths.ps1")
 $keep = Get-VidarRel -Id runtime   # runtime\homes and the rest of runtime\ survive a rebuild; never copied.
 if ($reuse) {
   Get-ChildItem -LiteralPath $app -Force | Where-Object { $_.Name -ne $keep } | Remove-Item -Recurse -Force
+  # runes-seed.mjs wrote vidar.json, contracts\module-bundles.json and runes-e2e\ (all gone with the wipe above,
+  # then restored by the copy below) and app\runtime\runes\ (kept by the wipe, so removed here). A manifest from an
+  # earlier seeded run means an unseeded Start also drops what that run wrote under the base, then the manifest.
+  $seedManifest = Join-Path $Base ".runes-seed-manifest.json"
+  if ($Seed -ne $runesSeedSet -and (Test-Path -LiteralPath $seedManifest -PathType Leaf)) {
+    $imports = Resolve-VidarPath -Id runeImports -Root $app
+    if (Test-Path -LiteralPath $imports) { Remove-Item -LiteralPath $imports -Recurse -Force }
+    $m = Get-Content -LiteralPath $seedManifest -Raw | ConvertFrom-Json
+    foreach ($p in @($m.files) + @($m.dirs)) {
+      if ($p -is [string] -and (Test-Under $p $Base) -and -not (Test-Under $Base $p) -and (Test-Path -LiteralPath $p)) { Remove-Item -LiteralPath $p -Recurse -Force }
+    }
+    Remove-Item -LiteralPath $seedManifest -Force
+    "unseeded start: removed the files an earlier runes-e2e seed left under $Base"
+  }
+  # The explorer seed edits settings/config files in place, so its manifest keeps their old text: revert restores it.
+  if ($Seed -ne $explorerSeedSet -and (Test-Path -LiteralPath (Join-Path $Base ".explorer-seed-manifest.json") -PathType Leaf)) {
+    $out = & node (Join-Path $PSScriptRoot "explorer-seed.mjs") --to $Base --revert 2>&1
+    if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("explorer-seed.mjs --revert exited ${LASTEXITCODE}: $out"); exit $LASTEXITCODE }
+    "unseeded start: reverted the explorer seed under $Base"
+  }
+  # The sample seed plants one folder under work\; a start with no sample set removes it (the seeder re-plants on its own).
+  if ($Seed -notin $sampleSeedSets -and (Test-Path -LiteralPath (Join-Path $Base ".sample-seed-manifest.json") -PathType Leaf)) {
+    $out = & node (Join-Path $PSScriptRoot "sample-seed.mjs") --to $Base --revert 2>&1
+    if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("sample-seed.mjs --revert exited ${LASTEXITCODE}: $out"); exit $LASTEXITCODE }
+    "unseeded start: removed the sample project under $Base"
+  }
 }
-Get-ChildItem -LiteralPath $srcExe.DirectoryName -Force | Where-Object { $_.Name -ne $keep } |
-  ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination (Join-Path $app $_.Name) }
-Remove-Item -LiteralPath $incoming -Recurse -Force
+if ($From) {
+  # Copy, never move: the staged folder stays as it was.
+  Get-ChildItem -LiteralPath $srcDir -Force | Where-Object { $_.Name -ne $keep } |
+    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $app $_.Name) -Recurse -Force }
+} else {
+  Get-ChildItem -LiteralPath $srcDir -Force | Where-Object { $_.Name -ne $keep } |
+    ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination (Join-Path $app $_.Name) }
+  Remove-Item -LiteralPath $incoming -Recurse -Force
+}
 # The shell resolves User Shell Folders (%USERPROFILE%\Desktop, ...) through the redirected profile: a
 # missing one makes the folder picker raise "Location is not available" (S5 rerun, 2026-10-13).
 foreach ($d in @("AppData\Roaming", "AppData\Local\Temp", "Desktop", "Documents", "Downloads", "Music",
     "Pictures", "Videos", "Favorites", "Links")) {
   New-Item -ItemType Directory -Force -Path (Join-Path $prof $d) | Out-Null
 }
-"extracted: $Zip -> $app"
+"extracted: $(if ($From) { $From } else { $Zip }) -> $app"
+
+if ($SeedBundle) {
+  # Copy a Falcon bundle in and point current.json at the copy. A link inside the source is refused:
+  # a copy that followed it would reach outside the bundle.
+  $linked = @(Get-ChildItem -LiteralPath $SeedBundle -Recurse -Force | Where-Object { $_.LinkType })
+  if (-not (Get-Item -LiteralPath $SeedBundle -Force).LinkType -and -not $linked.Count) {
+    $bundleId = Split-Path -Leaf (Get-Norm $SeedBundle)
+    $bundlesDir = Join-Path $app (Get-VidarRel -Id falconBundles)
+    $dest = Join-Path $bundlesDir $bundleId
+    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $bundlesDir | Out-Null
+    Copy-Item -LiteralPath $SeedBundle -Destination $dest -Recurse
+    $falconExe = Get-ChildItem -LiteralPath $dest -Recurse -File -Filter falcon.exe | Select-Object -First 1
+    if (-not $falconExe) { Stop-Refused "no falcon.exe in bundle $SeedBundle" }
+    $pointer = Join-Path $app (Get-VidarRel -Id falconPointer)
+    Write-Utf8 $pointer ((ConvertTo-Json -Compress -InputObject ([ordered]@{ bundle_id = $bundleId; executable = $falconExe.FullName })) + "`n")
+    "seeded bundle: $bundleId"
+  } else {
+    Stop-Refused "bundle $SeedBundle is or holds a link; it is not copied."
+  }
+}
 
 if ($Seed) { Invoke-Seed $prof }
 
 if ($DryRun) { "DryRun: redirects satisfied; vidar.exe not started."; exit 0 }
-$p = Start-CleanProcess -FilePath $exe -WorkingDirectory $app -Extra ([hashtable]$extra)
+$p = Start-CleanProcess -FilePath $exe -WorkingDirectory $app -ArgumentList $ArgumentList -Extra ([hashtable]$extra)
 "root pid: $($p.Id)"
 # Run record for traced-run.ps1. $env:TEMP is the real one: this script runs in the user's normal terminal and
 # the redirects above reach only the child. Append only; -DryRun exits before here and writes none.

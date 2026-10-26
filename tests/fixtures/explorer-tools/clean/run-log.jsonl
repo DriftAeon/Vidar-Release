@@ -1,0 +1,3 @@
+{"t":"2026-10-24T00:00:00.000Z","port":9222,"episode":"g1","verb":"press","args":["e1"],"hit":{"ok":true},"exit":0}
+{"t":"2026-10-24T00:00:02.000Z","port":9222,"episode":"g1","verb":"key","args":["Enter"],"exit":0}
+{"t":"2026-10-24T00:00:05.000Z","port":9222,"episode":"g1","verb":"read","args":[],"exit":0}

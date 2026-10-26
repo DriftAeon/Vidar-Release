@@ -3,8 +3,17 @@
 //   import { owedGaps, OWED_SINCE, PARK_MARK } from "./owed.mjs";  owedGaps([{ name, notes, context }])
 // Returns [{ run, problem }]. Pure: no file reads; where.mjs feeds it the run folders. Node built-ins only.
 // Refuses nothing at runtime; it only reports. Runs dated before OWED_SINCE and runs not yet closed are never flagged.
+// Marker rules (shared by where.mjs openParks, its run-bullet filter and this check):
+//   opener `- parked <id>: ` is strict (the colon and a space);
+//   closer `- unparked <id>` ends at `:`, whitespace, `(` or end of line, so `- unparked caption (note): ...` closes `caption`.
+// Filed runs: where.mjs drops runs listed in the archive index (§ Runs) from Parked and, by filtering its input
+// before this call, from Close-out gaps; /tidy homes their residuals first and a closed run is never edited again.
+// owedGaps stays pure and knows nothing about filing.
 export const OWED_SINCE = "2026-10-08";
-export const PARK_MARK = /^\s*- (un)?parked [A-Za-z0-9._-]+: /; // the one marker shape where.mjs and this check share
+const ID = "[A-Za-z0-9._-]+";
+export const PARK_OPEN = new RegExp(`^\\s*- parked (${ID}): `);
+export const PARK_CLOSE = new RegExp(`^\\s*- unparked (${ID})(?::|(?=[\\s(]|$))`);
+export const PARK_MARK = new RegExp(`${PARK_OPEN.source}|${PARK_CLOSE.source}`); // any marker line
 
 const CLOSED_NOTES = /\brun closed\b|\bclosed by (the )?user\b/i;
 const CLOSED_CONTEXT = /^Status:\s*merged/im;

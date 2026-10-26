@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "note": "Explorer sandbox seed. Model ids are the cheapest already named in repo config (src/format.ts:85-89); the sandbox's live catalogue was not read, so they are inferred. A goal tagged realModel overrides them in its own tab.",
+  "claude": {
+    "model": "claude-haiku-5-5",
+    "effortLevel": "low",
+    "env": { "ENABLE_CLAUDEAI_MCP_SERVERS": "false" },
+    "deny": ["mcp__*"]
+  },
+  "codex": {
+    "model": "gpt-5.6-terra",
+    "model_reasoning_effort": "low",
+    "prefer_mxc": true
+  },
+  "project": "project",
+  "workspace": { "label": "Explorer" },
+  "runes": {
+    "note": "Library pieces reused from tests/fixtures/runes-e2e/seed.json: its rulesLibrary (vidar-recall, the recall rune) plus these import libraries, without their row-* sets and without any gen-index. kit is left out (its modules bring MCP servers), and so is the memory library (named after the runes-e2e work folder). No row or workspace holds sets.",
+    "libraries": ["claude-user", "codex-user"]
+  }
+}

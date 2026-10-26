@@ -5,11 +5,16 @@
 // its pill first. Notices come once, on completion (history replays started + completed back to back).
 
 import type { AgentEvent } from "./protocol";
+import type { CodexProgress } from "./codex-progress";
+import { codexStructured } from "./codex-diff";
+import { asyncAskEvents, asyncAskQuestions } from "./codex-async-ask";
+import { pretty } from "../format";
 
 type Json = Record<string, unknown>;
 
-const str = (v: unknown): string => (typeof v === "string" ? v : "");
+const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const titleWord = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 /** milliseconds as a short duration: 900ms, 5s, 1.5s, 2m 5s */
@@ -115,3 +120,85 @@ export function codexItemCompleted(item: Json, started: boolean): AgentEvent[] |
   const done: AgentEvent = { kind: "tool_done", toolUseId: str(item.id), content, isError, parentToolUseId: null };
   return started ? [done] : [...(codexItemStarted(item) ?? []), done];
 }
+
+export interface Change { path: string; kind: string; diff: string }
+export interface ItemState {
+  type: string;
+  output: string;
+  changes: Change[];
+  thinking: boolean;
+  asyncAsk?: boolean; // codex-async-ask.ts: its deltas are the flattened questions, never drawn
+}
+
+export function parseChanges(v: unknown): Change[] {
+  return arr(v).map((c) => {
+    const o = obj(c) ?? {};
+    // PatchChangeKind is an object: { type: "add"|"delete"|"update", move_path? }
+    const k = obj(o.kind);
+    const kind = k ? `${str(k.type, "change")}${str(k.move_path) ? ` → ${str(k.move_path)}` : ""}` : str(o.kind, "change");
+    return { path: str(o.path), kind, diff: str(o.diff) };
+  });
+}
+
+/** The adapter's item/started and item/completed switch: `it` is the adapter's per-item state
+ *  (created by the caller on start, looked up on completion), `live` is false while history replays. */
+export const codexItemEvents = {
+  started(item: Json, it: ItemState, progress: CodexProgress): AgentEvent[] {
+    const id = str(item.id);
+    const type = str(item.type);
+    switch (type) {
+      case "collabAgentToolCall": return progress.started(item);
+      case "agentMessage": it.asyncAsk = asyncAskQuestions(item) !== null; return [];
+      case "userMessage": case "plan": return [];
+      case "reasoning":
+        if (it.thinking) return [];
+        it.thinking = true;
+        return [{ kind: "thinking", blockId: id, done: false }];
+      case "commandExecution":
+        return [{ kind: "tool_start", toolUseId: id, name: "Command", input: { command: str(item.command), cwd: str(item.cwd) }, parentToolUseId: null }];
+      case "fileChange": {
+        it.changes = parseChanges(item.changes);
+        return [{ kind: "tool_start", toolUseId: id, name: "Edit", input: { changes: it.changes.map((c) => ({ path: c.path, kind: c.kind })) }, parentToolUseId: null }];
+      }
+      case "mcpToolCall":
+        return [{ kind: "tool_start", toolUseId: id, name: `${str(item.server, "mcp")}.${str(item.tool, "tool")}`, input: item.arguments, parentToolUseId: null }];
+      case "webSearch":
+        return [{ kind: "tool_start", toolUseId: id, name: "WebSearch", input: { query: str(item.query) }, parentToolUseId: null }];
+      default:
+        return codexItemStarted(item) ?? [{ kind: "tool_start", toolUseId: id, name: type || "item", input: item, parentToolUseId: null }];
+    }
+  },
+
+  completed(item: Json, it: ItemState | undefined, progress: CodexProgress, live: boolean): AgentEvent[] {
+    const id = str(item.id);
+    const type = str(item.type);
+    const status = str(item.status, "completed");
+    const failed = status !== "completed" && status !== "inProgress";
+    switch (type) {
+      case "collabAgentToolCall": return progress.completed(item, live);
+      case "userMessage": return [];
+      case "agentMessage": return asyncAskEvents(item) ?? [{ kind: "text_done", blockId: id, markdown: str(item.text), parentToolUseId: null }];
+      case "plan":
+        return [{ kind: "text_done", blockId: id, markdown: str(item.text), parentToolUseId: null }];
+      case "reasoning":
+        return [{ kind: "thinking", blockId: id, done: true }];
+      case "commandExecution": {
+        const content = typeof item.aggregatedOutput === "string" ? item.aggregatedOutput : it?.output ?? "";
+        return [{ kind: "tool_done", toolUseId: id, content, isError: failed, structured: { status, exitCode: item.exitCode ?? null, durationMs: item.durationMs ?? null }, parentToolUseId: null }];
+      }
+      case "fileChange": {
+        const changes = parseChanges(item.changes);
+        const list = changes.length ? changes : it?.changes ?? [];
+        return [{ kind: "tool_done", toolUseId: id, content: list.map((c) => `${c.kind} ${c.path}\n${c.diff}`).join("\n\n"), isError: failed, structured: codexStructured(list, status), parentToolUseId: null }];
+      }
+      case "mcpToolCall": {
+        const error = obj(item.error);
+        return [{ kind: "tool_done", toolUseId: id, content: pretty(error ?? item.result ?? ""), isError: failed || !!error, parentToolUseId: null }];
+      }
+      case "webSearch":
+        return [{ kind: "tool_done", toolUseId: id, content: pretty(item.results ?? item.action ?? ""), isError: false, parentToolUseId: null }];
+      default:
+        return codexItemCompleted(item, !!it) ?? [{ kind: "tool_done", toolUseId: id, content: pretty(item), isError: failed, parentToolUseId: null }];
+    }
+  },
+};

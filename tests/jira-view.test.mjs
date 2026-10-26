@@ -229,12 +229,14 @@ test("a row status is a toned pill with the label and the raw name as its toolti
   assert.equal(root.querySelector(".jx-status"), null);
 });
 
-test("the head buttons and pickers wear the Sheen face", async () => {
+test("the scope buttons and pickers wear the Sheen face; the head icons stay flat as Slack's do", async () => {
   await open(SAVED, { issues: [ISSUE] });
-  for (const sel of ['button[aria-label="Refresh"]', 'button[aria-label="Disconnect"]', ".jx-scope-btn", ".jx-pick"]) {
+  for (const sel of [".jx-scope-btn", ".jx-pick"]) {
     assert.ok(root.querySelector(sel).classList.contains("wb-card-btn"), sel);
   }
-  assert.ok(!root.querySelector(".cx-ra").classList.contains("wb-card-btn"), "row Send stays flat");
+  for (const sel of ['button[aria-label="Refresh"]', 'button[aria-label="Disconnect"]', ".cx-ra"]) {
+    assert.ok(!root.querySelector(sel).classList.contains("wb-card-btn"), `${sel} stays flat`);
+  }
 });
 
 test("Send types the key and summary into the focused tab, and says so when there is none", async () => {

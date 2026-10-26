@@ -27,7 +27,7 @@ import type { DocEntry } from "./panels/document";
 import type { CommentsFile } from "./panels/comments";
 import type { DisplayUpdate, DisplayFile, DisplayPng, DecisionView } from "./panels/display-render";
 import type { RecentSession } from "./launcher/recent";
-import type { RunesCatalog, RunesLoaded, RuneLibraryKey } from "./runes/types";
+import type { LoadHistory, RunesCatalog, RunesLoaded, RuneLibraryKey } from "./runes/types";
 import type { LabItem } from "./lab/types";
 import type { ExternalSession } from "./launcher/locations";
 import type { Loadout } from "./panels/loadout";
@@ -51,7 +51,7 @@ import { mockInvoke, mockListen } from "./ipc-mock";
 const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 /** One past Codex thread (`list_codex_threads`, codex_threads.rs `ThreadRow`, camelCase). */
-export interface CodexThreadRow { id: string; label: string; cwd: string; ageSecs: number; model: string | null }
+export interface CodexThreadRow { id: string; label: string; cwd: string; ageSecs: number; model: string | null; home?: string; sets?: SetRef[] }
 
 /** `read_codex_limits` (status/codex.rs): the rollout model and the 5H/7D windows; `resets_at` epoch seconds, `observed_ms` epoch ms. */
 export interface CodexLimits {
@@ -90,6 +90,12 @@ export type ChangesStatus =
   | { repo: false }
   | { repo: true; root: string; branch: string | null; detached: boolean; head: string | null; upstream: string | null;
       ahead: number | null; behind: number | null; files: ChangedFile[] };
+/** `changes_p4_status` (src-tauri/src/changes_p4.rs): opened files grouped by pending changelist. */
+export interface P4File { depotFile: string; path: string; rel: string; action: string; type: string }
+export interface P4Change { change: string; description: string; files: P4File[] }
+export type P4Status =
+  | { kind: "no-p4"; reason: string }
+  | { kind: "p4"; client: string; user: string; port: string; root: string; changes: P4Change[] };
 /** `unreal_status` (src-tauri/src/unreal): `at` is epoch ms or null; a read error rejects with a string. */
 export interface UnrealDiag {
   file: string | null; line: number | null; severity: "error" | "warning"; text: string; source: "log" | "ubt";
@@ -120,14 +126,16 @@ export interface RulesImportBrick {
 }
 export interface RulesImportScan { library: string; bricks: RulesImportBrick[] }
 export interface RulesImportApplied { library: string; written: number; rows: string[] }
-/** src-tauri/src/rules/generate/commands.rs (run 2026-10-17-rune-generator ipc.md). */
+/** src-tauri/src/rules/generate/commands.rs (run 2026-10-17-rune-generator ipc.md; no row since 2026-10-25-rune-vault
+ *  L4a). `items`: ticked local skills, agents and hooks (`BareLocalFile.path`), landed as item runes. */
 export interface RulesGenerateArgs {
-  runId: string; rowKey: string; agent: AgentId; model: string; effort: string;
+  runId: string; agent: AgentId; model: string; effort: string;
   mergeEffort?: string;
-  paths: string[]; cwd: string | null; budget: number | null;
+  paths: string[]; items?: { kind: "skill" | "agent" | "hook"; path: string }[]; cwd: string | null;
 }
+/** `library` is `gen-<runId>`, `set` is `generated-<yyyymmdd>`; nothing is added to a vault or row until Add to Vault. */
 export interface RulesGenerated {
-  library: string; runes: number; on: number; encodedChars: number | null;
+  library: string; set: string; runes: number; on: number; encodedChars: number | null;
   costUsd: number | null; inputTokens: number | null; outputTokens: number | null; durationMs: number; warnings: string[];
 }
 /** Bare Runes tab local files (src-tauri/src/rules/import/local.rs; run 2026-10-17-bare-runes-flow fold.md). */
@@ -136,68 +144,104 @@ export interface BareLocalFile {
   path: string; shown: string; kind: BareFileKind; library?: string; section?: string;
   scope: "global" | "project"; ticked: boolean; pickable: boolean;
   reason?: "pathScoped" | "notMjs" | "guardDriver"
-    | "tooLarge" | "shadowed" | "summaryOnly" | "notHosted" | "stdio";
+    | "tooLarge" | "shadowed" | "summaryOnly" | "notHosted" | "stdio" | "notModule" | "commandArgs";
   guard?: { event: string; matcher?: string; run: string[] };
   /** Absent = a Claude row; mcp rows carry the hosted server name and its pinned url. */
   agent?: AgentId; hosted?: string; url?: string;
 }
 export interface BareLocalSources { files: BareLocalFile[]; memoryDir: string | null; guardsKey: boolean }
-/** A row's actives (src-tauri/src/bare/actives.rs; fold.md § Pinned shapes). `source` null: not imported, read-only. */
-export interface BareGuard { event: string; matcher?: string; run: string[] }
-export interface BareActiveLibrary {
-  library: string; source: string | null; scope: "global" | "project"; sourceGone: boolean;
-  /** `path` is the rune file; a missing file gives "" and kind rule, activate always. */
-  bricks: {
-    id: string; section: string[]; studs: number; on: boolean;
-    path: string; kind: string; activate: string; description: string; body: string;
-  }[];
-  /** Absent for import libraries (run 2026-10-17-rune-generator, ipc.md). */
-  generated?: {
-    agent: AgentId; model: string; effort: string; date: string;
-    inputs: string[]; warnings: string[]; encodedChars: number | null;
-  };
-  /** Each set the row names here, with its layer sidecar (actives.rs `ActiveSetLayer`, run 2026-10-20-rune-sets W4). */
-  sets?: BareSetLayer[];
+export interface BareGuard { event: string; matcher?: string; run?: string[]; command?: string; source?: string }
+/** Inputs converted into item runes by Add Kit or Attach. */
+export interface ItemRuneInputs {
+  skills?: string[]; agents?: string[]; guards?: (BareGuard & { open?: string[] })[];
+  codexAgents?: string[]; codexGuards?: (BareGuard & { open?: string[] })[];
+  modules?: Record<string, { off: string[] }>;
 }
-export interface BareSetLayer {
-  set: string; editable: boolean;
-  skills: string[]; agents: string[]; guards: (BareGuard & { open?: string[] })[]; codexSkills: string[]; warnings: string[];
-}
-/** bare_set_layer_write: a present key replaces the sidecar's, an absent one stays (bare/set_layer.rs `write_set`). */
-export interface BareSetLayerWrite {
-  skills?: string[]; agents?: string[]; guards?: (BareGuard & { open?: string[] })[]; codexSkills?: string[];
-}
-export interface BareActives {
-  rowKey: string; libraries: BareActiveLibrary[];
-  skills: string[]; agents: string[]; guards: BareGuard[]; guardsKey: boolean;
-  /** bareCodexSkills, bareCodexAgents and bareCodexMcp (additive; actives.rs; absent from an older build = none). */
-  codexSkills?: string[]; codexAgents?: string[]; codexMcp?: string[];
+/** bare_kit_create: `created` false = a Kit already existed, nothing written; `dropped` = items left out (bare/kit.rs). */
+export interface BareKitCreated { created: boolean; dropped: { id: string; reason: string }[] }
+/** A library template file (bare_kit_item_create, bare_library_files); `path` is a skill's folder, else the file. */
+export interface BareLibraryFile { kind: "skill" | "agent" | "hook"; agent: "claude" | "codex" | null; name: string; path: string }
+export interface BareModuleBundles {
+  bundles: Record<string, { mcp: { name: string; hasUrl: boolean; hasCommand: boolean; agents?: string[]; optional?: boolean }[]; skills: string[]; agents: string[]; guards: BareGuard[] }>;
+  warnings: string[];
 }
 /** `bare_launch`: what a tab's newest Bare manifest carried (bare/manifest.rs `LaunchRecord`);
  *  `warnings` are the binary's, then the payload's, then the manifest's. */
 export interface BareLaunch {
   createdUtc: string; agent: string; sets: string[]; skills: string[]; guards: string[]; warnings: string[];
+  /** The resolved item paths the launch loaded (additive; absent on a manifest written before them). */
+  items?: BareLaunchItems;
 }
-/** `cwd` overrides vidar.json `defaultCwd` for library naming. bare_layer_set leaves an omitted key
- *  untouched; `written` names the arg keys it changed. bare_launch is `null` when the tab has no manifest. */
+/** `skills` and `agents` are source paths; `guards` are `{ event, matcher?, run }`;
+ *  `mcp` is Codex's hosted server names. */
+export interface BareLaunchItems { skills: string[]; agents: string[]; guards: BareGuard[]; mcp: string[]; }
+/** Spawn refusal from bare/recall_skill.rs. The existing reason precedes this tagged JSON in the rejected string. */
+export interface BareRuneGuardRefusal { reason: string; id: string; library: string | null; set: string; }
+/** `cwd` overrides vidar.json `defaultCwd` for library naming. bare_launch is `null` when the tab has no manifest. */
 export interface RulesImportCommands {
   rules_import_sources: Cmd<undefined, RulesImportSource[]>;
   rules_import_scan: Cmd<{ path: string; cwd?: string }, RulesImportScan>;
   rules_import_apply: Cmd<{ path: string; kept: string[]; rows: Record<string, string[]>; cwd?: string }, RulesImportApplied>;
   rules_generate: Cmd<RulesGenerateArgs, RulesGenerated>;
   rules_generate_cancel: Cmd<{ runId: string }, null>;
-  rules_generate_toggle: Cmd<{ library: string; rowKey: string; id: string; on: boolean }, RulesImportApplied>;
   bare_local_sources: Cmd<{ cwd: string }, BareLocalSources>;
-  bare_actives: Cmd<{ rowKey: string }, BareActives>;
-  bare_layer_set: Cmd<{ guards?: BareGuard[]; skills?: string[]; agents?: string[]; codexSkills?: string[]; codexAgents?: string[]; codexMcp?: string[] }, { written: string[] }>;
-  bare_set_layer_write: Cmd<{ library: string; set: string; layer: BareSetLayerWrite }, null>;
+  bare_sets_list: Cmd<undefined, SetRef[]>;
+  bare_items_import: Cmd<{ library: string; layer: ItemRuneInputs }, { runes: (RuneRef & { kind: string })[]; dropped: { id: string; reason: string }[] }>;
+  bare_module_bundles: Cmd<undefined, BareModuleBundles>;
+  bare_set_fork: Cmd<{ library: string; set: string; name: string }, null>;
+  bare_kit_create: Cmd<{ layer: ItemRuneInputs }, BareKitCreated>;
+  bare_kit_item_create: Cmd<{ library: string; agent: "claude" | "codex"; kind: BareLibraryFile["kind"]; name: string }, BareLibraryFile>;
+  bare_library_files: Cmd<{ library: string }, BareLibraryFile[]>;
   bare_launch: Cmd<{ tab: string }, BareLaunch | null>;
+}
+/** Rune Vault (src-tauri/src/bare/vault; wire: tests/fixtures/rune-vault/vaults). */
+export interface RuneRef { library: string; id: string }
+export interface SetSource { library: string; set: string }
+export type VaultFrom = { vault: string; hash: string } | { template: string };
+export type VaultLockedBy = "button" | "first-message";
+export interface Vault {
+  version: number; id: string; name: string; createdUtc: string; from: VaultFrom | null;
+  runesets: { file: string; source: SetSource; copiedUtc: string; sourceHash: string }[];
+  runes: RuneRef[]; lockedUtc: string | null; lockedBy: VaultLockedBy | null; hash: string; pins: Record<string, string>;
+}
+export interface VaultListed { id: string; name: string; template: boolean; hash: string; lockedUtc: string | null }
+/** `drift`: pinned runes whose library body changed since lock. Refs only until item views are redacted. */
+export interface VaultView { vault: Vault; drift: RuneRef[] }
+export type VaultOp =
+  | { op: "addRune" | "removeRune"; ref: RuneRef }
+  | { op: "addRuneset" | "removeRuneset"; ref: SetSource }
+  | { op: "member"; ref: VaultMember };
+/** `member` op (L3d): switches `rune` in or out of the vault's own copy of placed runeset `library/runeset`. */
+export interface VaultMember { library: string; runeset: string; rune: RuneRef; on: boolean }
+/** `rune_vault_library_runes` reply (L3d): each rune in the `ViewRune` shape (`runes/bare/cake.ts` `VaultViewRune`,
+ *  `set` null, item kinds redacted) that a vault for the agent can take as a one-off. */
+export interface VaultLibraryRunes { runes: (RuneRef & { kind: string; description: string; set: null })[]; warnings: string[] }
+export interface VaultSession {
+  version: number; createdUtc: string; agent: string; body: string; tab: string;
+  falconSession: string | null; threadId: string | null; vault: { id: string; hash: string }; home: string; loadoutHash: string;
+}
+interface RuneVaultCommands {
+  rune_vault_list: Cmd<undefined, VaultListed[]>;
+  /** `hash` reads the revision a session loaded. */
+  rune_vault_read: Cmd<{ id: string; hash?: string | null }, VaultView>;
+  rune_vault_library_runes: Cmd<{ agent: string }, VaultLibraryRunes>;
+  /** `name: null` makes a Custom vault (an identical pick reuses it). */
+  /** `name: null` is a Custom vault, floored by the backend on `agent`'s stock template (required then). */
+  rune_vault_create: Cmd<{ name: string | null; from?: VaultFrom | null; runesets: SetSource[]; runes: RuneRef[]; agent?: string }, Vault>;
+  rune_vault_edit: Cmd<{ id: string; ops: VaultOp[]; mode: "unlocked" | "variant" | "invalidate" }, Vault>;
+  rune_vault_lock: Cmd<{ id: string; by: VaultLockedBy; expectHash: string }, Vault>;
+  rune_vault_session: Cmd<{ tab: string; falconSession?: string | null; threadId?: string | null }, VaultSession | null>;
+  /** The launcher pre-pick per agent (agent -> vault id), kept across relaunches. */
+  rune_vault_defaults: Cmd<undefined, Record<string, string>>;
+  rune_vault_default_set: Cmd<{ agent: string; vault: string }, void>;
+  /** Make Variant moves tab `tab` to vault `id` at its current hash (a new record); null when the tab has no record. */
+  rune_vault_session_move: Cmd<{ tab: string; falconSession?: string | null; id: string }, VaultSession | null>;
 }
 
 /** Raw-body commands (`tauri::ipc::Request`) take the bytes as the whole payload. */
 type RawBody = ArrayBuffer | Uint8Array;
 
-interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands, JiraCommands, NotionCommands, SlackCommands {
+interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands, RuneVaultCommands,JiraCommands, NotionCommands, SlackCommands {
   // settings::commands / state (switches and context_gate: ipc-settings.ts)
   patch_settings: Cmd<{ key: string; value: unknown }, void>;
   reload_config: Cmd<undefined, ConfigResult>;
@@ -257,7 +301,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   archive_display_file: Cmd<{ path: string }, string>;
   delete_display_file: Cmd<{ path: string }, void>;
   // pty
-  spawn_pty: Cmd<{ id: string; cols: number; rows: number; shell?: string | null; cwd?: string | null; args?: string[] | null; tabName?: string | null; ptyGen: number; profile?: string | null; rowKey?: string | null; agent?: string | null }, void>;
+  spawn_pty: Cmd<{ id: string; cols: number; rows: number; shell?: string | null; cwd?: string | null; args?: string[] | null; tabName?: string | null; ptyGen: number; profile?: string | null; rowKey?: string | null; sets?: SetRef[]; vault?: string; agent?: string | null }, void>;
   write_pty: Cmd<{ id: string; data: string }, void>;
   pty_has_descendant: Cmd<{ id: string; exe: string }, boolean>;
   resize_pty: Cmd<{ id: string; cols: number; rows: number }, void>;
@@ -271,7 +315,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   open_result: Cmd<{ id: string; ok: boolean; tab?: string | null; verdict: string; comment?: string | null; reason?: string | null }, void>;
   control_result: Cmd<{ id: string; ok: boolean; line: string; cardId?: string | null }, void>;
   // agent (Codex app-server)
-  spawn_codex_appserver: Cmd<{ id: string; cwd: string; rulesFile?: string | null; tabName?: string | null; profile?: string | null; rowKey?: string | null; agent?: string | null }, { gen: number; developerInstructions: string | null; bareWarnings?: string[] }>;
+  spawn_codex_appserver: Cmd<{ id: string; cwd: string; rulesFile?: string | null; tabName?: string | null; profile?: string | null; rowKey?: string | null; sets?: SetRef[]; vault?: string; agent?: string | null }, { gen: number; developerInstructions: string | null; bareWarnings?: string[] }>;
   // the Trust Folder action on a Bare Codex tab (bare/codex_trust.rs)
   codex_trust_offer: Cmd<{ id: string }, { folder: string; text: string } | null>;
   codex_trust_folder: Cmd<{ id: string; folder: string }, void>;
@@ -286,6 +330,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   // rune libraries and what a tab loaded (rules/catalog.rs, rules/loaded.rs; types in src/runes/types.ts)
   runes_catalog: Cmd<undefined, RunesCatalog>;
   runes_loaded: Cmd<{ tab: string; agent: string; sessionId?: string | null; profile?: string | null }, RunesLoaded>;
+  runes_load_history: Cmd<{ profile?: string | null }, LoadHistory>;
   // one rune's eval cases and Lab runs (lab.rs; types in src/lab/types.ts)
   lab_item: Cmd<{ library: RuneLibraryKey; id: string }, LabItem>;
   agent_send: Cmd<{ id: string; gen: number; line: string }, void>;
@@ -299,9 +344,9 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   list_recent_sessions: Cmd<{ cwd: string; profile?: string | null }, RecentSession[]>;
   read_session_meta: Cmd<{ cwd: string; sessionId: string; profile?: string | null }, { model: string | null; effort: string | null }>;
   read_codex_model: Cmd<{ cwd: string; tab?: string | null }, string | null>;
-  read_codex_limits: Cmd<{ cwd: string; tab?: string | null; profile?: string | null },CodexLimits | null>;
+  read_codex_limits: Cmd<{ cwd: string; tab?: string | null; profile?: string | null; row?: string | null },CodexLimits | null>;
   /** status/codex.rs: a cwd's rollouts in a Raw Codex tab's own home, newest first (codex-thread.ts). */
-  codex_rollout_threads: Cmd<{ cwd: string; profile: string | null }, { id: string; mtimeMs: number }[]>;
+  codex_rollout_threads: Cmd<{ cwd: string; profile: string | null; tab?: string | null },{ id: string; mtimeMs: number }[]>;
   status_snapshot: Cmd<undefined, { tab: string; age_secs: number; mtime_ms: number; payload: Record<string, unknown> }[]>;
   claude_installed_version: Cmd<undefined, string | null>;
   claude_auth_status: Cmd<undefined, boolean | null>;
@@ -311,6 +356,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   review_workspace: Cmd<{ cwd: string }, { path: string; files: number; truncated: boolean }>;
   // Changes bench tab (changes.rs): git runs from the repo root; act paths must be in a fresh status
   changes_status: Cmd<{ cwd: string }, ChangesStatus>;
+  changes_p4_status: Cmd<{ cwd: string }, P4Status>;
   changes_act: Cmd<{ cwd: string; verb: "stage" | "unstage" | "revert"; paths: string[] }, void>;
   changes_commit: Cmd<{ cwd: string; message: string; sync: boolean }, ChangesCommitResult>;
   changes_sync: Cmd<{ cwd: string; mode: "sync" | "pull" | "push" }, ChangesSyncResult>;
@@ -331,7 +377,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   open_in_editor: Cmd<{ path: string; line: number }, void>;
   // falcon (falcon.rs; the dock_* four only exist in the Falcon shell)
   falcon_available: Cmd<undefined, boolean>;
-  falcon_spawn: Cmd<{ id: string; cwd: string; model?: string | null; effort?: string | null; permissionMode: string; resume?: string | null; rulesFile?: string | null; tabName?: string | null; gateway?: string | null; profile?: string | null; agent?: FalconAgent | null; rowKey?: string | null }, number | { view_generation: number; bare_warnings?: string[] }>;
+  falcon_spawn: Cmd<{ id: string; cwd: string; model?: string | null; effort?: string | null; permissionMode: string; resume?: string | null; rulesFile?: string | null; tabName?: string | null; gateway?: string | null; profile?: string | null; agent?: FalconAgent | null; rowKey?: string | null; sets?: SetRef[]; vault?: string }, number | { view_generation: number; bare_warnings?: string[] }>;
   falcon_send: Cmd<{ id: string; gen: number; line: string }, void>;
   falcon_kill: Cmd<{ id: string; gen: number }, void>;
   falcon_list: Cmd<undefined, FalconList>;
@@ -356,12 +402,12 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   falcon_frontend_reload: Cmd<undefined, FalconFrontendStatus>;
   falcon_frontend_booted: Cmd<undefined, void>;
   // logs, loadout
-  read_loadout: Cmd<{ cwd: string; settingsPaths: string[]; pluginDir?: string | null; profile?: string | null }, Loadout>;
+  read_loadout: Cmd<{ cwd: string; settingsPaths: string[]; pluginDir?: string | null; profile?: string | null; tab?: string | null; row?: string | null }, Loadout>;
   file_kb: Cmd<{ path: string }, number | null>;
-  read_codex_loadout: Cmd<{ tab: string | null; profile: string | null; cwd: string }, CodexLoadout>;
+  read_codex_loadout: Cmd<{ tab: string | null; profile: string | null; row?: string | null; cwd: string }, CodexLoadout>;
   // mcp, lm studio, ports
-  read_mcp_servers: Cmd<{ project: string | null; profile?: string | null }, McpRack>;
-  read_codex_mcp_servers: Cmd<{ tab: string | null; profile: string | null }, McpRack>;
+  read_mcp_servers: Cmd<{ project: string | null; profile?: string | null; tab?: string | null; row?: string | null }, McpRack>;
+  read_codex_mcp_servers: Cmd<{ tab: string | null; profile: string | null; row?: string | null }, McpRack>;
   list_mcp_tools: Cmd<{ url: string }, McpTool[]>;
   list_mcp_tools_stdio: Cmd<{ name: string; scope: string; project: string | null; profile: string | null; tab: string | null }, McpTool[]>;
   proxy_status: Cmd<{ url: string }, BackendStatus[]>;
@@ -407,6 +453,7 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
 export type FalconAgent = AgentId;
 /** One entry of falcon_list: src-falcon/src/protocol.rs `SessionSummary` (no rename_all, so
  *  snake_case; `degraded` is skip_serializing_if None, so absent rather than null; `last_holder` is absent from an older host, launcher/readopt.ts). */
+export interface SetRef { library?: string; set: string }
 export interface FalconSessionSummary {
   session: string; generation: number; agent: string; cwd: string;
   conversation: string | null; pid: number; model: string | null;
@@ -425,6 +472,10 @@ export interface FalconSessionSummary {
   payload_file?: string;
   /** the launcher row key a profiled session was spawned for; a re-adopted tab's /clear sends it again */
   row_key?: string;
+  /** the launch's rune-set pick, echoed exactly (an empty list means "no sets"); absent when the row's own sets were used */
+  sets?: SetRef[];
+  /** the built MCP config (`layer\mcp-<hash>.json`) the session launched strict with; absent when none */
+  mcp_file?: string;
 }
 /** falcon_list: the host's `{ sessions }` payload; `host_warning` is added by the Vidar build
  *  only (falcon/session_commands.rs `falcon_list_blocking`), so the Falcon shell never sees it. */

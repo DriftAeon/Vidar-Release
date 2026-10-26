@@ -6,7 +6,6 @@ import type { CharacterArena } from "../character/arena";
 import type { CharacterId } from "../character/catalog";
 import { characterList, characterRevision, ensureCharacters, onCharactersChanged, setStyleNote } from "../character/packs";
 import { resolveCharacter, type Resolution } from "../character/resolve";
-import { emptyStage } from "../character/empty-stage";
 import type { CharacterActivityDetail, CharacterCompletionDetail, CharacterStatusDetail } from "../character/events";
 import { characterLoop, reduceLowContext } from "../character/behavior";
 import { getFocusedSession, type FocusedSession } from "./sessions";
@@ -50,8 +49,6 @@ export function initCharacter(
   // on screen; a load that comes earlier waits here for the first intersection.
   let hostSeen = false;
   let loadWaiting = false;
-  let listFailed = false;
-  let addButton: HTMLButtonElement | undefined;
   // Per-character saved default view (vidar.json `characterViews`), loaded on first use and kept
   // in sync locally on save/delete so a reload of the same character sees its own change right
   // away. A `settings-changed` (another writer, or `reload_config`) drops it for a fresh read.
@@ -71,10 +68,13 @@ export function initCharacter(
   let viewMenu: HTMLDivElement | undefined;
   let closeMenu: ClosePopover | undefined;
 
-  const setControls = (enabled: boolean) => { select.disabled = !enabled; };
+  // The select shows only with a character on stage: an empty or loading stage has no clips to pick.
+  let controlsOn = false;
   // "Animation Dropdown" flag (right-click menu). Off removes the select from layout, not just
   // from view; local UI preference, so vidar-state.json (prefs) rather than vidar.json.
-  const applyDropdown = () => { select.hidden = getPref("character.animationDropdown") === "off"; };
+  const dropdownPref = () => getPref("character.animationDropdown") !== "off";
+  const applyDropdown = () => { select.hidden = !controlsOn || !dropdownPref(); };
+  const setControls = (enabled: boolean) => { controlsOn = enabled; select.disabled = !enabled; applyDropdown(); };
   applyDropdown();
   const canAnimate = () => !reducedMotion.matches && !document.hidden && panelVisible;
   // The stage fallback note stands whenever the character has nothing to say.
@@ -203,7 +203,7 @@ export function initCharacter(
     const reading = pack && id ? readModel(id) : null;
     reading?.catch(() => {}); // handled below; avoids an unhandled rejection while imports load
     try {
-      report(pack ? `Loading ${pack.name}…` : placeholderNote(res));
+      report(pack ? "" : placeholderNote(res));
       const [{ createCharacterRenderer }, onStage] = await Promise.all([
         import("../character/renderer"), ensureArena(), ensureViewsLoaded(),
       ]);
@@ -245,23 +245,7 @@ export function initCharacter(
       if (loading === request) { loading = undefined; stage.setAttribute("aria-busy", "false"); }
     }
   }
-  /** Add Character shows only for a loaded list with no packs (a loading or failed list shows none). */
-  function updateEmptyStage(): void {
-    const add = emptyStage(characterList(), listFailed) === "add";
-    if (add && !addButton) {
-      addButton = document.createElement("button");
-      addButton.type = "button";
-      addButton.className = "character-add";
-      addButton.textContent = "Add Character";
-      addButton.addEventListener("click", () => {
-        void import("../settings/modal").then(({ openShortcutsModal }) => openShortcutsModal("characters"));
-      }, { signal: listeners.signal });
-      stage.append(addButton);
-    }
-    if (addButton) addButton.hidden = !add;
-  }
   function reconcileCharacter(): void {
-    updateEmptyStage();
     const next = desiredCharacter();
     const key = stageKey(next);
     if (key === shownKey) {
@@ -320,8 +304,8 @@ export function initCharacter(
         .finally(() => { if (!disposed) void load(); });
     });
     row("Reset View", () => renderer?.resetView());
-    row(`${select.hidden ? "" : "✓ "}Animation Dropdown`, () => {
-      setPref("character.animationDropdown", select.hidden ? "on" : "off");
+    row(`${dropdownPref() ? "✓ " : ""}Animation Dropdown`, () => {
+      setPref("character.animationDropdown", dropdownPref() ? "off" : "on");
       applyDropdown();
     });
     const close = openPopover({
@@ -346,7 +330,7 @@ export function initCharacter(
     panelVisible = entry.isIntersecting;
     if (panelVisible && !hostSeen) {
       hostSeen = true;
-      // The default stage shows with no character (and behind Add Character with no packs).
+      // The default stage shows with no character.
       ensureArena().then((created) => created.render(), (error) => {
         if (!disposed) report(error instanceof Error ? error.message : String(error));
       });
@@ -432,7 +416,7 @@ export function initCharacter(
   const stopCharacters = onCharactersChanged(() => { if (!disposed) reconcileCharacter(); });
   void ensureCharacters().then(
     () => { if (!disposed) reconcileCharacter(); },
-    (e) => { listFailed = true; updateEmptyStage(); report(`Characters Not Loaded: ${String(e)}`); },
+    (e) => { report(`Characters Not Loaded: ${String(e)}`); },
   );
   return () => {
     disposed = true;

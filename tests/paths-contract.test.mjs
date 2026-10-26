@@ -90,6 +90,18 @@ test("runeImports is runtime/runes, apart from the root runes library", () => {
   }
 });
 
+test("runeSkills is runtime/rune-skills", () => {
+  assert.deepEqual(ids().runeSkills, { under: "runtime", rel: "rune-skills" });
+  const dir = mkdtempSync(join(tmpdir(), "paths-"));
+  try {
+    mkdirSync(join(dir, "contracts"), { recursive: true });
+    copyFileSync(join(ROOT, "contracts", "paths.json"), join(dir, "contracts", "paths.json"));
+    assert.equal(resolveNode("runeSkills", { root: dir }), join(dir, "runtime", "rune-skills"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("Node and PowerShell readers agree on every id", { skip: !process.env.VIDAR_FULL_GATE }, () => {
   const list = Object.keys(ids()).map((id) => `'${id}'`).join(",");
   const cmd = `. '${ROOT}/tools/lib/Paths.ps1'; $o = [ordered]@{}; ` +

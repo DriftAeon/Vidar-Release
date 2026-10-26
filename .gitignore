@@ -24,6 +24,8 @@ src-tauri/target-zip/
 src-tauri/target-bare/
 # Any other cargo --target-dir under src-tauri: an unignored target-wt/ marked every zip -dirty (2026-10-18).
 src-tauri/target-*/
+# Same for src-falcon: an unignored target-wt/ there failed paths-contract for every lane (2026-10-25).
+src-falcon/target-*/
 # A staged release build invoked from the repo root rather than src-tauri lands here instead:
 # 1.4 GB of Rust build output that the rule above does not reach.
 target-staging/

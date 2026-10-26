@@ -187,15 +187,16 @@ test("restore: failed reap retains records through an unrelated subsequent save"
   assert.deepEqual(saved, records);
 });
 
-test("profile and rowKey: old records validate, bad types refuse, snapshot keeps both", () => {
+test("profile, rowKey and sets: old records validate and snapshot keeps the override", () => {
   assert.equal(guard([rec()]), true);
   assert.equal(guard([rec({ profile: "bare", rowKey: "codex-bare" })]), true);
   assert.equal(guard([rec({ profile: 3 })]), false);
   assert.equal(guard([rec({ rowKey: 3 })]), false);
   const out = snapshotCodexTabs(["a", "b"], new Map([
-    ["a", view({ profile: "bare", rowKey: "codex-bare" })], ["b", view({ title: "B" })],
+    ["a", view({ profile: "bare", rowKey: "codex-bare", sets: [] })], ["b", view({ title: "B" })],
   ]), null);
   assert.deepEqual([out[0].profile, out[0].rowKey], ["bare", "codex-bare"]);
+  assert.deepEqual(out[0].sets, []);
   assert.equal("profile" in out[1] || "rowKey" in out[1], false);
 });
 

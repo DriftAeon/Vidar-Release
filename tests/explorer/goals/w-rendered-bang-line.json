@@ -1,0 +1,17 @@
+{
+  "id": "w-rendered-bang-line",
+  "title": "Run a Bang Line From the Composer",
+  "style": "impatient",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab"],
+  "tags": ["composer"],
+  "realModel": false,
+  "core": false,
+  "source": ["4e47fc10"],
+  "steps": [
+    { "intent": "open a Claude chat tab" },
+    { "intent": "type a short ! line such as '! echo hi' in the composer" },
+    { "intent": "press Enter twice quickly" },
+    { "intent": "check the command ran once and its output shows in the transcript" }
+  ]
+}

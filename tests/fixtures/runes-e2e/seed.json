@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "about": "Runes e2e seed (run 2026-10-24-runesets-full-stack, U1). Materialised by tools/sandbox/runes-seed.mjs and the Rust e2e snapshot test; rules in README.md beside this file.",
+  "tokens": {
+    "<APP>": "install root: vidar.json, contracts/, runes-e2e/ (rulesLibrary), runtime/runes/",
+    "<HOME>": "user profile: .claude/, .codex/",
+    "<WORK>": "project folder, a git repo with a linked worktree at .worktrees/e2e (steps)",
+    "<WORK_SLUG>": "memory_slug(<WORK>): every char not ASCII alphanumeric becomes '-'",
+    "<MEMORY_LIB>": "slug(\"memory-\" + <WORK_SLUG>): the memory import library id (rules/import/split.rs slug: 4 words, 32 chars)"
+  },
+  "cases": {
+    "1": "agents[claude-kit] holds only kit/kit; kit/sets/kit.md has no slots",
+    "2": "kit/sets/kit.layer.json modules jira + openai-docs bring atlassian + openaiDeveloperDocs; <HOME>/.codex/config.toml lists both again",
+    "3": "discovery of <HOME>/.codex/config.toml mcp rows against the kit modules",
+    "4": "steps[git-worktree]: discover from <WORK>/.worktrees/e2e names <WORK>/CLAUDE.md and AGENTS.md",
+    "5": "contracts/module-bundles.json openai-docs brings openaiDeveloperDocs",
+    "6": "agents[codex-bare] refs gen-claude-rendered-bare-5e1d0a7c/fork-short, another row's generation",
+    "7": "discovery offers skills and agents beside rules and memory under <HOME>/.claude",
+    "8": "agents[claude-rendered-bare] refs its generation's row set and the fork-short fork",
+    "9": "gen-claude-rendered-bare-0c4f2b19 keeps a row set; gen-index names 5e1d0a7c",
+    "10": "locations[E2E] add-on set vidar-recall from rulesLibrary runes-e2e",
+    "11": "agents[codex-rendered-bare] with falcon.hostedCodex and kit/kit (modules bring MCP servers)"
+  },
+  "steps": [
+    {
+      "op": "git-worktree",
+      "repo": "<WORK>",
+      "add": [".gitignore", "CLAUDE.md", "AGENTS.md"],
+      "branch": "e2e-wt",
+      "worktree": "<WORK>/.worktrees/e2e"
+    }
+  ],
+  "files": [
+    {
+      "path": "<APP>/vidar.json",
+      "json": {
+        "primaryAgent": "claude",
+        "rulesLibrary": "runes-e2e",
+        "falcon": { "hostedCodex": true },
+        "agents": [
+          { "key": "claude-kit", "id": "claude", "label": "Kit", "under": "claude", "profile": "bare", "sets": [{ "library": "kit", "set": "kit" }] },
+          { "key": "claude-bare", "sets": [{ "library": "claude-user", "set": "row-claude-bare" }, { "library": "<MEMORY_LIB>", "set": "row-claude-bare" }, { "library": "kit", "set": "kit" }] },
+          { "key": "claude-rendered-bare", "sets": [{ "library": "kit", "set": "kit" }, { "library": "gen-claude-rendered-bare-5e1d0a7c", "set": "row-claude-rendered-bare" }, { "library": "gen-claude-rendered-bare-5e1d0a7c", "set": "fork-short" }] },
+          { "key": "codex-bare", "sets": [{ "library": "codex-user", "set": "row-codex-bare" }, { "library": "gen-claude-rendered-bare-5e1d0a7c", "set": "fork-short" }] },
+          { "key": "codex-rendered-bare", "sets": [{ "library": "kit", "set": "kit" }] }
+        ],
+        "locations": [{ "label": "E2E", "cwd": "<WORK>", "sets": [{ "set": "vidar-recall" }] }]
+      }
+    },
+    {
+      "path": "<APP>/contracts/module-bundles.json",
+      "json": {
+        "version": 1,
+        "bundles": {
+          "jira": {
+            "mcp": [{ "name": "atlassian", "http": { "url": "https://mcp.atlassian.com/v2/mcp" }, "reads": [] }],
+            "skills": [], "agents": [], "guards": []
+          },
+          "openai-docs": {
+            "mcp": [{ "name": "openaiDeveloperDocs", "http": { "url": "https://developers.openai.com/mcp" }, "reads": [] }],
+            "skills": [], "agents": [], "guards": []
+          }
+        }
+      }
+    },
+    { "path": "<APP>/runes-e2e/sets/vidar-recall.md", "text": "---\nname: vidar-recall\nkind: set\nscope: [vidar]\n---\n# Vidar recall index\n\n<?recall?>\n" },
+    { "path": "<APP>/runes-e2e/rules/search-notes-first.md", "text": "---\nname: search-notes-first\nkind: rule\nscope: [vidar]\nstate: active\nactivate: recall\ndescription: \"Search the notes first\"\n---\n\nSearch the notes before asking.\n" },
+    { "path": "<APP>/runes-e2e/rules/desktop-only-recall.md", "text": "---\nname: desktop-only-recall\nkind: rule\nscope: [vidar, \"!bare\"]\nstate: active\nactivate: recall\ndescription: \"Not for Bare\"\n---\n\nOnly outside Bare.\n" },
+    { "path": "<APP>/runtime/runes/gen-index.json", "json": { "claude-rendered-bare": "gen-claude-rendered-bare-5e1d0a7c" } },
+    { "path": "<APP>/runtime/runes/kit/sets/kit.md", "text": "---\nname: kit\nkind: set\nscope: [kit]\n---\nThe kit set carries this row's skills, agents and guards.\n" },
+    {
+      "path": "<APP>/runtime/runes/kit/sets/kit.layer.json",
+      "json": {
+        "skills": ["~\\.claude\\skills\\e2e-review"],
+        "agents": ["~\\.claude\\agents\\e2e-hound.md"],
+        "modules": { "jira": {}, "openai-docs": {} }
+      }
+    },
+    {
+      "path": "<APP>/runtime/runes/claude-user/import.json",
+      "json": {
+        "source": "~\\.claude\\CLAUDE.md",
+        "sha256": "b07671b12cd9e620a5b66081a6036f34f1c717dbfa85c81717b703d062127212",
+        "date": "2026-10-24",
+        "bricks": [
+          { "id": "keep-answers-short", "sha256": "2bdad925aaed3a17394612498b4f620b69917380f2bfbaa9400b2472ef994678", "section": ["Style"], "line": 3, "prefix": "- " },
+          { "id": "name-the-file", "sha256": "ab1eaa374086b969ad831a825765b0c85cdb41801be48e800538624cec518a99", "section": ["Style"], "line": 4, "prefix": "- " },
+          { "id": "never-destructive", "sha256": "d2ccd9b47a2c88a72e72d39c3f467257f605243f5099fb76b1d1f1af5e942678", "section": ["Safety"], "line": 8, "prefix": "- " }
+        ]
+      }
+    },
+    { "path": "<APP>/runtime/runes/claude-user/rules/keep-answers-short.md", "text": "---\nname: keep-answers-short\nkind: rule\nscope: [claude-user]\nstate: active\nactivate: always\ndescription: \"Style\"\norigin: \"2026-10-24 ~\\\\.claude\\\\CLAUDE.md:3\"\n---\n\nKeep answers short.\n" },
+    { "path": "<APP>/runtime/runes/claude-user/rules/name-the-file.md", "text": "---\nname: name-the-file\nkind: rule\nscope: [claude-user]\nstate: active\nactivate: always\ndescription: \"Style\"\norigin: \"2026-10-24 ~\\\\.claude\\\\CLAUDE.md:4\"\n---\n\nName the file beside the claim.\n" },
+    { "path": "<APP>/runtime/runes/claude-user/rules/never-destructive.md", "text": "---\nname: never-destructive\nkind: rule\nscope: [claude-user]\nstate: active\nactivate: always\ndescription: \"Safety\"\norigin: \"2026-10-24 ~\\\\.claude\\\\CLAUDE.md:8\"\n---\n\nNever run destructive commands without asking.\n" },
+    { "path": "<APP>/runtime/runes/claude-user/sets/row-claude-bare.md", "text": "---\nname: row-claude-bare\nkind: set\nscope: [claude-user]\n---\n# Style\n\n- <?rune keep-answers-short?>\n- <?rune name-the-file?>\n\n# Safety\n\n- <?rune never-destructive?>\n" },
+    {
+      "path": "<APP>/runtime/runes/<MEMORY_LIB>/import.json",
+      "json": {
+        "source": "~\\.claude\\projects\\<WORK_SLUG>\\memory",
+        "sha256": "7ed310c3fd640d3953737674551ed1ef20974f897682ec7193cfcc3e06585a88",
+        "date": "2026-10-24",
+        "bricks": [
+          { "id": "reply-in-three-lines", "sha256": "7a6059d447d4e35a0ca73ea627ec58130647b75ad89a73f36b56d22eed301887", "section": ["Short replies"], "line": 3 }
+        ]
+      }
+    },
+    { "path": "<APP>/runtime/runes/<MEMORY_LIB>/rules/reply-in-three-lines.md", "text": "---\nname: reply-in-three-lines\nkind: rule\nscope: [<MEMORY_LIB>]\nstate: active\nactivate: always\ndescription: \"Short replies\"\norigin: \"2026-10-24 ~\\\\.claude\\\\projects\\\\<WORK_SLUG>\\\\memory:3\"\n---\n\nReply in three lines or fewer.\n" },
+    { "path": "<APP>/runtime/runes/<MEMORY_LIB>/sets/row-claude-bare.md", "text": "---\nname: row-claude-bare\nkind: set\nscope: [<MEMORY_LIB>]\n---\n## Short replies\n\n<?rune reply-in-three-lines?>\n" },
+    {
+      "path": "<APP>/runtime/runes/codex-user/import.json",
+      "json": {
+        "source": "~\\.codex\\AGENTS.md",
+        "sha256": "6e5281fe43533b87c01c902a2556be6521dd1f3f0f2bd6792a911766fba0b87d",
+        "date": "2026-10-24",
+        "bricks": [
+          { "id": "keep-diffs-small", "sha256": "e9be7255f72d2fef8fc0edaacaf462e7bdb01dffd063202520a6c18921dae41b", "section": ["Codex"], "line": 3, "prefix": "- " }
+        ]
+      }
+    },
+    { "path": "<APP>/runtime/runes/codex-user/rules/keep-diffs-small.md", "text": "---\nname: keep-diffs-small\nkind: rule\nscope: [codex-user]\nstate: active\nactivate: always\ndescription: \"Codex\"\norigin: \"2026-10-24 ~\\\\.codex\\\\AGENTS.md:3\"\n---\n\nKeep diffs small.\n" },
+    { "path": "<APP>/runtime/runes/codex-user/sets/row-codex-bare.md", "text": "---\nname: row-codex-bare\nkind: set\nscope: [codex-user]\n---\n# Codex\n\n- <?rune keep-diffs-small?>\n" },
+    {
+      "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/generate.json",
+      "json": {
+        "version": 1,
+        "library": "gen-claude-rendered-bare-5e1d0a7c",
+        "rowKey": "claude-rendered-bare",
+        "agent": "claude",
+        "model": "haiku",
+        "effort": "low",
+        "skillSha256": "f4cf19827fccb9541e5de99b45aeb19de2a3d5e5438021d933f432197516066a",
+        "date": "2026-10-24",
+        "inputs": [{ "path": "~\\.claude\\CLAUDE.md", "sha256": "b07671b12cd9e620a5b66081a6036f34f1c717dbfa85c81717b703d062127212", "lines": 8 }],
+        "runes": [
+          { "id": "short-answers", "kind": "rule", "locked": false, "sources": [{ "path": "~\\.claude\\CLAUDE.md", "line": 3 }] },
+          { "id": "ask-before-destroying", "kind": "rule", "locked": false, "sources": [{ "path": "~\\.claude\\CLAUDE.md", "line": 8 }] },
+          { "id": "braces-draft", "kind": "fact", "locked": true, "sources": [{ "path": "~\\.claude\\CLAUDE.md", "line": 4 }] }
+        ],
+        "sections": [
+          { "heading": "Style", "ids": ["short-answers", "braces-draft"] },
+          { "heading": "Safety", "ids": ["ask-before-destroying"] }
+        ],
+        "dropped": [],
+        "warnings": [],
+        "encodedChars": null
+      }
+    },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/rules/short-answers.md", "text": "---\nname: short-answers\nkind: rule\nscope: [gen-claude-rendered-bare-5e1d0a7c]\nstate: active\nactivate: always\ndescription: \"Keep answers short\"\norigin: \"2026-10-24 ~\\\\.claude\\\\CLAUDE.md:3\"\n---\n\nKeep answers short and name the file beside the claim.\n" },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/rules/ask-before-destroying.md", "text": "---\nname: ask-before-destroying\nkind: rule\nscope: [gen-claude-rendered-bare-5e1d0a7c]\nstate: active\nactivate: always\ndescription: \"Ask before destructive commands\"\norigin: \"2026-10-24 ~\\\\.claude\\\\CLAUDE.md:8\"\n---\n\nAsk before running a destructive command.\n" },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/facts/braces-draft.md", "text": "---\nname: braces-draft\nkind: fact\nscope: [gen-claude-rendered-bare-5e1d0a7c]\nstate: draft\nactivate: always\ndescription: \"Template note\"\norigin: \"2026-10-24 ~\\\\.claude\\\\CLAUDE.md:4\"\n---\n\nFill {{name}} before use.\n" },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/sets/row-claude-rendered-bare.md", "text": "---\nname: row-claude-rendered-bare\nkind: set\nscope: [gen-claude-rendered-bare-5e1d0a7c]\n---\n## Style\n\n- <?rune short-answers?>\n\n## Safety\n\n- <?rune ask-before-destroying?>\n" },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/sets/fork-short.md", "text": "---\nname: fork-short\nkind: set\nscope: [gen-claude-rendered-bare-5e1d0a7c]\n---\n- <?rune short-answers?>\n" },
+    {
+      "path": "<APP>/runtime/runes/gen-claude-rendered-bare-0c4f2b19/generate.json",
+      "json": {
+        "version": 1,
+        "library": "gen-claude-rendered-bare-0c4f2b19",
+        "rowKey": "claude-rendered-bare",
+        "agent": "claude",
+        "model": "haiku",
+        "effort": "low",
+        "skillSha256": "f4cf19827fccb9541e5de99b45aeb19de2a3d5e5438021d933f432197516066a",
+        "date": "2026-10-20",
+        "inputs": [{ "path": "~\\.claude\\CLAUDE.md", "sha256": "36182bed3f164a0cfaa77157280796cbb77e9145b74897cac8f849cbfc0ab64d", "lines": 3 }],
+        "runes": [
+          { "id": "short-answers", "kind": "rule", "locked": false, "sources": [{ "path": "~\\.claude\\CLAUDE.md", "line": 3 }] }
+        ],
+        "sections": [{ "heading": "Style", "ids": ["short-answers"] }],
+        "dropped": [],
+        "warnings": [],
+        "encodedChars": null
+      }
+    },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-0c4f2b19/rules/short-answers.md", "text": "---\nname: short-answers\nkind: rule\nscope: [gen-claude-rendered-bare-0c4f2b19]\nstate: active\nactivate: always\ndescription: \"Keep answers short\"\norigin: \"2026-10-20 ~\\\\.claude\\\\CLAUDE.md:3\"\n---\n\nKeep answers short.\n" },
+    { "path": "<APP>/runtime/runes/gen-claude-rendered-bare-0c4f2b19/sets/row-claude-rendered-bare.md", "text": "---\nname: row-claude-rendered-bare\nkind: set\nscope: [gen-claude-rendered-bare-0c4f2b19]\n---\n## Style\n\n- <?rune short-answers?>\n" },
+    { "path": "<HOME>/.claude/CLAUDE.md", "text": "# Style\n\n- Keep answers short.\n- Name the file beside the claim.\n\n# Safety\n\n- Never run destructive commands without asking.\n" },
+    { "path": "<HOME>/.claude/rules/e2e-style.md", "text": "# E2E style\n\n- Prefer plain words.\n" },
+    { "path": "<HOME>/.claude/projects/<WORK_SLUG>/memory/MEMORY.md", "text": "- [Short replies](feedback-short.md)\n" },
+    { "path": "<HOME>/.claude/projects/<WORK_SLUG>/memory/feedback-short.md", "text": "---\nname: Short replies\ndescription: The user wants short replies\ntype: feedback\n---\n\nReply in three lines or fewer.\n" },
+    { "path": "<HOME>/.claude/skills/e2e-review/SKILL.md", "text": "---\nname: e2e-review\ndescription: Review a diff for the e2e fixture.\n---\n\nRead the diff and list findings.\n" },
+    { "path": "<HOME>/.claude/agents/e2e-hound.md", "text": "---\nname: e2e-hound\ndescription: Read-only sweep for the e2e fixture.\n---\n\nGather facts and report.\n" },
+    {
+      "path": "<HOME>/.claude/settings.json",
+      "json": {
+        "hooks": {
+          "PreToolUse": [
+            { "matcher": "Bash", "hooks": [{ "type": "command", "command": "node \"<HOME>\\.claude\\hooks\\fail-closed.mjs\" \"<HOME>\\.claude\\hooks\\guard-install.mjs\"" }] }
+          ]
+        }
+      }
+    },
+    { "path": "<HOME>/.claude/hooks/fail-closed.mjs", "text": "// e2e stub: allows every call.\nprocess.exit(0);\n" },
+    { "path": "<HOME>/.claude/hooks/guard-install.mjs", "text": "// e2e stub: allows every call.\nprocess.exit(0);\n" },
+    { "path": "<HOME>/.codex/AGENTS.md", "text": "# Codex\n\n- Keep diffs small.\n" },
+    { "path": "<HOME>/.codex/config.toml", "text": "[mcp_servers.openaiDeveloperDocs]\nurl = \"https://developers.openai.com/mcp\"\n\n[mcp_servers.atlassian]\nurl = \"https://mcp.atlassian.com/v2/mcp\"\n" },
+    { "path": "<WORK>/.gitignore", "text": ".worktrees/\n" },
+    { "path": "<WORK>/CLAUDE.md", "text": "# E2E project\n\n- Use the e2e fixtures.\n" },
+    { "path": "<WORK>/AGENTS.md", "text": "# E2E project\n\n- Run the e2e tests before a commit.\n" },
+    { "path": "<WORK>/.claude/rules/scoped.md", "text": "---\npaths: src/**\n---\n\n- Only for files under src.\n" }
+  ]
+}

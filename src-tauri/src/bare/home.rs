@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use super::codex_mcp::{self, Hosted};
+use super::codex_mcp::{self, Tables as McpTables};
 
 /// The pure placement (`home_path.rs`), shared by `#[path]` with the Falcon shell.
 pub use super::home_path::resolve_for;
@@ -76,8 +76,19 @@ pub fn prepare_dirs(home: &Path, dirs: &[String]) -> Result<(), String> {
 /// It grants one of them write on the TEMP it runs with (the bare overlay points TEMP into
 /// `user-home`) and never revokes, so those ACEs are Codex's own, not a foreign principal. A missing
 /// or unparsable file, or any entry that is not a SID, yields no exemptions at all.
+/// Every Codex home gets the same rule (W3 L9): the legacy `codex-home` and each indexed
+/// combination home (`agent_homes::listed`) are read alike, each file on its own, so a bad file
+/// voids only itself and no home grants more than a legacy file would. Flow's `flow-codex` home
+/// (W2-L2d) is read alike: its Codex runs on the same TEMP.
 fn codex_cap_sids(home: &Path) -> Vec<acl::Sid> {
-    let Ok(text) = std::fs::read_to_string(home.join("codex-home").join("cap_sid")) else { return Vec::new() };
+    let legacy = home.join("codex-home");
+    let homes = super::agent_homes::listed(super::agent_homes::Agent::Codex, home, &legacy).into_iter().map(|(dir, _)| dir);
+    homes.chain([super::flow_home::dir(home)]).flat_map(|dir| cap_sids_in(&dir)).collect()
+}
+
+/// The exemptions one Codex home's own `cap_sid` records.
+fn cap_sids_in(codex_home: &Path) -> Vec<acl::Sid> {
+    let Ok(text) = std::fs::read_to_string(codex_home.join("cap_sid")) else { return Vec::new() };
     let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) else { return Vec::new() };
     let mut texts: Vec<&Value> = Vec::new();
     for (k, v) in &doc {
@@ -189,13 +200,19 @@ fn strings<'a>(v: &'a Value, out: &mut Vec<&'a str>) {
     }
 }
 
-/// `needle` in `hay` with no letter, digit or `_` on either side.
+/// `needle` (case-insensitive) in `hay` as a whole word with a `\` or `/` right next to it on at
+/// least one side: a path position, so ordinary words (`exit quill`, `a-quill-b`) never match.
 fn has_token(hay: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;
     }
+    let (hay, needle) = (hay.to_lowercase(), needle.to_lowercase());
     let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
-    hay.match_indices(needle).any(|(i, m)| !word(hay[..i].chars().next_back()) && !word(hay[i + m.len()..].chars().next()))
+    let sep = |c: Option<char>| matches!(c, Some('\\' | '/'));
+    hay.match_indices(needle.as_str()).any(|(i, m)| {
+        let (prev, next) = (hay[..i].chars().next_back(), hay[i + m.len()..].chars().next());
+        !word(prev) && !word(next) && (sep(prev) || sep(next))
+    })
 }
 
 /// The parsed-back file: same top-level keys as the template, hook events still arrays of
@@ -264,18 +281,76 @@ pub(crate) fn guard_brick(body: &str, root: &str, home: &str, guard: &Guard) -> 
 
 /// Template -> substituted, guard copies appended (`guards.rs`) -> temp file + rename -> read back and validated; any failure refuses.
 pub fn generate_settings(template_path: &Path, target: &Path, root: &Path, home: &Path, guard: &Guard, hooks: &[super::guards::HookEntry]) -> Result<(), String> {
+    generate_settings_with(template_path, target, root, home, guard, hooks, &SettingsExtras::default())
+}
+
+/// What a launch's sets add to the baseline settings.json (fold W2 L2a; `Loadout.permissions` and
+/// `Loadout.output_style`): rules appended to `permissions.allow` / `.ask` (no duplicates), the
+/// set's permission mode as `permissions.defaultMode`, its output style as top-level `outputStyle`.
+#[derive(Debug, Default, Clone)]
+pub struct SettingsExtras {
+    pub allow: Vec<String>,
+    pub ask: Vec<String>,
+    pub mode: Option<String>,
+    pub output_style: Option<String>,
+}
+
+/// `generate_settings` plus a launch's `extras`. The file is written only when its bytes differ;
+/// it is always read back and validated (the template's keys plus `outputStyle` when one is set).
+pub fn generate_settings_with(
+    template_path: &Path,
+    target: &Path,
+    root: &Path,
+    home: &Path,
+    guard: &Guard,
+    hooks: &[super::guards::HookEntry],
+    extras: &SettingsExtras,
+) -> Result<(), String> {
     let text = crate::fsx::read_text(template_path).map_err(|e| format!("Bare settings template {}: {e}", template_path.display()))?;
-    let template: Value = serde_json::from_str(crate::fsx::strip_bom(&text))
+    let mut template: Value = serde_json::from_str(crate::fsx::strip_bom(&text))
         .map_err(|e| format!("Bare settings template {}: {e}", template_path.display()))?;
     let (root_s, home_s) = (root.to_string_lossy().into_owned(), home.to_string_lossy().into_owned());
     let mut generated = template.clone();
     substitute(&mut generated, &root_s, &home_s);
     super::guards::append(&mut generated, hooks)?;
+    apply_extras(&mut generated, extras)?;
+    if let (Some(style), Some(t)) = (&extras.output_style, template.as_object_mut()) {
+        t.insert("outputStyle".into(), Value::String(style.clone()));
+    }
     let bytes = serde_json::to_vec_pretty(&generated).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(target, &bytes).map_err(|e| format!("Bare settings {}: {e}", target.display()))?;
+    if std::fs::read(target).ok().as_deref() != Some(bytes.as_slice()) {
+        crate::fsx::atomic_write(target, &bytes).map_err(|e| format!("Bare settings {}: {e}", target.display()))?;
+    }
     let back = crate::fsx::read_text(target).map_err(|e| format!("Bare settings read-back {}: {e}", target.display()))?;
     let back: Value = serde_json::from_str(&back).map_err(|e| format!("Bare settings read-back {}: {e}", target.display()))?;
     validate(&back, &template, &root_s, &home_s, guard)
+}
+
+fn apply_extras(settings: &mut Value, extras: &SettingsExtras) -> Result<(), String> {
+    let obj = settings.as_object_mut().ok_or("Bare settings: not a JSON object")?;
+    if !extras.allow.is_empty() || !extras.ask.is_empty() || extras.mode.is_some() {
+        let perms = obj.entry("permissions").or_insert_with(|| serde_json::json!({}));
+        let perms = perms.as_object_mut().ok_or("Bare settings: permissions is not an object")?;
+        for (key, add) in [("allow", &extras.allow), ("ask", &extras.ask)] {
+            if add.is_empty() {
+                continue;
+            }
+            let list = perms.entry(key).or_insert_with(|| Value::Array(Vec::new()));
+            let list = list.as_array_mut().ok_or_else(|| format!("Bare settings: permissions.{key} is not a list"))?;
+            for rule in add {
+                if !list.iter().any(|v| v.as_str() == Some(rule.as_str())) {
+                    list.push(Value::String(rule.clone()));
+                }
+            }
+        }
+        if let Some(mode) = &extras.mode {
+            perms.insert("defaultMode".into(), Value::String(mode.clone()));
+        }
+    }
+    if let Some(style) = &extras.output_style {
+        obj.insert("outputStyle".into(), Value::String(style.clone()));
+    }
+    Ok(())
 }
 
 /// A value of the TOML subset the Codex template uses: basic strings, integers, booleans and
@@ -511,7 +586,7 @@ pub const CTL_ENV_VARS: &[&str] = &["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_
 /// Store alias); it is often the per-user alias, so that exact argv entry is exempt from the guard.
 #[cfg(test)]
 pub fn validate_codex(doc: &TomlDoc, template: &TomlDoc, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard) -> Result<(), String> {
-    validate_codex_for(doc, template, root, home, pwsh, payload, guard, None, &[])
+    validate_codex_for(doc, template, root, home, pwsh, payload, guard, None, &McpTables::default())
 }
 
 /// A folder path compared by text: trimmed, `\\?\` stripped, `/` to `\`, trailing `\` dropped,
@@ -545,8 +620,8 @@ pub(crate) fn trusted_project_table(key: &str) -> String {
 /// validates through `validate_codex_with`.
 #[cfg(test)]
 #[allow(clippy::too_many_arguments)]
-pub fn validate_codex_for(doc: &TomlDoc, template: &TomlDoc, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, trusted: Option<&str>, enabled: &[&Hosted]) -> Result<(), String> {
-    validate_codex_with(doc, template, root, home, pwsh, payload, guard, trusted, enabled, &HookTrust::default())
+pub fn validate_codex_for(doc: &TomlDoc, template: &TomlDoc, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, trusted: Option<&str>, mcp: &McpTables) -> Result<(), String> {
+    validate_codex_with(doc, template, root, home, pwsh, payload, guard, trusted, mcp, &HookTrust::default())
 }
 
 /// Trust records for Vidar's own Codex hooks (`codex_hooks.rs`): `hooks_json` is the file every key
@@ -593,7 +668,7 @@ impl HookTrust<'_> {
 /// `validate_codex_for` with Vidar's hook trust: the doc's `hooks.*` keys are exactly `trust`'s
 /// `hooks.state."<key>".trusted_hash` pairs at their hashes (none when `trust` is empty).
 #[allow(clippy::too_many_arguments)]
-pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, trusted: Option<&str>, enabled: &[&Hosted], trust: &HookTrust) -> Result<(), String> {
+pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, trusted: Option<&str>, mcp: &McpTables, trust: &HookTrust) -> Result<(), String> {
     const L: &str = "Bare Codex config";
     if !pwsh.is_absolute() {
         return Err(format!("{L}: pwsh {} is not an absolute path; spawn refused", pwsh.display()));
@@ -615,7 +690,7 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
         return Err(format!("{L}: hooks tables must be the trust records of Vidar's own hooks.json only; spawn refused"));
     }
     let mut gk: Vec<&String> = doc.iter().map(|(k, _)| k).filter(|k| !k.starts_with("projects.") && !k.starts_with("hooks.")).collect();
-    let extra = codex_mcp::keys(enabled);
+    let extra = mcp.keys();
     let mut tk: Vec<&String> = template.iter().map(|(k, _)| k).chain(extra.iter()).collect();
     gk.sort();
     tk.sort();
@@ -662,11 +737,10 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
                 && matches!(argv.last(), Some(Toml::Str(s)) if s.ends_with("codex-notify.ps1") && Path::new(s).is_absolute()) => {}
         _ => return Err(format!("{L}: notify must be the template's argv ending in an absolute codex-notify.ps1")),
     }
-    // MCP: optional, but if any `mcp_servers.*` key is present it is the vidar-drive table, whole
-    // and exactly pinned (the server under the install root, the control identity by name only:
-    // the in-process token, or the Falcon session and its secret for a hosted tab).
-    // Enabled hosted tables (`bareCodexMcp`) are the only other servers: url and approval mode only.
-    let hosted_keys = codex_mcp::keys(enabled);
+    // The stock vidar-drive rune adds this pinned table only for vaults that carry it. Its
+    // env_vars name the control identity; no token value is written into the table or argv.
+    // The vault's other MCP tables are compared against exactly what the launch wrote.
+    let hosted_keys = extra.clone();
     let is_hosted = |k: &String| hosted_keys.contains(k);
     if doc.iter().any(|(k, _)| k.starts_with("mcp_servers.") && !is_hosted(k)) {
         const T: &str = "mcp_servers.vidar_drive.";
@@ -691,7 +765,7 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
             }
         }
     }
-    codex_mcp::check(doc, enabled)?;
+    codex_mcp::check(doc, mcp)?;
     let mut all: Vec<&str> = Vec::new();
     let mut instr: Vec<&str> = Vec::new();
     fn walk<'a>(v: &'a Toml, out: &mut Vec<&'a str>) {
@@ -718,9 +792,10 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
             }
             continue;
         }
-        // The pinned hosted urls are exact-compared by `codex_mcp::check`; a username inside one
-        // (a user named `notion`) is not a leak.
-        let pinned = k == "developer_instructions" || (k.starts_with("mcp_servers.") && k.ends_with(".url") && !k.starts_with("mcp_servers.vidar_drive."));
+        // The launch's MCP values are exact-compared by `codex_mcp::check` against what Vidar wrote
+        // from its catalogue and the spawning env; a username inside one (a user named `notion`, a
+        // `P4USER`) is not a leak. A user-profile path in one still refuses.
+        let pinned = k == "developer_instructions" || hosted_keys.contains(k);
         walk(v, if pinned { &mut instr } else { &mut all });
     }
     let (root_s, home_s) = (root.to_string_lossy(), home.to_string_lossy());
@@ -733,20 +808,20 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
 /// -> parsed back and validated. Any failure refuses the spawn; nothing falls back.
 #[cfg(test)]
 pub fn generate_codex_config(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard) -> Result<(), String> {
-    generate_codex_config_for(template_path, target, root, home, pwsh, payload, guard, None, &[])
+    generate_codex_config_for(template_path, target, root, home, pwsh, payload, guard, None, &McpTables::default())
 }
 
 /// `generate_codex_config` plus a trusted `[projects]` entry for the launch folder `cwd` (Codex
 /// would otherwise ask about trusting it at every start, since this file is rewritten per launch).
 #[allow(clippy::too_many_arguments)]
-pub fn generate_codex_config_for(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, enabled: &[&Hosted]) -> Result<(), String> {
-    generate_codex_config_with(template_path, target, root, home, pwsh, payload, guard, cwd, enabled, &HookTrust::default())
+pub fn generate_codex_config_for(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, mcp: &McpTables) -> Result<(), String> {
+    generate_codex_config_with(template_path, target, root, home, pwsh, payload, guard, cwd, mcp, &HookTrust::default())
 }
 
 /// `generate_codex_config_for` plus the `[hooks.state."<key>"]` trust tables of Vidar's own hooks
 /// (`codex_hooks::trust`), validated by `validate_codex_with`.
 #[allow(clippy::too_many_arguments)]
-pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, enabled: &[&Hosted], trust: &HookTrust) -> Result<(), String> {
+pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, mcp: &McpTables, trust: &HookTrust) -> Result<(), String> {
     let text = crate::fsx::read_text(template_path).map_err(|e| format!("Bare Codex template {}: {e}", template_path.display()))?;
     let text = crate::fsx::strip_bom(&text);
     let template = parse_toml_lite(text).map_err(|e| format!("Bare Codex template {}: {e}", template_path.display()))?;
@@ -763,12 +838,12 @@ pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Pa
             ("pwsh", toml_escape(&pwsh.to_string_lossy())),
         ],
     );
-    if !enabled.is_empty() {
+    if !mcp.text.is_empty() {
         if !filled.ends_with('\n') {
             filled.push('\n');
         }
         filled.push('\n');
-        filled.push_str(&codex_mcp::tables(enabled));
+        filled.push_str(&mcp.text);
     }
     if let Some(key) = &trusted {
         if !filled.ends_with('\n') {
@@ -785,10 +860,13 @@ pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Pa
         }
         filled.push_str(&trust.tables());
     }
-    crate::fsx::atomic_write(target, filled.as_bytes()).map_err(|e| format!("Bare Codex config {}: {e}", target.display()))?;
+    // An identical file is left as it is (no rename, no new timestamp); it is still read back and checked.
+    if std::fs::read(target).ok().as_deref() != Some(filled.as_bytes()) {
+        crate::fsx::atomic_write(target, filled.as_bytes()).map_err(|e| format!("Bare Codex config {}: {e}", target.display()))?;
+    }
     let back = crate::fsx::read_text(target).map_err(|e| format!("Bare Codex config read-back {}: {e}", target.display()))?;
     let doc = parse_toml_lite(&back).map_err(|e| format!("Bare Codex config read-back {}: {e}", target.display()))?;
-    validate_codex_with(&doc, &template, root, home, pwsh, payload, guard, trusted.as_deref(), enabled, trust)
+    validate_codex_with(&doc, &template, root, home, pwsh, payload, guard, trusted.as_deref(), mcp, trust)
 }
 
 /// The Raw Codex line's built payload as a profile file: `<codex_home>\vidar-<hash12>.config.toml`
@@ -848,6 +926,60 @@ pub fn mirror_claude_seen(normal: &Path, bare: &Path) -> Result<bool, String> {
     if changed {
         let bytes = serde_json::to_vec_pretty(&to).map_err(|e| format!("{}: {e}", bare.display()))?;
         crate::fsx::atomic_write(bare, &bytes).map_err(|e| format!("{}: {e}", bare.display()))?;
+    }
+    Ok(changed)
+}
+
+/// The `.claude.json` keys a set-combination home takes from the profile's own config dir
+/// (`seed_claude_json`): the onboarding flags, so a new home does not rerun first-run setup.
+const SEEDED_KEYS: [&str; 2] = ["hasCompletedOnboarding", "lastOnboardingVersion"];
+
+/// Seeds a set-combination home's `.claude.json` (`combo`) from the profile's own (`legacy`), fold W2
+/// L2a: each `SEEDED_KEYS` value and every project's `hasTrustDialogAccepted: true`, only where
+/// `combo` lacks the key. Nothing else is read across (no account, user ID, servers or history), and
+/// the file is never copied whole. A missing `legacy` seeds nothing; `Ok(true)` when written. A read
+/// or parse failure is an `Err` and touches nothing.
+pub fn seed_claude_json(legacy: &Path, combo: &Path) -> Result<bool, String> {
+    let read = |p: &Path| -> Result<serde_json::Map<String, Value>, String> {
+        let text = crate::fsx::read_text(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        match serde_json::from_str::<Value>(crate::fsx::strip_bom(&text)) {
+            Ok(Value::Object(o)) => Ok(o),
+            Ok(_) => Err(format!("{}: not a JSON object", p.display())),
+            Err(e) => Err(format!("{}: {e}", p.display())),
+        }
+    };
+    if !legacy.is_file() {
+        return Ok(false);
+    }
+    let from = read(legacy)?;
+    let mut to = if combo.exists() { read(combo)? } else { serde_json::Map::new() };
+    let mut changed = false;
+    for k in SEEDED_KEYS {
+        if let (Some(v), false) = (from.get(k), to.contains_key(k)) {
+            to.insert(k.to_string(), v.clone());
+            changed = true;
+        }
+    }
+    let trusted: Vec<&String> = from
+        .get("projects")
+        .and_then(Value::as_object)
+        .map(|p| p.iter().filter(|(_, e)| e.get("hasTrustDialogAccepted").and_then(Value::as_bool) == Some(true)).map(|(k, _)| k).collect())
+        .unwrap_or_default();
+    if !trusted.is_empty() {
+        let projects = to.entry("projects").or_insert_with(|| Value::Object(Default::default()));
+        if let Some(projects) = projects.as_object_mut() {
+            for k in trusted {
+                let entry = projects.entry(k.clone()).or_insert_with(|| Value::Object(Default::default()));
+                if let Some(e) = entry.as_object_mut().filter(|e| !e.contains_key("hasTrustDialogAccepted")) {
+                    e.insert("hasTrustDialogAccepted".into(), Value::Bool(true));
+                    changed = true;
+                }
+            }
+        }
+    }
+    if changed {
+        let bytes = serde_json::to_vec_pretty(&Value::Object(to)).map_err(|e| format!("{}: {e}", combo.display()))?;
+        crate::fsx::atomic_write(combo, &bytes).map_err(|e| format!("{}: {e}", combo.display()))?;
     }
     Ok(changed)
 }
@@ -1169,6 +1301,27 @@ mod tests {
     }
 
     #[test]
+    fn a_set_homes_cap_sid_passes_like_the_legacy_one_and_a_bad_one_voids_only_itself() {
+        let t = TempDir::new("cap-set");
+        let home = home_granting(&t, CAP, None);
+        let set = home.join("codex-homes").join("h1");
+        std::fs::create_dir_all(&set).unwrap();
+        std::fs::write(home.join("codex-homes.json"), r#"{"h1":{"sets":["lib/a"],"dir":"codex-homes/h1","lastUsed":0}}"#).unwrap();
+        // Not listed in the index: no exemption.
+        std::fs::create_dir_all(home.join("codex-homes").join("h2")).unwrap();
+        std::fs::write(home.join("codex-homes").join("h2").join("cap_sid"), format!(r#"{{"workspace":"{CAP}"}}"#)).unwrap();
+        let err = prepare_dirs(&home, &["codex-home".into()]).unwrap_err();
+        assert!(err.contains("other principal"), "{err}");
+        // A listed set home's own file passes; a malformed legacy file does not poison it.
+        std::fs::write(set.join("cap_sid"), format!(r#"{{"writable_root_by_path":{{"c:/h/temp":"{CAP}"}}}}"#)).unwrap();
+        std::fs::write(home.join("codex-home").join("cap_sid"), "not json").unwrap();
+        prepare_dirs(&home, &["codex-home".into(), "codex-homes/h1".into()]).unwrap();
+        // A foreign SID in the set home's file still refuses.
+        std::fs::write(set.join("cap_sid"), r#"{"workspace":"S-1-5-21-1-2-3-9"}"#).unwrap();
+        assert!(prepare_dirs(&home, &["codex-home".into()]).unwrap_err().contains("other principal"));
+    }
+
+    #[test]
     fn a_foreign_sid_not_in_cap_sid_still_refuses() {
         let t = TempDir::new("cap-foreign");
         let cap = r#"{"workspace":"S-1-5-21-1-2-3-4","writable_root_by_path":{"c:/h/temp":"S-1-5-21-1-2-3-9"}}"#;
@@ -1223,7 +1376,7 @@ mod tests {
     fn a_profile_path_or_username_in_the_settings_refuses() {
         let t: Value = serde_json::json!({ "a": "x", "hooks": {} });
         let bad_path = serde_json::json!({ "a": r"C:\Users\TestUser\.claude\x", "hooks": {} });
-        let bad_name = serde_json::json!({ "a": "run as testuser now", "hooks": {} });
+        let bad_name = serde_json::json!({ "a": r"D:\other\testuser\x", "hooks": {} });
         let fine = serde_json::json!({ "a": r"D:\vidar\homes\testusers-not-a-token", "hooks": {} });
         assert!(validate(&bad_path, &t, r"D:\vidar", r"D:\vidar\homes", &guard()).unwrap_err().contains("user-profile"));
         assert!(validate(&bad_name, &t, r"D:\vidar", r"D:\vidar\homes", &guard()).unwrap_err().contains("account name"));
@@ -1232,6 +1385,18 @@ mod tests {
         assert!(validate(&unrolled, &t, "", "", &guard()).unwrap_err().contains("array of matchers"));
         let extra = serde_json::json!({ "a": "x", "hooks": {}, "b": 1 });
         assert!(validate(&extra, &t, "", "", &guard()).is_err());
+    }
+
+    #[test]
+    fn the_account_name_is_refused_only_in_a_path_position() {
+        let g = Guard { user_profile: Some(r"C:\Users\nobody-here".into()), username: Some("quill".into()) };
+        let check = |s: &str| guard_strings(&[s], r"D:\vidar", r"D:\vidar\homes", &g, "t");
+        for ok in ["falcon-changed-quill-check", "exit quill", r"\quills\x", "quill is fine", "a quill-b"] {
+            check(ok).unwrap_or_else(|e| panic!("{ok:?}: {e}"));
+        }
+        for bad in [r"\\server\quill\x", "/home/quill", r"D:\quill\notes", "quill/x", r"D:\Other\QUILL"] {
+            assert!(check(bad).unwrap_err().contains("account name"), "{bad:?} passed");
+        }
     }
 
     #[test]
@@ -1457,7 +1622,7 @@ mod tests {
         let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
         prepare_dirs(&home, &["codex-home".into()]).unwrap();
         let target = home.join("codex-home").join("config.toml");
-        generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), Some(cwd), &[]).unwrap();
+        generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), Some(cwd), &McpTables::default()).unwrap();
         let text = std::fs::read_to_string(&target).unwrap();
         println!("{text}");
         parse_toml_lite(&text).unwrap().into_iter().filter(|(k, _)| k.starts_with("projects.")).collect()
@@ -1487,7 +1652,7 @@ mod tests {
         let (root, home) = (none.0.join("root"), none.0.join("agent-home"));
         prepare_dirs(&home, &["codex-home".into()]).unwrap();
         let target = home.join("codex-home").join("config.toml");
-        generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), Some(""), &[]).unwrap();
+        generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), Some(""), &McpTables::default()).unwrap();
         assert!(!std::fs::read_to_string(&target).unwrap().contains("\n[projects"));
     }
 
@@ -1496,11 +1661,11 @@ mod tests {
         let (root, home) = (Path::new(r"D:\vidar"), Path::new(r"D:\vidar\runtime\homes"));
         let t = TempDir::new("codex-trust-refuse");
         let target = t.0.join("config.toml");
-        generate_codex_config_for(&codex_template(), &target, root, home, pwsh(), "p", &guard(), None, &[]).unwrap();
+        generate_codex_config_for(&codex_template(), &target, root, home, pwsh(), "p", &guard(), None, &McpTables::default()).unwrap();
         let tpl = parse_toml_lite(&std::fs::read_to_string(codex_template()).unwrap()).unwrap();
         let doc = parse_toml_lite(&std::fs::read_to_string(&target).unwrap()).unwrap();
         let trust = ("projects.c:\\x.trust_level".to_string(), Toml::Str("trusted".into()));
-        let run = |d: &TomlDoc, key: Option<&str>| validate_codex_for(d, &tpl, root, home, pwsh(), "p", &guard(), key, &[]);
+        let run = |d: &TomlDoc, key: Option<&str>| validate_codex_for(d, &tpl, root, home, pwsh(), "p", &guard(), key, &McpTables::default());
         run(&doc, None).unwrap();
         // No launch folder given: any projects key refuses.
         let mut one = doc.clone();
@@ -1522,7 +1687,7 @@ mod tests {
         // And through the text: an extra key under the table fails the parse-back validation.
         let text = std::fs::read_to_string(&target).unwrap() + "\n[projects.'c:\\x']\ntrust_level = \"trusted\"\nextra = 1\n";
         let back = parse_toml_lite(&text).unwrap();
-        assert!(validate_codex_for(&back, &tpl, root, home, pwsh(), "p", &guard(), Some(r"c:\x"), &[]).is_err());
+        assert!(validate_codex_for(&back, &tpl, root, home, pwsh(), "p", &guard(), Some(r"c:\x"), &McpTables::default()).is_err());
     }
 
     #[test]
@@ -1650,7 +1815,8 @@ mod tests {
         let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
         prepare_dirs(&home, &["codex-home".into()]).unwrap();
         let target = home.join("codex-home").join("config.toml");
-        let enabled: Vec<&Hosted> = codex_mcp::HOSTED.iter().collect();
+        let all: Vec<&codex_mcp::Hosted> = codex_mcp::HOSTED.iter().collect();
+        let enabled = McpTables::hosted(&all);
         generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), Some(r"D:\Work"), &enabled).unwrap();
         let text = std::fs::read_to_string(&target).unwrap();
         assert!(text.contains("[mcp_servers.notion]\nurl = \"https://mcp.notion.com/mcp\"\ndefault_tools_approval_mode = \"writes\"\n"), "{text}");
@@ -1659,8 +1825,42 @@ mod tests {
         let key = trusted_project_key(r"D:\Work");
         validate_codex_for(&doc, &tpl, &root, &home, pwsh(), PAYLOAD, &guard(), key.as_deref(), &enabled).unwrap();
         // The same file against a narrower enabled list: the extra table refuses.
-        let err = validate_codex_for(&doc, &tpl, &root, &home, pwsh(), PAYLOAD, &guard(), key.as_deref(), &enabled[..1]).unwrap_err();
+        let err = validate_codex_for(&doc, &tpl, &root, &home, pwsh(), PAYLOAD, &guard(), key.as_deref(), &McpTables::hosted(&all[..1])).unwrap_err();
         assert!(err.contains("keys differ"), "{err}");
+    }
+
+    #[test]
+    fn a_hosted_spawns_server_tables_are_written_with_their_env_and_validate() {
+        use super::super::bundles::{Http, Mcp, Reads, Stdio};
+        let t = TempDir::new("codex-gen-servers");
+        let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
+        prepare_dirs(&home, &["codex-home".into()]).unwrap();
+        let target = home.join("codex-home").join("config.toml");
+        let mcp = |name: &str, http: Option<&str>, args: &[&str]| Mcp {
+            name: name.into(),
+            http: http.map(|u| Http { url: u.into(), oauth: None }),
+            stdio: http.is_none().then(|| Stdio { command: "p4mcp-server".into(), args: args.iter().map(|a| a.to_string()).collect(), env_from: vec!["P4USER".into()] }),
+            agents: Vec::new(),
+            reads: Reads::Names(Vec::new()),
+            optional: false,
+        };
+        // P4USER is the account name: a value Vidar wrote from the env, not a leak.
+        let env = |k: &str| (k == "P4USER").then(|| "testuser".to_string());
+        let (tables, warnings) = McpTables::servers(&[mcp("proxy", Some("http://127.0.0.1:8399/mcp"), &[]), mcp("p4", None, &["--readonly"])], &env).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), None, &tables).unwrap();
+        let text = std::fs::read_to_string(&target).unwrap();
+        assert!(text.contains("[mcp_servers.proxy]\nurl = \"http://127.0.0.1:8399/mcp\"\ndefault_tools_approval_mode = \"writes\"\n"), "{text}");
+        assert!(text.contains("[mcp_servers.p4]\ncommand = \"p4mcp-server\"\nargs = [\"--readonly\"]\ndefault_tools_approval_mode = \"writes\"\n"), "{text}");
+        assert!(text.contains("[mcp_servers.p4.env]\nP4USER = \"testuser\"\n"), "{text}");
+        // The same file against no tables refuses: the in-process line's config.toml holds none.
+        let doc = parse_toml_lite(&text).unwrap();
+        let tpl = parse_toml_lite(&std::fs::read_to_string(codex_template()).unwrap()).unwrap();
+        assert!(validate_codex_for(&doc, &tpl, &root, &home, pwsh(), PAYLOAD, &guard(), None, &McpTables::default()).is_err());
+        // A user-profile path in a server's args still refuses the spawn.
+        let (leak, _) = McpTables::servers(&[mcp("p4", None, &[r"C:\Users\testuser\p4.cfg"])], &env).unwrap();
+        let err = generate_codex_config_for(&codex_template(), &target, &root, &home, pwsh(), PAYLOAD, &guard(), None, &leak).unwrap_err();
+        assert!(err.contains("user-profile"), "{err}");
     }
 
     #[test]

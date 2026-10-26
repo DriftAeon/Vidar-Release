@@ -15,7 +15,6 @@
 .jira-pane .cx-head .wb-actions > button.wb-card-btn, .jira-pane .jx-filters > button.wb-card-btn, .jira-pane .jx-scope > button.wb-card-btn {
   box-sizing: border-box; height: var(--row-24); min-height: 0; padding: 0 var(--space-8);
 }
-.jira-pane .cx-head .wb-actions > button.wb-card-btn.cx-ico { padding: 0; }
 .jira-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 
 .jira-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
@@ -111,7 +110,8 @@
 .jx-sec[data-kind="task"] { --sec-hue: var(--kind-task); }
 .jx-sec[data-kind="bug"] { --sec-hue: var(--kind-bug); }
 .jx-sec[data-kind="subtask"] { --sec-hue: var(--kind-subtask); }
-.jx-sec > .cx-rows { padding: 0 var(--space-4); }
+/* the rows sit inside .jx-fold: their 4px inset plus the row's own 4px lines the icons up with the band's 8px */
+.jx-fold > .cx-rows { padding: 0 var(--space-4); }
 .jx-sec + .jx-sec { margin-top: var(--space-12); }
 .jira-pane .ty { display: inline-flex; flex: none; color: var(--fg-dim); }
 .jira-pane .jx-more { justify-content: center; color: var(--fg-dim); }

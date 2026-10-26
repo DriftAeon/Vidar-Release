@@ -12,13 +12,43 @@ import { setRoster, shownKey, shownRoots, typeLabel, setCloseLauncher } from "./
 import { onDepsChange } from "../deps/state";
 import { col, hideColsFrom, hoverOpen, launcherCols, setColumnRoot } from "./columns";
 import { markFor, menuRow, onGatewayMarksChange } from "./menu-rows";
+import { endKbNav } from "./keyboard";
 import { openPopover, placePopover, type ClosePopover } from "../modules/popover";
 import { placeBeside } from "../modules/place-menu";
 
+/** The slice of vidar.json the menu is built from. */
+export interface MenuSource { agents?: unknown; locations?: unknown }
+
 export interface LauncherMenuDeps {
   openLocations: (t: AgentType, anchor: HTMLElement, locations: Location[]) => void;
+  /** Re-reads vidar.json (reloadConfig); a read error resolves with `error` set. */
+  reload?: () => Promise<{ config: MenuSource; error?: unknown }>;
+  /** Rebuilds the menu from a fresh file (main.ts's buildTypeMenu call); it must call noteBuilt. */
+  rebuild?: (c: MenuSource) => void;
 }
 let openLocations: LauncherMenuDeps["openLocations"] = () => {};
+let reload: LauncherMenuDeps["reload"];
+let rebuild: LauncherMenuDeps["rebuild"];
+
+// JSON key of agents + locations at the last build; an open compares a fresh read against it.
+let builtKey: string | null = null;
+const sourceKey = (c: MenuSource) => JSON.stringify([c.agents ?? null, c.locations ?? null]);
+/** Record the config the menu was just built from. */
+export function noteBuilt(c: MenuSource): void { builtKey = sourceKey(c); }
+
+/** On open: re-read vidar.json and rebuild when agents or locations changed (a hand edit emits no
+ *  settings-changed). The rows are already up, so this applies only while no flyout column is open
+ *  and focus is not in the menu; otherwise the next open picks it up. A read error keeps the menu. */
+function refreshOnOpen(): void {
+  if (!reload || !rebuild) return;
+  void reload().then(({ config, error }) => {
+    if (error || !config || !closeMenu) return;
+    if (sourceKey(config) === builtKey) return;
+    if (launcherCols.some((c) => !c.classList.contains("hidden"))) return;
+    if (launcherMenu.contains(document.activeElement)) return;
+    rebuild!(config);
+  }, () => {});
+}
 
 export let newBtn: HTMLElement;
 export let launcherMenu: HTMLDivElement;
@@ -42,6 +72,7 @@ function teardown() {
   for (const c of launcherMenu.children) c.classList.remove("open");
   resetHostedProbe();
   resetRecentCache();
+  endKbNav();
 }
 
 // Type rows. Hover (or click) slides the workspace flyout out beside the row.
@@ -114,10 +145,13 @@ export function openLauncher() {
     onClose: () => { if (closeMenu === close) closeMenu = null; teardown(); },
   });
   closeMenu = close;
+  refreshOnOpen();
 }
 
 export function initLauncherMenu(deps: LauncherMenuDeps): void {
   openLocations = deps.openLocations;
+  reload = deps.reload;
+  rebuild = deps.rebuild;
   newBtn = document.getElementById("new-session")!;
   launcherMenu = document.createElement("div");
   setColumnRoot(launcherMenu);

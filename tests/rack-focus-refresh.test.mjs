@@ -90,28 +90,28 @@ test("Codex focus reads that tab and profile, then rereads on tab and agent chan
     globalThis.__rackFocused = session;
     document.dispatchEvent(new dom.window.CustomEvent("vidar-focus", { detail: session }));
   };
-  focus({ id: "codex-one", agent: "codex", profile: "bare-one", art: "codex", cwd: A });
+  focus({ id: "codex-one", agent: "codex", profile: "bare-one", rowKey: "codex-rendered-bare", art: "codex", cwd: A });
   await dom.flush();
-  assert.deepEqual(codexReads, [{ tab: "codex-one", profile: "bare-one" }]);
+  assert.deepEqual(codexReads, [{ tab: "codex-one", profile: "bare-one", row: "codex-rendered-bare" }]);
   assert.deepEqual(dom.rows().map((row) => row.dataset.server), ["codex-one"]);
   assert.equal(toolReads.length, 0, "a Codex stdio server is not listed until asked");
   await listRow(dom, dom.rows()[0]);
   assert.deepEqual(toolReads.at(-1), { name: "codex-one", scope: "codex", project: null, profile: "bare-one", tab: "codex-one" });
 
-  focus({ id: "codex-two", agent: "codex", profile: "bare-one", art: "codex", cwd: A });
+  focus({ id: "codex-two", agent: "codex", profile: "bare-one", rowKey: "codex-rendered-bare", art: "codex", cwd: A });
   await dom.flush();
-  assert.deepEqual(codexReads.at(-1), { tab: "codex-two", profile: "bare-one" });
+  assert.deepEqual(codexReads.at(-1), { tab: "codex-two", profile: "bare-one", row: "codex-rendered-bare" });
   assert.equal(codexReads.length, 2);
   assert.deepEqual(dom.rows().map((row) => row.dataset.server), ["codex-two"]);
 
   focus({ id: "claude-one", agent: "claude", profile: "bare-one", art: "code", cwd: A });
   await dom.flush();
   assert.equal(claudeReads.length, 2);
-  assert.deepEqual(claudeReads.at(-1), { project: A, profile: "bare-one" });
+  assert.deepEqual(claudeReads.at(-1), { project: A, profile: "bare-one", tab: "claude-one", row: null });
   assert.deepEqual(dom.rows().map((row) => row.dataset.server), ["claude"]);
 });
 
-test("Claude to Claude tab switches with the same cwd and profile do not reread", async (t) => {
+test("Claude to Claude tab switches with the same cwd do not reread unless each runs on its own home", async (t) => {
   const claudeReads = [];
   const dom = begin({
     read_mcp_servers: (args) => { claudeReads.push(args); return response(server("claude", A)); },
@@ -123,12 +123,20 @@ test("Claude to Claude tab switches with the same cwd and profile do not reread"
     globalThis.__rackFocused = session;
     document.dispatchEvent(new dom.window.CustomEvent("vidar-focus", { detail: session }));
   };
-  focus({ id: "claude-one", agent: "claude", profile: "p", art: "code", cwd: A });
+  const reads = () => dom.ipc.invoked.filter((cmd) => cmd === "read_mcp_servers").length;
+  focus({ id: "claude-one", agent: "claude", art: "code", cwd: A });
   await dom.flush();
-  const before = dom.ipc.invoked.filter((cmd) => cmd === "read_mcp_servers").length;
-  focus({ id: "claude-two", agent: "claude", profile: "p", art: "code", cwd: A });
+  const before = reads();
+  focus({ id: "claude-two", agent: "claude", art: "code", cwd: A });
   await dom.flush();
-  assert.equal(dom.ipc.invoked.filter((cmd) => cmd === "read_mcp_servers").length, before);
+  assert.equal(reads(), before, "unprofiled tabs share the user's own config");
+  // a Bare profile's tabs may sit on different combination homes, so each reads its own
+  focus({ id: "claude-three", agent: "claude", profile: "p", rowKey: "r", art: "code", cwd: A });
+  await dom.flush();
+  focus({ id: "claude-four", agent: "claude", profile: "p", rowKey: "r", art: "code", cwd: A });
+  await dom.flush();
+  assert.equal(reads(), before + 2);
+  assert.deepEqual(claudeReads.at(-1), { project: A, profile: "p", tab: "claude-four", row: "r" });
 });
 
 const userStdio = (name) => ({ ...server(name, null, false, "stdio"), scope: "user" });

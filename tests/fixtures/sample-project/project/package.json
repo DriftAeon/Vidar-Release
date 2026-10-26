@@ -1,0 +1,11 @@
+{
+  "name": "slugkit",
+  "version": "0.2.0",
+  "description": "Turn titles into URL slugs.",
+  "type": "module",
+  "bin": { "slugkit": "src/cli.js" },
+  "scripts": {
+    "test": "node --test \"test/*.spec.mjs\""
+  },
+  "license": "MIT"
+}

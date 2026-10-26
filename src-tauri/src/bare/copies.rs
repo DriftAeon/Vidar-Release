@@ -12,14 +12,13 @@
 //!   built in a fresh temp sibling, then renamed in; a file goes through `fsx::atomic_write`. A
 //!   name dropped from the list loses only the files whose bytes still match the ledger; a folder
 //!   is removed only once empty. No write follows a link or junction under the config dir.
-//! - A Codex Bare spawn (`plan_codex`/`sync_codex`, run 2026-10-17-bare-runes-flow C1) copies the
-//!   same `bareSkills` (plus every Codex Bare row's rune-set skills, `set_layer`: the union is copied so one
-//!   row's spawn never deletes another's, while the listing covers only the shared list and the row's own) into `<CODEX_HOME>\skills\<name>\` under the same rules, with its own ledger
-//!   `<home>\layer\codex-copies.json`. `bareCodexAgents` (`["<abs role .toml>"]`, checked by
-//!   `check_codex_agent`; absent or null is none) copies to `<CODEX_HOME>\agents\<file name>` under the
-//!   agent rules above, and each `bareAgents` entry becomes a derived role `<name>.toml` there
+//! - Per agent home (fold W2 L2b): `plan_for` and `sync_home` take named lists (a launch's loadout,
+//!   `set_loadout::resolve`) into one agent home with that home's own ledger `<dir>\.vidar-copies.json`.
+//!   A Codex spawn (`sync_codex`) copies the built-in skill and its loadout's skills into
+//!   `<CODEX_HOME>\skills\<name>\`; `.toml` role files (checked by `check_codex_agent`) copy to
+//!   `<CODEX_HOME>\agents\<file name>`, and each `.md` agent becomes a derived role `<name>.toml` there
 //!   (`codex_roles::convert`): no model (inherited from the parent), read-only agents marked and held
-//!   by prompt only, and an explicit `bareCodexAgents` file of the same name wins. `listing` turns the installed
+//!   by prompt only, and an explicit role file of the same name wins. `listing` turns the installed
 //!   SKILL.md files that ledger vouches for into the lines its built instructions end with
 //!   (`$name` and description); a skill without a usable name and description is not listed.
 //! Copy problems are warnings: they never refuse the spawn.
@@ -29,10 +28,13 @@ use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::home::HomeLock;
+use super::set_loadout::ResolveEnv;
+use crate::falcon::Agent;
 
 /// Per skill folder: at most this many files.
 pub const MAX_FILES: usize = 400;
@@ -40,8 +42,11 @@ pub const MAX_FILES: usize = 400;
 pub const MAX_BYTES: u64 = 4 * 1024 * 1024;
 const REPARSE: u32 = 0x0000_0400;
 const LEDGER: &str = "copies.json";
-/// A Codex spawn's own ledger: the Claude one is never read or written for Codex.
+/// The pre-W2 Codex ledger, `<home>\layer\codex-copies.json`: read once to seed a Codex home's own
+/// ledger, never moved or written (plan F6).
 const CODEX_LEDGER: &str = "codex-copies.json";
+/// A Codex home's own ledger, `<codex_home>\.vidar-copies.json` (one per set-combination home).
+const HOME_LEDGER: &str = ".vidar-copies.json";
 
 fn sha(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
@@ -77,13 +82,17 @@ pub struct AgentCopy {
 /// What a spawn copies, read and hashed before the lock.
 #[derive(Debug, Default)]
 pub struct Plan {
-    /// Every skill to copy. A Codex plan holds the union (shared plus every Codex Bare row's set skills).
+    /// Every skill to copy (a Codex plan: the built-in, then its loadout's skills; all listed).
     pub skills: Vec<SkillCopy>,
-    /// A Codex plan's listing scope: the lowercased folders the spawning row lists (built-in, shared and
-    /// its own set skills). `None` lists every skill in `skills`.
-    pub list_only: Option<Vec<String>>,
     pub agents: Vec<AgentCopy>,
     pub warnings: Vec<String>,
+}
+
+impl Plan {
+    /// The source paths of the skills and agents this plan takes, for the launch record.
+    pub fn item_sources(&self) -> (Vec<String>, Vec<String>) {
+        (self.skills.iter().map(|s| s.source.clone()).collect(), self.agents.iter().map(|a| a.source.clone()).collect())
+    }
 }
 
 /// A plain file or folder name a copy may take (no leading dot, no path or reserved characters).
@@ -222,17 +231,10 @@ pub fn check_codex_agent(path: &str, home: Option<&Path>) -> Result<AgentCopy, S
 }
 
 /// `bareSkills` and `bareAgents` of vidar.json at `config`, raw. A missing file or key is an empty
-/// list; anything unreadable is a warning and an empty list.
+/// list; anything unreadable is a warning and an empty list. Test-only since fold W2 L2a: a Claude
+/// launch takes its skills and agents from its sets (`plan_for`).
+#[cfg(test)]
 pub fn lists(config: &Path) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let (skills, agents, _, warnings) = lists_of(config, false);
-    (skills, agents, warnings)
-}
-
-/// `lists`, plus the Claude agents a Codex spawn derives roles from. `codex` reads the skill list from
-/// `bareCodexSkills` when that key is present, else `bareSkills`, the agent list from `bareCodexAgents`
-/// (absent or null is none) and the derived list from `bareAgents`; otherwise the agent list is
-/// `bareAgents` and the derived list is empty.
-fn lists_of(config: &Path, codex: bool) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
     let mut warnings = Vec::new();
     let root: Value = match crate::fsx::read_text(config) {
         Ok(t) => match serde_json::from_str(crate::fsx::strip_bom(&t)) {
@@ -263,91 +265,44 @@ fn lists_of(config: &Path, codex: bool) -> (Vec<String>, Vec<String>, Vec<String
             }
         }
     };
-    // A Codex spawn reads `bareCodexSkills` when the key is present (even `[]`), else `bareSkills`.
-    let skills_key = if codex && matches!(root.get("bareCodexSkills"), Some(v) if !v.is_null()) { "bareCodexSkills" } else { "bareSkills" };
-    let skills = list(skills_key);
-    let (agents, derived) = if codex { (list("bareCodexAgents"), list("bareAgents")) } else { (list("bareAgents"), Vec::new()) };
-    (skills, agents, derived, warnings)
+    let skills = list("bareSkills");
+    let agents = list("bareAgents");
+    (skills, agents, warnings)
 }
 
 /// Reads and hashes every source `config` names (run before the home lock).
+#[cfg(test)]
 pub fn plan(config: &Path, home: &Path) -> Plan {
     let (skills, agents, warnings) = lists(config);
     plan_from(&skills, &agents, Some(home), warnings)
 }
 
-/// A Codex spawn's plan: the built-in skill, then `bareCodexSkills` (else `bareSkills`), read and hashed before the lock.
-pub fn plan_codex(config: &Path, home: &Path, row_key: Option<&str>) -> Plan {
-    plan_codex_row(config, home, &crate::paths::root(), row_key)
+/// A Codex launch copies exactly the skill sources resolved from its Rune Vault.
+/// The stock vidar-control source is one of those only when its skill rune is present.
+pub(crate) fn codex_skills_in(_root: &Path, skills: &[String]) -> Vec<String> {
+    skills.to_vec()
 }
 
-/// The keys of the Codex Bare rows in vidar.json that carry `sets` (the admission test of a spawn).
-fn codex_set_rows(config: &Path) -> Vec<String> {
-    let Some(root) = crate::fsx::read_text(config).ok().and_then(|t| serde_json::from_str::<Value>(crate::fsx::strip_bom(&t)).ok()) else { return Vec::new() };
-    let mut keys: Vec<String> = Vec::new();
-    for e in root.get("agents").and_then(Value::as_array).into_iter().flatten() {
-        let Some(k) = e.get("key").and_then(Value::as_str).map(str::trim).filter(|k| !k.is_empty()) else { continue };
-        if e.get("sets").is_some() && !keys.iter().any(|o| o == k) && super::admit_row_key(Some(k.to_string()), Some("bare"), Some(config)).is_ok() {
-            keys.push(k.to_string());
+/// Reads and hashes named skill folders and agent files for one agent's home (run before the home
+/// lock; every rule of the module header applies). Claude agents are `.md` files (`check_agent`).
+/// Codex agents are `.toml` role files (`check_codex_agent`) taken first, then a role derived from
+/// each `.md` agent (`derive_roles`; an explicit role of the same file name wins).
+pub(crate) fn plan_for(agent: Agent, skills: &[String], agents: &[String], home: Option<&Path>) -> Plan {
+    match agent {
+        Agent::Claude => plan_with(skills, agents, home, Vec::new(), check_agent),
+        Agent::Codex => {
+            let is_md = |a: &&String| Path::new(a.as_str()).extension().is_some_and(|e| e.eq_ignore_ascii_case("md"));
+            let (derived, roles): (Vec<String>, Vec<String>) = agents.iter().cloned().partition(|a| is_md(&a));
+            let mut plan = plan_with(skills, &roles, home, Vec::new(), check_codex_agent);
+            derive_roles(&mut plan, &derived, home);
+            plan
         }
     }
-    keys
 }
 
-/// `plan_codex` with the install root given: `<root>\profiles\bare\codex-skills\vidar-control` goes ahead of the user's
-/// list when that folder exists, so a same-name user skill is dropped with the duplicate warning. The
-/// `bareCodexAgents` role files come first, then a role derived from each `bareAgents` entry (`derive_roles`).
-#[cfg(test)]
-pub fn plan_codex_in(config: &Path, home: &Path, root: &Path) -> Plan {
-    plan_codex_row(config, home, root, None)
-}
-
-/// `plan_codex_in` for the spawn of `row_key`. Copies the UNION of the shared list and every Codex Bare row's
-/// set skills (`set_layer`, each set's `codexSkills`/`skills`): `sync_skills` deletes any name dropped from the
-/// wanted list, so a per-row copy would let row B's spawn delete row A's skill while A runs. `list_only` scopes
-/// the `$name` listing to the built-in, the shared list and `row_key`'s own set skills.
-pub fn plan_codex_row(config: &Path, home: &Path, root: &Path, row_key: Option<&str>) -> Plan {
-    let (mut skills, agents, derived, mut warnings) = lists_of(config, true);
-    let builtin = root.join("profiles").join("bare").join("codex-skills").join("vidar-control");
-    if builtin.is_dir() {
-        skills.insert(0, builtin.to_string_lossy().into_owned());
-    }
-    let same = |a: &str, b: &str| a.replace('/', "\\").eq_ignore_ascii_case(&b.replace('/', "\\"));
-    let mut listed: Vec<String> = skills.clone();
-    let row_key = row_key.map(str::trim).filter(|k| !k.is_empty());
-    let user_home = super::set_layer::user_home();
-    for key in codex_set_rows(config) {
-        let row = match super::layer::row_sets(config, &key) {
-            Ok(r) => r,
-            Err(e) => {
-                warnings.push(e);
-                continue;
-            }
-        };
-        let (layer, w) = super::set_layer::row_layer(root, &row, user_home.as_deref());
-        for w in w {
-            if !warnings.contains(&w) {
-                warnings.push(w);
-            }
-        }
-        for p in layer.codex_skills {
-            if Some(key.as_str()) == row_key && !listed.iter().any(|o| same(o, &p)) {
-                listed.push(p.clone());
-            }
-            if !skills.iter().any(|o| same(o, &p)) {
-                skills.push(p);
-            }
-        }
-    }
-    let mut plan = plan_with(&skills, &agents, Some(home), warnings, check_codex_agent);
-    plan.list_only = Some(plan.skills.iter().filter(|s| listed.iter().any(|l| same(l, &s.source))).map(|s| s.name.to_lowercase()).collect());
-    derive_roles(&mut plan, &derived, Some(home));
-    plan
-}
-
-/// Each `bareAgents` entry, through `check_agent` and `codex_roles::convert`, joins `plan.agents` as a
+/// Each `.md` agent, through `check_agent` and `codex_roles::convert`, joins `plan.agents` as a
 /// role file (source the `.md`, bytes and sha the TOML). A role file name already in the plan wins: an
-/// explicit `bareCodexAgents` file, or an earlier derived role. Every skip is a warning.
+/// explicit `.toml` role, or an earlier derived role. Every skip is a warning.
 fn derive_roles(plan: &mut Plan, derived: &[String], home: Option<&Path>) {
     let explicit = plan.agents.len();
     for a in derived {
@@ -370,7 +325,7 @@ fn derive_roles(plan: &mut Plan, derived: &[String], home: Option<&Path>) {
             }
         };
         if let Some(i) = plan.agents.iter().position(|o| o.name.eq_ignore_ascii_case(&role.file_name)) {
-            let by = if i < explicit { "a bareCodexAgents file" } else { "another derived role" };
+            let by = if i < explicit { "a Codex role file" } else { "another derived role" };
             plan.warnings.push(format!("Bare agent {a}: derived role {} skipped; {by} takes that name", role.file_name));
             continue;
         }
@@ -379,6 +334,7 @@ fn derive_roles(plan: &mut Plan, derived: &[String], home: Option<&Path>) {
     }
 }
 
+#[cfg(test)]
 pub fn plan_from(skills: &[String], agents: &[String], home: Option<&Path>, warnings: Vec<String>) -> Plan {
     plan_with(skills, agents, home, warnings, check_agent)
 }
@@ -503,7 +459,7 @@ fn prune_empty(dir: &Path) {
     }
 }
 
-fn sync_skills(dir: &Path, wanted: &[SkillCopy], ledger: &mut BTreeMap<String, Placed>, warnings: &mut Vec<String>) {
+fn sync_skills(dir: &Path, wanted: &[SkillCopy], ledger: &mut BTreeMap<String, Placed>, warnings: &mut Vec<String>, delete_gone: bool) {
     if wanted.is_empty() && ledger.is_empty() {
         return;
     }
@@ -579,6 +535,9 @@ fn sync_skills(dir: &Path, wanted: &[SkillCopy], ledger: &mut BTreeMap<String, P
         }
         ledger.insert(key, Placed { files, ..fresh });
     }
+    if !delete_gone {
+        return;
+    }
     let gone: Vec<String> = ledger.keys().filter(|k| !wanted.iter().any(|s| s.name.to_lowercase() == **k)).cloned().collect();
     for key in gone {
         let Some(placed) = ledger.remove(&key) else { continue };
@@ -604,7 +563,7 @@ fn sync_skills(dir: &Path, wanted: &[SkillCopy], ledger: &mut BTreeMap<String, P
     }
 }
 
-fn sync_agents(dir: &Path, wanted: &[AgentCopy], ledger: &mut BTreeMap<String, Placed>, warnings: &mut Vec<String>) {
+fn sync_agents(dir: &Path, wanted: &[AgentCopy], ledger: &mut BTreeMap<String, Placed>, warnings: &mut Vec<String>, delete_gone: bool) {
     if wanted.is_empty() && ledger.is_empty() {
         return;
     }
@@ -648,6 +607,9 @@ fn sync_agents(dir: &Path, wanted: &[AgentCopy], ledger: &mut BTreeMap<String, P
             Err(e) => warnings.push(format!("Bare agent {} not copied ({e})", a.name)),
         }
     }
+    if !delete_gone {
+        return;
+    }
     let gone: Vec<String> = ledger.keys().filter(|k| !wanted.iter().any(|a| a.name.to_lowercase() == **k)).cloned().collect();
     for key in gone {
         let Some(placed) = ledger.remove(&key) else { continue };
@@ -667,7 +629,9 @@ fn sync_agents(dir: &Path, wanted: &[AgentCopy], ledger: &mut BTreeMap<String, P
 /// Syncs `plan` into `config_dir` (the home's `CLAUDE_CONFIG_DIR`) under the caller's lock and
 /// returns the skill folders the ledger holds after it, in `bareSkills` order (the skills the
 /// launch carries, which the manifest records; one left unplaced is not named), and the warnings
-/// (the plan's first). `config_dir` `None`: nothing is copied.
+/// (the plan's first). `config_dir` `None`: nothing is copied. Test-only since fold W2 L2a (Claude
+/// launches sync through `sync_home`); its tests still cover `sync_into`.
+#[cfg(test)]
 pub fn sync_named(_lock: &HomeLock, home_dir: &Path, config_dir: Option<&Path>, plan: Plan) -> (Vec<String>, Vec<String>) {
     let Some(config_dir) = config_dir else {
         let mut warnings = plan.warnings;
@@ -677,7 +641,7 @@ pub fn sync_named(_lock: &HomeLock, home_dir: &Path, config_dir: Option<&Path>, 
         return (Vec::new(), warnings);
     };
     let order: Vec<String> = plan.skills.iter().map(|s| s.name.clone()).collect();
-    let (ledger, warnings) = sync_into(&home_dir.join("layer").join(LEDGER), home_dir, &config_dir.join("skills"), Some(&config_dir.join("agents")), plan);
+    let (ledger, warnings) = sync_into(&home_dir.join("layer").join(LEDGER), home_dir, &config_dir.join("skills"), Some(&config_dir.join("agents")), plan, true);
     let names = order.iter().filter_map(|n| ledger.skills.get(&n.to_lowercase()).map(|p| p.name.clone())).collect();
     (names, warnings)
 }
@@ -690,26 +654,93 @@ pub struct Listed {
     pub description: String,
 }
 
-/// Syncs a Codex plan's skills into `<codex_home>\skills` under the caller's lock, with its own
-/// ledger `<home>\layer\codex-copies.json` (never the Claude one; the same rules as `sync`).
-/// Returns the listing read from the installed copies (`installed_listing`), in `bareSkills`
-/// order, and the warnings.
-pub fn sync_codex(_lock: &HomeLock, home_dir: &Path, codex_home: &Path, plan: Plan) -> (Vec<Listed>, Vec<String>) {
+/// Syncs `plan` into one agent home `dir` (a `CLAUDE_CONFIG_DIR` or a `CODEX_HOME`) under the caller's
+/// lock: skills to `<dir>\skills\<name>\`, agents to `<dir>\agents\<file>`, with the home's own ledger
+/// `<dir>\.vidar-copies.json`. A home without one first takes the pre-fold ledger's entries it still
+/// holds as placed (`<home>\layer\copies.json` for Claude, `codex-copies.json` for Codex; read, never
+/// moved or written). `delete_gone` false (the home has a live or unknown owner, plan F2): an item the
+/// plan dropped stays on disk and in the ledger until an ownerless spawn. Returns the skill folders the
+/// ledger holds after it, in plan order, and the warnings (the plan's first).
+pub(crate) fn sync_home(agent: Agent, _lock: &HomeLock, home_dir: &Path, dir: &Path, plan: Plan, delete_gone: bool) -> (Vec<String>, Vec<String>) {
+    let order: Vec<String> = plan.skills.iter().map(|s| s.name.clone()).collect();
+    let (ledger, warnings) = sync_dir(agent, home_dir, dir, plan, delete_gone);
+    (order.iter().filter_map(|n| ledger.skills.get(&n.to_lowercase()).map(|p| p.name.clone())).collect(), warnings)
+}
+
+/// `sync_home`'s body: the ledger as left and the warnings.
+fn sync_dir(agent: Agent, home_dir: &Path, dir: &Path, plan: Plan, delete_gone: bool) -> (Ledger, Vec<String>) {
+    let ledger_path = dir.join(HOME_LEDGER);
+    let mut seed_warnings = Vec::new();
+    if !exists(&ledger_path) {
+        if let Err(e) = seed_home_ledger(agent, home_dir, dir) {
+            seed_warnings.push(e);
+        }
+    }
+    let (ledger, mut warnings) = sync_into(&ledger_path, home_dir, &dir.join("skills"), Some(&dir.join("agents")), plan, delete_gone);
+    warnings.extend(seed_warnings);
+    (ledger, warnings)
+}
+
+/// A Codex home's sync (`sync_home`), returning the listing read from the installed copies
+/// (`installed_listing`) in plan order instead of the folder names.
+pub fn sync_codex(_lock: &HomeLock, home_dir: &Path, codex_home: &Path, plan: Plan, delete_gone: bool) -> (Vec<Listed>, Vec<String>) {
     let order = listed_order(&plan);
-    let skills_dir = codex_home.join("skills");
-    let agents_dir = codex_home.join("agents");
-    let (ledger, mut warnings) = sync_into(&home_dir.join("layer").join(CODEX_LEDGER), home_dir, &skills_dir, Some(&agents_dir), plan);
-    let listed = installed_listing(&skills_dir, &order, &ledger, &mut warnings);
+    let (ledger, mut warnings) = sync_dir(Agent::Codex, home_dir, codex_home, plan, delete_gone);
+    let listed = installed_listing(&codex_home.join("skills"), &order, &ledger, &mut warnings);
     (listed, warnings)
 }
 
-/// The skill folders a plan's listing covers, in plan order: all of them, or the `list_only` scope.
+/// The agent's pre-fold, home-wide ledger under `<home>\layer\`.
+fn legacy_ledger(agent: Agent, home_dir: &Path) -> PathBuf {
+    home_dir.join("layer").join(match agent {
+        Agent::Claude => LEDGER,
+        Agent::Codex => CODEX_LEDGER,
+    })
+}
+
+/// The pre-fold ledger's entries agent home `dir` still holds as Vidar placed them: a skill whose every
+/// recorded file is a plain file with the recorded hash, an agent file likewise. Read-only.
+fn home_ledger_from_legacy(agent: Agent, home_dir: &Path, dir: &Path) -> Result<Ledger, String> {
+    let old = read_ledger(&legacy_ledger(agent, home_dir))?;
+    let skills_dir = dir.join("skills");
+    let agents_dir = dir.join("agents");
+    let skills = old
+        .skills
+        .into_iter()
+        .filter(|(_, p)| plain_target(&skills_dir, &p.name).is_some_and(|d| d.is_dir()) && p.files.iter().all(|(rel, h)| plain_target(&skills_dir.join(&p.name), rel).and_then(|t| hash_of(&t)).as_ref() == Some(h)))
+        .collect();
+    let agents = old
+        .agents
+        .into_iter()
+        .filter(|(_, p)| plain_target(&agents_dir, &p.name).and_then(|t| hash_of(&t)).as_ref() == p.files.values().next())
+        .collect();
+    Ok(Ledger { skills, agents })
+}
+
+/// Copies the validated pre-fold entries into `<dir>\.vidar-copies.json` (plan F6); the original
+/// stays where it is, untouched. Nothing to keep writes nothing.
+fn seed_home_ledger(agent: Agent, home_dir: &Path, dir: &Path) -> Result<(), String> {
+    let seeded = home_ledger_from_legacy(agent, home_dir, dir)?;
+    if seeded == Ledger::default() {
+        return Ok(());
+    }
+    let path = dir.join(HOME_LEDGER);
+    let json = serde_json::to_string_pretty(&seeded).map_err(|e| e.to_string())?;
+    crate::fsx::atomic_write(&path, json.as_bytes()).map_err(|e| format!("Bare copies ledger {} not seeded ({e})", path.display()))
+}
+
+/// A Codex home's ledger as a spawn would start from it, read-only: its own, else the seed.
+fn codex_ledger_now(home_dir: &Path, codex_home: &Path) -> Ledger {
+    let own = codex_home.join(HOME_LEDGER);
+    match exists(&own) {
+        true => read_ledger(&own).unwrap_or_default(),
+        false => home_ledger_from_legacy(Agent::Codex, home_dir, codex_home).unwrap_or_default(),
+    }
+}
+
+/// The skill folders a plan's listing covers: every one, in plan order.
 fn listed_order(plan: &Plan) -> Vec<String> {
-    plan.skills
-        .iter()
-        .filter(|s| plan.list_only.as_ref().is_none_or(|l| l.contains(&s.name.to_lowercase())))
-        .map(|s| s.name.clone())
-        .collect()
+    plan.skills.iter().map(|s| s.name.clone()).collect()
 }
 
 /// The listing built from the SKILL.md Vidar holds in `skills_dir\<folder>\` after the sync
@@ -825,17 +856,23 @@ pub fn listing(skills: &[Listed]) -> String {
     out
 }
 
-/// The listing a Codex spawn would carry now, read-only (no lock, no sync, no ledger write): `bareCodexSkills` (else `bareSkills`) in
-/// order, each skill listed only when the installed copy still matches the ledger, as after a sync.
-pub fn listing_now(config: &Path, home_dir: &Path, codex_home: &Path, row_key: Option<&str>) -> String {
-    let order = listed_order(&plan_codex(config, home_dir, row_key));
-    let ledger = read_ledger(&home_dir.join("layer").join(CODEX_LEDGER)).unwrap_or_default();
+/// The listing a Codex spawn with no runesets would carry now, read-only (no lock, no sync, no ledger
+/// write): the built-in skill, then whatever the empty resolve gives for Codex (`set_loadout::resolve`),
+/// each listed only when the installed copy still matches the ledger, as after a sync.
+pub fn listing_now(config: &Path, home_dir: &Path, codex_home: &Path) -> String {
+    let root = crate::paths::root();
+    let user_home = super::set_layer::user_home();
+    let env = ResolveEnv { root: &root, config, home: home_dir, user_home: user_home.as_deref() };
+    let (loadout, _) = super::set_loadout::resolve(&env, Agent::Codex, &[]);
+    let order = listed_order(&plan_for(Agent::Codex, &codex_skills_in(&root, &loadout.skills), &[], Some(home_dir)));
+    let ledger = codex_ledger_now(home_dir, codex_home);
     listing(&installed_listing(&codex_home.join("skills"), &order, &ledger, &mut Vec::new()))
 }
 
 /// The shared sync: skills into `skills_dir`, agents into `agents_dir` (none: agents are not
-/// copied), the ledger at `ledger_path`. Returns the ledger as left and the warnings.
-fn sync_into(ledger_path: &Path, home_dir: &Path, skills_dir: &Path, agents_dir: Option<&Path>, plan: Plan) -> (Ledger, Vec<String>) {
+/// copied), the ledger at `ledger_path`. `delete_gone` false keeps dropped items (see `sync_codex`).
+/// Returns the ledger as left and the warnings.
+fn sync_into(ledger_path: &Path, home_dir: &Path, skills_dir: &Path, agents_dir: Option<&Path>, plan: Plan, delete_gone: bool) -> (Ledger, Vec<String>) {
     let mut warnings = plan.warnings;
     let mut ledger = match read_ledger(ledger_path) {
         Ok(l) => l,
@@ -845,9 +882,9 @@ fn sync_into(ledger_path: &Path, home_dir: &Path, skills_dir: &Path, agents_dir:
         }
     };
     let before = ledger.clone();
-    sync_skills(skills_dir, &plan.skills, &mut ledger.skills, &mut warnings);
+    sync_skills(skills_dir, &plan.skills, &mut ledger.skills, &mut warnings, delete_gone);
     if let Some(agents_dir) = agents_dir {
-        sync_agents(agents_dir, &plan.agents, &mut ledger.agents, &mut warnings);
+        sync_agents(agents_dir, &plan.agents, &mut ledger.agents, &mut warnings, delete_gone);
     }
     if ledger != before {
         let written = std::fs::create_dir_all(ledger_path.parent().unwrap_or(home_dir))
@@ -1085,30 +1122,15 @@ mod tests {
         assert_eq!(w.len(), 2, "{w:?}");
         let (s, a, w) = lists(&f.src.join("missing.json"));
         assert!(s.is_empty() && a.is_empty() && w.is_empty());
-        // A Codex plan derives roles from bareAgents, so a bad value warns there too.
-        let p = plan_codex_in(&config, &f.home, &f.src);
-        assert!(p.agents.is_empty());
-        assert!(p.warnings.iter().any(|w| w.contains("`bareAgents` is not a list")), "{:?}", p.warnings);
     }
 
     #[test]
-    fn codex_plan_reads_bare_codex_skills_and_falls_back_to_bare_skills() {
+    fn claude_plan_ignores_the_codex_keys() {
         let f = fx("codexlist");
         let (a, b) = (skill(&f.src, "alpha", "A."), skill(&f.src, "beta", "B."));
         let config = f.src.join("config.json");
         let names = |p: &Plan| p.skills.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
         let write = |v: serde_json::Value| std::fs::write(&config, v.to_string()).unwrap();
-
-        // Present list wins over bareSkills.
-        write(serde_json::json!({ "bareSkills": [a], "bareCodexSkills": [b] }));
-        assert_eq!(names(&plan_codex_in(&config, &f.home, &f.src)), vec!["beta".to_string()]);
-        // Present but empty copies nothing.
-        write(serde_json::json!({ "bareSkills": [a], "bareCodexSkills": [] }));
-        assert!(plan_codex_in(&config, &f.home, &f.src).skills.is_empty());
-        // Absent key falls back to bareSkills.
-        write(serde_json::json!({ "bareSkills": [a] }));
-        assert_eq!(names(&plan_codex_in(&config, &f.home, &f.src)), vec!["alpha".to_string()]);
-        // Claude's plan ignores the key.
         write(serde_json::json!({ "bareSkills": [a], "bareCodexSkills": [b] }));
         assert_eq!(names(&plan(&config, &f.home)), vec!["alpha".to_string()]);
         write(serde_json::json!({ "bareCodexSkills": [b] }));
@@ -1116,26 +1138,21 @@ mod tests {
     }
 
     #[test]
-    fn codex_plan_puts_the_built_in_skill_first_and_drops_a_same_name_user_skill() {
+    fn codex_plan_copies_only_skill_runes_in_the_vault() {
         let f = fx("builtin");
         let root = f.src.join("root");
         skill(&root.join("profiles").join("bare").join("codex-skills"), "vidar-control", "Built in.");
         let other = skill(&f.src, "beta", "B.");
         let dup = skill(&f.src.join("mine"), "vidar-control", "Mine.");
-        let config = f.src.join("config.json");
-        std::fs::write(&config, serde_json::json!({ "bareCodexSkills": [other, dup] }).to_string()).unwrap();
 
-        let p = plan_codex_in(&config, &f.home, &root);
+        let p = plan_for(Agent::Codex, &codex_skills_in(&root, &[other, dup]), &[], Some(&f.home));
         let names: Vec<_> = p.skills.iter().map(|s| s.name.clone()).collect();
-        assert_eq!(names, vec!["vidar-control".to_string(), "beta".to_string()]);
-        assert!(p.skills[0].source.contains("codex-skills"), "{}", p.skills[0].source);
-        assert!(p.warnings.iter().any(|w| w.contains("another skill named vidar-control comes first")), "{:?}", p.warnings);
+        assert_eq!(names, vec!["beta".to_string(), "vidar-control".to_string()]);
+        assert!(!p.skills[1].source.contains("codex-skills"), "{}", p.skills[1].source);
 
-        // An empty user list still leaves the built-in skill.
-        std::fs::write(&config, r#"{ "bareCodexSkills": [] }"#).unwrap();
-        assert_eq!(plan_codex_in(&config, &f.home, &root).skills.len(), 1);
-        // No built-in folder: today's behaviour.
-        assert!(plan_codex_in(&config, &f.home, &f.src.join("nowhere")).skills.is_empty());
+        // Merely having the built-in folder on disk never injects it.
+        assert!(plan_for(Agent::Codex, &codex_skills_in(&root, &[]), &[], Some(&f.home)).skills.is_empty());
+        assert!(codex_skills_in(&f.src.join("nowhere"), &[]).is_empty());
     }
 
     fn codex_agent(src: &Path, name: &str, body: &str) -> String {
@@ -1166,28 +1183,21 @@ mod tests {
     }
 
     #[test]
-    fn codex_plan_reads_bare_codex_agents_only_when_the_key_is_present() {
+    fn codex_plan_takes_role_files_and_derives_from_md_agents() {
         let f = fx("cagentplan");
         let a = codex_agent(&f.src, "reviewer", ROLE);
-        // No frontmatter: no role is derived from it (a warning), so only bareCodexAgents shows.
+        // No frontmatter: no role is derived from it (a warning), so only the role file shows.
         let claude = agent(&f.src, "claude", "Review it.");
-        let config = f.src.join("config.json");
         let names = |p: &Plan| p.agents.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
-        let write = |v: serde_json::Value| std::fs::write(&config, v.to_string()).unwrap();
 
-        write(serde_json::json!({ "bareCodexAgents": [a], "bareAgents": [claude] }));
-        assert_eq!(names(&plan_codex_in(&config, &f.home, &f.src)), vec!["reviewer.toml".to_string()]);
-        write(serde_json::json!({ "bareCodexAgents": [] , "bareAgents": [claude] }));
-        assert!(plan_codex_in(&config, &f.home, &f.src).agents.is_empty());
-        write(serde_json::json!({ "bareCodexAgents": null, "bareAgents": [claude] }));
-        assert!(plan_codex_in(&config, &f.home, &f.src).agents.is_empty());
-        write(serde_json::json!({ "bareAgents": [claude] }));
-        let p = plan_codex_in(&config, &f.home, &f.src);
+        let p = plan_for(Agent::Codex, &[], &[a.clone(), claude.clone()], Some(&f.home));
+        assert_eq!(names(&p), vec!["reviewer.toml".to_string()]);
+        let p = plan_for(Agent::Codex, &[], &[claude], Some(&f.home));
         assert!(p.agents.is_empty(), "{:?}", names(&p));
         assert!(p.warnings.iter().any(|w| w.contains("has no frontmatter; no Codex role derived")), "{:?}", p.warnings);
-        // Claude's plan ignores the key.
-        write(serde_json::json!({ "bareCodexAgents": [a] }));
-        assert!(plan(&config, &f.home).agents.is_empty());
+        // Claude's plan refuses a role file.
+        let p = plan_for(Agent::Claude, &[], &[a], Some(&f.home));
+        assert!(p.agents.is_empty() && !p.warnings.is_empty(), "{:?}", p.warnings);
     }
 
     const CLAUDE_AGENT: &str = "---\nname: reviewer\ndescription: Reviews a diff.\nmodel: opus\ntools: Read, Grep\n---\nReview the diff.\n";
@@ -1200,14 +1210,14 @@ mod tests {
         let config = f.src.join("config.json");
         std::fs::write(&config, serde_json::json!({ "bareAgents": [md] }).to_string()).unwrap();
 
-        let p = plan_codex_in(&config, &f.home, &f.src);
+        let p = plan_for(Agent::Codex, &[], std::slice::from_ref(&md), Some(&f.home));
         assert!(p.warnings.is_empty(), "{:?}", p.warnings);
         assert_eq!(p.agents.len(), 1);
         assert_eq!(p.agents[0].name, "reviewer.toml");
         assert_eq!(p.agents[0].source, md);
         assert_eq!(p.agents[0].sha, sha(&p.agents[0].bytes));
         let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
-        assert!(sync_codex(&lock, &f.home, &codex_home, p).1.is_empty());
+        assert!(sync_codex(&lock, &f.home, &codex_home, p, true).1.is_empty());
         let placed = std::fs::read_to_string(codex_home.join("agents").join("reviewer.toml")).unwrap();
         assert!(super::super::codex_roles::read_only_by_prompt(&placed), "{placed}");
         let t: toml::Table = placed.parse().unwrap();
@@ -1229,15 +1239,13 @@ mod tests {
         let explicit = codex_agent(&f.src, "reviewer", ROLE);
         let md = agent(&f.src, "reviewer", CLAUDE_AGENT);
         let other = agent(&f.src.join("again"), "reviewer", CLAUDE_AGENT);
-        let config = f.src.join("config.json");
-        std::fs::write(&config, serde_json::json!({ "bareCodexAgents": [explicit], "bareAgents": [md] }).to_string()).unwrap();
-        let p = plan_codex_in(&config, &f.home, &f.src);
+        // The role file wins whatever its place in the list.
+        let p = plan_for(Agent::Codex, &[], &[md.clone(), explicit], Some(&f.home));
         assert_eq!(p.agents.len(), 1);
         assert_eq!(p.agents[0].bytes, ROLE.as_bytes());
-        assert!(p.warnings.iter().any(|w| w.contains("derived role reviewer.toml skipped; a bareCodexAgents file takes that name")), "{:?}", p.warnings);
+        assert!(p.warnings.iter().any(|w| w.contains("derived role reviewer.toml skipped; a Codex role file takes that name")), "{:?}", p.warnings);
         // Two derived roles of one name: the first stays.
-        std::fs::write(&config, serde_json::json!({ "bareAgents": [md, other] }).to_string()).unwrap();
-        let p = plan_codex_in(&config, &f.home, &f.src);
+        let p = plan_for(Agent::Codex, &[], &[md.clone(), other], Some(&f.home));
         assert_eq!(p.agents.len(), 1);
         assert_eq!(p.agents[0].source, md);
         assert!(p.warnings.iter().any(|w| w.contains("another derived role takes that name")), "{:?}", p.warnings);
@@ -1253,13 +1261,13 @@ mod tests {
         let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
         let go = |list: Vec<String>| {
             let plan = plan_with(&[], &list, Some(&f.home), Vec::new(), check_codex_agent);
-            sync_codex(&lock, &f.home, &codex_home, plan).1
+            sync_codex(&lock, &f.home, &codex_home, plan, true).1
         };
         let w = go(vec![mine.clone(), theirs.clone()]);
         assert_eq!(w.iter().filter(|w| w.contains("was not placed by Vidar")).count(), 1, "{w:?}");
         assert_eq!(std::fs::read_to_string(codex_home.join("agents").join("reviewer.toml")).unwrap(), ROLE);
         assert_eq!(std::fs::read_to_string(codex_home.join("agents").join("planner.toml")).unwrap(), "user's own");
-        let ledger = std::fs::read_to_string(f.home.join("layer").join(CODEX_LEDGER)).unwrap();
+        let ledger = std::fs::read_to_string(codex_home.join(HOME_LEDGER)).unwrap();
         assert!(ledger.contains("reviewer.toml") && !ledger.contains("planner.toml"), "{ledger}");
         // Dropped: the placed copy leaves, the user's file stays.
         assert!(go(vec![]).is_empty());
@@ -1350,7 +1358,7 @@ description: "a \\ b" # c"#), (Some("ti\"dy".into()), Some(r"a \ b".into())));
         let run_codex = |skills: &[String]| {
             let plan = plan_from(skills, &[], Some(&f.home), Vec::new());
             let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
-            sync_codex(&lock, &f.home, &codex_home, plan)
+            sync_codex(&lock, &f.home, &codex_home, plan, true)
         };
         let (listed, w) = run_codex(&all);
         assert_eq!(listed, vec![Listed { name: "good".into(), description: "Works.".into() }]);
@@ -1377,13 +1385,14 @@ description: "a \\ b" # c"#), (Some("ti\"dy".into()), Some(r"a \ b".into())));
         let run_codex = |skills: &[String]| {
             let plan = plan_from(skills, &[], Some(&f.home), Vec::new());
             let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
-            sync_codex(&lock, &f.home, &codex_home, plan)
+            sync_codex(&lock, &f.home, &codex_home, plan, true)
         };
         let (listed, w) = run_codex(&[tidy.clone(), other.clone()]);
         assert_eq!(listed, vec![Listed { name: "tidy".into(), description: "Keep it tidy.".into() }]);
         assert_eq!(w.len(), 1, "{w:?}");
         assert!(codex_home.join("skills").join("tidy").join("refs").join("notes.md").is_file());
-        assert!(f.home.join("layer").join(CODEX_LEDGER).is_file());
+        assert!(codex_home.join(HOME_LEDGER).is_file());
+        assert!(!f.home.join("layer").join(CODEX_LEDGER).exists(), "a Codex sync wrote the pre-W2 ledger");
         assert!(!f.home.join("layer").join(LEDGER).exists(), "a Codex sync wrote the Claude ledger");
         assert!(!f.config_dir.join("skills").exists(), "a Codex sync wrote the Claude config dir");
         let (listed, _) = run_codex(&[]);
@@ -1405,7 +1414,10 @@ description: "a \\ b" # c"#), (Some("ti\"dy".into()), Some(r"a \ b".into())));
     fn two_rows(f: &Fx, shared: &str, a: &str, b: &str) -> PathBuf {
         let lib = f.src.join("lib").join("sets");
         std::fs::create_dir_all(&lib).unwrap();
-        std::fs::write(lib.join("set-a.layer.json"), serde_json::json!({ "codexSkills": [a] }).to_string()).unwrap();
+        for set in ["set-a", "set-b"] {
+            std::fs::write(lib.join(format!("{set}.md")), format!("---\nname: {set}\nkind: set\nscope: [global]\n---\n{set} text.\n")).unwrap();
+        }
+        std::fs::write(lib.join("set-a.layer.json"), serde_json::json!({ "skills": [a] }).to_string()).unwrap();
         std::fs::write(lib.join("set-b.layer.json"), serde_json::json!({ "skills": [b] }).to_string()).unwrap();
         let config = f.src.join("config.json");
         let row = |key: &str, set: &str| serde_json::json!({ "key": key, "sets": [{ "set": set }] });
@@ -1419,60 +1431,102 @@ description: "a \\ b" # c"#), (Some("ti\"dy".into()), Some(r"a \ b".into())));
         config
     }
 
+    /// A Codex plan for the rules-library set `set` through the resolver.
+    fn row_plan(config: &Path, f: &Fx, set: &str) -> Plan {
+        let sets = [super::super::layer::SetRef { library: None, set: set.to_string() }];
+        // The checkout's root for the bundle catalog; the fixture sets carry no rune members.
+        let root = crate::paths::root();
+        let env = ResolveEnv { root: &root, config, home: &f.home, user_home: None };
+        let (loadout, warnings) = super::super::set_loadout::resolve(&env, Agent::Codex, &sets);
+        let mut plan = plan_for(Agent::Codex, &codex_skills_in(&f.src, &loadout.skills), &loadout.agents, Some(&f.home));
+        plan.warnings.splice(0..0, warnings);
+        plan
+    }
+
     #[test]
-    fn a_rows_spawn_keeps_the_other_rows_set_skill_on_disk_and_lists_only_its_own() {
+    fn a_codex_plan_ignores_legacy_sidecar_skills() {
         let f = fx("union");
         let codex_home = f.home.join("codex");
         let (shared, a, b) = (described(&f.src, "shared"), described(&f.src, "only-a"), described(&f.src, "only-b"));
         let config = two_rows(&f, &shared, &a, &b);
-        let skills = codex_home.join("skills");
         let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
 
-        let plan_a = plan_codex_row(&config, &f.home, &f.src, Some("codex-rendered-bare"));
+        // The home-wide `bareCodexSkills` reaches no Codex plan.
+        let plan_a = row_plan(&config, &f, "set-a");
         assert!(plan_a.warnings.is_empty(), "{:?}", plan_a.warnings);
-        let (listed_a, w) = sync_codex(&lock, &f.home, &codex_home, plan_a);
+        let (listed_a, w) = sync_codex(&lock, &f.home, &codex_home, plan_a, true);
         assert!(w.is_empty(), "{w:?}");
-        let names = |l: &[Listed]| l.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
-        assert_eq!(names(&listed_a), ["shared", "only-a"], "row A lists shared plus its own");
-        assert!(skills.join("only-b").is_dir(), "the union is copied: B's skill is on disk for A's session too");
+        assert!(listed_a.is_empty());
+        assert!(row_plan(&config, &f, "set-b").skills.is_empty());
 
-        // Row B spawns while A runs: A's copy stays.
-        let plan_b = plan_codex_row(&config, &f.home, &f.src, Some("codex-bare"));
-        let (listed_b, w) = sync_codex(&lock, &f.home, &codex_home, plan_b);
-        assert!(w.is_empty(), "{w:?}");
-        assert!(skills.join("only-a").join("SKILL.md").is_file(), "B's spawn must not delete A's set skill");
-        assert_eq!(names(&listed_b), ["shared", "only-b"], "row B lists shared plus its own, never A's");
-        let text = listing(&listed_b);
-        assert!(text.contains("$only-b") && text.contains("$shared") && !text.contains("only-a"), "{text}");
-
-        // A row-less plan lists the shared list alone; the read-only listing agrees.
+        // The read-only listing names no set, so it lists none of them.
         drop(lock);
-        let bare = listing_now(&config, &f.home, &codex_home, None);
-        assert!(bare.contains("$shared") && !bare.contains("only-"), "{bare}");
-        let a_now = listing_now(&config, &f.home, &codex_home, Some("codex-rendered-bare"));
-        assert!(a_now.contains("$only-a") && !a_now.contains("only-b"), "{a_now}");
-
-        // Control: a per-row copy (a plan without A's skill) is exactly what deletes it.
-        let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
-        let narrow = plan_from(&[shared.clone(), b.clone()], &[], Some(&f.home), Vec::new());
-        sync_codex(&lock, &f.home, &codex_home, narrow);
-        assert!(!skills.join("only-a").exists(), "sync deletes a dropped name, which is why the copy is the union");
+        let bare = listing_now(&config, &f.home, &codex_home);
+        assert!(!bare.contains("only-a") && !bare.contains("shared"), "{bare}");
     }
 
     #[test]
-    fn a_bad_sidecar_path_warns_and_the_plan_still_builds() {
+    fn a_live_owned_home_keeps_a_removed_skill_until_ownerless() {
+        let f = fx("owned");
+        let codex_home = f.home.join("codex-homes").join("abc");
+        let (a, b) = (described(&f.src, "keep"), described(&f.src, "drop"));
+        let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
+        let go = |skills: &[String], delete_gone: bool| sync_codex(&lock, &f.home, &codex_home, plan_from(skills, &[], Some(&f.home), Vec::new()), delete_gone);
+        go(&[a.clone(), b.clone()], true);
+        // Owned: the dropped skill stays on disk and in the ledger, and leaves the listing.
+        let (listed, w) = go(&[a.clone()], false);
+        assert!(w.is_empty(), "{w:?}");
+        assert_eq!(listed.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["keep"]);
+        assert!(codex_home.join("skills").join("drop").join("SKILL.md").is_file());
+        assert!(std::fs::read_to_string(codex_home.join(HOME_LEDGER)).unwrap().contains("\"drop\""));
+        // The next ownerless spawn deletes it.
+        go(&[a.clone()], true);
+        assert!(!codex_home.join("skills").join("drop").exists());
+        assert!(codex_home.join("skills").join("keep").is_dir());
+    }
+
+    #[test]
+    fn the_ledger_is_copied_into_each_home_and_the_original_is_untouched() {
+        let f = fx("ledgerseed");
+        let legacy = f.home.join("codex-home");
+        let (a, b) = (described(&f.src, "one"), described(&f.src, "two"));
+        let lock = home::lock(&f.home, home::LOCK_WAIT).unwrap();
+        // A pre-W2 home: its skills placed and recorded in `<home>\layer\codex-copies.json`.
+        sync_codex(&lock, &f.home, &legacy, plan_from(&[a.clone(), b.clone()], &[], Some(&f.home), Vec::new()), true);
+        let own = std::fs::read(legacy.join(HOME_LEDGER)).unwrap();
+        std::fs::create_dir_all(f.home.join("layer")).unwrap();
+        let original = f.home.join("layer").join(CODEX_LEDGER);
+        std::fs::write(&original, &own).unwrap();
+        std::fs::remove_file(legacy.join(HOME_LEDGER)).unwrap();
+        // One placed copy the user since edited: not carried into the home's ledger.
+        std::fs::write(legacy.join("skills").join("two").join("SKILL.md"), "edited").unwrap();
+        let before = std::fs::read(&original).unwrap();
+        let mtime = std::fs::metadata(&original).unwrap().modified().unwrap();
+
+        let (listed, _) = sync_codex(&lock, &f.home, &legacy, plan_from(&[a.clone()], &[], Some(&f.home), Vec::new()), true);
+        assert_eq!(listed.len(), 1);
+        let seeded = std::fs::read_to_string(legacy.join(HOME_LEDGER)).unwrap();
+        assert!(seeded.contains("\"one\"") && !seeded.contains("\"two\""), "{seeded}");
+        assert!(legacy.join("skills").join("two").join("SKILL.md").is_file(), "an unrecorded edited copy was deleted");
+        // A new combination home starts from nothing the legacy home placed.
+        let combo = f.home.join("codex-homes").join("abc");
+        sync_codex(&lock, &f.home, &combo, plan_from(&[a.clone()], &[], Some(&f.home), Vec::new()), true);
+        assert!(combo.join("skills").join("one").join("SKILL.md").is_file());
+        assert_eq!(std::fs::read(&original).unwrap(), before, "the original ledger changed");
+        assert_eq!(std::fs::metadata(&original).unwrap().modified().unwrap(), mtime);
+    }
+
+    #[test]
+    fn a_bad_legacy_sidecar_path_does_not_enter_the_plan() {
         let f = fx("badsidecar");
         let (shared, a, b) = (described(&f.src, "shared"), described(&f.src, "only-a"), described(&f.src, "only-b"));
         let config = two_rows(&f, &shared, &a, &b);
-        std::fs::write(f.src.join("lib").join("sets").join("set-a.layer.json"), serde_json::json!({ "codexSkills": ["relative\\skill", f.src.join("missing"), a] }).to_string()).unwrap();
-        let plan = plan_codex_row(&config, &f.home, &f.src, Some("codex-rendered-bare"));
+        std::fs::write(f.src.join("lib").join("sets").join("set-a.layer.json"), serde_json::json!({ "skills": ["relative\\skill", f.src.join("missing"), a] }).to_string()).unwrap();
+        let plan = row_plan(&config, &f, "set-a");
         let w = plan.warnings.join("\n");
-        assert!(w.contains("relative") && w.contains("missing"), "{w}");
+        assert!(w.is_empty(), "{w}");
         let names: Vec<&str> = plan.skills.iter().map(|s| s.name.as_str()).collect();
-        assert_eq!(names, ["shared", "only-a", "only-b"], "the good entries still copy");
-        std::fs::write(f.src.join("lib").join("sets").join("set-a.layer.json"), "{ not json").unwrap();
-        let plan = plan_codex_row(&config, &f.home, &f.src, Some("codex-rendered-bare"));
-        assert!(plan.warnings.join("\n").contains("not valid JSON"));
-        assert_eq!(plan.skills.len(), 2, "shared and B's");
+        assert!(names.is_empty(), "legacy sidecars are never launch inputs");
+        let _ = (shared, b);
     }
 }

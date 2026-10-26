@@ -6,6 +6,7 @@ import { iconImg, type ColorIcon } from "../icon-img";
 import { renderMarkdownOrText } from "../panels/markdown-build";
 import { setCard, setHead } from "./set-card";
 import { isPluginTarget, type TracedLibrary, type TracedSet } from "./trace";
+import { loadedLine, type LoadReason } from "./ledger";
 import type { RuneItem, RuneSet, RuneSetMember } from "./types";
 
 export interface CardCtx {
@@ -74,7 +75,7 @@ function iconChip(cls: string, icon: ColorIcon, title: string): HTMLElement {
 }
 
 export interface ScopeKey { icons: Record<string, ColorIcon>; names: Record<string, string> }
-/** A Bare library's scope (`bare_actives` `scope`), with the icons the Bare set head uses. */
+/** A Bare library's scope, with the icons the Bare set head uses. */
 export const BARE_SCOPE: ScopeKey = { icons: { global: "globe", project: "folder" }, names: { global: "Global", project: "Project" } };
 
 /** Compact key for the card icons, using the same lookup as the cards; `scope` swaps the Scope group. */
@@ -117,20 +118,28 @@ function fm(k: string, v: Node | string, cls = ""): HTMLElement {
   return f;
 }
 
-function openedBody(r: CardRune, ctx: CardCtx, barScope?: string): HTMLElement {
+/** What an opened body can vary: the bar's Scope text, the Kind label, extra fields after Activate, and which actions show. */
+export interface BodyOpts { barScope?: string; kindName?: string; fields?: [string, string][]; acts?: ("edit" | "folder")[] }
+
+/** The opened card: frontmatter bar (Name, Kind, Scope, Activate, then `fields`, and the actions) over the overview and body. */
+export function openedBody(r: CardRune, ctx: CardCtx, o: BodyOpts = {}): HTMLElement {
   const rb = el("div", "runes-rb");
   const bar = el("div", "runes-fmbar");
   const fms = el("span", "runes-fms");
   const scopes = el("span", "runes-fsv");
-  scopes.append(barScope ?? (r.scope.length ? r.scope.map(TC).join(", ") : "[]"));
-  fms.append(fm("Name", r.id, " fname"), fm("Kind", TC(r.kind)), fm("Scope", scopes), fm("Activate", TC(r.activate), r.activate === "recall" ? " a-recall" : ""));
+  scopes.append(o.barScope ?? (r.scope.length ? r.scope.map(TC).join(", ") : "[]"));
+  fms.append(fm("Name", r.id, " fname"), fm("Kind", o.kindName ?? TC(r.kind)), fm("Scope", scopes), fm("Activate", TC(r.activate), r.activate === "recall" ? " a-recall" : ""));
+  for (const [k, v] of o.fields ?? []) fms.appendChild(fm(k, v));
+  if (r.origin?.trim()) fms.appendChild(fm("Origin", r.origin));
+  if (r.closesWhen?.trim()) fms.appendChild(fm("Closes When", r.closesWhen));
+  const want = o.acts ?? ["edit", "folder"];
   const acts = el("span", "runes-acts");
-  acts.append(
-    actButton("Edit", "document-edit", () => ctx.openInDocument(r.path)),
-    actButton("Open Folder", "folder", () => {
+  if (want.includes("edit")) acts.appendChild(actButton("Edit", "document-edit", () => ctx.openInDocument(r.path)));
+  if (want.includes("folder")) {
+    acts.appendChild(actButton("Open Folder", "folder", () => {
       invoke("open_folder", { path: r.path }).catch((e) => ctx.note(`Open Folder Failed: ${String(e)}`));
-    }),
-  );
+    }));
+  }
   bar.append(fms, acts);
   const body = el("div", "runes-rbody");
   if (r.description) body.appendChild(el("div", "runes-rd", r.description));
@@ -139,12 +148,21 @@ function openedBody(r: CardRune, ctx: CardCtx, barScope?: string): HTMLElement {
   if (built.fellBack) rt.appendChild(el("pre", "doc-text", r.body));
   else rt.appendChild(built.el);
   body.appendChild(rt);
+  for (const [label, markdown] of [["Why", r.why], ["Example", r.example]] as const) {
+    if (!markdown?.trim()) continue;
+    const section = el("div", "runes-rt");
+    section.appendChild(el("h4", "", label));
+    const rendered = renderMarkdownOrText(baseName(r.path), markdown);
+    if (rendered.fellBack) section.appendChild(el("pre", "doc-text", markdown));
+    else section.appendChild(rendered.el);
+    body.appendChild(section);
+  }
   rb.append(bar, body);
   return rb;
 }
 
 /** The fields a card shows (a RuneItem, or a Bare brick's rune). */
-export type CardRune = Pick<RuneItem, "id" | "scope" | "activate" | "description" | "path" | "body"> & { kind: string };
+export type CardRune = Pick<RuneItem, "id" | "scope" | "activate" | "description" | "path" | "body" | "origin" | "closesWhen" | "why" | "example"> & { kind: string };
 
 export interface CardOpts {
   /** The card's visible name. */
@@ -162,15 +180,15 @@ export interface CardOpts {
   tail?: HTMLElement[];
   /** The opened bar's Scope value; default the rune's scope list. */
   barScope?: string;
+  /** The first path glob, shown beside the name (Bare paths cards); `title` lists every glob. */
+  glob?: { text: string; title: string };
 }
 
 /** One rune card: a `details` whose summary is Kind slot, name, then lead / Scope / Activate / tail chips,
  *  and whose frontmatter bar and body are built on first open. */
 export function cardDetails(r: CardRune, o: CardOpts, ctx: CardCtx): HTMLDetailsElement {
   const det = el("details", "runes-rn");
-  fillers.set(det, () => {
-    if (det.childElementCount === 1) det.appendChild(openedBody(r, ctx, o.barScope));
-  });
+  lazyBody(det, () => openedBody(r, ctx, { barScope: o.barScope }));
   if (o.dim) det.classList.add("is-dim");
   const sum = el("summary", `runes-blk card${o.cls ?? ""}`);
   sum.title = o.title;
@@ -183,11 +201,26 @@ export function cardDetails(r: CardRune, o: CardOpts, ctx: CardCtx): HTMLDetails
   const act = iconChip(`runes-chip${r.activate === "recall" ? " a-recall" : ""}`, ACT_ICON[r.activate] ?? "question", `Activate: ${TC(r.activate)}`);
   chips.appendChild(act);
   for (const c of o.tail ?? []) chips.appendChild(c);
-  sum.append(kslot, el("span", "runes-rname", o.name), chips);
+  sum.append(kslot, el("span", "runes-rname", o.name));
+  if (o.glob) {
+    const g = el("span", "runes-glob", o.glob.text);
+    g.title = o.glob.title;
+    sum.appendChild(g);
+  }
+  sum.appendChild(chips);
   det.appendChild(sum);
-  // the body is built on first open: a library of runes renders no markdown until asked
-  det.addEventListener("toggle", () => fillCard(det));
   return det;
+}
+
+/** Register `det`'s body: `build` runs on first open (a library of runes renders no markdown until asked) and its
+ *  element is appended after the summary; `null` appends nothing yet (the caller calls `fillCard` when it has it). */
+export function lazyBody(det: HTMLDetailsElement, build: () => HTMLElement | null): void {
+  fillers.set(det, () => {
+    if (det.childElementCount !== 1) return;
+    const body = build();
+    if (body) det.appendChild(body);
+  });
+  det.addEventListener("toggle", () => fillCard(det));
 }
 
 // Open-state keys live outside the DOM (the shape test pins the markup): `lib/set` and `lib/set/rune`.
@@ -220,7 +253,7 @@ export function reopen(host: ParentNode, keys: Set<string>): void {
   }
 }
 
-function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: TracedSet): HTMLElement {
+function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: TracedSet, ledger: ReadonlyMap<string, LoadReason>): HTMLElement {
   const r = t.lib.runes.find((x) => x.id === m.id);
   if (!r) {
     const miss = el("div", "runes-blk missing");
@@ -235,11 +268,12 @@ function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: Trace
     lead.push(also);
   }
   const chipScope = r.scope.filter((sc) => !sc.startsWith("!"));
+  const load = ledger.get(r.id);
   const card = cardDetails(r, {
     name: runeName(r),
-    dim: t.runeLoaded.get(r.id) === false,
+    dim: !load && t.runeLoaded.get(r.id) === false,
     cls: m.recall ? " rc" : inSet.set.tier === 2 ? " ps" : "",
-    title: `${r.id}\n${r.description}${others.length ? `\nAlso in ${others.join(", ")}` : ""}${m.recall ? "\nRecall: pointer line only" : ""}`,
+    title: `${r.id}\n${r.description}${others.length ? `\nAlso in ${others.join(", ")}` : ""}${m.recall ? "\nRecall: pointer line only" : ""}${load ? `\n${loadedLine(load)}` : ""}`,
     lead,
     scopes: (chipScope.length ? chipScope : ["(none)"]).map((sc) => ({
       icon: SCOPE_ICON[sc] ?? "question", title: `Scope: ${sc === "(none)" ? "None" : TC(sc)}`,
@@ -249,7 +283,7 @@ function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: Trace
   return card;
 }
 
-export function setSection(t: TracedLibrary, ts: TracedSet, ctx: CardCtx): HTMLElement {
+export function setSection(t: TracedLibrary, ts: TracedSet, ctx: CardCtx, ledger: ReadonlyMap<string, LoadReason> = new Map()): HTMLElement {
   const s = ts.set;
   const cond = el("span", "runes-cond");
   fillCondition(cond, s);
@@ -258,7 +292,7 @@ export function setSection(t: TracedLibrary, ts: TracedSet, ctx: CardCtx): HTMLE
   const det = setCard(hueOf(s), sum);
   if (ts.state === "Not Loaded" || ts.state === "On Touch") det.classList.add("is-dim");
   const tray = el("div", "runes-tray");
-  for (const m of s.members) tray.appendChild(runeCard(t, ctx, m, ts));
+  for (const m of s.members) tray.appendChild(runeCard(t, ctx, m, ts, ledger));
   det.appendChild(tray);
   openKeyOf.set(det, `${t.lib.key}/${s.id}`);
   return det;

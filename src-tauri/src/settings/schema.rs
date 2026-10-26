@@ -60,6 +60,19 @@ pub struct AgentCfg {
 pub struct LocationCfg {
     pub label: String,
     pub cwd: String,
+    /// Add-on rune sets: a Bare launch in this workspace loads them after the row's own
+    /// (`resolveSets`, src/launcher/roster.ts). Absent = none; an empty list is not written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sets: Option<Vec<LocationSetCfg>>,
+}
+
+/// One add-on set of a workspace: the `{ library?, set }` shape of a row's `sets` (bare/layer.rs `SetRef`).
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LocationSetCfg {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library: Option<String>,
+    pub set: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -242,6 +255,19 @@ mod tests {
             let cfg: VidarConfig = serde_json::from_value(raw).expect("config parses");
             assert_eq!(cfg.font_size, Some(17));
         }
+    }
+
+    /// A workspace's add-on sets survive the typed round-trip; a workspace without any writes no `sets` key.
+    #[test]
+    fn location_add_on_sets_round_trip() {
+        let raw = serde_json::json!({ "locations": [
+            { "label": "Unreal", "cwd": "C:\\x", "sets": [{ "library": "team", "set": "unreal-tools" }, { "set": "base" }] },
+            { "label": "Main", "cwd": "C:\\y" },
+        ] });
+        let cfg: VidarConfig = serde_json::from_value(raw.clone()).expect("config parses");
+        let back = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(back["locations"][0]["sets"], raw["locations"][0]["sets"]);
+        assert!(back["locations"][1].get("sets").is_none());
     }
 
     #[test]

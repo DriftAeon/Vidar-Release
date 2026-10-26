@@ -20,6 +20,7 @@ use crate::pty::SCRUBBED_ENV;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const OVERALL_CAP: Duration = Duration::from_secs(10);
 const LABEL_MAX: usize = 80;
+const LIST_CAP: usize = 30;
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +30,12 @@ pub struct ThreadRow {
     pub cwd: String,
     pub age_secs: u64,
     pub model: Option<String>,
+    /// The Codex home the thread lives in (a resume must launch there: another home answers "no
+    /// rollout found"); `None` for the default home.
+    pub home: Option<String>,
+    /// The set refs (`library/set`) of that home's combination; empty on the legacy home unless the
+    /// seed maps one onto it.
+    pub sets: Vec<String>,
 }
 
 /// Name when set, else the first non-empty line of the preview, cut to `LABEL_MAX` chars.
@@ -62,6 +69,8 @@ fn rows_from_result(result: &Value, now_secs: i64) -> Vec<ThreadRow> {
                 cwd: t.get("cwd").and_then(Value::as_str).unwrap_or("").to_string(),
                 age_secs: (now_secs - updated).max(0) as u64,
                 model: t.get("model").and_then(Value::as_str).map(str::to_string),
+                home: None,
+                sets: Vec::new(),
                 id,
             })
         })
@@ -107,8 +116,28 @@ fn await_response(rx: &mpsc::Receiver<String>, id: u64, deadline: Instant) -> Re
 #[derive(Debug, PartialEq)]
 enum HomeChoice {
     Default,
+    /// The profile's legacy home.
     Profile(PathBuf),
     Empty,
+}
+
+/// Newest-first union of per-home lists, one thread id once, capped at `LIST_CAP`; each row carries
+/// its home and that home's sets.
+fn merge_rows(per_home: Vec<(Option<PathBuf>, Vec<String>, Vec<ThreadRow>)>) -> Vec<ThreadRow> {
+    let mut all: Vec<ThreadRow> = Vec::new();
+    for (home, sets, rows) in per_home {
+        for mut r in rows {
+            if all.iter().any(|x| x.id == r.id) {
+                continue;
+            }
+            r.home = home.as_ref().map(|h| h.to_string_lossy().into_owned());
+            r.sets = sets.clone();
+            all.push(r);
+        }
+    }
+    all.sort_by_key(|r| r.age_secs);
+    all.truncate(LIST_CAP);
+    all
 }
 
 /// Profile ids are folder names under `profiles\`: `^[a-z0-9][a-z0-9-]*$`, checked before any join.
@@ -137,13 +166,40 @@ fn home_for(profile: Option<&str>, resolve: impl Fn(&str) -> Result<PathBuf, Str
 }
 
 fn list_blocking(cwd: &str, profile: Option<&str>) -> Result<Vec<ThreadRow>, String> {
-    let deadline = Instant::now() + OVERALL_CAP;
     // Resolved before any process starts; read-only, it never creates a home.
-    let home = match home_for(profile, crate::bare::codex_home_for_profile)? {
+    let id = match home_for(profile, crate::bare::codex_home_for_profile)? {
         HomeChoice::Empty => return Ok(Vec::new()),
-        HomeChoice::Default => None,
-        HomeChoice::Profile(h) => Some(h),
+        HomeChoice::Default => return list_home(cwd, None),
+        HomeChoice::Profile(_) => profile.map(str::trim).unwrap_or_default(),
     };
+    // A Bare profile: the legacy home plus every indexed set-combination home (W3 L9), one
+    // app-server each in parallel; a thread resumes in the home it lives in. One home failing
+    // leaves the rest; all failing is the first error.
+    let homes = crate::bare::codex_homes_for_profile(id)?;
+    let results: Vec<(crate::bare::CodexHomeInfo, Result<Vec<ThreadRow>, String>)> = std::thread::scope(|s| {
+        let jobs: Vec<_> = homes
+            .into_iter()
+            .map(|h| s.spawn(move || { let r = list_home(cwd, Some(&h.dir)); (h, r) }))
+            .collect();
+        jobs.into_iter().filter_map(|j| j.join().ok()).collect()
+    });
+    let mut first_err = None;
+    let mut per_home = Vec::new();
+    for (h, r) in results {
+        match r {
+            Ok(rows) => per_home.push((Some(h.dir), h.sets, rows)),
+            Err(e) => { first_err.get_or_insert(e); }
+        }
+    }
+    match (per_home.is_empty(), first_err) {
+        (true, Some(e)) => Err(e),
+        _ => Ok(merge_rows(per_home)),
+    }
+}
+
+/// One `thread/list` call under `home` (`None` = the default home).
+fn list_home(cwd: &str, home: Option<&std::path::Path>) -> Result<Vec<ThreadRow>, String> {
+    let deadline = Instant::now() + OVERALL_CAP;
     let js = crate::agent::codex_js()?;
     let mut cmd = Command::new("node");
     cmd.arg(js)
@@ -155,7 +211,7 @@ fn list_blocking(cwd: &str, profile: Option<&str>) -> Result<Vec<ThreadRow>, Str
     for key in SCRUBBED_ENV {
         cmd.env_remove(key);
     }
-    if let Some(h) = &home {
+    if let Some(h) = home {
         cmd.env("CODEX_HOME", h);
     }
     let mut child = JobChild::spawn(&mut cmd)?;
@@ -224,6 +280,23 @@ mod tests {
         assert_eq!(rows[2].label.chars().count(), LABEL_MAX);
         assert!(rows[2].label.ends_with("..."));
         assert_eq!(rows[2].age_secs, 0);
+    }
+
+    #[test]
+    fn merged_rows_are_newest_first_unique_and_carry_their_home_and_sets() {
+        let row = |id: &str, age: u64| ThreadRow { id: id.into(), label: id.into(), cwd: String::new(), age_secs: age, model: None, home: None, sets: Vec::new() };
+        let legacy = PathBuf::from("C:\\h\\codex-home");
+        let set = PathBuf::from("C:\\h\\codex-homes\\abc");
+        let rows = merge_rows(vec![
+            (Some(legacy.clone()), vec![], vec![row("a", 50), row("dup", 5)]),
+            (Some(set.clone()), vec!["lib/x".into()], vec![row("b", 10), row("dup", 5)]),
+        ]);
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["dup", "b", "a"]);
+        assert_eq!(rows[0].home.as_deref(), Some("C:\\h\\codex-home"));
+        assert_eq!((rows[1].home.as_deref(), rows[1].sets.clone()), (Some("C:\\h\\codex-homes\\abc"), vec!["lib/x".to_string()]));
+        let many = (0..40).map(|i| row(&format!("t{i}"), i)).collect();
+        assert_eq!(merge_rows(vec![(Some(legacy), vec![], many)]).len(), LIST_CAP);
     }
 
     #[test]

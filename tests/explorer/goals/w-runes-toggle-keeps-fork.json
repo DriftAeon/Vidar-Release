@@ -1,0 +1,18 @@
+{
+  "id": "w-runes-toggle-keeps-fork",
+  "title": "Switch a Rune Without Losing the Extended Set",
+  "style": "cancel-midway",
+  "scope": "vidar",
+  "surfaces": ["runes"],
+  "tags": ["runes", "resume"],
+  "realModel": false,
+  "core": false,
+  "source": ["6940e6a4"],
+  "steps": [
+    { "intent": "open Runes, press Modify, press Extend Set on a generated set and name the new set in the Extend Set Name field" },
+    { "intent": "in the extended set, press a rune's State switch until it reads State: Off; open More Runes and check an addable rune's switch reads State: Off or State: On" },
+    { "intent": "press Extend Set on another set, then press Escape in the Extend Set Name field to cancel halfway" },
+    { "intent": "leave Runes and come back" },
+    { "intent": "check the extended set I made is still there, still the set in use, and the rune I switched keeps its State" }
+  ]
+}

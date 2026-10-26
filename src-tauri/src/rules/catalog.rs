@@ -43,6 +43,14 @@ pub struct RuneRow {
     pub state: &'static str,
     pub activate: String,
     pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closes_when: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub example: Option<String>,
     pub path: String,
     pub body: String,
 }
@@ -187,6 +195,10 @@ fn rune_row(r: &Rune, path: &PathBuf) -> RuneRow {
         state: state_name(r.state),
         activate: r.activate.clone(),
         description: r.description.clone(),
+        origin: r.origin.clone(),
+        closes_when: r.closes_when.clone(),
+        why: r.why.clone(),
+        example: r.example.clone(),
         path: clean(path),
         body: r.body.clone(),
     }
@@ -242,6 +254,16 @@ mod tests {
         let want: Value =
             serde_json::from_str(&std::fs::read_to_string(fixtures().join("golden.json")).unwrap()).unwrap();
         assert_eq!(got, want, "actual:\n{}", serde_json::to_string_pretty(&got).unwrap());
+    }
+
+    #[test]
+    fn runes_catalog_serializes_present_page_keys() {
+        let rune = super::super::rune::parse("---\nname: page\nkind: rule\nscope: [global]\norigin: Research\ncloses-when: Review ends\nwhy: Keep context\nexample: Open a file\n---\nBody\n").unwrap();
+        let row = serde_json::to_value(rune_row(&rune, &PathBuf::from("page.md"))).unwrap();
+        assert_eq!(row["origin"], "Research");
+        assert_eq!(row["closesWhen"], "Review ends");
+        assert_eq!(row["why"], "Keep context");
+        assert_eq!(row["example"], "Open a file");
     }
 
     #[test]

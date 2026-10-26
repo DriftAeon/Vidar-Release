@@ -217,9 +217,17 @@ pub enum LiveState {
 /// process holds its session; an exited or reused pid is a stale file (Free);
 /// anything else (not queryable, image unreadable, no ancestry) is Unknown and
 /// is never treated as idle.
+/// Reads every config dir of the profile (`claude_dir::homes_for`): a Bare session registers in
+/// its combination's home.
 fn registry_states(profile: Option<&str>) -> HashMap<String, LiveState> {
-    let Some(dir) = registry_dir(profile) else { return HashMap::new() };
-    states_in(&dir, &crate::deps::claude_images())
+    let images = crate::deps::claude_images();
+    let mut out = HashMap::new();
+    for dir in crate::bare::claude_dir::homes_for(profile) {
+        for (id, state) in states_in(&dir.join("sessions"), &images) {
+            merge_state(&mut out, id, state);
+        }
+    }
+    out
 }
 
 fn states_in(dir: &Path, images: &[String]) -> HashMap<String, LiveState> {
@@ -249,11 +257,12 @@ fn merge_state(out: &mut HashMap<String, LiveState>, id: String, state: LiveStat
     }
 }
 
-/// Every registry a Vidar-started Claude can write: the user's own and the bare home's. A Bare
-/// tab runs with `CLAUDE_CONFIG_DIR` in the bare home, so its process registers there, never in
-/// the user's `.claude\sessions`.
+/// Every registry a Vidar-started Claude can write: the user's own and each Bare config dir (the
+/// profile's own and every combination home). A Bare tab runs with `CLAUDE_CONFIG_DIR` in one of
+/// them, so its process registers there, never in the user's `.claude\sessions`.
 fn guard_dirs() -> Vec<PathBuf> {
-    [None, Some("bare")].into_iter().filter_map(registry_dir).collect()
+    let bare = crate::bare::claude_dir::homes_for(Some("bare")).into_iter().map(|d| d.join("sessions"));
+    registry_dir(None).into_iter().chain(bare).collect()
 }
 
 fn live_state_across(dirs: &[PathBuf], images: &[String], session_id: &str) -> LiveState {
@@ -525,9 +534,11 @@ mod tests {
         // the user's registry alone (the guard before this fix) misses it
         assert!(matches!(live_state_across(&[user.clone()], &images, sid), LiveState::Free));
         assert!(matches!(live_state_across(&[user, bare], &images, sid), LiveState::Live(_)));
-        // and the real guard reads the bare home's registry beside the user's
+        // and the real guard reads every bare home's registry beside the user's
         let dirs = guard_dirs();
-        assert!(dirs.contains(&registry_dir(Some("bare")).expect("bare registry")), "{dirs:?}");
+        for home in crate::bare::claude_dir::homes_for(Some("bare")) {
+            assert!(dirs.contains(&home.join("sessions")), "{dirs:?}");
+        }
         assert!(dirs.contains(&registry_dir(None).expect("user registry")), "{dirs:?}");
         let _ = std::fs::remove_dir_all(&root);
     }

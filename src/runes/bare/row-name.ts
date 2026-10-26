@@ -1,5 +1,6 @@
 // src\runes\bare\row-name.ts — the name and path a skill, agent or hook file row shows in the Bare Runes view:
-// a bold human name on the left, the full path as dim mono subtext on the right. Rune rows (rules and memory
+// a bold human name on the left, the full path as dim mono subtext on the right. Raw hook rows
+// show the safe event, matcher and program label only. Rune rows (rules and memory
 // libraries, MCP servers) keep their own names and are not touched.
 import type { BareLocalFile } from "./flow";
 
@@ -16,20 +17,40 @@ export function fileName(path: string): string {
   const segs = path.split(/[\\/]/).filter(Boolean);
   let last = segs.pop() ?? path;
   if (/^skill\.md$/i.test(last) && segs.length) last = segs.pop()!;
-  const words = last.replace(EXT, "").split(/[-_\s]+/).filter(Boolean);
-  if (!words.length) return last;
+  return nameLabel(last.replace(EXT, "")) || last;
+}
+
+/** Pure: an id in Title Case, no path or extension handling. `kit-mine` → Kit Mine, `kit` → Kit.
+ *  camelCase splits too: openaiDeveloperDocs → Openai Developer Docs. Empty when the id holds no word. */
+export function nameLabel(id: string): string {
+  const words = id.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[-_\s]+/).filter(Boolean);
   return words
     .map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(" ");
 }
 
-/** The row's two spans: the bold name, then the right-aligned path. The full path also goes in the row's title. */
-export function nameAndPath(f: Pick<BareLocalFile, "path">): HTMLElement[] {
+/** The text a tick row shows: an MCP server id in the same Title Case skills get (`vidar-control` → Vidar Control);
+ *  the raw id stays in the row's title. */
+export const rowLabel = (f: Pick<BareLocalFile, "kind" | "shown">): string => (f.kind === "mcp" ? fileName(f.shown) : f.shown);
+
+/** The row's two spans: a bold name, then the right-aligned dim mono detail. */
+export function nameAndDetail(label: string, detail: string): HTMLElement[] {
   const name = document.createElement("span");
   name.className = "rp-name";
-  name.textContent = fileName(f.path);
+  name.textContent = label;
   const path = document.createElement("span");
   path.className = "rp-path";
-  path.textContent = f.path;
+  path.textContent = detail;
   return [name, path];
+}
+
+/** A file row's name and path, or only the safe label of a raw hook reference. */
+export function nameAndPath(f: Pick<BareLocalFile, "path" | "kind" | "shown" | "guard">): HTMLElement[] {
+  if (f.kind === "hook" && f.guard?.source) {
+    const name = document.createElement("span");
+    name.className = "rp-name";
+    name.textContent = f.shown;
+    return [name];
+  }
+  return nameAndDetail(fileName(f.path), f.path);
 }

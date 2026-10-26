@@ -1,6 +1,6 @@
 // Bare onboarding W1 (docs/projects/bare/onboarding-plan.md D3): the import library the Rust writer produces
 // (golden: tests/fixtures/rune-import/acme-claude-md, checked byte for byte by src-tauri/src/rules/import/mod.rs)
-// passes cook's lint, and its full-keep row set cooks back to the normalised source. Cooks into a temp dir only.
+// passes cook's lint, and its full-keep set (named after the library) cooks back to the normalised source. Cooks into a temp dir only.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -36,7 +36,7 @@ test("a full-keep import set cooks to the normalised source", { skip }, () => {
     const r = spawnSync(process.execPath, [join(REPO, "tools", "runes", "cook.mjs"), "--root", LIB, "--out", out], { encoding: "utf8" });
     assert.equal(r.status, 0, `cook failed:\n${r.stdout}\n${r.stderr}`);
     assert.doesNotMatch(r.stdout, /^warning /m, r.stdout);
-    assert.equal(readFileSync(join(out, "row-claude-bare.md"), "utf8"), expected);
+    assert.equal(readFileSync(join(out, "acme-claude-md.md"), "utf8"), expected);
   } finally {
     rmSync(out, { recursive: true, force: true });
   }

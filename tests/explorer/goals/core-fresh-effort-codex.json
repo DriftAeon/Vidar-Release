@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-effort-codex",
+  "title": "Raise the Effort on a Fresh Codex Tab",
+  "style": "mouse",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab"],
+  "tags": ["effort", "fresh"],
+  "realModel": true,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Codex chat tab" },
+    { "intent": "before typing anything, raise the effort one step above the default" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the effort I picked" }
+  ]
+}

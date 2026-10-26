@@ -57,9 +57,6 @@
 .blk-user.blk-relay-answer { display: flex; align-items: flex-start; gap: var(--space-8); }
 .blk-relay-answer > .tool-badge { --chain-tc: var(--ok-green); margin-top: var(--space-2); }
 .blk-relay-answer > .ask-answer { flex: 1 1 auto; min-width: 0; }
-/* a /catapult prompt (catapult-block.ts): the catapult icon and one word, path on hover */
-.blk-user.blk-catapult { display: flex; align-items: center; gap: var(--space-8); white-space: normal; font-family: var(--font-ui); font-size: var(--font-13); line-height: var(--line-20); }
-.blk-catapult > .icn { width: var(--space-16); height: var(--space-16); flex: none; }
 .blk-user > .queued-send { flex: none; align-self: center; } /* mid-height of the message (2026-10-05) */
 /* Steer: the wheel before the label (queued-block.ts; 2026-10-11) */
 .blk-user > .queued-send { display: inline-flex; align-items: center; gap: var(--space-6); } /* approved mock steer-marker-mock.html */
@@ -348,7 +345,7 @@ details.has-card > pre.tool-input { display: none; }
   flex: 1 1 auto; min-width: 0; resize: vertical; background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius-4); color: var(--fg); font: inherit; font-size: var(--font-14); padding: 7px 9px; line-height: 1.45;
 }
-.rendered-input:focus { outline: none; border-color: var(--accent); }
+.rendered-input:focus, .rendered-input.focus-held { outline: none; border-color: var(--accent); }
 .rendered.dead .rendered-input { opacity: 0.5; pointer-events: none; }
 .rendered-palette {
   position: absolute; left: 0; bottom: 100%; margin-bottom: var(--space-4); display: flex; flex-direction: column;
@@ -357,15 +354,15 @@ details.has-card > pre.tool-input { display: none; }
 .rendered-palette.hidden { display: none; }
 .palette-row { border-color: transparent; text-align: left; padding: var(--space-2) var(--space-8); }
 .palette-row.on { border-color: var(--accent); }
-/* Notice action card: amber wash and edge, the warning left, the actions stacked right on the
-   Sheen Cap face (`.wb-actions > button.wb-card-btn`, workbench.css). */
+/* Notice action card: amber wash inside a full amber border with even padding (user, 2026-10-25), the
+   warning left, the actions right on the Sheen Cap face (`.wb-actions > button.wb-card-btn`, workbench.css). */
 .blk-notice-card {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8);
-  border-left: var(--notice-warn-edge); border-radius: 0 var(--radius-4) var(--radius-4) 0;
-  background: var(--notice-warn-wash); padding: var(--space-4) var(--space-8) var(--space-4) var(--space-12);
+  border: var(--border-w) solid var(--approval-amber); border-radius: var(--radius-4);
+  background: var(--notice-warn-wash); padding: var(--space-8);
 }
 .blk-notice-card > .notice-body { flex: 1 1 auto; min-width: 0; }
-.blk-notice-card .blk-notice { padding-left: 0; overflow-wrap: anywhere; }
+.blk-notice-card .blk-notice { padding-left: 0; font-size: var(--font-13); overflow-wrap: anywhere; }
 .blk-notice-card .notice-err { color: var(--dead-red); font-size: var(--font-12); margin-top: var(--space-4); overflow-wrap: anywhere; }
 .blk-notice-card > .notice-acts { display: flex; flex-direction: row; align-items: center; gap: var(--space-4); flex: none; margin-left: auto; }
 /* Trust Folder: the Sheen Cap shape on the decision pair's Approve green (--approve-grad, tokens.css), bold

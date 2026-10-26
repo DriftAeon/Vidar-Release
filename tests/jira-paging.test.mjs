@@ -36,11 +36,11 @@ async function open({ issues }) {
 }
 const keys = () => [...root.querySelectorAll(".jx-key")].map((n) => n.textContent);
 const more = () => root.querySelector(".jx-more");
-const scopeBtn = (label) => [...root.querySelectorAll(".jx-scope button")].find((b) => b.textContent === label);
+const scopeBtn = (label) => [...root.querySelectorAll(".jx-scope button")].find((b) => b.getAttribute("aria-label") === label);
 
 test("the head has the Mine and All pair with the verbatim tooltips, Mine on", async () => {
   await open({ issues: { issues: [mk("A-1")], nextPageToken: null } });
-  assert.deepEqual([...root.querySelectorAll(".jx-scope button")].map((b) => [b.textContent, b.title, b.getAttribute("aria-pressed")]), [
+  assert.deepEqual([...root.querySelectorAll(".jx-scope button")].map((b) => [b.getAttribute("aria-label"), b.title, b.getAttribute("aria-pressed")]), [
     ["Mine", "Your saved query, or your open items when none is saved.", "true"],
     ["All", "Every open item you can see, 50 at a time.", "false"],
   ]);

@@ -118,6 +118,9 @@ pub fn root() -> PathBuf {
 pub fn config_path() -> PathBuf {
     p("config")
 }
+pub fn config_path_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "config")
+}
 
 // ---- state.rs ----
 pub fn window_state_path() -> PathBuf {
@@ -323,10 +326,14 @@ pub fn global_runes_dir_in(home: &Path, codex_home: Option<PathBuf>) -> Option<P
 pub fn rune_imports_dir() -> PathBuf {
     p("runeImports")
 }
-/// `runtime\runes\gen-index.json`: row key -> its current generated library (`rules/generate/land.rs`).
-#[allow(dead_code)] // the generator's commands (W2) call it; land.rs takes its paths as arguments
-pub fn rune_gen_index() -> PathBuf {
-    p("runeGenIndex")
+/// `runtime\runes\load-history.json`: last-seen dates of rune uses across sessions (`rules/load_history.rs`).
+pub fn rune_load_history() -> PathBuf {
+    p("runeLoadHistory")
+}
+/// The retired `runtime\runes\gen-index.json` (row key -> generated library): only the vault
+/// migration reads it, then deletes it (`bare/vault/migrate.rs`).
+pub fn legacy_rune_gen_index_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "legacyRuneGenIndex")
 }
 /// `profiles\bare\rune-create\SKILL.md`: the skill the rune generator's agent runs under (`rules/generate/commands.rs`).
 pub fn rune_create_skill() -> PathBuf {
@@ -339,6 +346,31 @@ pub fn rune_merge_skill() -> PathBuf {
 /// `rune_imports_dir` under an explicit root (the Bare layer takes its root as an argument).
 pub fn rune_imports_dir_in(root: &Path) -> PathBuf {
     contract::resolve(root, "runeImports")
+}
+/// `runtime\vaults`: one `<vault-id>\vault.json` per Rune Vault plus `sessions\` records (`bare/vault/store.rs`).
+pub fn rune_vaults_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "runeVaults")
+}
+/// `profiles\bare\stock-runes`: the tracked read-only `stock` rune library (`bare/vault/store.rs`).
+pub fn rune_stock_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "runeStock")
+}
+/// `profiles\bare\templates`: stock vault templates, copied into `runtime\vaults` on create.
+pub fn rune_templates_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "runeTemplates")
+}
+/// Content-addressed on-demand rune skills under the install's runtime directory.
+pub fn rune_skills_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "runeSkills")
+}
+/// The retired tracked-set overrides (`<lib>\<set>.json` per set of `rulesLibrary`): only the vault
+/// migration reads them, then deletes them (`bare/vault/migrate.rs`).
+pub fn legacy_rune_overrides_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "legacyRuneOverrides")
+}
+/// `runtime\migrations\`: one backup folder per startup migration that wrote (`bare/vault/migrate.rs`).
+pub fn migrations_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "migrations")
 }
 
 // ---- lab.rs: the run history, and the runner script whose presence gates the tab's commands ----
@@ -463,6 +495,7 @@ mod tests {
         // pinned exactly: the Falcon host hardcodes `runtime\rules\built`
         assert_eq!(rules_dir(), lit("runtime\\rules"));
         assert_eq!(rune_imports_dir(), lit("runtime\\runes"));
+        assert_eq!(migrations_dir_in(&root()), lit("runtime\\migrations"));
     }
 
     #[test]

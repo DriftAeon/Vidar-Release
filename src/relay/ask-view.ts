@@ -94,7 +94,7 @@ export function createAskForm(host: HTMLElement, item: RelayItem, opts: AskFormO
   const actions = el("div", "relay-ask-actions");
   const stateEl = el("span", "relay-ask-state dim");
   const notesEl = el("textarea", "q-other relay-ask-comment");
-  notesEl.rows = opts.compact ? 1 : 3;
+  notesEl.rows = opts.compact ? 1 : 2;
   notesEl.maxLength = 4000;
   notesEl.placeholder = "Note";
   const sendBtn = btn("Answer", "relay-ask-send relay-approve", () => void send());
@@ -112,14 +112,20 @@ export function createAskForm(host: HTMLElement, item: RelayItem, opts: AskFormO
   if (record.inline) {
     const f = questionForm(q, formInput(record), (ok) => { answered = ok; sync(); });
     collect = f.collect;
-    if (record.notes) q.append(notesEl);
     actions.append(stateEl, copyBtn, sendBtn);
   } else {
     for (const it of record.questions) q.append(el("div", "q-text", it.text));
     actions.append(stateEl, tabBtn);
   }
   if (record.dismiss !== null) actions.append(dismissBtn); // right-aligned, Dismiss at the far right
-  form.append(forEl, q, actions);
+  // the last free-text field (the Note, else the last question's Other row) shares the buttons' line
+  const field = !record.inline ? undefined
+    : record.notes ? notesEl : [...q.querySelectorAll<HTMLElement>(".q-other-row")].pop();
+  if (field) {
+    const tail = el("div", "relay-ask-tail");
+    tail.append(field, actions);
+    form.append(forEl, q, tail);
+  } else form.append(forEl, q, actions);
   host.replaceChildren(form);
 
   function reply(): AskReply {

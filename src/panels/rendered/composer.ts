@@ -89,7 +89,7 @@ export function createComposer(S: RenderedState, deps: ComposerDeps) {
     return sendUser(text);
   }
   async function clearSession() {
-    // the stop/respawn drops the caret (2026-10-09: /clear then /catapult needed a click);
+    // the stop/respawn drops the caret (2026-10-09: /clear then a prompt needed a click);
     // hand it back unless the user has since focused something else
     const hadFocus = document.activeElement === textarea;
     try {
@@ -122,7 +122,10 @@ export function createComposer(S: RenderedState, deps: ComposerDeps) {
     }
     userBlock(text);
     setInTurn(true); // optimistic; turn_start confirms, turn_done clears
-    void sendEncoded(S.adapter.encodeUser(wire)).then((ok) => { if (!ok) { sendStick.disarm(); bang.hold(runs); setInTurn(false); } });
+    // A refused send (a vault lock refusal, D-d, or a dead agent) puts the text back in the composer.
+    void sendEncoded(S.adapter.encodeUser(wire)).then((ok) => {
+      if (!ok) { sendStick.disarm(); bang.hold(runs); setInTurn(false); textarea.value = textarea.value ? `${text}\n\n${textarea.value}` : text; }
+    });
     return true;
   }
   /** Hold a mid-turn message where the user can see it, and take it back on click.

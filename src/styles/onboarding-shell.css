@@ -2,12 +2,12 @@
    right column, so the left bar stays drawn. The stage holds the step and the title label on the seam; the
    bar under it holds Back (left), the step dots (centre, the current one stretched) and Skip / Next (right).
    Next is the only green button (.ws-btn.ws-add, decision-pair.css). The scrim is the Doors Over the Room
-   one (primary-agent-variants B): the page bg at 92%. */
+   one (primary-agent-variants B), made opaque (user, 2026-10-24): nothing behind it shows through. */
 .onboarding-shell {
   grid-column: 2 / -1; grid-row: 1 / -1;
   position: relative; z-index: 5;
   display: flex; flex-direction: column; min-width: 0; min-height: 0;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  background: var(--bg);
   color: var(--fg);
 }
 .onboarding-shell[hidden] { display: none; }

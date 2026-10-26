@@ -903,7 +903,7 @@ mod tests {
         let v2 = negotiate(&host, PROTOCOL_VERSION, "secret").unwrap();
         assert_eq!(v2["protocol"], PROTOCOL_VERSION);
         assert_eq!(v2["supported_agents"], json!(["claude"]));
-        assert_eq!(v2["capabilities"], json!(["steer"]));
+        assert_eq!(v2["capabilities"], json!(["steer", "sets-echo"]));
     }
 
     #[test]
@@ -920,9 +920,9 @@ mod tests {
             tab_name: None,
             gateway: None,
             profile: None,
-            payload_file: None,
-            row_key: None,
-            set_plugin_dirs: Vec::new(),
+            payload_file: None, mcp_file: None,
+            row_key: None, sets: None,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
         };
         let mut claude = Op::Spawn(params(Some(Agent::Claude)));
         prepare_client_op(PROTOCOL_V1, &mut claude).unwrap();
@@ -959,9 +959,9 @@ mod tests {
                     tab_name: None,
                     gateway: None,
                     profile: None,
-                    payload_file: None,
-                    row_key: None,
-                    set_plugin_dirs: Vec::new(),
+                    payload_file: None, mcp_file: None,
+                    row_key: None, sets: None,
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
                 }),
             },
         );
@@ -1002,9 +1002,9 @@ mod tests {
             tab_name: None,
             gateway: None,
             profile: None,
-            payload_file: None,
-            row_key: None,
-            set_plugin_dirs: Vec::new(),
+            payload_file: None, mcp_file: None,
+            row_key: None, sets: None,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
         };
         let session = session::new_session(
             &reservation,
@@ -1187,9 +1187,9 @@ mod tests {
             tab_name: None,
             gateway: None,
             profile: None,
-            payload_file: None,
-            row_key: None,
-            set_plugin_dirs: Vec::new(),
+            payload_file: None, mcp_file: None,
+            row_key: None, sets: None,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
         };
         let session = session::new_session(
             &reservation,

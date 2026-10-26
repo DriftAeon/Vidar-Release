@@ -255,8 +255,9 @@
 .ch-row.open { border-bottom: 1px solid var(--border); }
 .ch-row .ch-name { width: 160px; flex-shrink: 0; }
 .ch-name-static { font-size: var(--font-12); color: var(--fg-dim); }
-.ws-btn.ch-caret { border-color: transparent; width: 20px; padding: var(--space-2) 0; display: inline-flex; align-items: center; justify-content: center; }
-.ws-btn.ch-caret .icn { width: var(--space-12); height: var(--space-12); flex: none; transform: rotate(-90deg); }
+/* square toggle: stretches to the name box's height (the row's tallest child) and takes it as its width; the glyph fills the square minus a --space-4 inset and is absolute so it never sets the row height */
+.ws-btn.ch-caret { border-color: transparent; position: relative; flex: none; align-self: stretch; width: auto; aspect-ratio: 1; padding: 0; }
+.ws-btn.ch-caret .icn { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; padding: var(--space-4); transform: rotate(-90deg); }
 .ws-btn.ch-caret[aria-expanded="true"] .icn { transform: none; }
 .ch-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); flex: 1; min-width: 0; }
 .ch-chip {

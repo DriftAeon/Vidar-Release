@@ -25,6 +25,8 @@ export interface StepCtx {
 export interface OnboardingStepView {
   id: OnboardingStep;
   title: string;
+  /** Hides the title label on the seam (the Primary Agent doors carry their own names). */
+  hideTitle?: boolean;
   /** Builds the step into `body`; the returned function removes its listeners. */
   mount(body: HTMLElement, ctx: StepCtx): () => void;
 }

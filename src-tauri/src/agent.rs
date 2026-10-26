@@ -80,6 +80,46 @@ struct AgentProc {
     stdin: Mutex<Option<ChildStdin>>,
     job: Mutex<Option<Job>>,
     stopping: AtomicBool,
+    /// A bare tab's thread id capture for its session record (model R4).
+    thread: Mutex<ThreadCapture>,
+}
+
+/// Which app-server reply names a bare tab's own thread: only the reply to a `thread/start` or
+/// `thread/resume` this tab sent, matched by JSON-RPC id. A `thread/read` or `thread/list` reply also
+/// carries `result.thread`, so a shape match alone could hand the record another thread's id.
+#[derive(Default)]
+struct ThreadCapture {
+    pending: Vec<serde_json::Value>,
+    known: bool,
+}
+
+impl ThreadCapture {
+    /// An outgoing line: remembers the request id of a thread start or resume until the first reply.
+    fn on_send(&mut self, line: &str) {
+        if self.known || !(line.contains("thread/start") || line.contains("thread/resume")) {
+            return;
+        }
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { return };
+        if matches!(v.get("method").and_then(|m| m.as_str()), Some("thread/start" | "thread/resume")) {
+            if let Some(id) = v.get("id").filter(|id| !id.is_null()) {
+                self.pending.push(id.clone());
+            }
+        }
+    }
+
+    /// An app-server stdout line: the thread id when it is the reply to a pending start or resume.
+    fn on_reply(&mut self, line: &[u8]) -> Option<String> {
+        if self.known || self.pending.is_empty() {
+            return None;
+        }
+        let v = serde_json::from_slice::<serde_json::Value>(line).ok()?;
+        let at = self.pending.iter().position(|id| v.get("id") == Some(id))?;
+        self.pending.remove(at);
+        let thread = v.pointer("/result/thread/id").and_then(|t| t.as_str()).filter(|t| !t.is_empty())?;
+        self.known = true;
+        self.pending.clear();
+        Some(thread.to_string())
+    }
 }
 
 // Poison must not disable best-effort process cleanup.
@@ -273,10 +313,12 @@ pub async fn spawn_codex_appserver(
     profile: Option<String>,
     agent: Option<String>,
     row_key: Option<String>,
+    sets: Option<Vec<crate::bare::LaunchSetRef>>,
+    vault: Option<String>,
 ) -> Result<CodexSpawned, String> {
     // Off the main thread: a Bare prepare reads versions and waits on a home lock.
     tauri::async_runtime::spawn_blocking(move || {
-        spawn_codex_appserver_blocking(app, id, cwd, rules_file, tab_name, profile, agent, row_key)
+        spawn_codex_appserver_blocking(app, id, cwd, rules_file, tab_name, profile, agent, row_key, sets, vault)
     })
     .await
     .map_err(|e| format!("spawn task failed: {e}"))?
@@ -292,8 +334,14 @@ fn spawn_codex_appserver_blocking(
     profile: Option<String>,
     agent: Option<String>,
     row_key: Option<String>,
+    sets: Option<Vec<crate::bare::LaunchSetRef>>,
+    vault: Option<String>,
 ) -> Result<CodexSpawned, String> {
     let state = app.state::<AgentManager>();
+    let vault = vault.map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    if vault.is_some() && profile.is_none() {
+        return Err("A Rune Vault rides only a Bare spawn; spawn refused".into());
+    }
     if !Path::new(&cwd).is_dir() {
         return Err(format!("cwd is not a directory: {cwd}"));
     }
@@ -319,7 +367,9 @@ fn spawn_codex_appserver_blocking(
     }
     crate::bare::admit_rendered(&profile, agent.as_deref(), rules_file.as_deref())?;
     crate::bare::refuse_profile_cwd(&cwd, std::env::var("USERPROFILE").ok().as_deref())?;
-    let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), config: None, claude_json: None };
+    // A named vault is the whole loadout (model R2); the transition pick is read only without one.
+    let custom_sets = if vault.is_some() { None } else { sets.as_deref() };
+    let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), custom_sets, vault: vault.as_deref(), ..Default::default() };
     // Bare spawns stay serialized in-process, held until the home lock drops with `launch`.
     let prepare_guard = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
     let mut launch = crate::bare::prepare_codex(&profile, &opts, &cwd)?;
@@ -435,6 +485,7 @@ fn spawn_agent(
         stdin: Mutex::new(stdin),
         job: Mutex::new(Some(job)),
         stopping: AtomicBool::new(false),
+        thread: Mutex::new(ThreadCapture::default()),
     });
     let stdout = stdout.ok_or("missing agent stdout")?;
     let stderr = stderr.ok_or("missing agent stderr")?;
@@ -454,7 +505,17 @@ fn spawn_agent(
     let reader = thread::Builder::new()
         .name(format!("agent-stdout-{gen}"))
         .spawn(move || {
-            let result = forward_stdout(stdout, &app, &reader_id, gen);
+            // A bare tab's session record takes its thread id from the start/resume reply (R4).
+            let mut on_line = |line: &[u8]| {
+                if reader_proc.codex_home.is_none() {
+                    return;
+                }
+                let Some(thread) = lock(&reader_proc.thread).on_reply(line) else { return };
+                if let Err(error) = crate::bare::vault::session::append_thread_id(&crate::paths::root(), &reader_id, None, &thread) {
+                    eprintln!("agent {reader_id}: session record thread id: {error}");
+                }
+            };
+            let result = forward_stdout(stdout, &app, &reader_id, gen, &mut on_line);
             if let Err(error) = result {
                 eprintln!("agent {reader_id}: stdout read failed: {error}");
                 reader_proc.stop();
@@ -501,6 +562,41 @@ fn spawn_agent(
     Ok(gen)
 }
 
+/// The first-message lock (model R3), called by `agent_send` and `falcon_send` before a user turn is
+/// delivered: the session record (`bare/vault/session.rs`, written at spawn or adopt) names the vault
+/// and the hash the session loaded, and `Store::lock(id, FirstMessage, hash)` locks it there. A vault
+/// already locked at that hash stands; another hash, or a vault gone, refuses the send. No record (a
+/// default tab, a session from before vaults) delivers unlocked. `falcon_session`, when given, must
+/// match the record, never a tab's older one. `memo` names one spawn (tab and generation or Falcon
+/// session): after its first pass, later turns skip the store.
+pub(crate) fn lock_first_send(tab: &str, falcon_session: Option<&str>, memo: &str) -> Result<(), String> {
+    use std::collections::HashSet;
+    use std::sync::OnceLock;
+    static PASSED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    let passed = PASSED.get_or_init(|| Mutex::new(HashSet::new()));
+    if lock(passed).contains(memo) {
+        return Ok(());
+    }
+    let root = crate::paths::root();
+    let record = crate::bare::vault::session::find(&root, tab, falcon_session, None)?
+        .filter(|r| falcon_session.is_none() || r.falcon_session.as_deref() == falcon_session);
+    if let Some(r) = record {
+        crate::bare::vault::store::Store::open(&root)
+            .lock(&r.vault.id, crate::bare::vault::LockedBy::FirstMessage, &r.vault.hash)
+            .map_err(|e| format!("Rune Vault lock refused ({e}); message not sent"))?;
+    }
+    lock(passed).insert(memo.to_string());
+    Ok(())
+}
+
+/// A Codex app-server line that starts a turn (`turn/start`): the one the vault locks on.
+fn starts_turn(line: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(line)
+        .ok()
+        .and_then(|v| v.get("method").and_then(|m| m.as_str()).map(|m| m == "turn/start"))
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub fn agent_send(
     state: State<AgentManager>,
@@ -509,6 +605,15 @@ pub fn agent_send(
     line: String,
 ) -> Result<(), String> {
     let proc = get_proc(&state, &id, gen)?;
+    // R3: a Bare tab's first turn locks its vault before the line reaches the agent (D-d: a refusal
+    // keeps the composer's text). Outside the stdin lock: the store does file I/O.
+    if proc.codex_home.is_some() && starts_turn(&line) {
+        lock_first_send(&id, None, &format!("{id}\0{gen}"))?;
+    }
+    // Before the write, so the reply cannot beat the pending id.
+    if proc.codex_home.is_some() {
+        lock(&proc.thread).on_send(&line);
+    }
     let mut stdin = lock(&proc.stdin);
     if proc.stopping.load(Ordering::SeqCst) {
         return Err("agent is stopping".into());
@@ -560,7 +665,8 @@ pub async fn agent_reap_all(state: State<'_, AgentManager>) -> Result<u32, Strin
 
 // Chunk framing bounds allocation even for a producer that never emits LF.
 // Size excludes LF, includes any CR; CRLF is normalized only for forwarded text.
-fn forward_stdout(mut reader: impl Read, app: &AppHandle, id: &str, gen: u64) -> io::Result<()> {
+/// `on_line` sees each in-cap line before it is forwarded.
+fn forward_stdout(mut reader: impl Read, app: &AppHandle, id: &str, gen: u64, on_line: &mut dyn FnMut(&[u8])) -> io::Result<()> {
     let mut chunk = [0u8; 8192];
     let mut line = Vec::new();
     let mut bytes = 0u64;
@@ -571,12 +677,18 @@ fn forward_stdout(mut reader: impl Read, app: &AppHandle, id: &str, gen: u64) ->
         };
         if n == 0 {
             if bytes != 0 {
+                if bytes <= LINE_CAP as u64 {
+                    on_line(&line);
+                }
                 emit_line(app, id, gen, &mut line, bytes);
             }
             return Ok(());
         }
         for &byte in &chunk[..n] {
             if byte == b'\n' {
+                if bytes <= LINE_CAP as u64 {
+                    on_line(&line);
+                }
                 emit_line(app, id, gen, &mut line, bytes);
                 bytes = 0;
             } else {
@@ -680,6 +792,14 @@ fn drain_stderr(mut reader: impl Read, id: &str, banner: Option<&str>) {
 mod tests {
     use super::*;
 
+    #[test]
+    fn only_turn_start_locks_a_codex_vault() {
+        assert!(starts_turn(r#"{"jsonrpc":"2.0","id":3,"method":"turn/start","params":{}}"#));
+        assert!(!starts_turn(r#"{"id":1,"method":"thread/start","params":{}}"#));
+        assert!(!starts_turn(r#"{"id":2,"result":{}}"#));
+        assert!(!starts_turn("not json"));
+    }
+
     fn codex_bin() -> crate::bare::CodexBinary {
         crate::bare::CodexBinary {
             shims: vec!["codex.ps1".into(), "codex.cmd".into()],
@@ -740,6 +860,21 @@ mod tests {
         assert!(err.contains(&appdata.display().to_string()), "{err}");
         assert!(err.ends_with("or beside a codex.ps1 or codex.cmd shim on the Path"), "{err}");
         let _ = std::fs::remove_dir_all(&t);
+    }
+
+    #[test]
+    fn only_the_reply_to_this_tabs_thread_start_or_resume_names_its_thread() {
+        let mut c = ThreadCapture::default();
+        // A reply with no pending request, and a thread/read reply, are not this tab's thread.
+        assert_eq!(c.on_reply(br#"{"id":1,"result":{"thread":{"id":"t-early"}}}"#), None);
+        c.on_send(r#"{"id":2,"method":"thread/read","params":{"threadId":"t-other"}}"#);
+        assert_eq!(c.on_reply(br#"{"id":2,"result":{"thread":{"id":"t-other"}}}"#), None);
+        c.on_send(r#"{"id":3,"method":"thread/start","params":{}}"#);
+        assert_eq!(c.on_reply(br#"{"id":9,"result":{"thread":{"id":"t-wrong"}}}"#), None);
+        assert_eq!(c.on_reply(b"{\"id\":3,\"result\":{\"thread\":{\"id\":\"t-own\"}}}\r").as_deref(), Some("t-own"));
+        // Once known, a later start in the same process never replaces it.
+        c.on_send(r#"{"id":4,"method":"thread/resume","params":{"threadId":"t-next"}}"#);
+        assert_eq!(c.on_reply(br#"{"id":4,"result":{"thread":{"id":"t-next"}}}"#), None);
     }
 
     #[test]

@@ -59,6 +59,20 @@ test("bang: write() never runs a ! line, the next keyboard Enter does", async ()
   body.dispose();
 });
 
+test("bang: the finished pill is open and shows its output", async () => {
+  dom.ipc.answers.bang_run = { ...RESULT, stdout: "hi" };
+  const body = mount("bang-open", []);
+  await settle();
+  type(body, "!echo hi");
+  enter(body);
+  await settle();
+  const pill = body.el.querySelector("details.blk-tool");
+  assert.ok(pill, "the Bash pill is drawn");
+  assert.equal(pill.open, true);
+  assert.equal(pill.querySelector("pre.tool-output").textContent, "hi");
+  body.dispose();
+});
+
 test("bang: held output attaches once to the next non-slash send", async () => {
   dom.ipc.answers.bang_run = RESULT;
   const sent = [];

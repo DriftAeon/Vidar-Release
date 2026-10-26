@@ -323,6 +323,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn raw_powershell_command_reaches_hooks_json_byte_identically() {
+        let d = Dir::new("raw-command");
+        let command = "pwsh -NoProfile -Command '$token = \"sk-secret-1\"; exit 7'";
+        let raw = super::super::guards::RawHook { event: "Stop".into(), matcher: None, command: command.into() };
+        let group = super::super::guards::raw_group(&raw, true);
+        let lock = super::super::home::lock(&d.0, super::super::home::LOCK_WAIT).unwrap();
+        assert_eq!(write(&lock, &d.0, &[group]).unwrap(), 1);
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(d.hooks()).unwrap()).unwrap();
+        assert_eq!(saved["hooks"]["Stop"][0]["hooks"][0]["command"], command);
+        assert_eq!(saved["hooks"]["Stop"][0]["hooks"][0]["commandWindows"], command);
+    }
+
     const HASH: &str = "sha256:abababababababababababababababababababababababababababababababab";
 
     /// A mock `hooks/list` counting its calls: two hooks of `hooks.json`, trusted once config.toml

@@ -12,10 +12,11 @@ pub mod check;
 pub mod codex;
 pub mod context;
 pub mod generate;
+pub mod fork;
 pub mod import;
 pub mod library;
+pub mod load_history;
 pub mod loaded;
-mod parity;
 pub mod rune;
 pub mod set;
 

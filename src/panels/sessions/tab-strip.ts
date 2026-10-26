@@ -112,6 +112,8 @@ export function buildTabButton(id: string, opts: LaunchOpts | undefined, counter
   button.appendChild(buildRightColumn());
   const close = document.createElement("span");
   close.className = "session-close";
+  close.setAttribute("role", "button");
+  close.setAttribute("aria-label", "Close Tab");
   close.title = "Close Tab"; // the X is a CSS mask (leftbar.css .session-close)
   close.addEventListener("click", (ev) => {
     ev.stopPropagation();

@@ -112,6 +112,16 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
     addWaiting, resumeWaiting, taskDone, liveTasks, clearWaiting, settleDoneAgents, settleReplayedAgents, flushQueue, pendingQueued, onExit, groupRefresh,
   } = deps;
   const monitors = createMonitorRun(S, { tools, groupRefresh });
+  /** The ChatGPT login's one notice: a new link replaces it and a login clears it, so repeated
+   *  opens do not stack and none outlives the login. */
+  let loginNote: HTMLElement | null = null;
+  function loginNotice(text: string, level: "info" | "error", reason?: string) {
+    loginNote?.remove();
+    sealGroup();
+    loginNote = el("div", `blk blk-notice ${level}`, text);
+    if (reason) loginNote.title = reason;
+    append(loginNote);
+  }
   /** Only fills a blank: an explicit launcher model or a confirmed init wins. */
   function hintModel(model: string) {
     if (sl.model !== "Starting…" && sl.model !== "Ready") return;
@@ -378,21 +388,19 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
         liveTasks(ev.taskIds, ev.subagentOwned ?? [], ev.subagentOwners);
         monitors.onTasksLive(ev.taskIds);
         break;
-      case "auth": login.fromAgent(ev.loggedIn); break;
+      case "auth":
+        if (ev.loggedIn) { loginNote?.remove(); loginNote = null; }
+        login.fromAgent(ev.loggedIn);
+        break;
       case "login_url":
         // the card keeps the link: open_url drops ShellExecuteW's result, so a browser that never opened is silent
         loginUrl?.(ev.url);
         // the adapter passes only https://auth.openai.com/ links; open_url checks the scheme again
         void invoke("open_url", { url: ev.url }).then(
           // open_url returns before the shell runs, so the notice never claims the page opened
-          () => noticeBlock("Opening ChatGPT Login", "info"),
-          (e) => {
-            // same block the notice draws, built here so the raw reason can ride in its tooltip
-            sealGroup();
-            const b = el("div", "blk blk-notice error", "ChatGPT Login Did Not Open");
-            b.title = String(e);
-            append(b);
-          },
+          () => loginNotice("Opening ChatGPT Login", "info"),
+          // the raw reason rides in the tooltip
+          (e) => loginNotice("ChatGPT Login Did Not Open", "error", String(e)),
         );
         break;
       case "unknown": unknownBlock(ev.type, ev.raw); break;

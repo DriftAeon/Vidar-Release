@@ -10,10 +10,12 @@
 //! A Claude spawn may name its row (`LaunchOpts::row_key`): when that vidar.json row carries
 //! `sets`, the payload is `<home>\layer\payload-<hash12>.md`, built at spawn, instead of the
 //! profile's static `payload.md`; a failed build refuses the spawn. Every Claude spawn, Raw or
-//! hosted, copies vidar.json's `bareGuards` scripts into `<home>\layer\hooks\` and appends them to
-//! the generated settings (`guards.rs`); a missing or misnamed script refuses the spawn. Then it
-//! syncs vidar.json's `bareSkills` and `bareAgents` into the profile's `CLAUDE_CONFIG_DIR`
-//! (`copies.rs`); a copy problem is a warning, never a refusal.
+//! hosted, runs on its set combination's config dir (`agent_homes::pick`; the empty combination
+//! and the adopted one are the profile's own `claude-config`) and carries what its sets resolve to
+//! (`set_loadout::resolve`, fold W2 L2a): skills and agents copied flat into that dir (`copies.rs`,
+//! its own ledger), guards copied beside them and wired as `settings.json` hooks with the sets'
+//! permissions and output style (`claude_launch.rs`), module MCP in the strict `--mcp-config` file
+//! (`claude_mcp.rs`). Flow's Claude nodes run on `flow-claude` (`flow_claude.rs`), never a set's.
 //!
 //! A Codex spawn may name its row too, once `admit_row_key` has bound the key to a Codex Bare
 //! row. When that row has `sets`, or vidar.json `bareSkills` copies skills into
@@ -34,14 +36,19 @@
 //! A profiled Raw Codex tab is the Codex TUI on the same home and config.toml as the Rendered
 //! Bare row: `node <codex.js> <rawArgs> [--profile vidar-<hash12>]`, spawned directly
 //! (no pwsh host, `Surface::Tui`); pty.rs refuses a home-folder cwd before the prepare writes it
-//! as the trusted project. Flow reads the same home through `codex_env_for_profile`, read-only.
+//! as the trusted project. Flow's Codex nodes run on their own baseline home, `flow-codex`
+//! (`flow_home`, through `codex_env_for_profile`), never a rune set's.
 
-pub(crate) mod actives;
-mod actives_gen;
+mod agent_homes;
+pub(crate) mod bundles;
 pub mod claude_dir;
+mod claude_launch;
+mod claude_line;
+mod claude_mcp;
 mod codex_hooks;
 mod codex_hosted;
 pub(crate) mod codex_mcp;
+pub(crate) mod codex_runes_loaded;
 // Shared with Falcon by `#[path]`; `read_admitted`/`admit_and_read` are the host's half.
 #[allow(dead_code)]
 pub(crate) mod codex_payload;
@@ -51,15 +58,25 @@ mod codex_user_trust;
 mod codex_verify;
 pub(crate) mod copies;
 mod env;
-mod guards;
+mod flow_claude;
+mod flow_home;
+pub(crate) mod guards;
 pub(crate) mod home;
 mod home_path;
 mod identity;
+pub(crate) mod kit;
+pub(crate) mod item_import;
+mod launch_row;
 pub(crate) mod layer;
 mod login_link;
+mod recall_skill;
 pub(crate) mod manifest;
+pub(crate) mod rune_items;
 pub(crate) mod set_layer;
-pub(crate) mod set_plugin;
+pub(crate) mod set_loadout;
+pub(crate) mod sets_list;
+pub(crate) mod vault;
+mod vault_spawn;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -70,12 +87,20 @@ use std::time::{Duration, SystemTime};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+use agent_homes::Agent;
 pub use env::Env;
+pub use claude_launch::{prepare, prepare_hosted_for};
+#[cfg(test)]
+pub(crate) use claude_launch::{prepare_hosted_with, prepare_with};
+pub use set_layer::Ambient;
+pub use launch_row::{admit_row_key, row_key_of, LaunchSetRef};
 pub(crate) use codex_verify::{codex_warning, read_accepted};
 pub use codex_hosted::{prepare_codex_hosted, CodexHostedLaunch};
 #[cfg(test)]
 pub(crate) use codex_verify::{Accepted, AcceptedMap};
 use codex_verify::verify_new_codex;
+use launch_row::vault_for;
+use vault_spawn::SessionSeed;
 
 /// Launch profiles this build knows. Anything else is refused before a home is touched.
 pub const PROFILES: &[&str] = &["bare"];
@@ -139,9 +164,9 @@ struct Profile {
     shared_login: Vec<login_link::SharedLogin>,
 }
 
-/// `rendered` in a Claude profile: the plugin set the hosted sidecar loads and the env overlay
-/// Falcon lays over the profile's own (Falcon and the sidecar read the file themselves; Vidar
-/// checks the plugins exist before it prepares the home, and records them).
+/// `rendered` in a Claude profile: the env overlay Falcon lays over the profile's own (Falcon and
+/// the sidecar read the file themselves). Its `plugins` list must stay empty: a hosted session's
+/// plugins are its vault's plugin runes, sent by name (`HostedLaunch.plugin_names`).
 #[derive(Deserialize)]
 struct RenderedBlock {
     plugins: Vec<String>,
@@ -168,6 +193,14 @@ fn check_isolation(p: &Profile) -> Result<(), String> {
     }
     if p.overlay.get("CLAUDE_CODE_DISABLE_CLAUDE_MDS").map(String::as_str) != Some("1") {
         return Err(format!("Launch profile {:?} lacks CLAUDE_CODE_DISABLE_CLAUDE_MDS=1; spawn refused", p.id));
+    }
+    // Plugins, allowed tools and the mode arrive only through the session's Rune Vault (run
+    // 2026-10-25-rune-vault L2b): a profile that carries them itself is refused.
+    if !p.plugins.is_empty() || p.rendered.as_ref().is_some_and(|r| !r.plugins.is_empty()) {
+        return Err(format!("Launch profile {:?} lists plugins; plugins come from the vault's plugin runes; spawn refused", p.id));
+    }
+    if let Some(a) = p.args.iter().find(|a| ["--plugin-dir", "--allowedTools", "--allowed-tools", "--permission-mode"].contains(&a.as_str())) {
+        return Err(format!("Launch profile {:?} carries {a}; that comes from the vault's runes; spawn refused", p.id));
     }
     Ok(())
 }
@@ -197,9 +230,8 @@ fn config_dir_of(p: &Profile, root: &Path, home_dir: &Path) -> Option<PathBuf> {
 /// (`home::mirror_claude_seen`). Never blocks the spawn; a skip is a line in
 /// `<home>\logs\claude-seen-mirror.log` (stderr is invisible in release). `normal` is the source
 /// `.claude.json` the caller resolved (`LaunchOpts::claude_json`); tests pass a temp file and the
-/// real home is never read here.
-fn mirror_claude_seen(p: &Profile, root: &Path, home_dir: &Path, normal: Option<&Path>) {
-    let Some(dir) = config_dir_of(p, root, home_dir) else { return };
+/// real home is never read here. `dir` is the launch's config dir (its combination's or the own).
+fn mirror_claude_seen(dir: &Path, home_dir: &Path, normal: Option<&Path>) {
     let skipped = match normal {
         None => Some("no normal .claude.json path resolved".to_string()),
         Some(normal) => home::mirror_claude_seen(normal, &dir.join(".claude.json")).err(),
@@ -308,19 +340,22 @@ fn plugin_dir(root: &Path, name: &str) -> Result<PathBuf, String> {
 /// Per-spawn options for the Claude prepares (Raw and hosted) and the Codex one.
 #[derive(Default, Clone, Copy)]
 pub struct LaunchOpts<'a> {
-    /// The launching row's `key`: its `sets` come from the last vidar.json entry with that key.
-    /// A Codex spawn's key is admitted first (`admit_row_key`): it must name a Codex Bare row.
+    /// The launching row's `key`. Since L2a nothing reads it: a row's `sets` never reach a session
+    /// (model R1). Kept so the IPC callers' shape holds until L3a. A Codex spawn's key is admitted
+    /// first (`admit_row_key`).
+    #[allow(dead_code)]
     pub row_key: Option<&'a str>,
     /// The vidar.json the row is read from; `None` is `paths::config_path()` (tests set it).
     pub config: Option<&'a Path>,
     /// The normal `.claude.json` the seen-counters mirror reads. The public `prepare` and
     /// `prepare_hosted_for` fill it from the real home; `None` (tests) logs a skip.
     pub claude_json: Option<&'a Path>,
-}
-
-/// A spawn's row key, trimmed; empty or blank is no key (as `falcon_spawn`'s `none_if_blank`).
-pub fn row_key_of(raw: Option<String>) -> Option<String> {
-    raw.map(|k| k.trim().to_string()).filter(|k| !k.is_empty())
+    /// The Rune Vault the spawn loads (`launch_row::vault_for`); a `stock-*` id is made from its
+    /// template. Unknown refuses.
+    pub vault: Option<&'a str>,
+    /// Transition until L3a sends a vault id: the spawn IPC's `sets` list, turned into a Custom vault
+    /// (`Store::create_custom`). Read only when `vault` is `None`; neither refuses.
+    pub custom_sets: Option<&'a [LaunchSetRef]>,
 }
 
 /// The vidar.json a spawn reads: the opts' file, else the live one. A test without `config`
@@ -333,62 +368,6 @@ fn config_of(opts: &LaunchOpts) -> PathBuf {
     }
 }
 
-/// The built-in Codex Bare rows (`src/launcher/roster.ts`), Rendered and Raw: id `codex`, profile `bare`.
-const CODEX_BARE_ROWS: &[&str] = &["codex-rendered-bare", "codex-bare"];
-
-/// A Codex Bare spawn's row key (Rendered or Raw), admitted before the profile prepare (review e2cc19e2): blank
-/// is none; a key without a profile refuses; a key must name a Codex Bare row, so a caller cannot
-/// feed a Claude or non-Bare row's sets into Codex Bare. The row is folded from vidar.json
-/// `agents` as `src/config-agents.ts` overlays it: a built-in (`codex-rendered-bare`, `codex-bare`) starts as
-/// id `codex`, profile `bare`; each entry with that key lays its given `id` (non-empty) and
-/// `profile` (non-null) over the row, a `disabled: true` one removes it, and an unknown key's first
-/// entry adds it. The row must end as id `codex`, profile `bare`, and the spawn's own profile must
-/// be `bare` (review d13bc628). The fold reads keyed entries only, with no keyless legacy matching
-/// or root-disable cascade: the launcher never spawns a row it removed, and a Rust false-reject
-/// fails visibly rather than admitting the wrong sets. `config` `None` is the live vidar.json
-/// (none in tests, as `config_of`).
-pub fn admit_row_key(raw: Option<String>, profile: Option<&str>, config: Option<&Path>) -> Result<Option<String>, String> {
-    let Some(key) = row_key_of(raw) else { return Ok(None) };
-    let Some(profile) = profile else {
-        return Err("A row key rides only a profiled spawn; spawn refused".into());
-    };
-    if profile != "bare" {
-        return Err(format!("Row {key:?} is not a Codex Bare row; Bare spawn refused"));
-    }
-    let path = config_of(&LaunchOpts { row_key: None, config, claude_json: None });
-    let root: serde_json::Value = match crate::fsx::read_text(&path) {
-        Ok(t) => serde_json::from_str(crate::fsx::strip_bom(&t)).map_err(|e| format!("vidar.json {} is unreadable ({e}); Bare spawn refused", path.display()))?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::Value::Null,
-        Err(e) => return Err(format!("vidar.json {} is unreadable ({e}); Bare spawn refused", path.display())),
-    };
-    // (id, profile) of the row as the launcher would show it; `None` = no such row.
-    let mut row: Option<(String, Option<String>)> = CODEX_BARE_ROWS.contains(&key.as_str()).then(|| ("codex".to_string(), Some("bare".to_string())));
-    let entries = root.get("agents").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
-    for e in entries.iter().filter(|e| e.get("key").and_then(serde_json::Value::as_str) == Some(key.as_str())) {
-        let id = e.get("id").and_then(serde_json::Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
-        let given_profile = e.get("profile").filter(|v| !v.is_null()).map(|v| v.as_str().map(str::to_string).unwrap_or_default());
-        if e.get("disabled").and_then(serde_json::Value::as_bool) == Some(true) {
-            row = None;
-            continue;
-        }
-        row = Some(match row {
-            Some((rid, rprofile)) => (id.unwrap_or(rid), given_profile.or(rprofile)),
-            None => (id.unwrap_or_default(), given_profile),
-        });
-    }
-    match row {
-        Some((id, Some(p))) if id == "codex" && p == "bare" => Ok(Some(key)),
-        _ => Err(format!("Row {key:?} is not a Codex Bare row; Bare spawn refused")),
-    }
-}
-
-/// The row's sets, read before any home is touched; `None` when there is no key or no sets.
-fn row_sets_for(opts: &LaunchOpts) -> Result<Option<layer::RowSets>, String> {
-    let Some(key) = opts.row_key.map(str::trim).filter(|k| !k.is_empty()) else { return Ok(None) };
-    let row = layer::row_sets(&config_of(opts), key)?;
-    Ok((!row.sets.is_empty()).then_some(row))
-}
-
 /// The payload a Claude spawn hands over: the profile's static file, or the row's sets built
 /// into `<home>\layer\` under the caller's lock.
 struct PayloadChoice {
@@ -399,19 +378,22 @@ struct PayloadChoice {
     warnings: Vec<String>,
 }
 
-fn choose_payload(lock: &home::HomeLock, p: &Profile, root: &Path, home_dir: &Path, row: Option<&layer::RowSets>, guard: &home::Guard, carried: &[String]) -> Result<PayloadChoice, String> {
-    if let Some(row) = row {
+/// `text` is the vault's rendered runes (`set_loadout::resolve_vault`), filled into the profile's
+/// `setsPayload`; `None` keeps the static payload. `sets` (the vault's `library/set` runesets) is
+/// recorded either way.
+fn choose_payload(lock: &home::HomeLock, p: &Profile, root: &Path, home_dir: &Path, text: Option<&str>, sets: &[String], guard: &home::Guard) -> Result<PayloadChoice, String> {
+    if let Some(text) = text {
         let rel = p.sets_payload.as_deref().ok_or_else(|| format!("Launch profile {:?} has no setsPayload, so rune sets cannot load; Bare spawn refused", p.id))?;
         let tpl_path = under(root, rel);
         let template = crate::fsx::read_text(&tpl_path).map_err(|e| format!("Bare sets payload {}: {e}; Bare spawn refused", tpl_path.display()))?;
-        let b = layer::build_payload(lock, root, home_dir, &template, row, guard, carried)?;
-        return Ok(PayloadChoice { path: b.path, bytes: b.bytes, marker: b.marker, sets: b.sets, warnings: b.warnings });
+        let b = layer::build_text_payload(lock, root, home_dir, &template, text, guard)?;
+        return Ok(PayloadChoice { path: b.path, bytes: b.bytes, marker: b.marker, sets: sets.to_vec(), warnings: Vec::new() });
     }
     let path = under(root, &p.payload);
     let text = crate::fsx::read_text(&path).map_err(|e| format!("Bare payload {}: {e}", path.display()))?;
     let (marker, _) = payload_marker(&text)?;
     let bytes = std::fs::read(&path).map_err(|e| format!("Bare payload {}: {e}", path.display()))?;
-    Ok(PayloadChoice { path, bytes, marker, sets: Vec::new(), warnings: Vec::new() })
+    Ok(PayloadChoice { path, bytes, marker, sets: sets.to_vec(), warnings: Vec::new() })
 }
 
 impl PayloadChoice {
@@ -453,6 +435,8 @@ pub struct Launch {
     manifest: manifest::Manifest,
     file_stamp: String,
     manifests_dir: PathBuf,
+    /// The session record `write_manifest` adds (model R4); `None` only for the test no-vault spawn.
+    seed: Option<SessionSeed>,
     _lock: home::HomeLock,
 }
 
@@ -490,148 +474,15 @@ pub fn login_env_with(profile_id: &str, root: &Path, home_dir: &Path, inherited:
     Ok(profile_env(&p, root, home_dir, inherited))
 }
 
-/// Prepares the real home (the per-install home under LOCALAPPDATA) from Vidar's own env.
-pub fn prepare(profile: &str, opts: &LaunchOpts) -> Result<Launch, String> {
-    let probes = Probes { find: &find_on_env_path, version: &read_version, remote_control: &read_remote_control };
-    let normal = claude_dir::claude_json_for(None);
-    prepare_with(
-        profile,
-        &crate::paths::root(),
-        &home::resolve()?,
-        std::env::vars_os(),
-        &home::Guard::from_vidar_env(),
-        &probes,
-        &LaunchOpts { claude_json: normal.as_deref(), ..*opts },
-    )
-}
-
-pub fn prepare_with(
-    profile_id: &str,
-    root: &Path,
-    home_dir: &Path,
-    inherited: impl IntoIterator<Item = (OsString, OsString)>,
-    guard: &home::Guard,
-    probes: &Probes,
-    opts: &LaunchOpts,
-) -> Result<Launch, String> {
-    let p = load_profile(root, profile_id)?;
-    check_isolation(&p)?;
-    check_config_in_home(&p, root, home_dir)?;
-    let row = row_sets_for(opts)?;
-    let bare_guards = guards::read(&config_of(opts))?;
-    let (root_s, home_s) = (root.to_string_lossy().into_owned(), home_dir.to_string_lossy().into_owned());
-    home::prepare_dirs(home_dir, &p.home_dirs)?;
-    // Sources read and hashed before the lock (fold 4: LOCK_WAIT is 5 s).
-    let layer_plan = copies::plan(&config_of(opts), home_dir);
-    let lock = home::lock(home_dir, home::LOCK_WAIT)?;
-    let login_warnings = login_link::sync_profile(home_dir, &p.shared_login, &p.home_dirs, &lock)?;
-    let git = identity::write(&lock, home_dir, guard);
-    // Before settings: a refused row build or guard copy leaves settings.json as it was.
-    let copied = guards::copy(&lock, home_dir, &bare_guards)?;
-    let (skills, copy_warnings) = copies::sync_named(&lock, home_dir, config_dir_of(&p, root, home_dir).as_deref(), layer_plan);
-    // Each set's skills, agents and guards ride one plugin per set (`--plugin-dir` below); its guard
-    // scripts count as carried, so a rune's `enforced-by` claim on them stays.
-    let set_plugins = set_plugin::build(&lock, root, home_dir, row.as_ref(), set_layer::user_home().as_deref());
-    let mut carried = copied.files.clone();
-    carried.extend(set_plugins.guard_files.iter().cloned());
-    let payload = choose_payload(&lock, &p, root, home_dir, row.as_ref(), guard, &carried)?;
-    let settings = under(home_dir, &p.settings_target);
-    home::generate_settings(&under(root, &p.settings_template), &settings, root, home_dir, guard, &copied.hooks)?;
-    mirror_claude_seen(&p, root, home_dir, opts.claude_json);
-
-    let fill = |s: &str| s.replace("{{root}}", &root_s).replace("{{home}}", &home_s);
-    let env = profile_env(&p, root, home_dir, inherited);
-    let profile_dir = fill(&p.overlay.get("USERPROFILE").cloned().unwrap_or_default());
-
-    let host = (probes.find)(&env, &p.host.name).ok_or_else(|| format!("{} is not on the allowlisted Path; bare spawn refused", p.host.name))?;
-    let claude = (probes.find)(&env, &p.binary.name).ok_or_else(|| format!("{} is not on the allowlisted Path; bare spawn refused", p.binary.name))?;
-    let version = (probes.version)(&claude, &env);
-    let warning = match &version {
-        Some(v) if *v == p.verified_version => None,
-        Some(v) => Some(format!("Claude {v} differs from the verified {}; launching anyway. Verify: node tools/bare/verify-pin.mjs", p.verified_version)),
-        None => Some(format!("Claude version unreadable (verified {}); launching anyway", p.verified_version)),
-    };
-
-    let mut claude_args = Vec::new();
-    for a in &p.args {
-        if a == "{{plugins}}" {
-            for name in &p.plugins {
-                let dir = plugin_dir(root, name)?;
-                claude_args.push("--plugin-dir".to_string());
-                claude_args.push(dir.to_string_lossy().into_owned());
-            }
-            for dir in set_plugins.dirs() {
-                claude_args.push("--plugin-dir".to_string());
-                claude_args.push(dir.to_string_lossy().into_owned());
-            }
-        } else if a == "{{remoteControl}}" {
-            if (probes.remote_control)() {
-                claude_args.push("--remote-control".to_string());
-            }
-        } else {
-            claude_args.push(fill(&a.replace("{{payload}}", &payload.path.to_string_lossy())));
-        }
-    }
-    let mut line = String::new();
-    for w in warning.iter().chain(&payload.warnings).chain(&set_plugins.warnings).chain(&copy_warnings).chain(&login_warnings).chain(&git.warning) {
-        line.push_str(&format!("Write-Host {} -ForegroundColor Yellow; ", ps_quote(&format!("[Vidar Bare: {w}]"))));
-    }
-    line.push_str("& ");
-    line.push_str(&std::iter::once(claude.to_string_lossy().into_owned()).chain(claude_args).map(|a| ps_quote(&a)).collect::<Vec<_>>().join(" "));
-    let mut args = p.host.args.clone();
-    args.push(line);
-
-    let (created_utc, file_stamp) = manifest::stamps();
-    let m = manifest::Manifest {
-        profile: p.id.clone(),
-        agent: p.agent.clone(),
-        tab: String::new(),
-        created_utc,
-        vidar_pid: std::process::id(),
-        binary: manifest::Binary {
-            path: claude.to_string_lossy().into_owned(),
-            version,
-            verified_version: p.verified_version.clone(),
-            warning,
-        },
-        program: host.to_string_lossy().into_owned(),
-        args: args.clone(),
-        env_names: Vec::new(),
-        homes: manifest::Homes {
-            home: home_s.clone(),
-            claude_config: fill(p.overlay.get("CLAUDE_CONFIG_DIR").map(String::as_str).unwrap_or_default()),
-            codex_home: String::new(),
-            user_home: profile_dir,
-            settings: settings.to_string_lossy().into_owned(),
-        },
-        payload: payload.record(),
-        plugins: p.plugins.iter().cloned().chain(set_plugins.plugins.iter().filter_map(|s| s.dir.file_name().map(|n| n.to_string_lossy().into_owned()))).collect(),
-        guards: copied.files,
-        skills,
-        git_keys: git.keys,
-        warnings: set_plugins.warnings.into_iter().chain(copy_warnings).chain(login_warnings).chain(git.warning).collect(),
-        managed_policy: manifest::managed_policy(),
-        codex_rules: None,
-        falcon_session: None,
-    };
-    Ok(Launch {
-        program: host,
-        args,
-        env,
-        manifest: m,
-        file_stamp,
-        manifests_dir: home_dir.join("manifests"),
-        _lock: lock,
-    })
-}
-
 impl Launch {
     /// Records the launch (create-new) with the final env names, tab variables included. An
     /// error refuses the spawn: a bare tab never runs unrecorded.
     pub fn write_manifest<'a>(&mut self, tab: &str, env_names: impl IntoIterator<Item = &'a str>) -> Result<PathBuf, String> {
         self.manifest.tab = tab.to_string();
         self.manifest.env_names = env_names.into_iter().map(str::to_string).collect();
-        manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)
+        let written = manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)?;
+        vault_spawn::write_record(self.seed.as_ref(), tab, None, Path::new(&self.manifest.homes.claude_config))?;
+        Ok(written)
     }
 }
 
@@ -659,12 +510,18 @@ pub struct HostedLaunch {
     /// The row's built payload (`<home>\layer\payload-<hash12>.md`), for `SpawnParams.payload_file`;
     /// `None` when the row has no sets and the sidecar reads the profile's own payload.
     pub payload_file: Option<PathBuf>,
-    /// The row's set plugin folders (`set_plugin::build`, ref order), for
-    /// `SpawnParams.set_plugin_dirs`; empty when the row has no sets or none attach anything.
-    pub set_plugin_dirs: Vec<PathBuf>,
+    /// Strict MCP config under the Bare home's layer, present on every launch.
+    pub mcp_file: Option<PathBuf>,
+    /// The launch's `CLAUDE_CONFIG_DIR` (its set combination's home, or the profile's own), for
+    /// `SpawnParams.claude_config_dir`; checked by `check_claude_config_dir` before it is set.
+    pub claude_config_dir: Option<PathBuf>,
+    /// The vault's plugin rune names, for `SpawnParams.plugin_names`: Falcon admits each from
+    /// `<root>\plugins\<name>` and the sidecar loads it (run 2026-10-25-rune-vault L2b).
+    pub plugin_names: Vec<String>,
     manifest: manifest::Manifest,
     file_stamp: String,
     manifests_dir: PathBuf,
+    seed: Option<SessionSeed>,
 }
 
 impl HostedLaunch {
@@ -681,85 +538,10 @@ impl HostedLaunch {
         self.manifest.tab = tab.to_string();
         self.manifest.falcon_session = Some(falcon_session.to_string());
         self.manifest.env_names = env_names.into_iter().map(str::to_string).collect();
-        manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)
+        let written = manifest::write_hosted(&self.manifests_dir, &self.file_stamp, &self.manifest, self.mcp_file.as_deref())?;
+        vault_spawn::write_record(self.seed.as_ref(), tab, Some(falcon_session), Path::new(&self.manifest.homes.claude_config))?;
+        Ok(written)
     }
-}
-
-/// Prepares the real home (the per-install home under LOCALAPPDATA) for a hosted spawn.
-pub fn prepare_hosted_for(profile: &str, opts: &LaunchOpts) -> Result<HostedLaunch, String> {
-    let normal = claude_dir::claude_json_for(None);
-    prepare_hosted_with(profile, &crate::paths::root(), &home::resolve()?, &home::Guard::from_vidar_env(), &LaunchOpts { claude_json: normal.as_deref(), ..*opts })
-}
-
-/// The Raw path's home steps without its spawn line: profile and isolation checks, the rendered
-/// plugin set present, dirs and ACL, the lock, the payload (the row's sets built, or the
-/// profile's own and its marker), `settings.json` generated.
-pub fn prepare_hosted_with(profile_id: &str, root: &Path, home_dir: &Path, guard: &home::Guard, opts: &LaunchOpts) -> Result<HostedLaunch, String> {
-    let p = load_profile(root, profile_id)?;
-    check_isolation(&p)?;
-    check_config_in_home(&p, root, home_dir)?;
-    let rendered = p.rendered.as_ref().ok_or_else(|| format!("Launch profile {:?} has no rendered block; spawn refused", p.id))?;
-    for name in &rendered.plugins {
-        plugin_dir(root, name)?;
-    }
-    let row = row_sets_for(opts)?;
-    let bare_guards = guards::read(&config_of(opts))?;
-    let (root_s, home_s) = (root.to_string_lossy().into_owned(), home_dir.to_string_lossy().into_owned());
-    home::prepare_dirs(home_dir, &p.home_dirs)?;
-    // Held only while the payload, guard copies and `settings.json` are written: the manifest is
-    // create-new with a unique name, so the host round-trip that follows needs no lock (a second
-    // bare spawn must not wait on it). Copy sources are read and hashed before it.
-    let layer_plan = copies::plan(&config_of(opts), home_dir);
-    let lock = home::lock(home_dir, home::LOCK_WAIT)?;
-    let login_warnings = login_link::sync_profile(home_dir, &p.shared_login, &p.home_dirs, &lock)?;
-    let git = identity::write(&lock, home_dir, guard);
-    let copied = guards::copy(&lock, home_dir, &bare_guards)?;
-    let (skills, copy_warnings) = copies::sync_named(&lock, home_dir, config_dir_of(&p, root, home_dir).as_deref(), layer_plan);
-    // As Raw: one plugin per set (Falcon admits each folder and the sidecar loads it after the
-    // profile's plugins); its guard scripts count as carried for `enforced-by` claims.
-    let set_plugins = set_plugin::build(&lock, root, home_dir, row.as_ref(), set_layer::user_home().as_deref());
-    let mut carried = copied.files.clone();
-    carried.extend(set_plugins.guard_files.iter().cloned());
-    let payload = choose_payload(&lock, &p, root, home_dir, row.as_ref(), guard, &carried)?;
-    let settings = under(home_dir, &p.settings_target);
-    home::generate_settings(&under(root, &p.settings_template), &settings, root, home_dir, guard, &copied.hooks)?;
-    mirror_claude_seen(&p, root, home_dir, opts.claude_json);
-    drop(lock);
-
-    let fill = |s: &str| s.replace("{{root}}", &root_s).replace("{{home}}", &home_s);
-    let (created_utc, file_stamp) = manifest::stamps();
-    let m = manifest::Manifest {
-        profile: p.id.clone(),
-        agent: p.agent.clone(),
-        tab: String::new(),
-        created_utc,
-        vidar_pid: std::process::id(),
-        // Falcon resolves claude.exe and runs the sidecar; Vidar sees neither.
-        binary: manifest::Binary { path: String::new(), version: None, verified_version: p.verified_version.clone(), warning: None },
-        program: "falcon".into(),
-        args: Vec::new(),
-        env_names: Vec::new(),
-        homes: manifest::Homes {
-            home: home_s.clone(),
-            claude_config: fill(p.overlay.get("CLAUDE_CONFIG_DIR").map(String::as_str).unwrap_or_default()),
-            codex_home: String::new(),
-            user_home: fill(p.overlay.get("USERPROFILE").map(String::as_str).unwrap_or_default()),
-            settings: settings.to_string_lossy().into_owned(),
-        },
-        payload: payload.record(),
-        plugins: rendered.plugins.iter().cloned().chain(set_plugins.plugins.iter().filter_map(|s| s.dir.file_name().map(|n| n.to_string_lossy().into_owned()))).collect(),
-        guards: copied.files,
-        skills,
-        git_keys: git.keys,
-        // No spawn line to print it on: the manifest is the hosted tab's record.
-        warnings: set_plugins.warnings.iter().cloned().chain(copy_warnings).chain(login_warnings).chain(git.warning).collect(),
-        managed_policy: manifest::managed_policy(),
-        codex_rules: None,
-        falcon_session: None,
-    };
-    let payload_file = row.is_some().then(|| payload.path.clone());
-    let set_plugin_dirs = set_plugins.dirs();
-    Ok(HostedLaunch { payload_file, set_plugin_dirs, manifest: m, file_stamp, manifests_dir: home_dir.join("manifests") })
 }
 
 // ---- Codex Rendered (in-process app-server, agent.rs) ----
@@ -875,6 +657,9 @@ struct CodexProfile {
     /// The TUI line's args (Raw, `Surface::Tui`); a profile without them has no Raw row.
     #[serde(default)]
     raw_args: Option<Vec<String>>,
+    /// The one-shot `codex exec` line's args (`Surface::Exec`, the runes probe); the prompt rides after.
+    #[serde(default)]
+    exec_args: Option<Vec<String>>,
     payload: String,
     /// The template a row's rune sets and the copied skills listing fill (`{{sets}}`); read only
     /// when the spawn builds instructions.
@@ -897,7 +682,7 @@ fn load_codex_profile(root: &Path, id: &str) -> Result<CodexProfile, String> {
         return Err(format!("Launch profile {}: id {:?} / agent {:?} do not match a Codex {id:?} row", path.display(), p.id, p.agent));
     }
     if !p.shared_login.is_empty() {
-        return Err(format!("Launch profile {}: sharedLogin is not wired for Codex yet; spawn refused", path.display()));
+        return Err(format!("Launch profile {}: a Codex profile takes no sharedLogin entry (login_link::sync_codex shares auth.json itself); spawn refused", path.display()));
     }
     Ok(p)
 }
@@ -929,49 +714,110 @@ pub fn codex_home_for_profile_with(profile_id: &str, root: &Path, home_dir: &Pat
     Ok(codex_home)
 }
 
-/// What a Flow Codex node spawns on the Bare home: the profile's env (WindowsApps folders
-/// dropped, as a tab's), `node`, the resolved `codex.js` and the home it points at.
+/// One agent home of a Bare profile with the sets of its combination (empty on the legacy home
+/// unless the seed maps one onto it).
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgentHomeInfo {
+    pub dir: PathBuf,
+    pub sets: Vec<String>,
+}
+
+pub type CodexHomeInfo = AgentHomeInfo;
+
+/// Every Codex home of a Bare profile for readers: the legacy home first, then each indexed
+/// combination home (W3 L9). Read-only like `codex_home_for_profile`: Err when the profile or its
+/// legacy home is missing, and nothing is created.
+pub fn codex_homes_for_profile(profile_id: &str) -> Result<Vec<CodexHomeInfo>, String> {
+    codex_homes_for_profile_with(profile_id, &crate::paths::root(), &home::resolve()?)
+}
+
+pub fn codex_homes_for_profile_with(profile_id: &str, root: &Path, home_dir: &Path) -> Result<Vec<CodexHomeInfo>, String> {
+    let legacy = codex_home_for_profile_with(profile_id, root, home_dir)?;
+    // The sets shown are the runesets of the vault each home is keyed to, as Claude's (`claude_dir::listed_sets`).
+    Ok(agent_homes::listed(Agent::Codex, home_dir, &legacy).into_iter().map(|(dir, sets)| AgentHomeInfo { dir, sets: claude_dir::listed_sets(root, &sets) }).collect())
+}
+
+/// Every Claude config dir of a Bare profile for readers: the legacy one (the profile's
+/// `CLAUDE_CONFIG_DIR`) first, then each indexed combination home under `claude-homes`. Read-only:
+/// Err when the profile, its `CLAUDE_CONFIG_DIR` or that folder is missing, and nothing is created.
+/// The readers go through `claude_dir::listed_for` (fold W2 L2e).
+pub fn claude_homes_for_profile_with(profile_id: &str, root: &Path, home_dir: &Path) -> Result<Vec<AgentHomeInfo>, String> {
+    let legacy = claude_legacy_dir(profile_id, root, home_dir)?;
+    if !legacy.is_dir() {
+        return Err(format!("Bare Claude config {} does not exist yet; open the profile once to create it", legacy.display()));
+    }
+    Ok(agent_homes::listed(Agent::Claude, home_dir, &legacy).into_iter().map(|(dir, sets)| AgentHomeInfo { dir, sets }).collect())
+}
+
+/// A Claude profile's own `CLAUDE_CONFIG_DIR`, checked to sit under the Bare home; read-only.
+fn claude_legacy_dir(profile_id: &str, root: &Path, home_dir: &Path) -> Result<PathBuf, String> {
+    let p = load_profile(root, profile_id)?;
+    check_config_in_home(&p, root, home_dir)?;
+    config_dir_of(&p, root, home_dir).ok_or_else(|| format!("Launch profile {profile_id:?} sets no CLAUDE_CONFIG_DIR"))
+}
+
+/// What a Flow Codex node spawns on Flow's own home (`flow_home`, W2-L2d): the profile's env with
+/// `CODEX_HOME` at `<home>\flow-codex` (WindowsApps folders dropped, as a tab's), `node`, the
+/// resolved `codex.js`, that home, and the login link's warnings.
 /// Flow's runner calls it (run 2026-10-19-codex-primary, U2).
 pub struct CodexEnv {
     pub env: Env,
     pub node: PathBuf,
     pub js: PathBuf,
     pub codex_home: PathBuf,
+    pub warnings: Vec<String>,
 }
 
-/// A Bare Codex profile's env with no tab, for Flow. Read-only like `codex_home_for_profile`:
-/// Err when the profile, the home folder or its `auth.json` login is missing; it never prepares
-/// dirs, takes the lock or rewrites config.toml (a new `CODEX_HOME` triggers UAC and resets the
-/// sandbox passwords). `auth.json` is tested for presence only, never opened.
-pub fn codex_env_for_profile(profile_id: &str, inherited: impl IntoIterator<Item = (OsString, OsString)>) -> Result<CodexEnv, String> {
+/// A Bare Codex profile's env for a Flow node: prepares Flow's own baseline home
+/// (`flow_home::prepare`) under the home lock. Err when the profile or the legacy Bare home is
+/// missing (nothing written), or no login reached the Flow home. `cwd` is the node's launch folder.
+pub fn codex_env_for_profile(profile_id: &str, inherited: impl IntoIterator<Item = (OsString, OsString)>, cwd: &str) -> Result<CodexEnv, String> {
     let probes = CodexProbes { find: &find_on_env_path, codex: &resolve_codex };
-    codex_env_for_profile_with(profile_id, &crate::paths::root(), &home::resolve()?, inherited, &probes)
+    flow_home::prepare(profile_id, &crate::paths::root(), &home::resolve()?, inherited, &Ambient::from_env(), &home::Guard::from_vidar_env(), &probes, Some(cwd))
 }
 
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub fn codex_env_for_profile_with(
     profile_id: &str,
     root: &Path,
     home_dir: &Path,
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    ambient: &Ambient,
+    guard: &home::Guard,
     probes: &CodexProbes,
+    cwd: Option<&str>,
 ) -> Result<CodexEnv, String> {
-    if !PROFILES.contains(&profile_id) {
-        return Err(format!("Unknown launch profile {profile_id:?}"));
-    }
-    let p = load_codex_profile(root, profile_id)?;
-    let codex_home = codex_home_of(&p, root, home_dir).ok_or_else(|| format!("Bare Codex profile {profile_id:?} sets no CODEX_HOME"))?;
-    if !codex_home.is_dir() {
-        return Err("Open a Bare tab once to create its home".to_string());
-    }
-    if !codex_home.join("auth.json").is_file() {
-        return Err("Sign in from a Bare tab".to_string());
-    }
-    let overlay: BTreeMap<String, String> = p.overlay.iter().map(|(k, v)| (k.clone(), fill_placeholders(v, root, home_dir))).collect();
-    let mut env = env::codex(inherited, &overlay)?;
-    env::drop_app_alias_dirs(&mut env);
-    let node = (probes.find)(&env, &p.host.name).ok_or_else(|| format!("{} is not on the allowlisted Path", p.host.name))?;
-    let (js, _) = (probes.codex)(&env, &p.binary).ok_or_else(|| format!("{} not found beside a {} shim on the allowlisted Path", p.binary.script, p.binary.shims.join(" or ")))?;
-    Ok(CodexEnv { env, node, js, codex_home })
+    flow_home::prepare(profile_id, root, home_dir, inherited, ambient, guard, probes, cwd)
+}
+
+/// What a Flow Claude node spawns on Flow's own config dir (`flow_claude`, W2-L2a): the profile's
+/// env with `CLAUDE_CONFIG_DIR` at `<home>\flow-claude`, that dir, its drive-only MCP file and the
+/// login link's warnings.
+#[derive(Debug)]
+pub struct ClaudeFlowEnv {
+    pub env: Env,
+    pub config_dir: PathBuf,
+    pub mcp_file: PathBuf,
+    pub warnings: Vec<String>,
+}
+
+/// A Bare Claude profile's env for a Flow node: prepares Flow's own baseline config dir
+/// (`flow_claude::prepare`) under the home lock. Err when the profile or the legacy config dir is
+/// missing (nothing written).
+pub fn claude_env_for_flow(profile_id: &str, inherited: impl IntoIterator<Item = (OsString, OsString)>) -> Result<ClaudeFlowEnv, String> {
+    flow_claude::prepare(profile_id, &crate::paths::root(), &home::resolve()?, inherited, &home::Guard::from_vidar_env())
+}
+
+#[cfg(test)]
+pub fn claude_env_for_flow_with(
+    profile_id: &str,
+    root: &Path,
+    home_dir: &Path,
+    inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    guard: &home::Guard,
+) -> Result<ClaudeFlowEnv, String> {
+    flow_claude::prepare(profile_id, root, home_dir, inherited, guard)
 }
 
 /// D7 resolver: the first allowlisted `Path` folder holding a shim and the script beside it, and
@@ -1005,6 +851,10 @@ pub struct CodexProbes<'a> {
 pub enum Surface {
     AppServer,
     Tui,
+    /// `codex exec` one-shot (profile `execArgs`), payload as a profile file like the TUI; only the
+    /// runes probe (`probe_runes_tests`) builds it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Exec,
 }
 
 /// A prepared bare Codex launch: `node <codex.js> app-server` (or the TUI's `rawArgs`) with the
@@ -1024,6 +874,7 @@ pub struct CodexLaunch {
     manifest: manifest::Manifest,
     file_stamp: String,
     manifests_dir: PathBuf,
+    seed: Option<SessionSeed>,
     _lock: home::HomeLock,
 }
 
@@ -1032,7 +883,9 @@ impl CodexLaunch {
     pub fn write_manifest<'a>(&mut self, tab: &str, env_names: impl IntoIterator<Item = &'a str>) -> Result<PathBuf, String> {
         self.manifest.tab = tab.to_string();
         self.manifest.env_names = env_names.into_iter().map(str::to_string).collect();
-        manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)
+        let written = manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)?;
+        vault_spawn::write_record(self.seed.as_ref(), tab, None, &self.codex_home)?;
+        Ok(written)
     }
 }
 
@@ -1041,7 +894,7 @@ impl CodexLaunch {
 pub fn prepare_codex(profile: &str, opts: &LaunchOpts, cwd: &str) -> Result<CodexLaunch, String> {
     let probes = CodexProbes { find: &find_on_env_path, codex: &resolve_codex };
     let root = crate::paths::root();
-    let launch = prepare_codex_in(profile, &root, &home::resolve()?, std::env::vars_os(), &home::Guard::from_vidar_env(), &probes, opts, Some(cwd))?;
+    let launch = prepare_codex_in(profile, &root, &home::resolve()?, std::env::vars_os(), &Ambient::from_env(), &home::Guard::from_vidar_env(), &probes, opts, Some(cwd))?;
     verify_new_codex(&launch, &root);
     Ok(launch)
 }
@@ -1051,28 +904,35 @@ pub fn prepare_codex(profile: &str, opts: &LaunchOpts, cwd: &str) -> Result<Code
 pub fn prepare_codex_tui(profile: &str, opts: &LaunchOpts, cwd: &str) -> Result<CodexLaunch, String> {
     let probes = CodexProbes { find: &find_on_env_path, codex: &resolve_codex };
     let root = crate::paths::root();
-    let launch = prepare_codex_for(Surface::Tui, profile, &root, &home::resolve()?, std::env::vars_os(), &home::Guard::from_vidar_env(), &probes, opts, Some(cwd))?;
+    let launch = prepare_codex_for(Surface::Tui, profile, &root, &home::resolve()?, std::env::vars_os(), &Ambient::from_env(), &home::Guard::from_vidar_env(), &probes, opts, Some(cwd))?;
     verify_new_codex(&launch, &root);
     Ok(launch)
 }
 
-/// A Codex spawn's built instructions: the row's sets (`build_payload`, carrying the guard files
-/// hooks.json runs) and the copied skills listing, or the listing alone, filled into the profile's
-/// `setsPayload` with `{{root}}` filled; `None` when there are neither (the static payload in config.toml stands).
+/// A Codex spawn's built instructions: the loaded vault's rendered runes (`text`, from
+/// `set_loadout::resolve_vault`) and copied skill-rune listing, filled into the profile's
+/// `setsPayload`; `sets` (the vault's runesets) is recorded on the built payload. An empty result
+/// refuses the spawn.
 #[allow(clippy::too_many_arguments)]
-fn codex_instructions(lock: &home::HomeLock, p: &CodexProfile, root: &Path, home_dir: &Path, row: Option<&layer::RowSets>, skills: &str, guard: &home::Guard, carried: &[String]) -> Result<Option<layer::BuiltPayload>, String> {
-    if row.is_none() && skills.is_empty() {
-        return Ok(None);
+fn codex_instructions(lock: &home::HomeLock, p: &CodexProfile, root: &Path, home_dir: &Path, vault_text: Option<&str>, sets: &[String], skills: &str, guard: &home::Guard) -> Result<Option<layer::BuiltPayload>, String> {
+    if vault_text.is_none_or(|text| text.trim().is_empty()) && skills.trim().is_empty() {
+        return Err("Rune Vault built an empty Codex payload; Bare spawn refused".into());
     }
     let rel = p.sets_payload.as_deref().ok_or_else(|| format!("Launch profile {:?} has no setsPayload, so rune sets cannot load; Bare spawn refused", p.id))?;
     let tpl_path = under(root, rel);
     let template = crate::fsx::read_text(&tpl_path).map_err(|e| format!("Bare sets payload {}: {e}; Bare spawn refused", tpl_path.display()))?;
-    let template = template.replace("{{root}}", &root.to_string_lossy());
-    let built = match row {
-        // The listing rides after the sets, before the marker build_payload appends.
-        Some(row) => layer::build_payload(lock, root, home_dir, &layer::with_skills(&template, skills), row, guard, carried)?,
-        None => layer::build_text_payload(lock, root, home_dir, &template, skills, guard)?,
-    };
+    // The template's source comment documents the vault contract; only rune content is delivered.
+    let template = template.lines().filter(|line| !line.starts_with("<!-- This Codex session loaded a Rune Vault;"))
+        .collect::<Vec<_>>().join("\n").replace("{{root}}", &root.to_string_lossy());
+    if template.trim() != "{{sets}}" {
+        return Err("Codex vault payload template contains text outside the Rune Vault; Bare spawn refused".into());
+    }
+    let body = [vault_text.unwrap_or("").trim_end(), skills.trim_end()]
+        .into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join("\n\n")
+        // The stock identity rune's control CLI line names `{{root}}`, as the template once did.
+        .replace("{{root}}", &root.to_string_lossy());
+    let mut built = layer::build_text_payload(lock, root, home_dir, &template, &body, guard)?;
+    built.sets = sets.to_vec();
     Ok(Some(built))
 }
 
@@ -1089,11 +949,12 @@ pub fn prepare_codex_with(
     root: &Path,
     home_dir: &Path,
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    ambient: &Ambient,
     guard: &home::Guard,
     probes: &CodexProbes,
     opts: &LaunchOpts,
 ) -> Result<CodexLaunch, String> {
-    prepare_codex_in(profile_id, root, home_dir, inherited, guard, probes, opts, None)
+    prepare_codex_in(profile_id, root, home_dir, inherited, ambient, guard, probes, opts, None)
 }
 
 /// `prepare_codex_with` for a launch folder: `cwd` becomes config.toml's one trusted `[projects]` entry.
@@ -1103,12 +964,13 @@ pub fn prepare_codex_in(
     root: &Path,
     home_dir: &Path,
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    ambient: &Ambient,
     guard: &home::Guard,
     probes: &CodexProbes,
     opts: &LaunchOpts,
     cwd: Option<&str>,
 ) -> Result<CodexLaunch, String> {
-    prepare_codex_for(Surface::AppServer, profile_id, root, home_dir, inherited, guard, probes, opts, cwd)
+    prepare_codex_for(Surface::AppServer, profile_id, root, home_dir, inherited, ambient, guard, probes, opts, cwd)
 }
 
 /// `prepare_codex_in` for either surface; a Tui prepare on a profile without `rawArgs` refuses
@@ -1120,6 +982,7 @@ pub fn prepare_codex_for(
     root: &Path,
     home_dir: &Path,
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    ambient: &Ambient,
     guard: &home::Guard,
     probes: &CodexProbes,
     opts: &LaunchOpts,
@@ -1129,14 +992,15 @@ pub fn prepare_codex_for(
     let line_args = match surface {
         Surface::AppServer => p.args.clone(),
         Surface::Tui => p.raw_args.clone().ok_or_else(|| format!("Launch profile {profile_id:?} has no rawArgs, so it has no Raw Codex row; spawn refused"))?,
+        Surface::Exec => p.exec_args.clone().ok_or_else(|| format!("Launch profile {profile_id:?} has no execArgs, so it has no one-shot Codex line; spawn refused"))?,
     };
-    // The TUI takes the payload as a profile file; the app-server surface hands the text back for
-    // the Rendered adapter to send on `thread/start`. Neither has a length cap.
+    // The TUI and exec take the payload as a profile file; the app-server surface hands the text back
+    // for the Rendered adapter to send on `thread/start`. Neither has a length cap.
     let route = match surface {
         Surface::AppServer => codex_hosted::PayloadRoute::ThreadStart,
-        Surface::Tui => codex_hosted::PayloadRoute::ProfileFile,
+        Surface::Tui | Surface::Exec => codex_hosted::PayloadRoute::ProfileFile,
     };
-    let h = codex_hosted::prepare_home(p, root, home_dir, inherited, guard, probes.find, probes.codex, opts, cwd, route)?;
+    let h = codex_hosted::prepare_home(p, root, home_dir, inherited, ambient, guard, probes.find, probes.codex, opts, cwd, route, false)?;
     let fill = |s: &str| fill_placeholders(s, root, home_dir);
     let (p, env) = (&h.p, &h.env);
     let node = (probes.find)(env, &p.host.name).ok_or_else(|| format!("{} is not on the allowlisted Path; bare spawn refused", p.host.name))?;
@@ -1154,10 +1018,10 @@ pub fn prepare_codex_for(
     let binary_warning = warning.clone();
     let warning = codex_hosted::join_warnings(warning, h.trust_warning.clone());
     let warning = codex_hosted::join_warnings(warning, (!h.login_warnings.is_empty()).then(|| h.login_warnings.join("; ")));
-    let mut args = vec![js.to_string_lossy().into_owned()];
-    args.extend(line_args.iter().map(|a| fill(a)));
-    // The record names the built file, never the encoded text.
-    let mut recorded_args = args.clone();
+    let warning = codex_hosted::join_warnings(warning, (!h.unsupported_warnings.is_empty()).then(|| h.unsupported_warnings.join("; ")));
+    // MCP `-c` overrides ahead of the subcommand; the record names env values, never holds them.
+    let line = |mcp: &[String]| std::iter::once(js.to_string_lossy().into_owned()).chain(mcp.iter().cloned()).chain(line_args.iter().map(|a| fill(a))).collect::<Vec<_>>();
+    let (mut args, mut recorded_args) = (line(&h.mcp.args), line(&h.mcp.recorded));
     if let Some(name) = h.profile.clone() {
         let flag = ["--profile".to_string(), name];
         args.extend(flag.clone());
@@ -1169,6 +1033,16 @@ pub fn prepare_codex_for(
     };
     let binary = manifest::Binary { path: js.to_string_lossy().into_owned(), version, verified_version: p.verified_version.clone(), warning: binary_warning };
     let (m, file_stamp) = h.manifest(binary, node.to_string_lossy().into_owned(), recorded_args);
+    let body = match surface {
+        Surface::AppServer => "rendered",
+        Surface::Tui => "raw",
+        Surface::Exec => "exec",
+    };
+    // Raw has no first-message hook, so the TUI locks its vault at spawn.
+    if let (Surface::Tui, Some(v)) = (surface, h.vault.as_ref()) {
+        vault_spawn::lock_at_spawn(root, v)?;
+    }
+    let seed = SessionSeed::new(root, Agent::Codex, body, h.vault.as_ref(), &h.loadout_hash);
     Ok(CodexLaunch {
         program: node,
         args,
@@ -1179,6 +1053,7 @@ pub fn prepare_codex_for(
         manifest: m,
         file_stamp,
         manifests_dir: home_dir.join("manifests"),
+        seed,
         _lock: h.lock,
     })
 }
@@ -1196,3 +1071,9 @@ pub(crate) fn pinned(agent: &str) -> String {
 mod tests;
 #[cfg(test)]
 mod env_parity;
+#[cfg(test)]
+mod e2e_snap_tests;
+#[cfg(test)]
+mod probe_runes_tests;
+#[cfg(all(test, feature = "vault-gate"))]
+mod vault_gate_tests;

@@ -247,17 +247,23 @@ mod registry_record;
 #[cfg(not(falcon_shell))]
 use self::{
     protocol::{
-        Agent, Lease, Op, Outcome, Response, SpawnParams, CAPABILITY_STEER, MAX_SESSION_FRAME,
+        Lease, Op, Outcome, Response, SpawnParams, CAPABILITY_STEER, MAX_SESSION_FRAME,
     },
     registry_record::FalconRegistry,
 };
 #[cfg(falcon_shell)]
 use crate::{
     protocol::{
-        Agent, Lease, Op, Outcome, Response, SpawnParams, CAPABILITY_STEER, MAX_SESSION_FRAME,
+        Lease, Op, Outcome, Response, SpawnParams, CAPABILITY_STEER, MAX_SESSION_FRAME,
     },
     registry::FalconRegistry,
 };
+// The wire's agent: the Bare resolver's boundary (`bare::set_loadout::resolve`) and the key
+// `bare/agent_homes.rs` files each agent's homes under.
+#[cfg(not(falcon_shell))]
+pub(crate) use self::protocol::Agent;
+#[cfg(falcon_shell)]
+pub(crate) use crate::protocol::Agent;
 
 // Children: `#[path]` because this file is also mounted by path from the shell
 // crate; they reach this module through `super::` only (`.claude\rules\falcon-rs.md`).
@@ -830,6 +836,13 @@ impl Falcon {
             .map(|(tab, _)| tab.clone())
     }
 
+    /// The Falcon session the Vidar tab `tab` hosts (`falcon_hosted_session`'s lookup), for
+    /// readers that find a session's launch manifest by its session (`bare::claude_dir`).
+    #[cfg(not(falcon_shell))]
+    pub fn hosted_session_of(&self, tab: &str) -> Option<String> {
+        self.hosted.lock().ok()?.get(tab).map(|entry| entry.session.clone())
+    }
+
     /// Every view this process still holds. At frontend boot a non-empty set
     /// means a webview reload, not a first launch: the reload dropped the tabs,
     /// not this map (`docs\projects\falcon\falcon-idle-reap.md` §Decision 1).
@@ -1113,7 +1126,9 @@ mod tests {
                     profile: None,
                     payload_file: None,
                     row_key: None,
-                    set_plugin_dirs: Vec::new(),
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                    sets: None,
+                    mcp_file: None,
                 }),
                 r#"{"op":"spawn","agent":"claude","cwd":"C:\\work","permission_mode":"default","id":1}"#,
                 None,
@@ -1133,7 +1148,9 @@ mod tests {
                     profile: None,
                     payload_file: None,
                     row_key: None,
-                    set_plugin_dirs: Vec::new(),
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                    sets: None,
+                    mcp_file: None,
                 }),
                 r#"{"op":"spawn","agent":"claude","cwd":"C:\\work","permission_mode":"plan","model":"sonnet","resume":"c4ee6c0d-1111-2222-3333-444444444444","id":1}"#,
                 None,

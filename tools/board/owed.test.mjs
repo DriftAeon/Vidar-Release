@@ -18,6 +18,14 @@ test("closed with park lines is clean", () => {
   assert.deepEqual(owedGaps(run("run closed\n## Owed to the user\n- parked a1: do x\n- unparked a1: done\n")), []);
 });
 
+test("unpark closers with a paren or at end of line count as park lines", () => {
+  assert.deepEqual(owedGaps(run("run closed\n## Owed to the user\n- parked a1: x\n- unparked a1 (why): y\n- unparked a2\n")), []);
+});
+
+test("an opener without the colon is not a park line", () => {
+  assert.equal(owedGaps(run("run closed\n## Owed to the user\n- parked a1 do x\n")).length, 1);
+});
+
 test("closed with a plain bullet is flagged", () => {
   const g = owedGaps(run("run closed\n## Owed to the user\n- ask about y\n"));
   assert.equal(g.length, 1);

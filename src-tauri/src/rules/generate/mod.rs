@@ -1,10 +1,10 @@
 //! src-tauri\src\rules\generate\mod.rs — agent-generated runes, the path an agent's reply must pass before it
 //! can land (docs/runs/2026-10-17-rune-generator/plan.md § Skill, D3, E5). `envelope` parses the reply strictly
-//! (every error collected) and adds the coverage and modal warnings; `render` turns it into rune files, the row set
-//! and `generate.json`; `validate` builds the rendered library from a temp folder the way a Bare spawn would and
-//! splits structural errors (nothing lands) from advisory size. The skill the agent runs under is
-//! `profiles/bare/rune-create/SKILL.md`; `input_text` is the stdin form it documents. `land` writes a prepared
-//! library and swaps the row's refs in one transaction, and toggles a rune. `chunk` splits the input into the parts
+//! (every error collected) and adds the coverage and modal warnings; `render` turns it into rune files, the
+//! generated set and `generate.json`, with `items` adding ticked local skills, agents and hooks as item runes;
+//! `validate` builds the rendered library from a temp folder the way a Bare spawn would and splits structural errors
+//! (nothing lands) from advisory size. The skill the agent runs under is `profiles/bare/rune-create/SKILL.md`;
+//! `input_text` is the stdin form it documents. `land` writes a prepared library and nothing else. `chunk` splits the input into the parts
 //! one call reads, `merge` joins the chunk envelopes, `pipeline` and `progress` schedule the calls and report them,
 //! and `commands` runs it all (the `rules_generate*` IPC commands).
 #![cfg_attr(not(test), allow(dead_code))] // `execute`, `Span::whole` and a few helpers are test-only callers.
@@ -13,7 +13,9 @@ pub mod chunk;
 pub mod commands;
 pub mod envelope;
 pub mod home;
+pub mod items;
 pub mod land;
+pub mod login_back;
 pub mod merge;
 pub mod payload;
 pub mod pipeline;
@@ -67,19 +69,18 @@ fn rendered_line(n: usize, l: &str) -> String {
     }
 }
 
-/// The user message the skill's § Input describes: target agent, budget, then each file headed by its `~` path
+/// The user message the skill's § Input describes: target agent, then each file headed by its `~` path
 /// and line count with every line `L<n>:`-prefixed.
-pub fn input_text(inputs: &[Input], agent: &str, budget: Option<usize>) -> String {
+pub fn input_text(inputs: &[Input], agent: &str) -> String {
     let spans: Vec<Span> = inputs.iter().map(Span::whole).collect();
-    chunk_text(inputs, &spans, agent, budget)
+    chunk_text(inputs, &spans, agent)
 }
 
 /// The same message for the parts of files one call gets. A whole file renders as `input_text` does; a part is
 /// headed `(lines a-b of n)`, keeps the original `L<n>` numbers, and one that starts mid-file carries its ancestor
 /// headings as a non-citable `Context:` line right after the header.
-pub fn chunk_text(inputs: &[Input], spans: &[Span], agent: &str, budget: Option<usize>) -> String {
-    let budget = budget.map_or_else(|| "none".to_string(), |n| format!("{n} characters"));
-    let mut out = format!("Target agent: {agent}\nBudget: {budget}\n");
+pub fn chunk_text(inputs: &[Input], spans: &[Span], agent: &str) -> String {
+    let mut out = format!("Target agent: {agent}\n");
     for s in spans {
         let Some(input) = inputs.iter().find(|i| i.path == s.path) else { continue };
         if s.is_whole() {

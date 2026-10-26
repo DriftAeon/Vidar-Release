@@ -32,6 +32,40 @@ pub struct Payload {
     pub warnings: Vec<String>,
 }
 
+/// The resolved items a launch loaded from the home-wide lists (W6): the source paths of the skills and agents the
+/// copy plan took (as `bareSkills` / `bareAgents` hold them), the shared guards as `{ event, matcher?, run }`, and
+/// Codex's hosted MCP names. The Runes tab matches these to its Inherited Runes rows; older manifests carry none.
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+pub struct LaunchItems {
+    pub skills: Vec<String>,
+    pub agents: Vec<String>,
+    pub guards: Vec<serde_json::Value>,
+    pub mcp: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shadow: Vec<String>,
+}
+
+impl LaunchItems {
+    /// The Claude launch's: the plan's skill and agent sources, the guards it carries and the module
+    /// servers in its `--mcp-config` file.
+    pub fn claude(plan: &super::copies::Plan, guards: &[super::guards::BareGuard], mcp: Vec<String>, shadow: Vec<String>) -> LaunchItems {
+        let (skills, agents) = plan.item_sources();
+        LaunchItems { skills, agents, guards: guards.iter().filter_map(|g| serde_json::to_value(g).ok()).collect(), mcp, shadow }
+    }
+
+    pub fn codex(plan: &super::copies::Plan, mcp: Vec<String>, shadow: Vec<String>) -> LaunchItems {
+        let (skills, agents) = plan.item_sources();
+        LaunchItems { skills, agents, guards: Vec::new(), mcp, shadow }
+    }
+
+    /// A launch resolved through `set_loadout::resolve`: the loadout's skill and agent sources, its guard
+    /// objects and its MCP server names.
+    #[allow(dead_code)] // W2's launch paths adopt it.
+    pub fn from_loadout(l: &super::set_loadout::Loadout) -> LaunchItems {
+        LaunchItems { skills: l.skills.clone(), agents: l.agents.clone(), guards: l.guard_items.clone(), mcp: l.mcp.clone(), shadow: l.shadow.clone() }
+    }
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Homes {
@@ -68,7 +102,7 @@ pub struct Manifest {
     pub homes: Homes,
     pub payload: Payload,
     pub plugins: Vec<String>,
-    /// Claude Bare: the guard scripts copied into `<home>\layer\hooks\` (file names, sorted);
+    /// Claude Bare: the guard scripts copied into `<claude config dir>\hooks\` (file names, sorted);
     /// empty when none. Codex: the `bareCodexGuards` copies (the shim included) its hooks.json
     /// runs, set only once Codex trusts them.
     pub guards: Vec<String>,
@@ -76,6 +110,9 @@ pub struct Manifest {
     /// `$name`s listed in its instructions), in `bareSkills` order; empty when none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skills: Vec<String>,
+    /// The resolved item paths this launch loaded (`LaunchItems`); absent on a manifest written before W6.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<LaunchItems>,
     /// The git config keys carried into `<home>\user-home\.gitconfig` (names only, never values;
     /// `identity.rs`); empty when none were carried.
     pub git_keys: Vec<String>,
@@ -91,6 +128,12 @@ pub struct Manifest {
     /// `env_names` (the env is built in Falcon, not here).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub falcon_session: Option<String>,
+    /// The `Loadout.hash` this launch resolved (`set_loadout.rs`); absent before the fold's W2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loadout_hash: Option<String>,
+    /// The thread or conversation id once known, so a resume can compare its pick; absent when unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
 }
 
 /// Claude Code's machine-wide managed settings (levers: 4 hook groups on the trial machine);
@@ -118,14 +161,29 @@ pub fn stamps() -> (String, String) {
 /// Writes the manifest with create-new; an existing file of the same name is an error, never
 /// overwritten.
 pub fn write(dir: &Path, file_stamp: &str, m: &Manifest) -> Result<PathBuf, String> {
-    let path = dir.join(format!("{file_stamp}-{}-{}.json", safe_tab(&m.tab), m.vidar_pid));
     let bytes = serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?;
+    write_bytes(dir, file_stamp, m, &bytes)
+}
+
+/// Hosted Claude's admitted MCP config is recorded alongside the payload. Raw and Codex
+/// manifests keep their existing shape; only a hosted launch can supply this path.
+pub fn write_hosted(dir: &Path, file_stamp: &str, m: &Manifest, mcp_file: Option<&Path>) -> Result<PathBuf, String> {
+    let mut value = serde_json::to_value(m).map_err(|e| e.to_string())?;
+    if let Some(path) = mcp_file {
+        value["mcpFile"] = serde_json::Value::String(path.to_string_lossy().into_owned());
+    }
+    let bytes = serde_json::to_vec_pretty(&value).map_err(|e| e.to_string())?;
+    write_bytes(dir, file_stamp, m, &bytes)
+}
+
+fn write_bytes(dir: &Path, file_stamp: &str, m: &Manifest, bytes: &[u8]) -> Result<PathBuf, String> {
+    let path = dir.join(format!("{file_stamp}-{}-{}.json", safe_tab(&m.tab), m.vidar_pid));
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&path)
         .map_err(|e| format!("Bare manifest {}: {e}", path.display()))?;
-    f.write_all(&bytes).and_then(|_| f.sync_all()).map_err(|e| format!("Bare manifest {}: {e}", path.display()))?;
+    f.write_all(bytes).and_then(|_| f.sync_all()).map_err(|e| format!("Bare manifest {}: {e}", path.display()))?;
     Ok(path)
 }
 
@@ -139,6 +197,9 @@ pub struct LaunchRecord {
     pub sets: Vec<String>,
     pub skills: Vec<String>,
     pub guards: Vec<String>,
+    /// The resolved item paths the launch loaded; `None` for a manifest that predates them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<LaunchItems>,
     /// The binary's warning, then the payload's, then the manifest's own.
     pub warnings: Vec<String>,
 }
@@ -157,6 +218,13 @@ fn record(v: &serde_json::Value) -> LaunchRecord {
         sets: strs(&v["payload"]["sets"]),
         skills: strs(&v["skills"]),
         guards: strs(&v["guards"]),
+        items: v.get("items").filter(|i| i.is_object()).map(|i| LaunchItems {
+            skills: strs(&i["skills"]),
+            agents: strs(&i["agents"]),
+            guards: i["guards"].as_array().cloned().unwrap_or_default(),
+            mcp: strs(&i["mcp"]),
+            shadow: strs(&i["shadow"]),
+        }),
         warnings,
     }
 }
@@ -168,22 +236,39 @@ pub fn launch_in(dir: &Path, tab: &str) -> Result<Option<LaunchRecord>, String> 
     if !crate::rules::loaded::plain_id(tab, &['_']) {
         return Err(format!("invalid tab id `{tab}`"));
     }
+    Ok(newest_in(dir, tab, false, |v| v["tab"].as_str() == Some(tab)).map(|v| record(&v)))
+}
+
+/// The newest manifest in `dir` that `hit` accepts. File names lead with a fixed-width stamp, so
+/// sort order is age order; only names carrying `tab` are read, every name when `all` is set.
+fn newest_in(dir: &Path, tab: &str, all: bool, hit: impl Fn(&serde_json::Value) -> bool) -> Option<serde_json::Value> {
     let needle = format!("-{}-", safe_tab(tab));
-    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(None) };
+    let entries = std::fs::read_dir(dir).ok()?;
     let mut names: Vec<String> = entries
         .flatten()
         .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|n| n.ends_with(".json") && n.contains(&needle))
+        .filter(|n| n.ends_with(".json") && (all || n.contains(&needle)))
         .collect();
     names.sort();
-    for name in names.iter().rev() {
-        let Ok(text) = crate::fsx::read_text(&dir.join(name)) else { continue };
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(crate::fsx::strip_bom(&text)) else { continue };
-        if v["tab"].as_str() == Some(tab) {
-            return Ok(Some(record(&v)));
+    names.iter().rev().find_map(|name| {
+        let text = crate::fsx::read_text(&dir.join(name)).ok()?;
+        let v = serde_json::from_str::<serde_json::Value>(crate::fsx::strip_bom(&text)).ok()?;
+        hit(&v).then_some(v)
+    })
+}
+
+/// The `homes.claudeConfig` the newest Claude launch of `tab` recorded, else (a re-adopted tab
+/// under a new id) of the launch whose Falcon session is `session`; `None` when none did.
+pub fn claude_config_in(dir: &Path, tab: &str, session: Option<&str>) -> Option<PathBuf> {
+    let config = |v: &serde_json::Value| v.pointer("/homes/claudeConfig").and_then(|c| c.as_str()).filter(|c| !c.is_empty()).map(PathBuf::from);
+    let claude = |v: &serde_json::Value| v["agent"].as_str() == Some("claude") && config(v).is_some();
+    if crate::rules::loaded::plain_id(tab, &['_']) {
+        if let Some(v) = newest_in(dir, tab, false, |v| claude(v) && v["tab"].as_str() == Some(tab)) {
+            return config(&v);
         }
     }
-    Ok(None)
+    let session = session.filter(|s| !s.is_empty())?;
+    newest_in(dir, tab, true, |v| claude(v) && v["falconSession"].as_str() == Some(session)).and_then(|v| config(&v))
 }
 
 #[tauri::command]
@@ -201,6 +286,20 @@ pub async fn bare_launch(tab: String) -> Result<Option<LaunchRecord>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn both_launch_item_paths_report_shadow_and_keep_it_out_of_loadout_json() {
+        let mut loadout = super::super::set_loadout::Loadout::default();
+        loadout.shadow.push("lib/memo".into());
+        let plan = super::super::copies::Plan::default();
+        let claude = LaunchItems::claude(&plan, &[], Vec::new(), loadout.shadow.clone());
+        let codex = LaunchItems::codex(&plan, Vec::new(), loadout.shadow.clone());
+        let from = LaunchItems::from_loadout(&loadout);
+        for items in [claude, codex, from] {
+            assert_eq!(serde_json::to_value(items).unwrap()["shadow"], serde_json::json!(["lib/memo"]));
+        }
+        assert!(serde_json::to_value(loadout).unwrap().get("shadow").is_none());
+    }
 
     #[test]
     fn a_manifest_is_created_once_and_never_rewritten() {
@@ -221,11 +320,14 @@ mod tests {
             plugins: vec!["vidar-app".into()],
             guards: Vec::new(),
             skills: Vec::new(),
+            items: None,
             git_keys: vec!["user.name".into()],
             warnings: Vec::new(),
             managed_policy: Policy { path: "q".into(), present: false },
             codex_rules: None,
             falcon_session: None,
+            loadout_hash: None,
+            thread_id: None,
         };
         let p = write(&dir, "2026-10-13T193000000Z", &m).unwrap();
         assert!(p.file_name().unwrap().to_string_lossy().ends_with("-s1_ab-7.json"));
@@ -235,6 +337,10 @@ mod tests {
         assert_eq!(v["gitKeys"], serde_json::json!(["user.name"]));
         assert!(v["homes"].get("codexHome").is_none() && v.get("codexRules").is_none(), "Claude manifests carry no Codex fields");
         assert!(v.get("falconSession").is_none(), "a Raw manifest names no Falcon session");
+        let hosted = write_hosted(&dir, "2026-10-13T194000000Z", &m, Some(Path::new("mcp.json"))).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(hosted).unwrap()).unwrap();
+        assert_eq!(v["mcpFile"], "mcp.json");
+        assert_eq!(v["payload"]["path"], "p");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -272,6 +378,7 @@ mod tests {
                 sets: vec!["Core".into(), "UI".into()],
                 skills: vec!["tidy".into()],
                 guards: Vec::new(),
+                items: None,
                 warnings: vec!["Codex 9 differs".into(), "Set X disabled".into(), "No bareGuards".into()],
             }
         );
@@ -283,11 +390,53 @@ mod tests {
     }
 
     #[test]
+    fn a_launch_record_carries_the_resolved_items_and_an_old_manifest_has_none() {
+        let dir = std::env::temp_dir().join(format!("vidar-bare-launch-items-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        put(&dir, "2026-10-24T100000000Z-t-1-7.json", serde_json::json!({ "tab": "t-1", "agent": "claude", "createdUtc": "old", "skills": ["tidy"] }));
+        let old = launch_in(&dir, "t-1").unwrap().unwrap();
+        assert_eq!(old.items, None, "a manifest without items still parses, with none");
+        assert_eq!(old.skills, vec!["tidy".to_string()]);
+        put(
+            &dir,
+            "2026-10-24T110000000Z-t-1-7.json",
+            serde_json::json!({
+                "tab": "t-1", "agent": "claude", "createdUtc": "new",
+                "items": { "skills": ["C:\\s\\tidy"], "agents": ["C:\\a\\x.md"], "guards": [{ "event": "Stop", "run": ["g.mjs"] }] }
+            }),
+        );
+        let got = launch_in(&dir, "t-1").unwrap().unwrap();
+        let items = got.items.clone().unwrap();
+        assert_eq!((items.skills, items.agents, items.mcp), (vec!["C:\\s\\tidy".to_string()], vec!["C:\\a\\x.md".to_string()], Vec::<String>::new()));
+        assert_eq!(items.guards, vec![serde_json::json!({ "event": "Stop", "run": ["g.mjs"] })]);
+        assert_eq!(serde_json::to_value(&got).unwrap()["items"]["skills"], serde_json::json!(["C:\\s\\tidy"]));
+        assert!(serde_json::to_value(&old).unwrap().get("items").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn bare_launch_refuses_bad_tab_ids() {
         let dir = std::env::temp_dir();
         for tab in ["", "../x", "a/b", "a\\b", "t.json", "a b", &"x".repeat(129)] {
             assert!(launch_in(&dir, tab).is_err(), "tab {tab}");
         }
+    }
+
+    #[test]
+    fn claude_config_follows_the_tab_then_its_falcon_session() {
+        let dir = std::env::temp_dir().join(format!("vidar-bare-manifest-config-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let put = |name: &str, v: serde_json::Value| std::fs::write(dir.join(name), v.to_string()).unwrap();
+        put("2026-10-24T100000000Z-t-1-1.json", serde_json::json!({ "tab": "t-1", "agent": "claude", "falconSession": "fs-1", "homes": { "claudeConfig": "C:\\h\\old" } }));
+        put("2026-10-24T110000000Z-t-1-2.json", serde_json::json!({ "tab": "t-1", "agent": "claude", "falconSession": "fs-1", "homes": { "claudeConfig": "C:\\h\\new" } }));
+        put("2026-10-24T120000000Z-t-1-3.json", serde_json::json!({ "tab": "t-1", "agent": "codex", "homes": { "codexHome": "C:\\h\\codex" } }));
+        assert_eq!(claude_config_in(&dir, "t-1", None), Some(PathBuf::from("C:\\h\\new")), "newest Claude launch of the tab");
+        assert_eq!(claude_config_in(&dir, "t-9", Some("fs-1")), Some(PathBuf::from("C:\\h\\new")), "a re-adopted tab by its session");
+        assert_eq!(claude_config_in(&dir, "t-9", None), None);
+        assert_eq!(claude_config_in(&dir, "t-9", Some("fs-0")), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

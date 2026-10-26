@@ -599,6 +599,26 @@ fn listening_session_with(tag: &str, driver: AgentDriver) -> (TempJournalDir, Ar
     (temp, session)
 }
 
+#[test]
+fn session_summary_preserves_the_exact_set_pick_for_readopt() {
+    use crate::protocol::{SessionSummary, SetRef};
+    for (tag, sets) in [
+        ("sets-absent", None),
+        ("sets-empty", Some(vec![])),
+        ("sets-two", Some(vec![
+            SetRef { library: None, set: "base".into() },
+            SetRef { library: Some("team".into()), set: "review".into() },
+        ])),
+    ] {
+        let (_temp, session) = listening_session(tag);
+        if let Some(ref picked) = sets { session.sets.set(picked.clone()).unwrap(); }
+        let wire = serde_json::to_value(session.summary()).unwrap();
+        let readopt: SessionSummary = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(readopt.sets, sets);
+        assert_eq!(wire.get("sets").is_some(), sets.is_some());
+    }
+}
+
 fn dispatch_records(records: &[Record]) -> Vec<(String, bool)> {
     records
         .iter()
@@ -666,9 +686,9 @@ pub(crate) fn codex_session(tag: &str) -> (TempJournalDir, Arc<Session>) {
         tab_name: None,
         gateway: None,
         profile: None,
-        payload_file: None,
-        row_key: None,
-        set_plugin_dirs: Vec::new(),
+        payload_file: None, mcp_file: None,
+        row_key: None, sets: None,
+        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
     };
     let driver = AgentDriver::codex(&params);
     if let AgentDriver::Codex(codex) = &driver {
@@ -687,8 +707,8 @@ fn adopting_during_codex_history_sees_the_outcome_before_live_output() {
         agent: Some(crate::protocol::Agent::Codex), cwd: r"C:\work".into(),
         model: None, effort: None, permission_mode: "default".into(),
         resume: Some("thread-1".into()), ctl_secret: None, rules_file: None,
-        tab_name: None, gateway: None, profile: None, payload_file: None, row_key: None,
-        set_plugin_dirs: Vec::new(),
+        tab_name: None, gateway: None, profile: None, payload_file: None, mcp_file: None, row_key: None, sets: None,
+        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
     };
     let session = new_session(
         &reservation, "codex", params.cwd.clone(), params.resume.clone(),

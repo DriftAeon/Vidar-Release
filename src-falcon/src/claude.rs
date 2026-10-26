@@ -27,9 +27,11 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    process::{find_on_path, Child, SpawnRequest, WriteStatus},
-    protocol::{Outcome, SpawnParams, ALLOWED_MODES},
+    process::{find_on_path, Child, WriteStatus},
+    protocol::{Outcome, SpawnParams},
 };
+
+mod spawn_args;
 
 /// How long Falcon waits for the sidecar's terminal outcome before reporting
 /// the delivery as unknown. Generous: the SDK's own control requests
@@ -70,8 +72,10 @@ pub struct BareSpawn {
 /// the profile's `overlay` then its `rendered.overlay`, `{{root}}`/`{{home}}` filled, plus
 /// `HOMEDRIVE`/`HOMEPATH` from its `USERPROFILE`. Refuses a profile that lacks the rendered block
 /// or an isolation switch, and a home Vidar has not prepared (no `claude-config` folder): the
-/// CLI would otherwise create it with an inherited ACL.
-pub fn bare_spawn(root: &Path, local_app_data: Option<&Path>, profile: &str) -> Result<BareSpawn, String> {
+/// CLI would otherwise create it with an inherited ACL. A per-spawn `config_dir`
+/// (`SpawnParams.claude_config_dir`) is admitted by [`admit_claude_config`] after the overlay's
+/// own dir passed, and replaces `CLAUDE_CONFIG_DIR` and `VIDAR_AGENT_HOME`; None keeps the overlay.
+pub fn bare_spawn(root: &Path, local_app_data: Option<&Path>, profile: &str, config_dir: Option<&str>) -> Result<BareSpawn, String> {
     let lad = local_app_data
         .filter(|p| p.is_absolute())
         .ok_or("LOCALAPPDATA is unset or not absolute; the bare home cannot be placed")?;
@@ -125,55 +129,66 @@ pub fn bare_spawn(root: &Path, local_app_data: Option<&Path>, profile: &str) -> 
         env.push(("HOMEDRIVE".into(), drive));
         env.push(("HOMEPATH".into(), path));
     }
+    if let Some(raw) = config_dir {
+        let admitted = admit_claude_config(raw, &home, &config)?.to_string_lossy().into_owned();
+        for (k, v) in env.iter_mut() {
+            if ["CLAUDE_CONFIG_DIR", "VIDAR_AGENT_HOME"].iter().any(|n| k.eq_ignore_ascii_case(n)) {
+                *v = admitted.clone();
+            }
+        }
+    }
     Ok(BareSpawn { home, env })
 }
 
-/// Twelve lowercase hex digits: a `hash12` (`rules/build.rs`) as it appears in a file name.
-fn is_hash12(h: &str) -> bool {
-    h.len() == 12 && h.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
+/// The folder under the bare home that holds one Claude config dir per set combination (Vidar's
+/// `bare/agent_homes.rs`).
+pub const CLAUDE_HOMES_DIR: &str = "claude-homes";
 
-/// A set plugin folder name, `^[A-Za-z0-9._-]+-[0-9a-f]{12}$` (Vidar `set_plugin.rs`
-/// `<dir_safe(name)>-<hash12>`).
-fn is_set_plugin_name(name: &str) -> bool {
-    name.rsplit_once('-').is_some_and(|(set, hash)| {
-        !set.is_empty()
-            && set.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-            && is_hash12(hash)
-    })
-}
-
-/// The one admission rule for a client-named file the sidecar will read: no leading `-`,
-/// absolute, no `..`, a name `name_ok` accepts, then — after canonicalizing, which resolves
-/// symlinks and junctions — a regular file whose name `name_ok` still accepts and whose parent
-/// is exactly `dir()` (already canonical). Returns the plain canonical path the sidecar gets.
-fn admit_named_file(
-    raw: &str,
-    what: &str,
-    name_ok: &dyn Fn(&Path) -> bool,
-    name_rule: &str,
-    dir: &dyn Fn() -> Result<PathBuf, String>,
-    outside: &str,
-) -> Result<PathBuf, String> {
+/// Admit a client-named Claude config dir: no leading `-`, absolute, no `..`, under the bare home
+/// by path prefix (the overlay's rule) and an existing folder, then either the overlay's own dir
+/// (`overlay`) or exactly `<home>\claude-homes\<12 lowercase hex>`, as sent and again on the
+/// canonical folder, so a junction redirecting `claude-homes` or the combination folder is refused.
+/// Returns the folder as sent (a combination folder's canonical twin checked equal).
+pub fn admit_claude_config(raw: &str, home: &Path, overlay: &Path) -> Result<PathBuf, String> {
+    const OUTSIDE: &str = "Claude config dir is not the profile's own or a combination folder under the bare home's claude-homes directory; spawn refused";
     if raw.starts_with('-') {
-        return Err(format!("{what} starts with '-'"));
+        return Err("Claude config dir starts with '-'; spawn refused".into());
     }
-    let path = Path::new(raw);
+    let path = PathBuf::from(raw);
     if !path.is_absolute() {
-        return Err(format!("{what} is not an absolute path"));
+        return Err("Claude config dir is not an absolute path; spawn refused".into());
     }
-    if path.components().any(|c| c == std::path::Component::ParentDir) {
-        return Err(format!("{what} path contains '..'"));
+    let parts = |p: &Path| -> Vec<String> {
+        p.components().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).collect()
+    };
+    let (dir_parts, home_parts) = (parts(&path), parts(home));
+    if dir_parts.len() <= home_parts.len() || dir_parts[..home_parts.len()] != home_parts[..] || dir_parts.iter().any(|c| c == "..") {
+        return Err("Claude config dir is outside the bare home; spawn refused".into());
     }
-    if !name_ok(path) {
-        return Err(format!("{what} name is not {name_rule}"));
+    if !path.is_dir() {
+        return Err(format!("Claude config dir {raw} does not exist; spawn refused"));
     }
-    let dir = dir()?;
-    let file = std::fs::canonicalize(path).map_err(|error| format!("{what} unavailable: {error}"))?;
-    if file.parent() != Some(dir.as_path()) || !name_ok(&file) || !file.is_file() {
-        return Err(outside.into());
+    if dir_parts == parts(overlay) {
+        return Ok(path);
     }
-    Ok(crate::process::plain_path(&file))
+    let is_hash12 = |s: &str| s.len() == 12 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+    let name = match &dir_parts[home_parts.len()..] {
+        [dir, name] if dir == CLAUDE_HOMES_DIR && is_hash12(path.file_name().and_then(|n| n.to_str()).unwrap_or_default()) => name.clone(),
+        _ => return Err(OUTSIDE.into()),
+    };
+    let canon = |p: &Path| std::fs::canonicalize(p).map(|c| parts(&crate::process::plain_path(&c)));
+    let fail = |e: std::io::Error| format!("Claude config dir {raw} unavailable: {e}; spawn refused");
+    let (home_c, homes_c, dir_c) = (canon(home).map_err(fail)?, canon(&home.join(CLAUDE_HOMES_DIR)).map_err(fail)?, canon(&path).map_err(fail)?);
+    let mut want = home_c;
+    want.push(CLAUDE_HOMES_DIR.into());
+    if homes_c != want {
+        return Err(format!("{OUTSIDE} (the {CLAUDE_HOMES_DIR} directory is redirected)"));
+    }
+    want.push(name);
+    if dir_c != want {
+        return Err(format!("{OUTSIDE} (the combination folder is redirected)"));
+    }
+    Ok(path)
 }
 
 #[derive(Debug, Deserialize)]
@@ -320,288 +335,6 @@ impl ClaudeRuntime {
             claude_exe: crate::process::plain_path(&claude_exe),
             rules_built: None,
             pwsh: find_on_path("pwsh.exe").ok(),
-        })
-    }
-
-    /// Admit a client's `rules_file`: absolute, no `..`, no leading `-`, file
-    /// name `<12 lowercase hex>.md`, and — after canonicalizing both, which
-    /// resolves symlinks and junctions — a direct child of `rules_built`.
-    /// Returns the plain canonical path the sidecar gets.
-    fn admit_rules_file(&self, raw: &str) -> Result<PathBuf, String> {
-        let hash_name = |p: &Path| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|n| n.strip_suffix(".md"))
-                .is_some_and(is_hash12)
-        };
-        let dir = || {
-            let built = self
-                .rules_built
-                .as_deref()
-                .ok_or("this host has no rules directory")?;
-            std::fs::canonicalize(built).map_err(|error| format!("rules directory unavailable: {error}"))
-        };
-        admit_named_file(
-            raw,
-            "rules file",
-            &hash_name,
-            "<hash12>.md",
-            &dir,
-            "rules file is outside the built rules directory",
-        )
-    }
-
-    /// Admit a profiled spawn's `payload_file` by the `admit_rules_file` rule: absolute, no `..`,
-    /// no leading `-`, name `payload-<12 lowercase hex>.md` as sent and again on the canonical
-    /// file, a regular file whose canonical parent is `canonicalize(home)` joined with `layer`.
-    /// Never `canonicalize(layer)`: that would admit a junctioned `layer\` pointing elsewhere.
-    fn admit_payload_file(raw: &str, home: &Path) -> Result<PathBuf, String> {
-        let payload_name = |p: &Path| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|n| n.strip_prefix("payload-"))
-                .and_then(|n| n.strip_suffix(".md"))
-                .is_some_and(is_hash12)
-        };
-        let dir = || {
-            std::fs::canonicalize(home)
-                .map(|home| home.join("layer"))
-                .map_err(|error| format!("bare home unavailable: {error}"))
-        };
-        admit_named_file(
-            raw,
-            "payload file",
-            &payload_name,
-            "payload-<hash12>.md",
-            &dir,
-            "payload file is outside the bare home's layer directory",
-        )
-    }
-
-    /// Admit one of a profiled spawn's `set_plugin_dirs` (Vidar `bare/set_plugin.rs`): no leading
-    /// `-`, absolute, no `..`, a folder name `<[A-Za-z0-9._-]+>-<12 lowercase hex>` as sent and
-    /// again on the canonical folder, whose canonical parent is `canonicalize(home)` joined with
-    /// `layer\plugins` (never `canonicalize` of those: a junctioned `layer\` or `plugins\` lands
-    /// elsewhere and is refused). No reparse point from the home down: `layer`, `plugins`, the
-    /// folder entry as named (a junction to a sibling would pass the parent test), `.claude-plugin`
-    /// and its `plugin.json`, which must be a regular file. Returns the plain canonical folder.
-    fn admit_set_plugin_dir(raw: &str, home: &Path) -> Result<PathBuf, String> {
-        if raw.starts_with('-') {
-            return Err("set plugin folder starts with '-'".into());
-        }
-        let path = Path::new(raw);
-        if !path.is_absolute() {
-            return Err("set plugin folder is not an absolute path".into());
-        }
-        if path.components().any(|c| c == std::path::Component::ParentDir) {
-            return Err("set plugin folder path contains '..'".into());
-        }
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .filter(|n| is_set_plugin_name(n))
-            .ok_or("set plugin folder name is not <set>-<hash12>")?;
-        let plugins = std::fs::canonicalize(home)
-            .map(|home| home.join("layer").join("plugins"))
-            .map_err(|error| format!("bare home unavailable: {error}"))?;
-        let dir = std::fs::canonicalize(path).map_err(|error| format!("set plugin folder unavailable: {error}"))?;
-        let canonical_name = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-        if dir.parent() != Some(plugins.as_path()) || !canonical_name.eq_ignore_ascii_case(name) || !dir.is_dir() {
-            return Err("set plugin folder is outside the bare home's layer\\plugins directory".into());
-        }
-        let manifest_dir = dir.join(".claude-plugin");
-        let manifest = manifest_dir.join("plugin.json");
-        if !std::fs::symlink_metadata(&manifest).is_ok_and(|m| m.file_type().is_file()) {
-            return Err("set plugin folder has no regular .claude-plugin\\plugin.json".into());
-        }
-        for p in [plugins.parent().unwrap_or(&plugins), &plugins, &dir, &manifest_dir, &manifest] {
-            crate::security::reject_reparse(p)?;
-        }
-        Ok(crate::process::plain_path(&dir))
-    }
-
-    /// The Vidar root this host serves, from its own `--registry` (via `rules_built`), never from
-    /// a client.
-    fn vidar_root(&self) -> Option<&Path> {
-        self.rules_built.as_deref().and_then(|p| p.parent()).and_then(|p| p.parent()).and_then(|p| p.parent())
-    }
-
-    /// A spawn's launch profile: a known id, and never with `rules_file` or `gateway` (a profiled
-    /// session's layer comes from the profile alone).
-    fn admit_profile<'a>(params: &'a SpawnParams) -> Result<Option<&'a str>, String> {
-        let Some(profile) = params.profile.as_deref() else {
-            // A payload replaces a profile's static one: without a profile there is none to replace.
-            if params.payload_file.is_some() {
-                return Err("a payload file needs a launch profile".into());
-            }
-            return Ok(None);
-        };
-        if !PROFILES.contains(&profile) {
-            return Err(format!("unknown launch profile {profile:?}"));
-        }
-        if params.rules_file.is_some() {
-            return Err(format!("a {profile:?} spawn carries no rules file"));
-        }
-        if params.gateway.is_some() {
-            return Err(format!("a {profile:?} spawn carries no gateway"));
-        }
-        Ok(Some(profile))
-    }
-
-    /// Build the sidecar command line. The one place it is constructed, so the
-    /// permission-mode allowlist and the resume-id shape are enforced before
-    /// anything runs — the same containment `agent.rs::spawn_claude_sidecar`
-    /// gives Vidar.
-    pub fn spawn_request(
-        &self,
-        params: &SpawnParams,
-        session_id: &str,
-    ) -> Result<SpawnRequest, String> {
-        let lad = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
-        self.spawn_request_in(params, session_id, lad.as_deref())
-    }
-
-    /// `spawn_request` with the `LOCALAPPDATA` that places a profiled spawn's home passed in,
-    /// so tests place it under a fixture instead of the user's real one.
-    fn spawn_request_in(
-        &self,
-        params: &SpawnParams,
-        session_id: &str,
-        local_app_data: Option<&Path>,
-    ) -> Result<SpawnRequest, String> {
-        if !ALLOWED_MODES.contains(&params.permission_mode.as_str()) {
-            return Err(format!(
-                "permission mode not allowed: {}",
-                params.permission_mode
-            ));
-        }
-        if let Some(resume) = params.resume.as_deref() {
-            if !crate::protocol::valid_conversation_id(resume) {
-                return Err("resume id is not a UUID".into());
-            }
-        }
-        if let Some(secret) = params.ctl_secret.as_deref() {
-            if secret.len() != 32
-                || !secret.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            {
-                return Err("ctl secret is not 32 lowercase hex".into());
-            }
-        }
-        let profile = Self::admit_profile(params)?;
-        let rules_file = match params.rules_file.as_deref() {
-            Some(raw) => Some(self.admit_rules_file(raw)?),
-            None => None,
-        };
-        let cwd = crate::process::plain_path(&PathBuf::from(&params.cwd));
-        if !cwd.is_dir() {
-            return Err(format!("cwd is not a directory: {}", params.cwd));
-        }
-
-        let mut args = vec![
-            self.sidecar.to_string_lossy().into_owned(),
-            "--falcon".into(),
-            "--cwd".into(),
-            params.cwd.clone(),
-            "--permission-mode".into(),
-            params.permission_mode.clone(),
-            "--claude".into(),
-            self.claude_exe.to_string_lossy().into_owned(),
-        ];
-        if let Some(model) = params
-            .model
-            .as_deref()
-            .map(str::trim)
-            .filter(|model| !model.is_empty())
-        {
-            // The sidecar takes the first `--model` match, so a value shaped like a flag could steer it.
-            if model.starts_with('-') {
-                return Err(format!("model must not start with '-': {model}"));
-            }
-            args.push("--model".into());
-            args.push(model.to_string());
-        }
-        if let Some(effort) = params.effort.as_deref().map(str::trim) {
-            if !crate::protocol::effort_levels().contains(&effort) {
-                return Err(format!("effort level not allowed: {effort}"));
-            }
-            args.push("--effort".into());
-            args.push(effort.to_string());
-        }
-        if let Some(resume) = params.resume.as_deref() {
-            args.push("--resume".into());
-            args.push(resume.to_string());
-        }
-        if let Some(rules_file) = rules_file {
-            args.push("--rules-file".into());
-            args.push(rules_file.to_string_lossy().into_owned());
-        }
-
-        if let Some(gateway) = params.gateway {
-            // Resolve preparation from the trusted Vidar root, never a client-supplied path.
-            let root = self.vidar_root().ok_or("gateway preparation needs the Vidar root")?;
-            let prepare = root.join("tools/vendor/vendor-prepare.ps1");
-            if !prepare.is_file() { return Err("gateway preparation helper is missing".into()); }
-            let pwsh = self.pwsh.as_deref().ok_or("gateway preparation needs pwsh.exe on PATH")?;
-            args.extend(["--gateway".into(), gateway.as_str().into(),
-                "--vendor-preparer".into(), prepare.to_string_lossy().into_owned(),
-                "--pwsh".into(), pwsh.to_string_lossy().into_owned()]);
-        }
-
-        // A profiled (bare) session: the env is built from the allowlist plus the profile's
-        // overlay, never Falcon's own; the sidecar maps the profile to SDK options.
-        let mut env: Vec<(String, String)> = Vec::new();
-        let mut env_base = crate::process::EnvBase::Inherit;
-        if let Some(profile) = profile {
-            let root = self.vidar_root().ok_or("a profiled spawn needs the Vidar root")?;
-            let bare = bare_spawn(root, local_app_data, profile)?;
-            args.extend([
-                "--profile".into(), profile.into(),
-                "--root".into(), root.to_string_lossy().into_owned(),
-                "--home".into(), bare.home.to_string_lossy().into_owned(),
-            ]);
-            // A row's built payload, only from under this home's `layer\` (the sidecar checks
-            // the same place and the file's hash again before reading it).
-            if let Some(raw) = params.payload_file.as_deref() {
-                let payload = Self::admit_payload_file(raw, &bare.home)?;
-                args.extend(["--payload".into(), payload.to_string_lossy().into_owned()]);
-            }
-            // The row's rune-set plugins, only from under this home's `layer\plugins\`. A folder
-            // that fails is dropped with a warning: the tab still runs, without that set's plugin.
-            for raw in &params.set_plugin_dirs {
-                match Self::admit_set_plugin_dir(raw, &bare.home) {
-                    Ok(dir) => args.extend(["--set-plugin".into(), dir.to_string_lossy().into_owned()]),
-                    Err(error) => eprintln!("falcon: set plugin {raw:?} dropped: {error}"),
-                }
-            }
-            env = bare.env;
-            env_base = crate::process::EnvBase::Allowlist;
-        } else if !params.set_plugin_dirs.is_empty() {
-            eprintln!("falcon: set plugins dropped: they need a launch profile");
-        }
-
-        // The hosted CLI must not believe it is a Vidar tab.
-        env.push(("FALCON_SESSION".into(), session_id.to_string()));
-        // The bus identity proof (`control/policy.rs`). With None nothing is
-        // added, and `process::SCRUBBED_ENV` drops any value Falcon inherited.
-        if let Some(secret) = params.ctl_secret.as_deref() {
-            env.push(("VIDAR_CTL_SECRET".into(), secret.to_string()));
-        }
-        // The tab's name, beside FALCON_SESSION: a hosted agent says who it is. Cosmetic, so a
-        // blank or control-character name is left out rather than failing the spawn.
-        if let Some(name) = params
-            .tab_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|n| !n.is_empty() && !n.chars().any(char::is_control))
-        {
-            env.push(("VIDAR_TAB_NAME".into(), name.chars().take(128).collect()));
-        }
-        Ok(SpawnRequest {
-            program: self.node.clone(),
-            args,
-            cwd,
-            env,
-            env_base,
         })
     }
 }
@@ -1176,6 +909,7 @@ pub fn sha256_file(path: &Path) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::SpawnRequest;
 
     fn params(mode: &str) -> SpawnParams {
         SpawnParams {
@@ -1191,8 +925,10 @@ mod tests {
             gateway: None,
             profile: None,
             payload_file: None,
+            mcp_file: None,
             row_key: None,
-            set_plugin_dirs: Vec::new(),
+            sets: None,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
         }
     }
 
@@ -1232,6 +968,29 @@ mod tests {
         // No payload sent: the sidecar keeps the profile's static one.
         let request = rt.spawn_request_in(&bare_params(None), "s1", Some(&lad)).unwrap();
         assert!(!request.args.iter().any(|a| a == "--payload"));
+    }
+
+    #[test]
+    fn mcp_file_is_admitted_only_directly_under_the_bare_layer() {
+        let (root, rt, lad, home, _) = payload_fixture();
+        let name = "mcp-0123456789ab.json";
+        let file = home.join("layer").join(name);
+        std::fs::write(&file, r#"{"mcpServers":{}}"#).unwrap();
+        let mut p = bare_params(None);
+        p.mcp_file = Some(file.to_string_lossy().into_owned());
+        let request = rt.spawn_request_in(&p, "s1", Some(&lad)).unwrap();
+        let at = request.args.iter().position(|a| a == "--mcp-file").unwrap();
+        assert_eq!(std::fs::canonicalize(&request.args[at + 1]).unwrap(), std::fs::canonicalize(&file).unwrap());
+        for dir in [home.clone(), root.path().to_path_buf()] {
+            let outside = dir.join(name);
+            std::fs::write(&outside, "{}").unwrap();
+            p.mcp_file = Some(outside.to_string_lossy().into_owned());
+            assert!(rt.spawn_request_in(&p, "s1", Some(&lad)).unwrap_err().contains("outside the bare home's layer"));
+        }
+        let bad = home.join("layer").join("mcp-0123456789AB.json");
+        std::fs::write(&bad, "{}").unwrap();
+        p.mcp_file = Some(bad.to_string_lossy().into_owned());
+        assert!(rt.spawn_request_in(&p, "s1", Some(&lad)).unwrap_err().contains("mcp-<hash12>.json"));
     }
 
     #[test]
@@ -1409,6 +1168,82 @@ mod tests {
         assert!(admit(&plugins.join("far-0123456789ab")).unwrap_err().contains("outside"));
     }
 
+    #[test]
+    fn a_plugin_name_is_admitted_from_the_root_plugins_folder() {
+        let (root, rt, lad, home, _) = payload_fixture();
+        let a = root.path().join("plugins").join("vidar-app");
+        let b = root.path().join("plugins").join("0gate");
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let old = set_plugin_in(&home.join("layer").join("plugins"), "core-0123456789ab");
+        let mut p = bare_params(None);
+        p.set_plugin_dirs = vec![old.to_string_lossy().into_owned()];
+        p.plugin_names = vec!["vidar-app".into(), "0gate".into()];
+        let passed = set_plugin_args(&rt.spawn_request_in(&p, "s1", Some(&lad)).unwrap());
+        // Today's home-layer plugin first, then the names in order.
+        assert_eq!(passed.len(), 3, "{passed:?}");
+        assert!(passed.iter().all(|d| !d.starts_with(r"\\?\")), "plain paths for node: {passed:?}");
+        assert_eq!(std::fs::canonicalize(&passed[0]).unwrap(), std::fs::canonicalize(&old).unwrap());
+        assert_eq!(std::fs::canonicalize(&passed[1]).unwrap(), std::fs::canonicalize(&a).unwrap());
+        assert_eq!(std::fs::canonicalize(&passed[2]).unwrap(), std::fs::canonicalize(&b).unwrap());
+        // An old request without the field: only today's plugin.
+        p.plugin_names.clear();
+        assert_eq!(set_plugin_args(&rt.spawn_request_in(&p, "s1", Some(&lad)).unwrap()).len(), 1);
+    }
+
+    #[test]
+    fn a_bad_plugin_name_refuses_the_spawn() {
+        let (root, rt, lad, _home, _) = payload_fixture();
+        let plugins = root.path().join("plugins");
+        std::fs::create_dir_all(plugins.join("good")).unwrap();
+        std::fs::write(plugins.join("afile"), "x").unwrap();
+        let abs = plugins.join("good").to_string_lossy().into_owned();
+        let refuse = |names: &[&str]| {
+            let mut p = bare_params(None);
+            p.plugin_names = names.iter().map(|n| n.to_string()).collect();
+            rt.spawn_request_in(&p, "s1", Some(&lad)).expect_err("must refuse")
+        };
+        let long = "a".repeat(65);
+        for bad in [r"..\x", "../x", abs.as_str(), "Good", "GOOD", "", "-x", "a b", "a.b", r"good\x", long.as_str()] {
+            assert!(refuse(&["good", bad]).contains("is not [a-z0-9]"), "{bad:?}");
+        }
+        assert!(refuse(&["gone"]).contains("missing"));
+        assert!(refuse(&["afile"]).contains("not a directory"));
+        // Without a profile the names are refused, not dropped.
+        let mut plain = params("default");
+        plain.plugin_names = vec!["good".into()];
+        assert!(rt.spawn_request_in(&plain, "s1", Some(&lad)).unwrap_err().contains("need a launch profile"));
+        assert!(ClaudeRuntime::admit_plugin_name(&"a".repeat(64), root.path()).unwrap_err().contains("missing"));
+    }
+
+    /// A junction under `plugins\` (the named entry) or `plugins\` itself junctioned elsewhere.
+    #[test]
+    fn a_plugin_name_through_a_junction_is_refused() {
+        let (root, rt, lad, _home, _) = payload_fixture();
+        let junction = |link: &Path, target: &Path| {
+            let made = std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(link).arg(target).output();
+            made.as_ref().is_ok_and(|o| o.status.success()) && link.exists()
+        };
+        let plugins = root.path().join("plugins");
+        let outside = root.path().join("outside");
+        std::fs::create_dir_all(outside.join("far")).unwrap();
+        std::fs::create_dir_all(&plugins).unwrap();
+        if !junction(&plugins.join("far"), &outside.join("far")) {
+            eprintln!("SKIP a_plugin_name_through_a_junction_is_refused: could not create a junction");
+            return;
+        }
+        let refuse = |name: &str| {
+            let mut p = bare_params(None);
+            p.plugin_names = vec![name.into()];
+            rt.spawn_request_in(&p, "s1", Some(&lad)).expect_err("must refuse")
+        };
+        assert!(refuse("far").contains("reparse"));
+        std::fs::remove_dir(plugins.join("far")).unwrap();
+        std::fs::remove_dir_all(&plugins).unwrap();
+        assert!(junction(&plugins, &outside));
+        assert!(refuse("far").contains("reparse"));
+    }
+
     /// A fake Vidar root holding `runtime\rules\built\0123456789ab.md`, plus a
     /// runtime whose `rules_built` points at it.
     fn rules_fixture() -> (tempdir::Dir, ClaudeRuntime, PathBuf) {
@@ -1481,15 +1316,15 @@ mod tests {
             (r"C:\Program Files\My Vidar\App", "096f91e36c966a48"),
             (r"E:\Mixed\Case\ViDaR", "161d7d325fd5bbcf"),
         ] {
-            let err = bare_spawn(Path::new(root), Some(lad), "bare").unwrap_err();
+            let err = bare_spawn(Path::new(root), Some(lad), "bare", None).unwrap_err();
             assert!(err.contains("launch profile"), "{err}");
             assert_eq!(
                 crate::bare_home::resolve_for(Path::new(root), lad),
                 lad.join("Vidar").join("homes").join(key)
             );
         }
-        assert!(bare_spawn(Path::new(r"D:\Tools\Vidar"), None, "bare").unwrap_err().contains("LOCALAPPDATA"));
-        assert!(bare_spawn(Path::new(r"D:\Tools\Vidar"), Some(Path::new("rel")), "bare").unwrap_err().contains("LOCALAPPDATA"));
+        assert!(bare_spawn(Path::new(r"D:\Tools\Vidar"), None, "bare", None).unwrap_err().contains("LOCALAPPDATA"));
+        assert!(bare_spawn(Path::new(r"D:\Tools\Vidar"), Some(Path::new("rel")), "bare", None).unwrap_err().contains("LOCALAPPDATA"));
     }
 
     /// The shipped profile against a fake root and prepared home: the overlay, the rendered
@@ -1503,9 +1338,9 @@ mod tests {
         std::fs::copy(shipped, profile_dir.join("claude.json")).unwrap();
         let lad = root.path().join("lad");
         let home = crate::bare_home::resolve_for(root.path(), &lad);
-        assert!(bare_spawn(root.path(), Some(&lad), "bare").unwrap_err().contains("not prepared"));
+        assert!(bare_spawn(root.path(), Some(&lad), "bare", None).unwrap_err().contains("not prepared"));
         std::fs::create_dir_all(home.join("claude-config")).unwrap();
-        let bare = bare_spawn(root.path(), Some(&lad), "bare").unwrap();
+        let bare = bare_spawn(root.path(), Some(&lad), "bare", None).unwrap();
         assert_eq!(bare.home, home);
         let get = |n: &str| bare.env.iter().find(|(k, _)| k == n).map(|(_, v)| v.clone());
         let h = home.to_string_lossy();
@@ -1535,7 +1370,7 @@ mod tests {
             std::fs::write(dir.join("claude.json"), doc.to_string()).unwrap();
             let lad = root.path().join("lad");
             std::fs::create_dir_all(crate::bare_home::resolve_for(root.path(), &lad).join("claude-config")).unwrap();
-            bare_spawn(root.path(), Some(&lad), "bare").unwrap_err()
+            bare_spawn(root.path(), Some(&lad), "bare", None).unwrap_err()
         };
         for name in ["CLAUDE_CONFIG_DIR", "USERPROFILE"] {
             let e = attempt(&|d| d["rendered"]["overlay"][name] = r"C:\elsewhere".into());
@@ -1545,6 +1380,103 @@ mod tests {
             let e = attempt(&|d| d["overlay"]["CLAUDE_CONFIG_DIR"] = outside.into());
             assert!(e.contains("outside the bare home"), "{outside}: {e}");
         }
+    }
+
+    /// A fake root with the shipped profile and a prepared home: (root, LOCALAPPDATA, home).
+    fn shipped_home() -> (tempdir::Dir, PathBuf, PathBuf) {
+        let root = tempdir::Dir::new();
+        let profile_dir = root.path().join("profiles").join("bare");
+        std::fs::create_dir_all(&profile_dir).unwrap();
+        let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("profiles").join("bare").join("claude.json");
+        std::fs::copy(shipped, profile_dir.join("claude.json")).unwrap();
+        let lad = root.path().join("lad");
+        let home = crate::bare_home::resolve_for(root.path(), &lad);
+        std::fs::create_dir_all(home.join("claude-config")).unwrap();
+        (root, lad, home)
+    }
+
+    fn env_of<'a>(bare: &'a BareSpawn, name: &str) -> Option<&'a str> {
+        bare.env.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn no_claude_config_dir_keeps_the_overlay_dir() {
+        let (root, lad, home) = shipped_home();
+        let bare = bare_spawn(root.path(), Some(&lad), "bare", None).unwrap();
+        let own = home.join("claude-config").to_string_lossy().into_owned();
+        assert_eq!(env_of(&bare, "CLAUDE_CONFIG_DIR"), Some(own.as_str()));
+        assert_eq!(env_of(&bare, "VIDAR_AGENT_HOME"), Some(own.as_str()));
+    }
+
+    #[test]
+    fn an_admitted_combination_dir_replaces_the_overlay_dir() {
+        let (root, lad, home) = shipped_home();
+        let combo = home.join(CLAUDE_HOMES_DIR).join("0123456789ab");
+        std::fs::create_dir_all(&combo).unwrap();
+        let raw = combo.to_string_lossy().into_owned();
+        let bare = bare_spawn(root.path(), Some(&lad), "bare", Some(&raw)).unwrap();
+        assert_eq!(env_of(&bare, "CLAUDE_CONFIG_DIR"), Some(raw.as_str()));
+        assert_eq!(env_of(&bare, "VIDAR_AGENT_HOME"), Some(raw.as_str()));
+        assert_eq!(env_of(&bare, "CLAUDE_CODE_DISABLE_CLAUDE_MDS"), Some("1"), "the rest of the overlay stays");
+        // The overlay's own dir, named explicitly, is admitted too.
+        let own = home.join("claude-config").to_string_lossy().into_owned();
+        let bare = bare_spawn(root.path(), Some(&lad), "bare", Some(&own)).unwrap();
+        assert_eq!(env_of(&bare, "CLAUDE_CONFIG_DIR"), Some(own.as_str()));
+    }
+
+    #[test]
+    fn a_claude_config_dir_outside_the_home_is_refused() {
+        let (root, lad, home) = shipped_home();
+        let outside = root.path().join("elsewhere").join(CLAUDE_HOMES_DIR).join("0123456789ab");
+        std::fs::create_dir_all(&outside).unwrap();
+        for raw in [outside.to_string_lossy().into_owned(), home.to_string_lossy().into_owned(), format!(r"{}\claude-homes\..\..\x", home.display())] {
+            let e = bare_spawn(root.path(), Some(&lad), "bare", Some(&raw)).unwrap_err();
+            assert!(e.contains("outside the bare home") && e.contains("spawn refused"), "{raw}: {e}");
+        }
+        for raw in ["claude-homes\\0123456789ab", "-x"] {
+            let e = bare_spawn(root.path(), Some(&lad), "bare", Some(raw)).unwrap_err();
+            assert!(e.contains("spawn refused"), "{raw}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_missing_claude_config_dir_is_refused() {
+        let (root, lad, home) = shipped_home();
+        let raw = home.join(CLAUDE_HOMES_DIR).join("0123456789ab").to_string_lossy().into_owned();
+        let e = bare_spawn(root.path(), Some(&lad), "bare", Some(&raw)).unwrap_err();
+        assert!(e.contains("does not exist") && e.contains("spawn refused"), "{e}");
+    }
+
+    #[test]
+    fn a_sibling_of_claude_homes_is_refused() {
+        let (root, lad, home) = shipped_home();
+        let homes = home.join(CLAUDE_HOMES_DIR);
+        let deep = homes.join("0123456789ab").join("inner");
+        for d in [home.join("claude-homes-2").join("0123456789ab"), home.join("codex-homes").join("0123456789ab"), homes.join("NotAHash"), deep.clone()] {
+            std::fs::create_dir_all(&d).unwrap();
+        }
+        let cases = [
+            home.join("claude-homes-2").join("0123456789ab"),
+            home.join("codex-homes").join("0123456789ab"),
+            home.join("user-home"),
+            homes.clone(),
+            homes.join("NotAHash"),
+            deep,
+        ];
+        std::fs::create_dir_all(home.join("user-home")).unwrap();
+        for d in cases {
+            let raw = d.to_string_lossy().into_owned();
+            let e = bare_spawn(root.path(), Some(&lad), "bare", Some(&raw)).unwrap_err();
+            assert!(e.contains("claude-homes directory") && e.contains("spawn refused"), "{raw}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_claude_config_dir_needs_a_profile() {
+        let (_root, rt, _file) = rules_fixture();
+        let mut p = params("default");
+        p.claude_config_dir = Some(r"C:\x".into());
+        assert_eq!(rt.spawn_request(&p, "s1").unwrap_err(), "a Claude config dir needs a launch profile");
     }
 
     #[test]

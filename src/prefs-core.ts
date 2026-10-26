@@ -54,6 +54,8 @@ export interface PrefKeys {
   /** Swap button asks "rebuild now?" before a swap; set from its RMB menu (panels/swap.ts). Absent = off. */
   "swap.confirm": boolean;
   "character.animationDropdown": "on" | "off";
+  /** Which backend the Changes tab shows; absent = git (changes/view.ts switch). */
+  "changes.backend": "git" | "p4";
   /** Set once the launch-time Dependencies page has been shown (settings/dependencies.ts). */
   "onboarding.dependenciesSeen": boolean;
   /** Legacy: read once for compat, nothing writes it since the Your Rules page was retired (onboarding/start.ts decides launch). */
@@ -96,6 +98,10 @@ export interface CodexTabRecord {
   profile?: string;
   /** The launching Bare row's key; with `profile` it must still resolve to a row at restore. */
   rowKey?: string;
+  /** Explicit set override the tab launched with; absent = the row's own. */
+  sets?: { library?: string; set: string }[];
+  /** The Rune Vault a profiled tab loaded; restore resumes the thread on it, wins over `sets`. */
+  vault?: string;
 }
 export type PrefKey = keyof PrefKeys;
 
@@ -127,6 +133,7 @@ export const GUARDS: { [K in PrefKey]: (v: unknown) => boolean } = {
   "order.workbenchTabs": isStrArray,
   "swap.confirm": (v) => typeof v === "boolean",
   "character.animationDropdown": (v) => v === "on" || v === "off",
+  "changes.backend": (v) => v === "git" || v === "p4",
   "onboarding.dependenciesSeen": (v) => typeof v === "boolean",
   "onboarding.rulesSeen": (v) => typeof v === "boolean",
   "onboarding.progress": (v) => {
@@ -177,6 +184,8 @@ export const GUARDS: { [K in PrefKey]: (v: unknown) => boolean } = {
       const strOrNull = (y: unknown) => y === null || isStr(y);
       return !!x && typeof x === "object" && (x.tabKey === undefined || isStr(x.tabKey))
         && (x.profile === undefined || isStr(x.profile)) && (x.rowKey === undefined || isStr(x.rowKey))
+        && (x.sets === undefined || (Array.isArray(x.sets) && x.sets.every((r) => !!r && isStr((r as Record<string, unknown>).set) && ((r as Record<string, unknown>).library === undefined || isStr((r as Record<string, unknown>).library)))))
+        && (x.vault === undefined || isStr(x.vault))
         && strOrNull(x.threadId) && isStr(x.cwd) && isStr(x.title) && isStr(x.art)
         && strOrNull(x.model) && strOrNull(x.rules) && typeof x.active === "boolean"
         && (x.mode === "default" || x.mode === "acceptEdits" || x.mode === "plan");

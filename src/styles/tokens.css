@@ -116,6 +116,7 @@
   --row-28: 28px;
   --row-32: 32px;
   --border-w: 1px;
+  --opacity-dim: 0.5; /* disabled controls and the inactive side of a switch (user, 2026-10-24) */
   --bg-hover: color-mix(in srgb, var(--fg) 5%, var(--bg-panel));
   --bg-selected: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
   --border-strong: color-mix(in srgb, var(--fg) 20%, var(--bg-panel));

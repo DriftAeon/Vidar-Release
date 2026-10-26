@@ -95,6 +95,9 @@ pub(super) fn spawn_session(
         driver,
         journal,
     );
+    if let Some(sets) = params.sets.as_ref() {
+        let _ = session.sets.set(sets.clone());
+    }
     if agent == Agent::Codex {
         // `CodexRuntime::spawn_request` admitted the profile and built this child's env from it:
         // the echo is Vidar's proof (an older host refuses the profile), the names its manifest,
@@ -180,8 +183,22 @@ pub(super) fn spawn_session(
                     let _ = session.payload_file.set(admitted.clone());
                 }
             }
+            if params.mcp_file.is_some() {
+                if let Some(admitted) = request.args.windows(2)
+                    .find(|pair| pair[0] == "--mcp-file")
+                    .map(|pair| pair[1].clone())
+                {
+                    let _ = session.mcp_file.set(admitted);
+                }
+            }
             if let Some(row_key) = params.row_key.as_ref() {
                 let _ = session.row_key.set(row_key.clone());
+            }
+            // The admitted config dir is the child's CLAUDE_CONFIG_DIR (`claude::bare_spawn`).
+            if params.claude_config_dir.is_some() {
+                if let Some((_, dir)) = request.env.iter().find(|(k, _)| k.eq_ignore_ascii_case("CLAUDE_CONFIG_DIR")) {
+                    let _ = session.claude_config_dir.set(dir.clone());
+                }
             }
         }
     }

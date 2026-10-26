@@ -23,13 +23,14 @@ pub const PROTOCOL_VERSION: u32 = PROTOCOL_V2;
 
 /// The capability that admits [`Op::SteerPrompt`].
 pub const CAPABILITY_STEER: &str = "steer";
+pub const CAPABILITY_SETS_ECHO: &str = "sets-echo";
 /// What this host serves beyond the protocol version's base set, listed in
 /// the v2 negotiate reply's `capabilities` (additive; an older host sends
 /// none). An op added inside a version is advertised there instead of bumping
 /// the version, and a client never sends one the connected host did not
 /// list: a host that cannot parse a request drops the whole connection, and
 /// every hosted tab's lease with it (`serve.rs`, the request read loop).
-pub const CAPABILITIES: &[&str] = &[CAPABILITY_STEER];
+pub const CAPABILITIES: &[&str] = &[CAPABILITY_STEER, CAPABILITY_SETS_ECHO];
 /// The host can run hosted Codex turns. Not in [`CAPABILITIES`]: the host
 /// lists it only when Codex resolves AND its driver runs turns
 /// (`serve::negotiate`), and a client spawns a hosted Codex tab only on a
@@ -66,6 +67,10 @@ pub struct CodexBareSpawn {
     /// PowerShell 5.1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pwsh: Option<String>,
+    /// The admitted `SpawnParams.codex_home` the child runs on; None when none was asked.
+    /// Vidar ends a spawn whose request carried a home this does not echo (an older host).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_home: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -408,6 +413,14 @@ impl<'de> Deserialize<'de> for Gateway {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetRef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub library: Option<String>,
+    pub set: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SpawnParams {
     /// Required by protocol v2. Protocol v1 maps an omitted agent to Claude.
@@ -458,10 +471,16 @@ pub struct SpawnParams {
     /// only under the profile home's `layer\` (`claude.rs`). Optional both ways, like `profile`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payload_file: Option<String>,
+    /// A Claude Bare MCP config directly under the profile home's layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_file: Option<String>,
     /// The launcher row key the payload was built from. Echoed in `SessionSummary` so a
     /// re-adopted tab's /clear rebuilds the same row. Optional both ways.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_key: Option<String>,
+    /// Exact launch pick; Some([]) explicitly selects no sets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sets: Option<Vec<SetRef>>,
     /// A Claude Bare row's rune-set plugin folders (`<home>\layer\plugins\<set>-<hash12>\`,
     /// `bare/set_plugin.rs`), in ref order, handed to the sidecar as `--set-plugin` after the
     /// profile's own plugins. Profile only; the host admits each one under the profile home's
@@ -469,6 +488,32 @@ pub struct SpawnParams {
     /// ways: omitted on the wire when empty, empty when absent; an older host ignores it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub set_plugin_dirs: Vec<String>,
+    /// A Codex Bare row's set-combination home (`<home>\codex-homes\<hash12>`, holding the
+    /// combination's `config.toml` with its MCP server tables), used as `CODEX_HOME` in place
+    /// of the profile's own. Codex profile only; the host admits it with
+    /// `codex_payload::admit_codex_home` and refuses the spawn on any failure (`codex.rs`).
+    /// Echoed as `CodexBareSpawn.codex_home`; None keeps the profile's home. Optional both ways.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex_home: Option<String>,
+    /// A Claude Bare row's set-combination config dir (`<home>\claude-homes\<hash12>`), used as
+    /// `CLAUDE_CONFIG_DIR` (and `VIDAR_AGENT_HOME`) in place of the profile overlay's own. Claude
+    /// profile only; after the overlay's own admission the host admits it with
+    /// `claude::admit_claude_config` (under the home, an existing folder, and either the overlay's
+    /// dir or a `claude-homes` combination folder) and refuses the spawn on any failure. Echoed as
+    /// `SessionSummary.claude_config_dir`; None keeps the overlay's dir. Optional both ways: an
+    /// older host ignores it, and the missing echo tells Vidar so.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_config_dir: Option<String>,
+    /// A Claude Bare session's plugin runes, by name as the vault holds them (Vidar builds the
+    /// list from the session's Rune Vault; the host never picks what loads). Each name matches
+    /// `^[a-z0-9][a-z0-9-]{0,63}$` and is admitted only as `<install root>\plugins\<name>`, an
+    /// existing directory with no reparse point on it or on `plugins\`; the install root is the
+    /// host's own (from its `--registry`), never the client's. Handed to the sidecar as
+    /// `--set-plugin` after `set_plugin_dirs`, in order. Profile only. Unlike `set_plugin_dirs`,
+    /// any name that fails refuses the whole spawn (`claude/spawn_args.rs`). Optional both ways:
+    /// omitted on the wire when empty, empty when absent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugin_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -656,9 +701,16 @@ pub struct SessionSummary {
     /// refuses (and ends) a payload-bearing spawn whose reply lacks it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payload_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_file: Option<String>,
     /// The `SpawnParams.row_key` this host admitted; a re-adopt reads it back.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub row_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sets: Option<Vec<SetRef>>,
+    /// The admitted `SpawnParams.claude_config_dir` the child runs on; None when none was asked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_config_dir: Option<String>,
 }
 
 /// The permission behaviours a client may send. `bypassPermissions` and
@@ -717,8 +769,10 @@ mod tests {
                 gateway: None,
                 profile: None,
                 payload_file: None,
+                mcp_file: None,
                 row_key: None,
-                set_plugin_dirs: Vec::new(),
+                sets: None,
+                set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
             }),
         };
         let text = serde_json::to_string(&request).unwrap();
@@ -726,6 +780,26 @@ mod tests {
         let back: Request = serde_json::from_str(&text).unwrap();
         assert!(matches!(back.op, Op::Spawn(_)));
         assert_eq!(back.id, 7);
+    }
+
+    /// `plugin_names` is optional both ways: an old request without it reads as empty and an
+    /// empty list stays off the wire; a list round-trips in order.
+    #[test]
+    fn spawn_plugin_names_are_optional_both_ways() {
+        let old: Request = serde_json::from_str(
+            r#"{"id":1,"op":"spawn","cwd":"C:\\work","permission_mode":"default"}"#,
+        )
+        .unwrap();
+        let Op::Spawn(old) = old.op else { panic!("expected spawn") };
+        assert!(old.plugin_names.is_empty());
+        assert!(!serde_json::to_string(&old).unwrap().contains("plugin_names"));
+        let new: Request = serde_json::from_str(
+            r#"{"id":2,"op":"spawn","cwd":"C:\\work","permission_mode":"default","plugin_names":["vidar-app","gate"]}"#,
+        )
+        .unwrap();
+        let Op::Spawn(new) = new.op else { panic!("expected spawn") };
+        assert_eq!(new.plugin_names, ["vidar-app", "gate"]);
+        assert!(serde_json::to_string(&new).unwrap().contains(r#""plugin_names":["vidar-app","gate"]"#));
     }
 
     #[test]
@@ -818,6 +892,33 @@ mod tests {
         assert_eq!(back.rules_file, summary.rules_file);
     }
 
+    #[test]
+    fn sets_keep_absent_empty_and_two_refs_on_both_wires() {
+        let spawn = r#"{"cwd":"C:\\work","permission_mode":"default"}"#;
+        let summary = r#"{"session":"s1","generation":1,"agent":"claude","cwd":"C:\\w",
+            "conversation":null,"pid":1,"model":null,"permission_mode":"default",
+            "attached":0,"exited":null}"#;
+        let refs = vec![
+            SetRef { library: None, set: "base".into() },
+            SetRef { library: Some("team".into()), set: "review".into() },
+        ];
+        for sets in [None, Some(vec![]), Some(refs)] {
+            let mut p: SpawnParams = serde_json::from_str(spawn).unwrap();
+            p.sets = sets.clone();
+            let wire = serde_json::to_value(&p).unwrap();
+            assert_eq!(wire.get("sets").is_some(), sets.is_some());
+            let back: SpawnParams = serde_json::from_value(wire).unwrap();
+            assert_eq!(back.sets, sets);
+            let mut s: SessionSummary = serde_json::from_str(summary).unwrap();
+            s.sets = sets.clone();
+            let wire = serde_json::to_value(&s).unwrap();
+            assert_eq!(wire.get("sets").is_some(), sets.is_some());
+            let back: SessionSummary = serde_json::from_value(wire).unwrap();
+            assert_eq!(back.sets, sets);
+        }
+        assert!(CAPABILITIES.contains(&CAPABILITY_SETS_ECHO));
+    }
+
     /// `tab_name` is optional both ways: absent on the wire when None, None when absent,
     /// and carried through `SessionSummary` for a re-adopt.
     #[test]
@@ -898,8 +999,10 @@ mod tests {
                 gateway: None,
                 profile: None,
                 payload_file: None,
+                mcp_file: None,
                 row_key: None,
-                set_plugin_dirs: Vec::new(),
+                sets: None,
+                set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
             }),
             Op::Attach { session: s() },
             Op::Hydrate {

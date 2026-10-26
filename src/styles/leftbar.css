@@ -229,6 +229,8 @@
 /* the dead marker was carried by the digit's colour — it needs its own cue now */
 .session-btn.dead .session-wheel { opacity: 0.4; }
 
+/* the X's footprint from the row's right edge (its 12 inset + 16 width); right-edge items read this, none redo the sum */
+.session-btn, .agent-subtab { --tab-close-slot: calc(var(--space-12) + var(--space-16)); }
 .session-close {
   /* 12 from the row's right edge: 8 hugged it, 14 (8 + --bar-inset) was too much (2026-10-10) */
   position: absolute; top: 50%; right: var(--space-12); transform: translateY(-50%);
@@ -251,7 +253,7 @@
 .session-btn:hover:not([data-need]) .session-close, #close-notice:is(:hover, :focus-visible) .session-close { display: block; }
 /* Stopped/Disconnected steps left of the shown X (its left edge 12 + 16 from the row edge, less the column's 6 + 4 pad,
    which leaves a 4 gap) instead of sitting under it; the chip never shares a row with the X (user, 2026-10-23) */
-.session-btn:hover:not([data-need]) .tab-stopped { margin-right: calc(var(--space-12) + var(--space-16) - var(--radius-6)); }
+.session-btn:hover:not([data-need]) .tab-stopped { margin-right: calc(var(--tab-close-slot) - var(--radius-6)); }
 /* question chip draws the Noto question icon; the "?" stays in the DOM for accessibility (2026-10-10) */
 .session-btn[data-need="question"] .tab-chip {
   color: transparent;
@@ -264,12 +266,14 @@
 .tab-agents { display: flex; flex-direction: column; gap: var(--space-2); margin-inline-start: var(--space-16); flex-shrink: 0; }
 .tab-agents[hidden], .tab-agent-dots[hidden] { display: none; }
 /* parent row: one square per child (cap 8, tab-agents.ts), coloured by state; no figures */
-.tab-agent-dots { display: flex; gap: var(--space-2); padding-inline-end: calc(var(--space-12) + var(--space-16) - var(--space-4)); }
+.tab-agent-dots { display: flex; gap: var(--space-2); }
+/* the cube sits in the X's spot and steps left only while the X shows, as Stopped does */
+.session-btn:hover:not([data-need]) .tab-agent-dots { padding-inline-end: calc(var(--tab-close-slot) - var(--space-4)); }
 .tab-agent-dot { width: var(--space-8); height: var(--space-8); background: var(--dot-off); }
 .tab-agent-dot[data-state="running"] { background: var(--dot-ok); }
 .tab-agent-dot[data-state="needs"] { background: var(--dot-warn); }
 .tab-agent-dot[data-state="failed"] { background: var(--dot-alert); }
-.agent-subtab { grid-template-columns: var(--tab-face-size) minmax(0, 1fr); flex-shrink: 0; padding-inline-end: calc(var(--space-12) + var(--space-16)); }
+.agent-subtab { grid-template-columns: var(--tab-face-size) minmax(0, 1fr); flex-shrink: 0; padding-inline-end: var(--tab-close-slot); }
 .agent-subtab:is(:hover, :focus-within) .session-close { display: block; }
 .agent-subtab .session-close:focus-visible { outline: var(--space-2) solid var(--fg); }
 .agent-subtab .session-close:active { background: var(--bg-selected); }

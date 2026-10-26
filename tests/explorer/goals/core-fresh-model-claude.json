@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-model-claude",
+  "title": "Pick a Claude Model Before the First Message",
+  "style": "mouse",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab", "launcher"],
+  "tags": ["model", "fresh"],
+  "realModel": true,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Claude chat tab" },
+    { "intent": "before typing anything, choose a different model than the default" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the model I picked" }
+  ]
+}

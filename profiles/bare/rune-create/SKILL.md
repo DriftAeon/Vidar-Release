@@ -26,7 +26,10 @@ and the section each rune sits in. Never write header syntax (`---`, `name:`) in
   out silently; headings and fence lines may be left uncited.
 - No user-profile paths (`C:\Users\<name>\...`) and no `{{` in a body. Write `~` paths instead. A rune that cannot
   lose them is still returned; Vidar keeps it as a draft, switched off.
-- `kind` is `rule` (an instruction) or `fact` (something true about the setup). Every rune is loaded always.
+- `kind` is `rule` (an instruction) or `fact` (something true about the setup).
+- Pick `activate: always` for rules that must fire every turn, `recall` for reference read when needed, or `paths`
+  for rules tied to file globs. With `paths`, supply a non-empty `paths` array of globs; omit `paths` otherwise.
+  Omitted `activate` means `always`.
 - `id`: lowercase letters, digits and single hyphens, 2 to 5 words, unique, naming the rule (`no-force-push`).
 - `description`: one line under 80 characters saying what the rune holds.
 - Every rune sits in exactly one section; every id a section lists is one of your runes. Sections follow the
@@ -41,18 +44,27 @@ and the section each rune sits in. Never write header syntax (`---`, `name:`) in
   paths that only exist on one machine, anything derivable from the code or git. A dated origin or a
   closes-when note on a rule is not stale; fold it into the body.
 - Keep the reasoning a rule carries ("X, because Y") in its body; drop decoration, not causes.
-- Budget: when a budget in characters is stated, the bodies together should fit it. Merge and tighten first;
-  drop the least load-bearing runes (with a reason) only when merging is not enough.
 - Prefer the source's words. Rewrite only to make one rune stand alone or to merge copies.
+
+## Where runes load
+
+`Target agent` is the agent that reads the runes: `claude` (Claude Code) or `codex` (Codex CLI). They load in a
+Vidar Bare tab, where the runes are its only instructions: no CLAUDE.md, AGENTS.md or memory index loads there,
+and skills, subagents, hooks and MCP servers come from the tab's rune set, not from rules.
+
+- A line that only points at another instruction file is dropped (`points at an unloaded file`); a rule it
+  states becomes a rune.
+- A line that only installs or configures a skill, subagent, hook or MCP server is dropped (`setup comes from
+  the set`); a rule on when or how to use one stays.
+- A line written only for the other agent is dropped (`other agent`).
 
 ## Input
 
-The user message states the target agent and an optional budget, then each file headed by its `~` path and line
+The user message states the target agent, then each file headed by its `~` path and line
 count, every line prefixed `L<n>:`:
 
 ```text
 Target agent: claude
-Budget: none
 
 === FILE ~\.claude\CLAUDE.md (8 lines)
 L1: # Git
@@ -71,7 +83,8 @@ A file may arrive in parts, headed `(lines a-b of n)`; a `Context:` line under s
 ## Reply
 
 Exactly one JSON object and nothing else: no prose, no Markdown fence around it. Keys are exactly `runes`,
-`sections` and `dropped` (an empty list when nothing is dropped); no other keys at any level. For the input above:
+`sections` and `dropped` (an empty list when nothing is dropped). Each rune has `id`, `kind`, `description`,
+`body`, `sources`, and optionally `activate` and `paths`; no other keys at any level. For the input above:
 
 ```json
 {

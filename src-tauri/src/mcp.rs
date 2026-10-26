@@ -10,7 +10,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -20,10 +20,18 @@ pub mod codex;
 pub(crate) mod pin;
 
 // .claude.json sits beside the .claude dir by default, inside the config dir under a launch
-// profile (bare/claude_dir.rs). No home directory means no lookup, not a path relative to
+// profile (bare/claude_dir.rs; `home` = the config dir the tab's session runs on, one
+// combination home for a Bare tab). No home directory means no lookup, not a path relative to
 // Vidar's own cwd
-fn claude_json(profile: Option<&str>) -> Option<PathBuf> {
-    crate::bare::claude_dir::claude_json_for(profile)
+fn claude_json(profile: Option<&str>, home: Option<&Path>) -> Option<PathBuf> {
+    crate::bare::claude_dir::claude_json_in(profile, home.map(Path::to_path_buf))
+}
+
+/// The config dir one rack reads: the user's own `.claude` for no profile, else the tab's
+/// session home (`claude_dir::home_of_session`: its launch manifest, else the row's pick).
+fn rack_home(app: &tauri::AppHandle, profile: Option<&str>, tab: Option<&str>, row: Option<&str>) -> Option<PathBuf> {
+    let session = crate::bare::claude_dir::hosted_session_of(app, tab);
+    crate::bare::claude_dir::home_of_session(profile, tab, session.as_deref(), row)
 }
 
 #[derive(Clone, Serialize)]
@@ -161,8 +169,8 @@ fn read_json(p: &std::path::Path) -> Option<Value> {
 }
 
 /// User + managed settings documents (the same two files the deny list reads).
-fn global_settings(profile: Option<&str>) -> Vec<Value> {
-    let files = [crate::bare::claude_dir::claude_dir_for(profile).map(|d| d.join("settings.json")), Some(managed_settings())];
+fn global_settings(home: Option<&Path>) -> Vec<Value> {
+    let files = [home.map(|d| d.join("settings.json")), Some(managed_settings())];
     files.into_iter().flatten().filter_map(|p| read_json(&p)).collect()
 }
 
@@ -302,9 +310,9 @@ fn managed_settings() -> PathBuf {
 }
 
 /// User settings plus managed settings; a missing or unreadable file adds nothing.
-fn read_denied(profile: Option<&str>) -> Denied {
+fn read_denied(home: Option<&Path>) -> Denied {
     let mut out = Denied::default();
-    let files = [crate::bare::claude_dir::claude_dir_for(profile).map(|d| d.join("settings.json")), Some(managed_settings())];
+    let files = [home.map(|d| d.join("settings.json")), Some(managed_settings())];
     for p in files.into_iter().flatten() {
         if let Some(v) = fs::read_to_string(p).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
             add_denied(&v, &mut out);
@@ -331,19 +339,29 @@ fn collect(block: Option<&Value>, scope: &str, project: Option<&str>, out: &mut 
 /// Async on a blocking thread: reads ~/.claude.json and each project's .mcp.json, so a slow or
 /// unreachable share must not stall Tauri's main thread (as read_loadout).
 #[tauri::command]
-pub async fn read_mcp_servers(project: Option<String>, profile: Option<String>) -> Result<McpRack, String> {
-    tauri::async_runtime::spawn_blocking(move || read_mcp_servers_now(project, profile))
-        .await
-        .map_err(|e| e.to_string())
+pub async fn read_mcp_servers(
+    app: tauri::AppHandle,
+    project: Option<String>,
+    profile: Option<String>,
+    tab: Option<String>,
+    row: Option<String>,
+) -> Result<McpRack, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = rack_home(&app, profile.as_deref(), tab.as_deref(), row.as_deref());
+        read_mcp_servers_now(project, profile, home)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
-fn read_mcp_servers_now(project: Option<String>, profile: Option<String>) -> McpRack {
+fn read_mcp_servers_now(project: Option<String>, profile: Option<String>, home: Option<PathBuf>) -> McpRack {
     let profile = profile.as_deref();
+    let home = home.as_deref();
     let mut servers = Vec::new();
     let mut notes = Vec::new();
     let mut disabled: Option<HashSet<String>> = None;
 
-    let path = claude_json(profile);
+    let path = claude_json(profile, home);
     let read = path.as_ref().map(|p| fs::read_to_string(p));
     // A missing ~/.claude.json is the normal fresh-machine state: no note.
     let missing = matches!(&read, Some(Err(e)) if e.kind() == std::io::ErrorKind::NotFound);
@@ -375,7 +393,7 @@ fn read_mcp_servers_now(project: Option<String>, profile: Option<String>) -> Mcp
                     }
                 }
             }
-            apply_approval(&mut servers, &root, &global_settings(profile));
+            apply_approval(&mut servers, &root, &global_settings(home));
         }
         None if missing => {}
         None => notes.push(match &path {
@@ -384,7 +402,7 @@ fn read_mcp_servers_now(project: Option<String>, profile: Option<String>) -> Mcp
         }),
     }
 
-    apply_state(&mut servers, disabled.as_ref(), &read_denied(profile));
+    apply_state(&mut servers, disabled.as_ref(), &read_denied(home));
     servers.sort_by(|a, b| a.scope.cmp(&b.scope).then(a.name.cmp(&b.name)));
     McpRack { servers, notes }
 }
@@ -515,24 +533,46 @@ pub async fn list_mcp_tools(url: String) -> Result<Vec<McpTool>, String> {
         .map_err(|e| format!("tools task failed: {e}"))?
 }
 
+/// HTTP agent for loopback-only calls (the trust boundary behind `is_loopback_http`):
+/// follows no redirect and uses no proxy. ureq 3's default config reads the `*_PROXY`
+/// env vars, which would send a loopback call through an outside host.
+pub(crate) fn loopback_agent(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .max_redirects(0)
+        .proxy(None)
+        .timeout_global(Some(timeout))
+        .build()
+        .new_agent()
+}
+
+/// ureq 3 with `max_redirects(0)` hands a 3xx back as `Ok`; callers turn it into an
+/// error rather than parse a redirect body.
+pub(crate) fn redirect_status(resp: &ureq::http::Response<ureq::Body>) -> Option<u16> {
+    let status = resp.status();
+    status.is_redirection().then(|| status.as_u16())
+}
+
 fn list_mcp_tools_blocking(url: &str) -> Result<Vec<McpTool>, String> {
     if !is_loopback_http(url) {
         return Err("not a loopback http url".into());
     }
     // 10 s: a tools/list merged across live backends is legitimately slow.
-    let agent = ureq::AgentBuilder::new().redirects(0).timeout(Duration::from_secs(10)).build();
-    let resp = agent
-        .post(&url)
-        .set("Content-Type", "application/json")
-        .set("Accept", "application/json, text/event-stream")
-        .send_string(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+    let agent = loopback_agent(Duration::from_secs(10));
+    let mut resp = agent
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .send(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
         .map_err(|e| format!("unreachable: {e}"))?;
-    let sse = resp.content_type().starts_with("text/event-stream");
+    if let Some(code) = redirect_status(&resp) {
+        return Err(format!("redirect refused (HTTP {code})"));
+    }
+    let sse = resp.body().mime_type().unwrap_or("").starts_with("text/event-stream");
     let msg = if sse {
-        let reader = std::io::BufReader::new(resp.into_reader());
+        let reader = std::io::BufReader::new(resp.into_body().into_reader());
         sse_first_from_reader(reader).map_err(|e| format!("unreadable reply: {e}"))?
     } else {
-        let text = resp.into_string().map_err(|e| format!("unreadable reply: {e}"))?;
+        let text = resp.body_mut().read_to_string().map_err(|e| format!("unreadable reply: {e}"))?;
         serde_json::from_str::<Value>(&text).ok()
     }
     .ok_or("no JSON-RPC message in reply")?;
@@ -563,7 +603,8 @@ pub async fn list_mcp_tools_stdio(
         let rack = if scope == "codex" {
             codex::read_codex_mcp_servers_now(&app, tab, profile)
         } else {
-            read_mcp_servers_now(None, profile)
+            let home = rack_home(&app, profile.as_deref(), tab.as_deref(), None);
+            read_mcp_servers_now(None, profile, home)
         };
         let s = resolve_listable(rack.servers, &name, &scope, project.as_deref())?;
         list_mcp_tools_stdio_blocking(&s.target, &s.args, s.cwd().as_deref())
@@ -741,13 +782,16 @@ fn proxy_status_blocking(url: &str) -> Result<Vec<BackendStatus>, String> {
     if !is_loopback_http(url) {
         return Err("not a loopback http url".into());
     }
-    let agent = ureq::AgentBuilder::new().redirects(0).timeout(Duration::from_millis(1500)).build();
-    let resp = match agent.get(&format!("{}/status", origin_of(url))).call() {
+    let agent = loopback_agent(Duration::from_millis(1500));
+    let mut resp = match agent.get(format!("{}/status", origin_of(url))).call() {
         Ok(r) => r,
-        Err(ureq::Error::Status(code, _)) => return Err(format!("no status endpoint (HTTP {code})")),
+        Err(ureq::Error::StatusCode(code)) => return Err(format!("no status endpoint (HTTP {code})")),
         Err(e) => return Err(format!("unreachable: {e}")),
     };
-    let text = resp.into_string().map_err(|e| format!("unreadable reply: {e}"))?;
+    if let Some(code) = redirect_status(&resp) {
+        return Err(format!("redirect refused (HTTP {code})"));
+    }
+    let text = resp.body_mut().read_to_string().map_err(|e| format!("unreadable reply: {e}"))?;
     serde_json::from_str::<Value>(&text)
         .ok()
         .and_then(|v| backends_from(&v))
@@ -762,8 +806,92 @@ pub async fn proxy_status(url: String) -> Result<Vec<BackendStatus>, String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use std::io::{ErrorKind, Read, Write};
+    use std::net::TcpListener;
+
+    /// One-shot loopback server that answers its first request with a 302 to `location`.
+    /// Returns its origin (`http://127.0.0.1:<port>`).
+    pub(crate) fn redirect_server(location: String) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            // Drain the request (headers plus any Content-Length body) before replying.
+            let mut req = Vec::new();
+            let mut buf = [0u8; 4096];
+            loop {
+                let n = sock.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                req.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&req);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let len = text[..end]
+                        .lines()
+                        .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                        .unwrap_or(0);
+                    if req.len() >= end + 4 + len {
+                        break;
+                    }
+                }
+            }
+            let reply = format!("HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            let _ = sock.write_all(reply.as_bytes());
+        });
+        (origin, handle)
+    }
+
+    /// A loopback listener the redirect points at; `assert_untouched` proves no request reached it.
+    pub(crate) struct RedirectTarget(TcpListener);
+
+    impl RedirectTarget {
+        pub(crate) fn new() -> Self {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            l.set_nonblocking(true).unwrap();
+            Self(l)
+        }
+        pub(crate) fn url(&self, path: &str) -> String {
+            format!("http://{}{path}", self.0.local_addr().unwrap())
+        }
+        pub(crate) fn assert_untouched(&self) {
+            match self.0.accept() {
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {}
+                Ok(_) => panic!("redirect target was contacted"),
+                Err(e) => panic!("redirect target accept failed: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn tools_list_refuses_redirect() {
+        let target = RedirectTarget::new();
+        let (origin, server) = redirect_server(target.url("/mcp"));
+        let err = list_mcp_tools_blocking(&format!("{origin}/mcp")).unwrap_err();
+        server.join().unwrap();
+        assert_eq!(err, "redirect refused (HTTP 302)");
+        target.assert_untouched();
+    }
+
+    #[test]
+    fn proxy_status_refuses_redirect() {
+        let target = RedirectTarget::new();
+        let (origin, server) = redirect_server(target.url("/status"));
+        let err = proxy_status_blocking(&format!("{origin}/mcp")).unwrap_err();
+        server.join().unwrap();
+        assert_eq!(err, "redirect refused (HTTP 302)");
+        target.assert_untouched();
+    }
+
+    #[test]
+    fn loopback_agent_pins_no_redirect_no_proxy() {
+        let agent = loopback_agent(Duration::from_millis(1500));
+        let cfg = agent.config();
+        assert_eq!(cfg.max_redirects(), 0);
+        assert!(cfg.proxy().is_none());
+    }
 
     // Built from a raw string so the key is not a bare layout-id literal (paths-contract scan).
     fn tools_reply() -> Value {

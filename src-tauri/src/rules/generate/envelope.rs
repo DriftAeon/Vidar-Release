@@ -18,7 +18,7 @@ pub struct Envelope {
     pub dropped: Vec<Dropped>,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RuneOut {
     pub id: String,
@@ -27,6 +27,10 @@ pub struct RuneOut {
     pub description: String,
     pub body: String,
     pub sources: Vec<Source>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paths: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -55,6 +59,7 @@ pub struct Dropped {
 
 const TOP: [&str; 3] = ["runes", "sections", "dropped"];
 const RUNE: [&str; 5] = ["id", "kind", "description", "body", "sources"];
+const RUNE_OPTIONAL: [&str; 2] = ["activate", "paths"];
 const SOURCE: [&str; 2] = ["path", "line"];
 const SECTION: [&str; 2] = ["heading", "ids"];
 const DROPPED: [&str; 3] = ["path", "line", "reason"];
@@ -72,12 +77,12 @@ pub(super) fn unfence(reply: &str) -> &str {
     t
 }
 
-fn object<'a>(v: &'a Value, at: &str, keys: &[&str], errs: &mut Vec<String>) -> Option<&'a Map<String, Value>> {
+fn object<'a>(v: &'a Value, at: &str, keys: &[&str], optional: &[&str], errs: &mut Vec<String>) -> Option<&'a Map<String, Value>> {
     let Some(m) = v.as_object() else {
         errs.push(format!("{at}: expected an object"));
         return None;
     };
-    for k in m.keys().filter(|k| !keys.contains(&k.as_str())) {
+    for k in m.keys().filter(|k| !keys.contains(&k.as_str()) && !optional.contains(&k.as_str())) {
         errs.push(format!("{at}: unknown key `{k}`"));
     }
     for k in keys.iter().filter(|k| !m.contains_key(**k)) {
@@ -110,16 +115,28 @@ fn list<'a>(m: &'a Map<String, Value>, key: &str, at: &str, errs: &mut Vec<Strin
 }
 
 fn shape(v: &Value, errs: &mut Vec<String>) {
-    let Some(top) = object(v, "envelope", &TOP, errs) else { return };
+    let Some(top) = object(v, "envelope", &TOP, &[], errs) else { return };
     for (i, r) in list(top, "runes", "envelope", errs).iter().enumerate() {
         let at = format!("runes[{i}]");
-        let Some(m) = object(r, &at, &RUNE, errs) else { continue };
+        let Some(m) = object(r, &at, &RUNE, &RUNE_OPTIONAL, errs) else { continue };
         for k in ["id", "kind", "description", "body"] {
             want_string(m, k, &at, errs);
         }
+        want_string(m, "activate", &at, errs);
+        if let Some(paths) = m.get("paths") {
+            if let Some(paths) = paths.as_array() {
+                for (j, path) in paths.iter().enumerate() {
+                    if !path.is_string() {
+                        errs.push(format!("{at}.paths[{j}]: expected a string"));
+                    }
+                }
+            } else {
+                errs.push(format!("{at}.paths: expected a list"));
+            }
+        }
         for (j, s) in list(m, "sources", &at, errs).iter().enumerate() {
             let at = format!("{at}.sources[{j}]");
-            if let Some(m) = object(s, &at, &SOURCE, errs) {
+            if let Some(m) = object(s, &at, &SOURCE, &[], errs) {
                 want_string(m, "path", &at, errs);
                 want_line(m, &at, errs);
             }
@@ -127,7 +144,7 @@ fn shape(v: &Value, errs: &mut Vec<String>) {
     }
     for (i, s) in list(top, "sections", "envelope", errs).iter().enumerate() {
         let at = format!("sections[{i}]");
-        let Some(m) = object(s, &at, &SECTION, errs) else { continue };
+        let Some(m) = object(s, &at, &SECTION, &[], errs) else { continue };
         want_string(m, "heading", &at, errs);
         for (j, id) in list(m, "ids", &at, errs).iter().enumerate() {
             if !id.is_string() {
@@ -137,7 +154,7 @@ fn shape(v: &Value, errs: &mut Vec<String>) {
     }
     for (i, d) in list(top, "dropped", "envelope", errs).iter().enumerate() {
         let at = format!("dropped[{i}]");
-        if let Some(m) = object(d, &at, &DROPPED, errs) {
+        if let Some(m) = object(d, &at, &DROPPED, &[], errs) {
             want_string(m, "path", &at, errs);
             want_string(m, "reason", &at, errs);
             want_line(m, &at, errs);
@@ -196,6 +213,24 @@ fn meaning(env: &Envelope, scope: &Scope, errs: &mut Vec<String>) {
         }
         if r.kind != "rule" && r.kind != "fact" {
             errs.push(format!("{at}.kind: `{}` is not rule or fact", r.kind));
+        }
+        match r.activate.as_deref().unwrap_or("always") {
+            "paths" => {
+                if r.paths.as_ref().is_none_or(Vec::is_empty) {
+                    errs.push(format!("{at}.paths: required and non-empty when activate is paths"));
+                }
+            }
+            "always" | "recall" => {
+                if r.paths.is_some() {
+                    errs.push(format!("{at}.paths: only allowed when activate is paths"));
+                }
+            }
+            other => errs.push(format!("{at}.activate: `{other}` is not always, recall or paths")),
+        }
+        if let Some(paths) = &r.paths {
+            for (j, path) in paths.iter().enumerate() {
+                one_line(path, &format!("{at}.paths[{j}]"), errs);
+            }
         }
         one_line(&r.description, &format!("{at}.description"), errs);
         if r.body.trim().is_empty() {
@@ -418,6 +453,27 @@ mod tests {
 
     fn errs(reply: &str) -> Vec<String> {
         parse(reply, &inputs()).expect_err("expected a rejection")
+    }
+
+    #[test]
+    fn activate_and_paths_must_agree() {
+        let one = serde_json::json!([{ "heading": "A", "ids": ["a"] }]);
+        let mut r = rune("a", 3);
+        let env = parse(&reply(vec![r.clone()], one.clone()), &inputs()).unwrap();
+        assert_eq!(env.runes[0].activate, None);
+        r["activate"] = "paths".into();
+        assert!(errs(&reply(vec![r.clone()], one.clone())).iter().any(|e| e == "runes[0].paths: required and non-empty when activate is paths"));
+        r["paths"] = serde_json::json!([]);
+        assert!(errs(&reply(vec![r.clone()], one.clone())).iter().any(|e| e == "runes[0].paths: required and non-empty when activate is paths"));
+        r["paths"] = serde_json::json!(["src/**/*.rs"]);
+        assert!(parse(&reply(vec![r.clone()], one.clone()), &inputs()).is_ok());
+        r["activate"] = "recall".into();
+        assert!(errs(&reply(vec![r.clone()], one.clone())).iter().any(|e| e == "runes[0].paths: only allowed when activate is paths"));
+        r.as_object_mut().unwrap().remove("activate");
+        assert!(errs(&reply(vec![r.clone()], one.clone())).iter().any(|e| e == "runes[0].paths: only allowed when activate is paths"));
+        r.as_object_mut().unwrap().remove("paths");
+        r["activate"] = "sometimes".into();
+        assert!(errs(&reply(vec![r], one)).iter().any(|e| e == "runes[0].activate: `sometimes` is not always, recall or paths"));
     }
 
     #[test]

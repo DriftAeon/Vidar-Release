@@ -48,7 +48,7 @@ const ASK_FALLBACK = "Couldn't open a Claude tab to fix this";
 
 /** An action button on the Sheen face: default, loading (aria-busy, spinner, `busyLabel`) and error
  *  (red edge, the card's error line; still clickable, so a click retries). */
-function actionButton(label: string, busyLabel: string, primary: boolean, run: () => Promise<void>, onError: (message: string | null) => void, fallback: string): HTMLButtonElement {
+export function actionButton(label: string, busyLabel: string, primary: boolean, run: () => Promise<void>, onError: (message: string | null) => void, fallback: string): HTMLButtonElement {
   const b = el("button", primary ? "wb-card-btn wb-card-btn-primary notice-trust" : "wb-card-btn", label);
   b.type = "button";
   b.addEventListener("click", () => {
@@ -71,7 +71,7 @@ function actionButton(label: string, busyLabel: string, primary: boolean, run: (
   return b;
 }
 
-function card(text: string): { root: HTMLElement; acts: HTMLElement; text: HTMLElement; error: (message: string | null) => void } {
+export function card(text: string): { root: HTMLElement; acts: HTMLElement; text: HTMLElement; error: (message: string | null) => void } {
   const root = el("div", "blk blk-notice-card");
   const body = el("div", "notice-body");
   const textEl = el("div", "blk-notice warn", text);
@@ -151,7 +151,7 @@ export function trustCard(tabId: string, trust: TrustOffer, reopen?: TrustReopen
   return c.root;
 }
 
-export const VIDAR_CARD_TEXT = "Codex can't run in Vidar's own folder: its sandbox could write Vidar's launch files.";
+export const VIDAR_CARD_TEXT = "Codex can't run in Vidar's Folder";
 export const WORKTREE_LABEL = "Open in Worktree";
 export const WORKTREE_TITLE = "Makes a git worktree of Vidar at HEAD under runtime\\worktrees and opens Codex there; uncommitted changes stay here.";
 const WORKTREE_FAILED = "Couldn't open a worktree: ";

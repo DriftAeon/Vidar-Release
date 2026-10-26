@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-cwd-codex",
+  "title": "Choose a Folder for a Fresh Codex Tab",
+  "style": "mouse",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab", "launcher"],
+  "tags": ["cwd", "fresh"],
+  "realModel": false,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Codex chat tab" },
+    { "intent": "before typing anything, choose a different working folder" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the folder I picked" }
+  ]
+}

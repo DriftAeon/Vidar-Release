@@ -1,10 +1,14 @@
 // Changes tab IPC: the changes_* commands (src-tauri/src/changes.rs). Every call takes the repo
 // root the caller captured at click time, never a fresh read of the focused tab.
 import { invoke } from "../ipc";
-import type { ChangesCommitResult, ChangesStatus, ChangesSyncResult } from "../ipc";
+import type { ChangesCommitResult, ChangesStatus, ChangesSyncResult, P4Status } from "../ipc";
 
 export type ActVerb = "stage" | "unstage" | "revert";
 export type SyncMode = "sync" | "pull" | "push";
+
+export function readP4Status(cwd: string): Promise<P4Status> {
+  return invoke("changes_p4_status", { cwd });
+}
 
 export function readStatus(cwd: string): Promise<ChangesStatus> {
   return invoke("changes_status", { cwd });

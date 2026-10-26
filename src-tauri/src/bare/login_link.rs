@@ -73,9 +73,11 @@ impl std::fmt::Display for FileId {
 
 const STATE: &str = "login-link.json";
 const LOG: &str = "login-link.log";
-/// The Codex entry `sync_codex` builds: `<CODEX_HOME>\auth.json`, shared as `_shared\codex\auth.json`.
+/// The Codex entries `sync_codex` builds: `<CODEX_HOME>\auth.json`, shared as `_shared\codex\auth.json`,
+/// and the MCP OAuth store `.credentials.json` (`mcp_oauth_credentials_store = "file"`) beside it, so
+/// every set-combination home (W2 L6) holds the one login and the one set of server tokens.
 const CODEX_AGENT: &str = "codex";
-const CODEX_LOGIN: &str = "auth.json";
+const CODEX_LOGINS: &[&str] = &["auth.json", ".credentials.json"];
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 const FILE_READ_ATTRIBUTES: u32 = 0x80;
 const FILE_SHARE_ALL: u32 = 0x7;
@@ -135,12 +137,29 @@ pub fn sync_profile(home: &Path, entries: &[SharedLogin], home_dirs: &[String], 
 /// `codex_home` sits under `home` (any other `CODEX_HOME`, or a home outside `…\Vidar\homes`,
 /// shares nothing). `home_dirs` is the Codex profile's.
 pub fn sync_codex(home: &Path, codex_home: &Path, home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
-    let Ok(rel) = codex_home.strip_prefix(home) else { return Ok(Vec::new()) };
+    sync_dir(home, codex_home, CODEX_AGENT, CODEX_LOGINS, home_dirs, lock)
+}
+
+/// The Claude prepare call site (fold W2 L2a): `<dir>\.credentials.json` synced to the one shared
+/// Claude login, for the profile's own config dir and every set-combination home alike (the
+/// store is per file name, so each home links the same `_shared\claude\.credentials.json`).
+/// `dir` outside `home` shares nothing; `home_dirs` must hold `dir`'s folder.
+pub fn sync_claude(home: &Path, dir: &Path, home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
+    sync_dir(home, dir, CLAUDE_AGENT, CLAUDE_LOGINS, home_dirs, lock)
+}
+
+const CLAUDE_AGENT: &str = "claude";
+const CLAUDE_LOGINS: &[&str] = &[".credentials.json"];
+
+/// `files` in `dir` (under `home`) as `agent`'s shared-login entries.
+fn sync_dir(home: &Path, dir: &Path, agent: &str, files: &[&str], home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
+    let Ok(rel) = dir.strip_prefix(home) else { return Ok(Vec::new()) };
     if rel.as_os_str().is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_))) {
         return Ok(Vec::new());
     }
-    let file = format!("{}/{CODEX_LOGIN}", rel.to_string_lossy().replace('\\', "/"));
-    sync_profile(home, &[SharedLogin { agent: CODEX_AGENT.into(), file }], home_dirs, lock)
+    let rel = rel.to_string_lossy().replace('\\', "/");
+    let entries: Vec<SharedLogin> = files.iter().map(|f| SharedLogin { agent: agent.into(), file: format!("{rel}/{f}") }).collect();
+    sync_profile(home, &entries, home_dirs, lock)
 }
 
 /// The warnings' lead per agent; Claude's keep their original wording.
@@ -625,21 +644,21 @@ mod conflict_tests {
     use super::*;
     use std::time::{Duration, SystemTime};
 
-    const CRED: &str = "claude-config/.credentials.json";
-
-    /// Which login a test runs on: Claude's through its profile entry, Codex's through `sync_codex`.
+    /// Which login a test runs on: Claude's through `sync_claude` (the profile's own config dir or a
+    /// set-combination home), Codex's through `sync_codex`.
     struct Kind {
         agent: &'static str,
         dir: &'static str,
         file: &'static str,
     }
     const CLAUDE: Kind = Kind { agent: "claude", dir: "claude-config", file: ".credentials.json" };
+    const CLAUDE_COMBO: Kind = Kind { agent: "claude", dir: "claude-homes/0123456789ab", file: ".credentials.json" };
     const CODEX: Kind = Kind { agent: "codex", dir: "codex-home", file: "auth.json" };
 
     impl Kind {
         fn run(&self, h: &Path, lock: &HomeLock) -> Result<Vec<String>, String> {
             match self.agent {
-                "claude" => sync_profile(h, &[SharedLogin { agent: "claude".into(), file: CRED.into() }], &dirs(), lock),
+                "claude" => sync_claude(h, &h.join(self.dir), &dirs(), lock),
                 _ => sync_codex(h, &h.join(self.dir), &dirs(), lock),
             }
         }
@@ -684,7 +703,7 @@ mod conflict_tests {
     }
 
     fn dirs() -> Vec<String> {
-        vec!["claude-config".into(), "codex-home".into(), "logs".into()]
+        vec!["claude-config".into(), "claude-homes/0123456789ab".into(), "codex-home".into(), "logs".into()]
     }
 
     fn id(p: &Path) -> FileId {
@@ -737,6 +756,25 @@ mod conflict_tests {
     #[test]
     fn codex_after_a_refresh_split_a_fresh_home_links_the_newest_sibling() {
         after_a_refresh_split(&CODEX);
+    }
+
+    #[test]
+    fn combo_after_a_refresh_split_a_fresh_home_links_the_newest_sibling() {
+        after_a_refresh_split(&CLAUDE_COMBO);
+    }
+
+    /// A Claude combination home links the same store as the profile's own dir: one login.
+    #[test]
+    fn a_claude_combination_home_shares_the_profile_dirs_login() {
+        let t = TempDir::new("combo");
+        let (a, la) = t.home("aaaaaaaaaaaaaaaa");
+        std::fs::write(CLAUDE.cred(&a), "TOKEN").unwrap();
+        CLAUDE.run(&a, &la).unwrap();
+        CLAUDE_COMBO.run(&a, &la).unwrap();
+        assert_eq!(id(&CLAUDE_COMBO.cred(&a)), id(&CLAUDE.cred(&a)));
+        assert_eq!(id(&t.store(&CLAUDE)), id(&CLAUDE.cred(&a)));
+        let rec: BTreeMap<String, FileId> = crate::fsx::read_json(&a.join("logs").join(STATE)).unwrap();
+        assert_eq!(rec.keys().collect::<Vec<_>>(), vec!["claude/claude-config/.credentials.json", "claude/claude-homes/0123456789ab/.credentials.json"]);
     }
 
     fn both_changed(k: &Kind) {

@@ -10,6 +10,7 @@ mod build_guard;
 mod build_stamp;
 mod caption;
 mod changes;
+mod changes_p4;
 mod characters;
 mod chrome;
 mod codex_config;
@@ -165,17 +166,31 @@ fn main() {
             rules::rules_prepare,
             rules::catalog::runes_catalog,
             rules::loaded::runes_loaded,
+            rules::load_history::runes_load_history,
             rules::import::commands::rules_import_sources,
             rules::import::commands::rules_import_scan,
             rules::import::commands::rules_import_apply,
             rules::generate::commands::rules_generate,
             rules::generate::commands::rules_generate_cancel,
-            rules::generate::commands::rules_generate_toggle,
             rules::import::local::bare_local_sources,
-            bare::actives::bare_actives,
-            bare::actives::bare_layer_set,
-            bare::actives::bare_set_layer_write,
+            bare::item_import::bare_items_import,
+            bare::bundles::bare_module_bundles,
+            rules::fork::bare_set_fork,
+            bare::kit::bare_kit_create,
+            bare::kit::bare_kit_item_create,
+            bare::kit::bare_library_files,
+            bare::sets_list::bare_sets_list,
             bare::manifest::bare_launch,
+            bare::vault::rune_vault_list,
+            bare::vault::rune_vault_read,
+            bare::vault::rune_vault_create,
+            bare::vault::rune_vault_edit,
+            bare::vault::rune_vault_lock,
+            bare::vault::rune_vault_session,
+            bare::vault::rune_vault_defaults,
+            bare::vault::rune_vault_default_set,
+            bare::vault::rune_vault_session_move,
+            bare::vault::rune_vault_library_runes,
             lab::lab_item,
             agent::agent_send,
             agent::kill_agent,
@@ -202,6 +217,7 @@ fn main() {
             claude_login::claude_login_cancel,
             gitreview::review_workspace,
             changes::changes_status,
+            changes_p4::changes_p4_status,
             changes::changes_act,
             changes::changes_commit,
             changes::changes_sync,
@@ -400,6 +416,9 @@ fn main() {
         })
         .setup(|app| {
             let handle = app.app_handle().clone();
+            // Before any window or launch: Bare rows and the retired home-wide lists become Rune
+            // Vaults; vidar.json last (run 2026-10-25-rune-vault, L4c).
+            bare::vault::migrate::run_at_startup();
             bridge::ensure_dirs();
             bridge::sweep_review_artefacts();
             bridge::purge_workbench_archive();

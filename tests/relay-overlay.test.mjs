@@ -1,7 +1,7 @@
 // Relay ask overlay and settled state (src/relay/card-ask-state.ts via card.ts, stack.ts): the scrim shows for a
 // visible Rendered asker, a scrim click lifts it for that item, the action focuses the tab and fires
 // vidar-ask-focus, and a settled event shows Answered In <where> before the card leaves.
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
@@ -99,7 +99,7 @@ test("overlay: the action focuses the tab and dispatches vidar-ask-focus with th
   card.dispose();
 });
 
-test("settled: Answered In <where> with question over answer, then the card leaves", async () => {
+test("settled: Answered In <where> with question over answer, then the card leaves", async (t) => {
   setShown(["tab-1"], true);
   visible = true;
   const host = document.createElement("div");
@@ -110,6 +110,8 @@ test("settled: Answered In <where> with question over answer, then the card leav
   await dom.flush();
   const card = host.querySelector(".relay-card");
   assert.ok(card);
+  mock.timers.enable({ apis: ["setTimeout"] }); // the settled event arms the leave timer
+  t.after(() => mock.timers.reset());
   window.dispatchEvent(new window.CustomEvent("vidar-ask-settled", { detail: { key: "k-set", where: "Arc Coyote", answer: "Compact Rows" } }));
   assert.equal(card.querySelector(".relay-card-title").textContent, "Answered in Arc Coyote");
   assert.equal(card.querySelector(".relay-done-q").textContent, "Which tray layout should ship?");
@@ -118,7 +120,7 @@ test("settled: Answered In <where> with question over answer, then the card leav
   // the store drops the item: the answered card stays, then leaves on its own timer
   paintRelayStack([], null);
   assert.equal(host.children.length, 1, "left at once");
-  await new Promise((r) => setTimeout(r, 4100));
+  mock.timers.tick(4100);
   assert.equal(host.children.length, 0, "stayed past the timer");
 });
 
@@ -131,9 +133,14 @@ test("settled: a Relay-side answer removes the card at once; an unreported remov
   paintRelayStack([it], null);
   await dom.flush();
   // not answered through the form: the card lingers, then goes without a settled event
-  paintRelayStack([], null);
-  assert.equal(host.children.length, 1);
-  await new Promise((r) => setTimeout(r, 1600));
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    paintRelayStack([], null);
+    assert.equal(host.children.length, 1);
+    mock.timers.tick(1600);
+  } finally {
+    mock.timers.reset();
+  }
   assert.equal(host.children.length, 0);
 
   // answered through Relay's own form: gone with the item

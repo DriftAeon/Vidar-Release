@@ -1041,8 +1041,9 @@ fn wide(value: &std::ffi::OsStr) -> Vec<u16> {
 /// the programs Falcon hands them to. Node's `realpathSync` parses `\\?\C:\…`
 /// as a UNC-style root and then calls `lstat` on the bare drive letter, which
 /// fails with `EISDIR`; the sidecar dies before executing a line. That is the
-/// failure the slice-1 live proof hit, reproduced in
-/// `node_cannot_run_a_script_named_by_a_verbatim_path`.
+/// failure the slice-1 live proof hit. Node 24.22.1 no longer fails there, but
+/// older nodes and other programs still may, so the strip stays; guarded by
+/// `node_runs_a_canonical_script_once_plain_path_strips_it`.
 ///
 /// Anything a plain path cannot express (a path over `MAX_PATH`, or a device
 /// name) is returned untouched rather than silently corrupted.

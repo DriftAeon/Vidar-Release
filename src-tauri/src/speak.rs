@@ -397,12 +397,13 @@ pub async fn speak_last(
         .as_deref()
         .and_then(|id| app.state::<crate::agent::AgentManager>().codex_home(id))
         .map(|p| p.to_string_lossy().into_owned());
-    // A launch-profile (Bare) Claude tab keeps its transcripts under its own config dir; a profile
-    // that resolves to nothing never falls back to the user's home.
+    // A launch-profile (Bare) Claude tab keeps its transcripts under the config dir its session
+    // runs on (a combination home); a profile that resolves to nothing never falls back to the
+    // user's home.
     let claude_home = match profile.as_deref().filter(|p| !p.is_empty()) {
         None => None,
         Some(p) => Some(
-            crate::bare::claude_dir::claude_dir_for(Some(p))
+            crate::bare::claude_dir::home_of_session(Some(p), tab.as_deref(), crate::bare::claude_dir::hosted_session_of(&app, tab.as_deref()).as_deref(), None)
                 .ok_or_else(|| format!("No Claude home for launch profile {p:?}"))?
                 .to_string_lossy()
                 .into_owned(),

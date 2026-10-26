@@ -63,7 +63,7 @@ fn rust_builder_gives_the_fixture_names() {
     let guard = home::Guard { user_profile: Some(r"C:\Users\testuser".into()), username: Some("testuser".into()) };
     let find = |_: &Env, name: &str| Some(PathBuf::from(r"X:\bin").join(name));
     let probes = Probes { find: &find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-    let result = prepare_with("bare", &crate::paths::root(), &tmp.join("agent-home"), inherited(&f), &guard, &probes, &LaunchOpts::default());
+    let result = prepare_with("bare", &crate::paths::root(), &tmp.join("agent-home"), inherited(&f), &Ambient::default(), &guard, &probes, &LaunchOpts { vault: Some(super::launch_row::TEST_NO_VAULT), ..Default::default() });
     let built = result.map(|l| l.env);
     let _ = std::fs::remove_dir_all(&tmp);
     let built = built.expect("prepare_with succeeds on the fixture");

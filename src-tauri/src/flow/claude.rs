@@ -31,16 +31,17 @@ const CLAUDE_MODULE: &str = "claude";
 
 /// Production's runner spec: the sidecar the listed claude module declares in `agent.flow.script`
 /// (validated as one of its own `owns` files), under the Vidar root.
-/// The sidecar runs on the Bare Claude env (`flow/bare.rs`): Err with u1's string when the Bare
-/// config dir, or for a Claude model its login, is missing. A Claude-model stage also gets the
-/// Bare payload and the user's URL-only MCP servers (`flow/claude_mcp.rs`); a gateway stage not.
+/// The sidecar runs on the Bare Claude env on Flow's own config dir (`flow/bare.rs`,
+/// `<home>\flow-claude`): Err with u1's string when the Bare config dir, or for a Claude model its
+/// login, is missing. A Claude-model stage also gets the Bare payload, the user's URL-only MCP
+/// servers and Flow's drive-only MCP file (`flow/claude_mcp.rs`); a gateway stage none of them.
 pub(super) fn spec(need: super::bare::Need) -> Result<RunnerSpec, String> {
-    let env = super::bare::claude_env(need)?;
+    let ce = super::bare::claude_env(need)?;
     let registry = serde_json::to_value(crate::modules::listed()).map_err(|e| e.to_string())?;
     let script = flow_script_from(&registry, CLAUDE_MODULE).ok_or("Claude module not installed: no flow script")?;
-    let config_dir = env.get("CLAUDE_CONFIG_DIR").map(PathBuf::from);
-    let (args, warnings) = super::claude_mcp::for_stage(need, config_dir.as_deref());
-    Ok(RunnerSpec::Claude { sidecar: script_path(&crate::paths::root(), &script), env: Some(env), args, warnings })
+    let (args, mut warnings) = super::claude_mcp::for_stage(need, &ce);
+    warnings.extend(ce.warnings);
+    Ok(RunnerSpec::Claude { sidecar: script_path(&crate::paths::root(), &script), env: Some(ce.env), args, warnings })
 }
 
 /// Pure: `agent.flow.script` of module `id` in a serialized `modules_list` result.
@@ -461,7 +462,7 @@ mod tests {
         let user = r#"{"mcpServers":{"proxy":{"type":"http","url":"http://127.0.0.1:8765/mcp"},
             "k":{"type":"http","url":"https://x","headers":{"Authorization":"Bearer t"}}}}"#;
         let argv = |need: Need| {
-            let (stage, warnings) = stage_args(need, Path::new(r"C:\V"), url_only_servers(Some(user), &[]));
+            let (stage, warnings) = stage_args(need, Path::new(r"C:\V"), url_only_servers(Some(user), &[]), None);
             let mut extra = stage;
             extra.extend(required_mcp_args(&allow(&["mcp__proxy__a"])));
             let cmd = sidecar_command(

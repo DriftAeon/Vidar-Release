@@ -44,10 +44,17 @@ export function initZoom(opts?: { fontSize?: number }) {
 
 /* ---- font zoom (all sessions; hidden ones re-fit on next activate) ---- */
 
-const sessionsToast = createToast({ id: "zoom-toast", host: () => document.body });
+/** The focused tab's pane when it is a shown Rendered tab: the toast sits in its top-right
+ *  corner, level with the agent pill. Anything else (a terminal, a hidden view) gets body. */
+function toastHost(): HTMLElement {
+  const pane = document.querySelector<HTMLElement>(".term-container.rendered-host.focused");
+  return pane && pane.offsetParent !== null ? pane : document.body;
+}
 
-// The terminal area's one transient toast (top-centre): the zoom readout, and
-// sessions.ts's file-link open errors. Holds `ms` after the last call, then fades.
+const sessionsToast = createToast({ id: "zoom-toast", host: toastHost });
+
+// The terminal area's one transient toast (top-centre, or top-right on a Rendered tab): the
+// zoom readout, and sessions.ts's file-link open errors. Holds `ms` after the last call, then fades.
 export function showSessionsToast(message: string, ms = 500) {
   sessionsToast(message, ms);
 }

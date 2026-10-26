@@ -1,0 +1,17 @@
+{
+  "id": "w-error-bare-codex-shared-login",
+  "title": "Try Shared Login on a Bare Codex Tab",
+  "style": "impatient",
+  "scope": "vidar",
+  "surfaces": ["launcher", "settings"],
+  "tags": ["error", "login"],
+  "realModel": false,
+  "core": false,
+  "source": ["0be68ff4"],
+  "steps": [
+    { "intent": "open a Bare Codex tab that is not logged in" },
+    { "intent": "choose Shared Login and click it again right away" },
+    { "intent": "read the message that appears" },
+    { "intent": "check the message gives a real reason and a way forward, not a stale 'not wired yet' line" }
+  ]
+}

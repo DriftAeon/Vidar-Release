@@ -3,7 +3,8 @@
 //! or whose `enforced-by` hook file is not among the hooks the home carries, then tidies the rendered text.
 //! Design: docs/projects/bare/rune-scope-plan.md § How `bare` Composes With Scopes.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 use super::rune::Rune;
 
@@ -14,11 +15,17 @@ pub struct RenderCtx {
     pub hooks: BTreeSet<String>,
     /// Slot ids `set::render_in` drops unread: a Bare row's earlier library already rendered them.
     pub skip: BTreeSet<String>,
+    /// Rune ids `set::render_in` drops from its slots and its `<?recall?>` links alike. No spawn fills it
+    /// since the row overrides were retired; a vault's Disabled runeset is skipped in `bare/vault/store.rs`.
+    pub off: BTreeSet<String>,
+    /// Folders of the other libraries a set's `<?rune lib/id?>` slots name (filled by the Bare builder,
+    /// `bare/layer.rs` `build_sets`); a prefixed slot whose library is absent here fails the render.
+    pub libraries: BTreeMap<String, PathBuf>,
 }
 
 impl RenderCtx {
     pub fn bare(hooks: BTreeSet<String>) -> Self {
-        Self { bare: true, hooks, skip: BTreeSet::new() }
+        Self { bare: true, hooks, ..Self::default() }
     }
 
     /// The `enforced-by` files of `rune` this context does not carry (always empty when not Bare).
@@ -144,12 +151,12 @@ mod tests {
             return;
         }
         let none = render_with(&RenderCtx::bare(BTreeSet::new()));
-        assert_eq!(none.text, "\n# Bare Set\n\n## Kept\n\n- Facts live under the library folder.\n\n");
+        assert_eq!(none.text, "\n# Bare Set\n\n## Kept\n\n- Global fact — Global fact that every set recalls. Read global-fact.md in skill vidar-runes\n\n");
         assert_eq!(none.warnings.len(), 1, "{:?}", none.warnings);
         assert!(none.warnings[0].contains("`hook-rule`") && none.warnings[0].contains("guard-x.mjs"));
 
         let held = render_with(&RenderCtx::bare(BTreeSet::from(["guard-x.mjs".to_string()])));
-        assert!(held.text.contains("## Hooked\n\n- Hook claim: guard-x.mjs"), "{}", held.text);
+        assert!(held.text.contains("## Hooked\n\n<!-- rune: hook-rule -->\n- Hook claim: guard-x.mjs"), "{}", held.text);
         assert!(!held.text.contains("Bare tabs never see") && !held.text.contains("## Outer"), "{}", held.text);
         assert!(!held.text.contains("### Inner") && !held.text.contains("\n\n\n"), "{}", held.text);
         assert!(held.warnings.is_empty(), "{:?}", held.warnings);

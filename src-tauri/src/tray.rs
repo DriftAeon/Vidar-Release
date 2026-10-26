@@ -78,7 +78,7 @@ pub fn install(app: &AppHandle, cfg: WindowTrayCfg) -> Result<(), String> {
         std::thread::spawn(move || show(&app));
     });
     let installed = window.hwnd().map_err(|e| e.to_string())
-        .and_then(|hwnd| tray_native::install(hwnd, cfg.close_to_tray, chord, hide, summon));
+        .and_then(|hwnd| tray_native::install(windows::Win32::Foundation::HWND(hwnd.0), cfg.close_to_tray, chord, hide, summon));
     if let Err(error) = installed {
         app.remove_tray_by_id("vidar-window");
         return Err(error);

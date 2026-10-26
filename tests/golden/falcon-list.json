@@ -67,7 +67,9 @@
       "profile": "bare",
       "env_names": ["=C:", "CLAUDE_CONFIG_DIR", "FALCON_SESSION", "Path"],
       "payload_file": "C:\\Users\\test\\AppData\\Local\\Vidar\\homes\\1c49ff625c89a9b8\\layer\\payload-0123456789ab.md",
-      "row_key": "claude-bare"
+      "mcp_file": "C:\\Users\\test\\AppData\\Local\\Vidar\\homes\\1c49ff625c89a9b8\\layer\\mcp-0123456789ab.json",
+      "row_key": "claude-bare",
+      "sets": [{"library": "vidar", "set": "base"}]
     }
   ]
 }

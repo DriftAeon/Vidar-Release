@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-model-codex",
+  "title": "Pick a Codex Model Before the First Message",
+  "style": "keyboard-first",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab", "launcher"],
+  "tags": ["model", "fresh"],
+  "realModel": true,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Codex chat tab" },
+    { "intent": "before typing anything, choose a cheaper model using the keyboard" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the model I picked" }
+  ]
+}

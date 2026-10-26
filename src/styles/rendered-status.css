@@ -67,10 +67,15 @@
 }
 .cabinet-search:focus { border-color: var(--accent); outline: none; }
 .cabinet-list { overflow: auto; min-height: 0; padding: 0 var(--space-8) var(--space-8); }
+/* group heads fold their rows: bold, colour icon left of the title (2026-10-24) */
 .cabinet-group {
+  display: flex; align-items: center; gap: var(--space-8); cursor: pointer; list-style: none;
   padding: var(--space-8); margin-bottom: var(--space-4); border-bottom: var(--border-w) solid var(--border);
   color: var(--fg-dim); font-size: var(--font-11); font-weight: var(--weight-strong);
 }
+.cabinet-group::-webkit-details-marker { display: none; }
+.cabinet-group > .icn { width: var(--space-16); height: var(--space-16); }
+.cabinet-group:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
 .cabinet-row {
   display: block; width: 100%; box-sizing: border-box; margin-bottom: var(--space-4); padding: var(--space-8);
   border: var(--border-w) solid transparent; border-radius: var(--radius-4); background: transparent; color: var(--fg);

@@ -1,0 +1,17 @@
+{
+  "id": "core-fresh-cwd-claude",
+  "title": "Choose a Folder for a Fresh Claude Tab",
+  "style": "misclick",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab", "launcher"],
+  "tags": ["cwd", "fresh"],
+  "realModel": false,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Claude chat tab" },
+    { "intent": "before typing anything, open the folder picker, back out of it by mistake, then open it again" },
+    { "intent": "choose a different working folder" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the folder I picked" }
+  ]
+}

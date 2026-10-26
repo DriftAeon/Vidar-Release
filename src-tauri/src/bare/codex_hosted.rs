@@ -15,7 +15,7 @@ pub(super) struct CodexHome {
     /// Set when no unpackaged pwsh survives the WindowsApps drop on this env.
     pub shell_warning: Option<String>,
     pub codex_home: PathBuf,
-    /// The row's sets and/or skills listing, built into `<home>\layer\`; None = static payload.
+    /// The vault's text and copied skill-rune listing, built into `<home>\layer\`.
     pub built: Option<layer::BuiltPayload>,
     /// The name of the profile file written for `built` (`PayloadRoute::ProfileFile`); None when the
     /// caller carries the text itself or the payload is static.
@@ -25,6 +25,8 @@ pub(super) struct CodexHome {
     payload_text: String,
     marker: String,
     listed: Vec<copies::Listed>,
+    /// The resolved skill, agent and MCP items the launch loaded, for the manifest's `items`.
+    items: manifest::LaunchItems,
     copy_warnings: Vec<String>,
     /// The guard files copied for hooks.json (shim included), for the manifest's `guards`.
     guard_files: Vec<String>,
@@ -38,13 +40,21 @@ pub(super) struct CodexHome {
     /// The shared Codex login's launch warnings (`login_link::sync_codex`), chained after the trust
     /// warning wherever it goes.
     pub(super) login_warnings: Vec<String>,
+    /// The set items Codex cannot carry (`Loadout.unsupported`), one warning each, chained after the
+    /// login warnings.
+    pub(super) unsupported_warnings: Vec<String>,
+    /// MCP warnings; both Codex surfaces load server tables from this vault's config.toml.
+    pub(super) mcp: codex_mcp::LaunchArgs,
     git: identity::GitIdentity,
     config: PathBuf,
     home_dir: PathBuf,
+    /// The vault the launch loaded (`launch_row::vault_for`); `None` only for the test no-vault spawn.
+    pub(super) vault: Option<super::vault::Vault>,
+    pub(super) loadout_hash: String,
     pub lock: home::HomeLock,
 }
 
-/// How a prepare carries the row's built payload to Codex.
+/// How a prepare carries the vault's built payload to Codex.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PayloadRoute {
     /// The caller sends the built text as `developerInstructions` on `thread/start` (Rendered
@@ -96,14 +106,15 @@ pub(super) fn has_codex_settings(dir: &Path) -> bool {
     false
 }
 
-/// Whether the user's Codex config trusts `cwd`; tests stand in for the real `~\.codex\config.toml`.
+/// Whether the user's Codex config (`config`, the caller's path) trusts `cwd`; tests add folders
+/// through `TEST_TRUST` without a file.
 #[cfg(not(test))]
-fn trust_of(cwd: &str) -> bool {
-    super::codex_user_trust::user_trusts(cwd)
+fn trust_of(config: Option<&Path>, cwd: &str) -> bool {
+    config.is_some_and(|c| super::codex_user_trust::config_trusts(c, cwd))
 }
 #[cfg(test)]
-fn trust_of(cwd: &str) -> bool {
-    TEST_TRUST.with(|t| t.borrow().iter().any(|p| home::norm_cwd(p) == home::norm_cwd(cwd)))
+fn trust_of(config: Option<&Path>, cwd: &str) -> bool {
+    TEST_TRUST.with(|t| t.borrow().iter().any(|p| home::norm_cwd(p) == home::norm_cwd(cwd))) || config.is_some_and(|c| super::codex_user_trust::config_trusts(c, cwd))
 }
 #[cfg(test)]
 thread_local! {
@@ -127,16 +138,48 @@ pub(super) fn prepare_home(
     root: &Path,
     home_dir: &Path,
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    ambient: &Ambient,
     guard: &home::Guard,
     find: &dyn Fn(&Env, &str) -> Option<PathBuf>,
     codex: &ResolveCodex<'_>,
     opts: &LaunchOpts,
     cwd: Option<&str>,
     payload_route: PayloadRoute,
+    hosted: bool,
 ) -> Result<CodexHome, String> {
-    let overlay: BTreeMap<String, String> = p.overlay.iter().map(|(k, v)| (k.clone(), fill_placeholders(v, root, home_dir))).collect();
+    let _ = hosted; // Both surfaces now use vault-owned MCP tables.
+    let mut overlay: BTreeMap<String, String> = p.overlay.iter().map(|(k, v)| (k.clone(), fill_placeholders(v, root, home_dir))).collect();
+    let vault = vault_for(root, opts, super::agent_homes::Agent::Codex)?;
+    // Every item the launch carries comes from its vault through the resolver (model R2), which maps
+    // each item rune through rune_items::map_items(Agent::Codex, ...): skills, agents, guards, env and
+    // MCP. What Codex cannot carry (`Loadout.unsupported`: mode, plugins) is named in the warnings.
+    let config = config_of(opts);
+    let resolve_env = set_loadout::ResolveEnv { root, config: &config, home: home_dir, user_home: ambient.user_home.as_deref() };
+    let set_loadout::VaultLoadout { mut loadout, warnings: loadout_warnings, text, sets } = vault_spawn::resolve(&resolve_env, Agent::Codex, root, vault.as_ref())?;
+    if !loadout.refusals.is_empty() {
+        return Err(format!("Rune Vault failed to resolve: {}; Bare spawn refused", loadout.refusals.join("; ")));
+    }
+    // The launch's vault picks its Codex home (`agent_homes::pick_vault`, keyed `vault:<id>`; read-only
+    // here, recorded under the lock). The test no-vault spawn stays on the profile's home; a hosted
+    // spawn hands its pick to Falcon (`SpawnParams.codex_home`, W9).
+    let legacy = codex_home_of(&p, root, home_dir);
+    let picked = legacy.as_ref().map(|l| agent_homes::pick_vault(Agent::Codex, home_dir, l, vault.as_ref().map(|v| v.id.as_str())));
+    if let Some(pk) = picked.as_ref().filter(|pk| Some(&pk.dir) != legacy.as_ref()) {
+        for k in ["CODEX_HOME", "VIDAR_AGENT_HOME"] {
+            if let Some(v) = overlay.get_mut(k) {
+                *v = pk.dir.to_string_lossy().into_owned();
+            }
+        }
+    }
+    let inherited: Vec<(OsString, OsString)> = inherited.into_iter().collect();
     // Before the home is touched: an overlay without an absolute CODEX_HOME refuses here.
-    let mut env = env::codex(inherited, &overlay)?;
+    let mut env = env::codex(inherited.iter().cloned(), &overlay)?;
+    for (name, value) in &loadout.env {
+        if overlay.keys().any(|key| key.eq_ignore_ascii_case(name)) {
+            return Err(format!("Rune Vault env {name} conflicts with the Codex home overlay; Bare spawn refused"));
+        }
+        env.set(name, value.expose());
+    }
     // pwsh on the full allowlisted Path first (the Store alias included: notify runs outside the
     // sandbox), then the WindowsApps folders leave the Path so Codex's own shell lookup cannot pick the
     // Store pwsh its sandbox token cannot start (env::drop_app_alias_dirs). A pwsh found again after the
@@ -148,59 +191,133 @@ pub(super) fn prepare_home(
         Some(unpackaged) => (unpackaged, None),
         None => (full_pwsh, Some(SHELL_51_WARNING.to_string())),
     };
-    let codex_home = codex_home_of(&p, root, home_dir).ok_or("Bare Codex profile sets no CODEX_HOME; spawn refused")?;
-
-    let row = row_sets_for(opts)?;
-    let codex_guards = guards::read_codex(&config_of(opts))?;
-    // The node every hook line and the trust check run: the one on the Bare Path, as Codex's own.
-    let node = match codex_guards.is_empty() {
+    let process_env = |name: &str| env.get(name).and_then(|v| v.to_str()).map(str::to_string)
+        .or_else(|| inherited.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).and_then(|(_, v)| v.to_str()).map(str::to_string));
+    let (legacy, picked) = legacy.zip(picked).ok_or("Bare Codex profile sets no CODEX_HOME; spawn refused")?;
+    let codex_home = picked.dir.clone();
+    if let Some(skill) = recall_skill::write(root, home_dir, guard, &loadout.recall_skill)? {
+        loadout.skills.insert(0, skill.to_string_lossy().into_owned());
+    }
+    let mut codex_guards: Vec<guards::BareCodexGuard> = Vec::new();
+    let mut raw_groups = Vec::new();
+    for g in &loadout.guard_items {
+        if let Some(raw) = guards::raw_hook(g).map_err(|e| format!("{e}; Bare spawn refused"))? {
+            raw_groups.push(guards::raw_group(&raw, true));
+            continue;
+        }
+        codex_guards.push(serde_json::from_value(g.clone()).map_err(|e| format!("A set's codexGuards entry is not {{ event, matcher?, run, open? }} ({e}); Bare spawn refused"))?);
+    }
+    let unsupported_warnings: Vec<String> = loadout.unsupported.iter().map(|u| format!("{} {} Not Carried by Codex: {}", u.kind, u.item, u.reason)).collect();
+    // The trust check needs node even when every hook is a raw command.
+    let node = match codex_guards.is_empty() && raw_groups.is_empty() {
         true => PathBuf::new(),
         false => find(&env, &p.host.name).ok_or_else(|| format!("{} is not on the allowlisted Path for the guard hooks; Bare spawn refused", p.host.name))?,
     };
 
     home::prepare_dirs(home_dir, &p.home_dirs)?;
     // Skill sources read and hashed before the lock, as the Claude prepares do.
-    let skill_plan = copies::plan_codex(&config_of(opts), home_dir, opts.row_key);
-    let mcp = codex_mcp::read_enabled(&config_of(opts))?;
+    let skill_plan = copies::plan_for(Agent::Codex, &copies::codex_skills_in(root, &loadout.skills), &loadout.agents, Some(home_dir));
+    let selected_skills: Vec<String> = skill_plan.skills.iter().map(|s| s.name.clone()).collect();
+    let selected_agents: Vec<String> = skill_plan.agents.iter().map(|a| a.name.clone()).collect();
+    // MCP tables live in this vault's Codex home for both surfaces. Server URLs and env values
+    // never enter argv. vidar_drive has no bundle entry: its stock rune toggles the pinned table.
+    let (catalog, _) = bundles::load(root);
+    let servers = codex_mcp::for_launch(&loadout.mcp, &catalog);
+    let drive = match vault.as_ref() {
+        Some(v) => vault::store::Store::open(&vault_spawn::store_root(root)).resolve(&v.id)?.runes.iter().any(|r| {
+            r.library == "stock" && r.id == "vidar-drive" && loadout.mcp.iter().any(|m| m == "vidar_drive")
+        }),
+        None => false,
+    };
+    let (mut table_mcp, mut mcp_warnings) = codex_mcp::Tables::servers(&servers, &process_env)?;
+    if drive {
+        table_mcp = table_mcp.with_vidar_drive(root)?;
+    }
+    for name in &loadout.mcp {
+        if !table_mcp.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            mcp_warnings.push(format!("MCP server {name}: no Codex server definition for this Rune Vault; not carried"));
+        }
+    }
+    let mcp = codex_mcp::LaunchArgs { warnings: mcp_warnings, ..Default::default() };
+    let items = manifest::LaunchItems::codex(&skill_plan, table_mcp.names.clone(), loadout.shadow.clone());
     let lock = home::lock(home_dir, home::LOCK_WAIT)?;
+    agent_homes::record(Agent::Codex, &lock, home_dir, &legacy, &config, &picked)?;
+    let mut copy_warnings = agent_homes::prune(Agent::Codex, &lock, home_dir, crate::fsx::now_ms());
+    copy_warnings.extend(loadout_warnings);
     // First under the lock, as Claude's: `auth.json` linked to the shared Codex login, so a fresh
     // install folder starts signed in and Flow's `auth.json` presence check sees the linked file.
-    let login_warnings = login_link::sync_codex(home_dir, &codex_home, &p.home_dirs, &lock)?;
+    // A combination home's folder joins homeDirs for the check.
+    let mut login_dirs = p.home_dirs.clone();
+    login_dirs.extend((codex_home != legacy).then(|| picked.rel.clone()));
+    let login_warnings = login_link::sync_codex(home_dir, &codex_home, &login_dirs, &lock)?;
     let git = identity::write(&lock, home_dir, guard);
     // Before the payload: a refused guard copy leaves config.toml as it was.
     let copied = guards::copy_codex(&lock, home_dir, &node, &under(root, "tools/bare/codex-shim.mjs"), &codex_guards)?;
-    let handlers = codex_hooks::write(&lock, &codex_home, &copied.groups)?;
-    let (listed, copy_warnings) = copies::sync_codex(&lock, home_dir, &codex_home, skill_plan);
+    let mut groups = copied.groups.clone();
+    groups.extend(raw_groups);
+    let handlers = codex_hooks::write(&lock, &codex_home, &groups)?;
+    // Plan F2: an item dropped from the plan leaves only a home no live (or unknown) owner holds.
+    let delete_gone = agent_homes::owners(Agent::Codex, home_dir, &codex_home) == agent_homes::Owners::None;
+    let (listed, synced) = copies::sync_codex(&lock, home_dir, &codex_home, skill_plan, delete_gone);
+    copy_warnings.extend(synced);
+    // A live owner can keep a dropped copy in this home. Refuse a new spawn before Codex can
+    // discover a skill or role that the current vault did not select.
+    for (kind, names) in [("skills", &selected_skills), ("agents", &selected_agents)] {
+        let dir = codex_home.join(kind);
+        if dir.is_dir() {
+            for entry in std::fs::read_dir(&dir).map_err(|e| format!("Codex {kind} {}: {e}; Bare spawn refused", dir.display()))? {
+                let entry = entry.map_err(|e| format!("Codex {kind} {}: {e}; Bare spawn refused", dir.display()))?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !name.starts_with('.') && !names.iter().any(|wanted| wanted.eq_ignore_ascii_case(&name)) {
+                    return Err(format!("Codex {kind} {name:?} is outside the loaded Rune Vault; Bare spawn refused"));
+                }
+            }
+        }
+    }
+    copy_warnings.extend(mcp.warnings.iter().cloned());
     let payload_path = under(root, &p.payload);
     let payload_text = crate::fsx::read_text(&payload_path).map_err(|e| format!("Bare payload {}: {e}", payload_path.display()))?;
     let (marker, _) = payload_marker(&payload_text)?;
     // Built, then written as a profile file when that is the route, before config.toml: a refusal
-    // leaves it, the manifest and the spawn untouched. config.toml keeps the static payload; the
-    // `thread/start` param (P4) and the `--profile` file (r1) both override it (0.163.0).
-    let carried: &[String] = if handlers > 0 { &copied.files } else { &[] };
-    let built = codex_instructions(&lock, &p, root, home_dir, row.as_ref(), &copies::listing(&listed), guard, carried)?;
+    // leaves it, the manifest and the spawn untouched. config.toml has an inert baseline;
+    // `thread/start` or the `--profile` file delivers this vault's instructions.
+    let listing = copies::listing(&listed);
+    let built = match vault.is_none() && text.is_none() && listing.trim().is_empty() {
+        // The test-only no-vault spawn (`launch_row::TEST_NO_VAULT`) with nothing to carry.
+        true => None,
+        false => codex_instructions(&lock, &p, root, home_dir, text.as_deref(), &sets, &listing, guard)?,
+    };
     let profile = match (&built, payload_route) {
         (Some(b), PayloadRoute::ProfileFile) => Some(home::write_codex_profile(&lock, &codex_home, &String::from_utf8_lossy(&b.bytes), root, home_dir, guard)?),
         _ => None,
     };
-    let payload = payload_text.replace('\r', "");
-    let config = under(home_dir, &p.config_target);
+    // The active instructions are built from this vault. Keep the profile's baseline inert; only the
+    // test no-vault spawn keeps the static payload.
+    let payload = match built {
+        Some(_) => String::new(),
+        None => payload_text.replace('\r', ""),
+    };
+    let config = match codex_home == legacy {
+        true => under(home_dir, &p.config_target),
+        false => codex_home.join("config.toml"),
+    };
     let template = under(root, &p.config_template);
     // Only a folder the user's own Codex config trusts gets the trust table; any other still runs,
     // with its project config, hooks and exec policies not loaded, and the tab says so, but only when
     // the folder has a `.codex` to load (otherwise trusting it would change nothing).
     let launch_dir = cwd.filter(|c| !c.trim().is_empty());
-    let trusted_cwd = launch_dir.filter(|c| trust_of(c));
+    let trusted_cwd = launch_dir.filter(|c| trust_of(ambient.codex_config.as_deref(), c));
     let trust_warning = (launch_dir.is_some_and(|c| trusted_cwd.is_none() && has_codex_settings(Path::new(c)))).then(|| UNTRUSTED_FOLDER_WARNING.to_string());
     let untrusted_dir = launch_dir.filter(|_| trust_warning.is_some()).map(str::to_string);
-    home::generate_codex_config_for(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &mcp)?;
+    // Both surfaces: exactly the vault's server tables (none when it carries no MCP rune).
+    home::generate_codex_config_for(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp)?;
     if handlers > 0 {
         let hooks_json = codex_home.join(codex_hooks::HOOKS_FILE);
         let launch_dir = cwd.filter(|c| !c.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| codex_home.clone());
         let ctx = codex_hooks::ListCtx { env: &env, node: &node, js: codex(&env, &p.binary).map(|(js, _)| js), codex_home: &codex_home, cwd: &launch_dir };
         let mut write_trusted = |entries: &[(String, String)]| {
             let trust = home::HookTrust { hooks_json: Some(&hooks_json), entries };
-            home::generate_codex_config_with(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &mcp, &trust)
+            home::generate_codex_config_with(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp, &trust)
         };
         codex_hooks::trust(&ctx, &hooks_json, handlers, &mut write_trusted)?;
     }
@@ -216,15 +333,20 @@ pub(super) fn prepare_home(
         payload_text,
         marker,
         listed,
+        items,
         copy_warnings,
         guard_files: if handlers > 0 { copied.files } else { Vec::new() },
         guard_warnings: copied.warnings,
         trust_warning,
         untrusted_dir,
         login_warnings,
+        unsupported_warnings,
+        mcp,
         git,
         config,
         home_dir: home_dir.to_path_buf(),
+        vault,
+        loadout_hash: loadout.hash,
         lock,
     })
 }
@@ -263,25 +385,28 @@ impl CodexHome {
                     sha256: hex(&Sha256::digest(&b.bytes)),
                     marker: b.marker.clone(),
                     sets: b.sets.clone(),
-                    warnings: b.warnings.iter().cloned().chain(self.trust_warning.clone()).chain(self.login_warnings.iter().cloned()).collect(),
+                    warnings: b.warnings.iter().cloned().chain(self.trust_warning.clone()).chain(self.login_warnings.iter().cloned()).chain(self.unsupported_warnings.iter().cloned()).collect(),
                 },
                 None => manifest::Payload {
                     path: self.payload_path.to_string_lossy().into_owned(),
                     sha256: hex(&Sha256::digest(self.payload_text.as_bytes())),
                     marker: self.marker.clone(),
                     sets: Vec::new(),
-                    warnings: self.trust_warning.iter().chain(&self.login_warnings).cloned().collect(),
+                    warnings: self.trust_warning.iter().chain(&self.login_warnings).chain(&self.unsupported_warnings).cloned().collect(),
                 },
             },
             plugins: Vec::new(),
             guards: self.guard_files.clone(),
             skills: self.listed.iter().map(|s| s.name.clone()).collect(),
+            items: Some(self.items.clone()),
             git_keys: self.git.keys.clone(),
             // Copy warnings are log-only for Codex: the spawn line has no banner for them.
             warnings: self.guard_warnings.iter().chain(&self.copy_warnings).cloned().chain(self.git.warning.clone()).collect(),
             managed_policy: manifest::managed_policy(),
             codex_rules: Some(rules),
             falcon_session: None,
+            loadout_hash: Some(self.loadout_hash.clone()),
+            thread_id: None,
         };
         (m, file_stamp)
     }
@@ -295,12 +420,17 @@ pub struct CodexHostedLaunch {
     /// Falcon applies (`codex_payload::admit_payload_file`), for `SpawnParams.payload_file`;
     /// `None` when there is nothing to build and config.toml's static payload stands.
     pub payload_file: Option<PathBuf>,
+    /// The launch's combination home (`<home>\codex-homes\<hash12>`), already admitted by the rule
+    /// Falcon applies (`codex_payload::admit_codex_home`), for `SpawnParams.codex_home`; `None` when
+    /// the launch runs on the profile's own home (no sets, or the seeded combination).
+    pub codex_home: Option<PathBuf>,
     manifest: manifest::Manifest,
     file_stamp: String,
     manifests_dir: PathBuf,
     /// The launch folder when the user's Codex config does not trust it; `write_manifest` registers
     /// it for the notice card's Trust Folder action (`codex_trust`).
     untrusted_dir: Option<String>,
+    seed: Option<SessionSeed>,
     _lock: home::HomeLock,
 }
 
@@ -334,6 +464,7 @@ impl CodexHostedLaunch {
         self.manifest.falcon_session = Some(falcon_session.to_string());
         self.manifest.env_names = env_names.into_iter().map(str::to_string).collect();
         let written = manifest::write(&self.manifests_dir, &self.file_stamp, &self.manifest)?;
+        vault_spawn::write_record(self.seed.as_ref(), tab, Some(falcon_session), Path::new(&self.manifest.homes.codex_home))?;
         super::codex_trust::register(tab, self.untrusted_dir.clone());
         Ok(written)
     }
@@ -350,8 +481,9 @@ pub fn prepare_codex_hosted(profile: &str, opts: &LaunchOpts, cwd: &str) -> Resu
     let root = crate::paths::root();
     let home_dir = home::resolve()?;
     let guard = home::Guard::from_vidar_env();
+    let ambient = Ambient::from_env();
     let (_, launch) = crate::pty::codex_bare_prepare(Some(dir), |cwd| {
-        prepare_codex_hosted_with(profile, &root, &home_dir, std::env::vars_os(), &guard, &find_on_env_path, opts, cwd)
+        prepare_codex_hosted_with(profile, &root, &home_dir, std::env::vars_os(), &ambient, &guard, &find_on_env_path, opts, cwd)
     })?;
     Ok(launch)
 }
@@ -365,6 +497,7 @@ pub(super) fn prepare_codex_hosted_with(
     root: &Path,
     home_dir: &Path,
     inherited: impl IntoIterator<Item = (OsString, OsString)>,
+    ambient: &Ambient,
     guard: &home::Guard,
     find: &dyn Fn(&Env, &str) -> Option<PathBuf>,
     opts: &LaunchOpts,
@@ -376,7 +509,16 @@ pub(super) fn prepare_codex_hosted_with(
     let p = load_codex_profile(root, profile_id)?;
     // The host sends the payload on `thread/start`, so no length is refused here; the marker and
     // path admission below stay.
-    let h = prepare_home(p, root, home_dir, inherited, guard, find, &resolve_codex, opts, Some(cwd), PayloadRoute::ThreadStart)?;
+    let legacy = codex_home_of(&p, root, home_dir);
+    let h = prepare_home(p, root, home_dir, inherited, ambient, guard, find, &resolve_codex, opts, Some(cwd), PayloadRoute::ThreadStart, true)?;
+    // A combination home goes to Falcon by path, checked here by the host's own rule first.
+    let codex_home = match legacy.as_ref() == Some(&h.codex_home) {
+        true => None,
+        false => {
+            codex_payload::admit_codex_home(&h.codex_home.to_string_lossy(), home_dir).map_err(|e| format!("{e}; Bare spawn refused"))?;
+            Some(h.codex_home.clone())
+        }
+    };
     let payload_file = match &h.built {
         Some(b) => {
             codex_payload::admit_payload_file(&b.path.to_string_lossy(), home_dir).map_err(|e| format!("{e}; Bare spawn refused"))?;
@@ -387,5 +529,6 @@ pub(super) fn prepare_codex_hosted_with(
     // Falcon resolves and runs Codex; `record_host` fills path, version and warning from its reply.
     let binary = manifest::Binary { path: String::new(), version: None, verified_version: h.p.verified_version.clone(), warning: None };
     let (manifest, file_stamp) = h.manifest(binary, "falcon".into(), Vec::new());
-    Ok(CodexHostedLaunch { payload_file, manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), _lock: h.lock })
+    let seed = SessionSeed::new(root, Agent::Codex, "hosted", h.vault.as_ref(), &h.loadout_hash);
+    Ok(CodexHostedLaunch { payload_file, codex_home, manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), seed, _lock: h.lock })
 }

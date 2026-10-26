@@ -2,7 +2,7 @@
 // truncation, and the Revert All filter that mirrors changes.rs check_paths.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { focusAfter, groupFiles, headFocusClass, revertablePaths, truncatePath } from '../src/changes/model.ts';
+import { focusAfter, groupFiles, headFocusClass, p4ActionLetter, p4ChangeLabel, revertablePaths, truncatePath } from '../src/changes/model.ts';
 
 const file = (path, x, y, extra = {}) => ({
   path, x, y, untracked: false, stagedAdds: 0, stagedDels: 0, workAdds: 0, workDels: 0, ...extra,
@@ -80,4 +80,22 @@ test('after a busy redraw the header focus returns to the Sync or Rename control
   // detached HEAD: no pen, sync pair disabled, nothing to focus
   assert.equal(headFocusClass('sync', true), null);
   assert.equal(headFocusClass('rename', true), null);
+});
+
+test('p4 actions map to A, M and D; others keep their first letter; the title is Title Case', () => {
+  const l = (a) => { const r = p4ActionLetter(a); return [r.letter, r.title]; };
+  assert.deepEqual(l('add'), ['A', 'Add']);
+  assert.deepEqual(l('branch'), ['A', 'Branch']);
+  assert.deepEqual(l('move/add'), ['A', 'Move/Add']);
+  assert.deepEqual(l('edit'), ['M', 'Edit']);
+  assert.deepEqual(l('integrate'), ['M', 'Integrate']);
+  assert.deepEqual(l('delete'), ['D', 'Delete']);
+  assert.deepEqual(l('move/delete'), ['D', 'Move/Delete']);
+  assert.deepEqual(l('purge'), ['P', 'Purge']);
+});
+
+test('p4 changelist heads: Default, else #change plus the first description line', () => {
+  assert.deepEqual(p4ChangeLabel('default', ''), { label: 'Default', title: 'Default' });
+  assert.deepEqual(p4ChangeLabel('1234', 'Fix it\nMore detail\n'), { label: '#1234 Fix it', title: 'Fix it\nMore detail' });
+  assert.deepEqual(p4ChangeLabel('77', ''), { label: '#77', title: '#77' });
 });

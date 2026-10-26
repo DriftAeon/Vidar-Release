@@ -59,7 +59,7 @@ pub fn colour_sample(
     client_x: Option<f64>,
     client_y: Option<f64>,
 ) -> Result<Option<ColourSample>, String> {
-    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    let hwnd = window.hwnd().map(|h| windows::Win32::Foundation::HWND(h.0)).map_err(|e| e.to_string())?;
     unsafe {
         // The DPI context is per thread and restored in Drop, even on errors: the body has no
         // await, so the override never leaks to other work on this worker or to the process.

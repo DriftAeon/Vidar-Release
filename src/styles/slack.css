@@ -41,10 +41,7 @@
 .slack-pane .sx-group > .cx-sec .icn { color: var(--fg-bright); }
 .slack-pane .sx-group > .cx-sec .cx-sec-label { color: var(--fg-bright); font-size: var(--font-12); letter-spacing: 0; text-transform: none; }
 .slack-pane .sx-group > .cx-rows, .slack-pane .sx-group > .sx-conv { margin: 0 var(--space-4); }
-.slack-pane .sx-group[data-place="dm"] { border-left: 3px solid var(--place-dm); }
 .slack-pane .sx-conv + .cx-rows { margin-bottom: var(--space-4); }
-.sx-conv[data-place="channel"] { border-left: 3px solid var(--place-channel); }
-.sx-conv[data-place="private"] { border-left: 3px solid var(--place-private); }
 .sx-conv[data-place="channel"] .icn { color: var(--place-channel); }
 .sx-conv[data-place="private"] .icn { color: var(--place-private); }
 .sx-av[data-place="group"] { color: var(--place-group); }

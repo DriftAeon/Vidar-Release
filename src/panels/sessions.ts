@@ -31,7 +31,7 @@ import { readHostedCodexGate, setHostedCodexGate } from "../launcher/readopt";
 import { dropTabState, feedRaw } from "./sessions/tab-state-feeds";
 import { bindCodexSave, forgetCodexTab, noteCodexResume, saveCodexTabs } from "./sessions/codex-save";
 import { bindLookup, getFocusedSession, nextTabName } from "./sessions/lookup";
-import { bindHosted, closeHostedTab, closeRenderedLocal, jettisonSession } from "./sessions/hosted";
+import { bindHosted, closeHostedTab, closeRenderedLocal, jettisonFromMenu } from "./sessions/hosted";
 import { dockBottombar, inBottombar, rescueBottombar } from "./sessions/bottombar-dock";
 
 export type { LaunchOpts, PageSpec, SessionAgent, SessionBody } from "./sessions/types";
@@ -77,7 +77,7 @@ let showSessionsView: () => void = () => {};
 let defaultCwd: string | undefined;
 bindTabStrip({
   sessions, view: () => ({ visible, activeId, workbenchOpen }),
-  activate, closeSession, openDual, openWorkbench, collapseWorkbench, jettisonSession, closeHostedTab,
+  activate, closeSession, openDual, openWorkbench, collapseWorkbench, jettisonSession: jettisonFromMenu, closeHostedTab,
   dispatchFocus, focusBody,
 });
 bindZoom({ sessions, refitActive });
@@ -204,7 +204,7 @@ export async function createSession(opts?: LaunchOpts): Promise<string> {
   const s: TerminalSession = {
     id, container, button, alive: true, body,
     agent: kind, cwd, model: opts?.model, effort: opts?.effort, launchArgs: opts?.args, shell: opts?.shell, role: opts?.role,
-    falconSession: opts?.falconSession, rules: opts?.rules, profile: opts?.profile, rowKey: opts?.rowKey,
+    falconSession: opts?.falconSession, rules: opts?.rules, profile: opts?.profile, rowKey: opts?.rowKey, sets: opts?.sets, vault: opts?.vault,
     tabKey: kind === "codex" && body === "rendered" && !opts?.falconSession
       ? (opts?.tabKey ?? crypto.randomUUID()) : undefined,
     permissionMode: opts?.permissionMode ?? "default",

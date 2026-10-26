@@ -3,17 +3,19 @@
 //! a slot template; `write` puts them on disk as a standard library (`Library::open`, `cook --root`).
 //! `sources` lists the files to offer, `assign` keeps the row refs in vidar.json, and `commands` is the
 //! `rules_import_*` IPC over all of them. For the Bare Runes tab, `local` lists every local file it offers
-//! (`bare_local_sources`), `codex_home` adds what a Codex home offers to it, and `memory` reads a Claude
-//! memory folder as one source.
+//! (`bare_local_sources`), `codex_home` adds what a Codex home offers to it, `claude_json` the user-scope
+//! MCP servers of `~/.claude.json`, and `memory` reads a Claude memory folder as one source.
 #![cfg_attr(not(test), allow(dead_code))] // split.rs keeps `Brick::kind`, `Split::text` and `warnings` for its tests.
 
 pub mod assign;
+pub mod claude_json;
 pub mod codex_home;
 pub mod commands;
 pub mod local;
 pub mod memory;
 pub mod sources;
 pub mod split;
+pub mod worktree;
 pub mod write;
 
 #[cfg(test)]
@@ -141,7 +143,7 @@ mod tests {
         let (runes, errors) = lib.all_runes();
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(runes.len(), s.bricks.len() + 1);
-        let set = lib.load(&lib.entry("row-claude-bare").unwrap().unwrap()).unwrap();
+        let set = lib.load(&lib.entry("acme-claude-md").unwrap().unwrap()).unwrap();
         let rendered = crate::rules::set::render(&lib, &set).map_err(|e| e.join("; ")).unwrap();
         assert_eq!(rendered.text, read(&fixture().join("normalised.md")));
         let _ = std::fs::remove_dir_all(dir.parent().unwrap());
@@ -158,13 +160,16 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_plate_with_an_invalid_key_does_not_fail_the_write() {
+    fn a_row_key_never_names_a_file() {
         let s = split("Keep every change small and reviewed.\n", &[], PROFILE);
         let dir = temp("badkey").join("acme-claude-md");
         let rows = vec![("Bad_Key".to_string(), Vec::new())];
         write_library(&dir, &s, &META, &[], &rows, false).unwrap();
+        assert!(!dir.join("sets").exists(), "no row takes a brick, so no set");
         let with_ids = vec![("Bad_Key".to_string(), vec![s.bricks[0].id.clone()])];
-        assert!(write_library(&dir, &s, &META, &[], &with_ids, true).unwrap_err().contains("row key"));
+        write_library(&dir, &s, &META, &[], &with_ids, true).unwrap();
+        let names: Vec<String> = std::fs::read_dir(dir.join("sets")).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, vec!["acme-claude-md.md".to_string()]);
         let _ = std::fs::remove_dir_all(dir.parent().unwrap());
     }
 

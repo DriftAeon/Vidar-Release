@@ -24,6 +24,8 @@ export interface RecentSession {
   ageSecs: number;
   live: boolean;
   note: string | null;
+  /** set refs (`library/set`) of the Bare home the transcript sits in; absent for the user's own `.claude` */
+  sets?: string[];
 }
 
 let recentGen = 0;
@@ -90,7 +92,8 @@ export async function openRecent(t: AgentType, rendered: AgentType, loc: Locatio
           console.error("session meta:", e);
         }
         // the transcript's own cwd spelling, so Claude Code resolves the same project
-        await spawnFrom({ ...entry, cwd: undefined }, { label: loc.label, cwd: s.cwd }, undefined, s.sessionId); // no title: createSession mints a themed name
+        // a Bare transcript resumes on the vault its session record names (spawnFrom reads it)
+        await spawnFrom({ ...entry, cwd: undefined }, { label: loc.label, cwd: s.cwd }, undefined, s.sessionId); // the vault comes from the session record (spawnFrom); no title: createSession mints a themed name
       } catch (e) {
         showSessionsToast(e instanceof Error ? e.message : String(e), 6000);
         b.disabled = false; // the launcher stays open on a failed spawn: the row is usable again

@@ -92,11 +92,11 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
   // A profiled (bare) tab keeps its profile on every spawn: Falcon's for Claude
   // (createFalconProfileTransport, and through a re-adopt), in-process for Codex (createProfileTransport).
   const transport = s.falconSession
-    ? createFalconAdoptTransport(s.falconSession, gateway, s.profile, refused, s.rowKey)
+    ? createFalconAdoptTransport(s.falconSession, gateway, s.profile, refused, s.rowKey, s.sets, s.vault)
     : refused ? createRefusedTransport()
     : gateway ? createGatewayTransport(gateway)
-    : hosted ? (s.profile ? createFalconProfileTransport(s.profile, s.rowKey) : falconAgentTransport)
-    : s.profile ? createProfileTransport(s.profile, s.rowKey) : undefined;
+    : hosted ? (s.profile ? createFalconProfileTransport(s.profile, s.rowKey, s.sets, s.vault) : falconAgentTransport)
+    : s.profile ? createProfileTransport(s.profile, s.rowKey, s.sets, s.vault) : undefined;
   // the body shows prepare-time warnings once; the tab keeps the file for Resume and a switch back
   const rules = s.rules ?? null;
   if (s.rules) s.rules = { ...s.rules, warnings: [] };

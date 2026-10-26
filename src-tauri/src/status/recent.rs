@@ -25,6 +25,10 @@ pub struct RecentSession {
     /// true → not resumable now; `note` says why (running elsewhere, open in Vidar, unknown)
     live: bool,
     note: Option<String>,
+    /// set refs (`library/set`) of the Bare home the transcript sits in, so Resume launches on
+    /// that home; absent for the user's own `.claude`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sets: Option<Vec<String>>,
 }
 
 const RECENT_MAX: usize = 15;
@@ -78,27 +82,40 @@ pub async fn list_recent_sessions(cwd: String, profile: Option<String>) -> Vec<R
         .unwrap_or_default()
 }
 
-fn recent_blocking(cwd: &str, profile: Option<&str>) -> Vec<RecentSession> {
-    let Some(claude) = crate::bare::claude_dir::claude_dir_for(profile) else { return Vec::new() };
-    let dir = claude.join("projects").join(project_slug(cwd));
-    let Ok(rd) = fs::read_dir(&dir) else { return Vec::new() };
-    let mut files: Vec<(PathBuf, std::time::SystemTime, u64)> = rd
-        .flatten()
-        .filter_map(|e| {
-            let p = e.path();
-            if p.extension().and_then(|x| x.to_str()) != Some("jsonl") { return None; }
-            let md = e.metadata().ok()?;
-            Some((p, md.modified().ok()?, md.len()))
+type Transcript = (PathBuf, std::time::SystemTime, u64, Option<Vec<String>>);
+
+/// The newest transcripts of `slug` across every config dir of the profile, each with its home's
+/// set refs; one id seen in two homes keeps its newest copy.
+fn transcripts_in(homes: &[crate::bare::claude_dir::ClaudeHome], slug: &str) -> Vec<Transcript> {
+    let mut files: Vec<Transcript> = homes
+        .iter()
+        .flat_map(|h| {
+            let rd = fs::read_dir(h.dir.join("projects").join(slug)).into_iter().flatten().flatten();
+            rd.filter_map(|e| {
+                let p = e.path();
+                if p.extension().and_then(|x| x.to_str()) != Some("jsonl") { return None; }
+                let md = e.metadata().ok()?;
+                Some((p, md.modified().ok()?, md.len(), h.sets.clone()))
+            })
+            .collect::<Vec<_>>()
         })
         .collect();
-    if files.is_empty() { return Vec::new(); }
     files.sort_by(|a, b| b.1.cmp(&a.1));
+    let mut seen = std::collections::HashSet::new();
+    files.retain(|f| seen.insert(f.0.file_name().map(|n| n.to_os_string())));
     files.truncate(RECENT_MAX);
+    files
+}
+
+fn recent_blocking(cwd: &str, profile: Option<&str>) -> Vec<RecentSession> {
+    let homes = crate::bare::claude_dir::listed_for(profile);
+    let files = transcripts_in(&homes, &project_slug(cwd));
+    if files.is_empty() { return Vec::new(); }
     let states = registry_states(profile);
     let now = std::time::SystemTime::now();
     files
         .into_iter()
-        .filter_map(|(p, mtime, len)| {
+        .filter_map(|(p, mtime, len, sets)| {
             let id = p.file_stem()?.to_str()?.to_owned();
             if id.len() != 36 { return None; }
             let (label, tcwd) = first_prompt(&p);
@@ -122,7 +139,37 @@ fn recent_blocking(cwd: &str, profile: Option<&str>) -> Vec<RecentSession> {
                 age_secs: now.duration_since(mtime).map(|d| d.as_secs()).unwrap_or(0),
                 live,
                 note,
+                sets,
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bare::claude_dir::ClaudeHome;
+
+    #[test]
+    fn recent_lists_transcripts_across_every_home_with_their_sets() {
+        let root = std::env::temp_dir().join(format!("vidar-recent-homes-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (legacy, combo) = (root.join("claude-config"), root.join("claude-homes").join("abc123def456"));
+        let slug = "C--r-x";
+        let a = "aaaaaaaa-1111-2222-3333-444444444444";
+        let b = "bbbbbbbb-1111-2222-3333-444444444444";
+        for (dir, id) in [(&legacy, a), (&combo, b)] {
+            let p = dir.join("projects").join(slug);
+            fs::create_dir_all(&p).unwrap();
+            fs::write(p.join(format!("{id}.jsonl")), "{}\n").unwrap();
+        }
+        let sets = Some(vec!["lib/one".to_owned()]);
+        let homes = [ClaudeHome { dir: legacy, sets: Some(Vec::new()) }, ClaudeHome { dir: combo, sets: sets.clone() }];
+        let got = transcripts_in(&homes, slug);
+        let find = |id: &str| got.iter().find(|f| f.0.file_stem().and_then(|s| s.to_str()) == Some(id)).map(|f| f.3.clone());
+        assert_eq!(got.len(), 2);
+        assert_eq!(find(a), Some(Some(Vec::new())));
+        assert_eq!(find(b), Some(sets));
+        let _ = fs::remove_dir_all(&root);
+    }
 }

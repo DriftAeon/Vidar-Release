@@ -13,7 +13,9 @@
 //!   it as `timeout`, and a true `stop()` ends it as `cancelled`.
 //! - Classification uses the exit status plus the result JSON's error fields and the two auth signatures W0
 //!   recorded (Claude `is_error` with a `result` starting `Not logged in`; Codex `error`/`turn.failed` events
-//!   naming `401 Unauthorized`): auth is `login:`, another nonzero exit `spawn:`, no parseable result `output:`.
+//!   naming `401 Unauthorized`), plus a refused login (`AUTH_REFUSED`: an expired or revoked OAuth token, a 401,
+//!   `invalid_grant`, a "Please run /login" variant): auth is `login:`, another nonzero exit `spawn:`, no
+//!   parseable result `output:`.
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -291,19 +293,52 @@ fn code(raw: &Raw) -> String {
     raw.exit.map_or_else(|| "no exit code".to_string(), |c| format!("exit code {c}"))
 }
 
+/// Signatures of a login the service refused beyond "Not logged in": an expired or revoked OAuth token, a 401, a
+/// rotated refresh token, a "/login" prompt (both agents; matched lowercased).
+const AUTH_REFUSED: [&str; 12] = [
+    "oauth token has expired",
+    "oauth token revoked",
+    "token has expired",
+    "token expired",
+    "token revoked",
+    "invalid_grant",
+    "refresh_token_reused",
+    "authentication_error",
+    "api error: 401",
+    "401 unauthorized",
+    "please run /login",
+    "invalid api key",
+];
+
+/// True when `text` names a refused login (`AUTH_REFUSED`).
+pub fn auth_refused(text: &str) -> bool {
+    let low = text.to_lowercase();
+    AUTH_REFUSED.iter().any(|s| low.contains(s))
+}
+
+const CLAUDE_EXPIRED: &str = "login: Claude's login has expired or was revoked; log in on a Bare Claude tab first";
+const CODEX_EXPIRED: &str = "login: Codex's login has expired or was revoked; log in on a Bare Codex tab first";
+
 fn claude_reply(raw: &Raw) -> Result<Reply, String> {
     let out = String::from_utf8_lossy(&raw.stdout);
     let json: Option<Value> = serde_json::from_str::<Value>(out.trim()).ok().filter(Value::is_object);
     let result = json.as_ref().and_then(|j| j.get("result")).and_then(Value::as_str);
     let is_error = json.as_ref().and_then(|j| j.get("is_error")).and_then(Value::as_bool).unwrap_or(false);
+    let stderr = String::from_utf8_lossy(&raw.stderr);
     if raw.exit != Some(0) {
         if is_error && result.is_some_and(|r| r.starts_with("Not logged in")) {
             return Err("login: Claude is not logged in; log in on a Bare Claude tab first".into());
         }
-        let why = result.map(str::to_string).unwrap_or_else(|| String::from_utf8_lossy(&raw.stderr).into_owned());
+        if result.is_some_and(auth_refused) || (result.is_none() && auth_refused(&stderr)) {
+            return Err(CLAUDE_EXPIRED.into());
+        }
+        let why = result.map(str::to_string).unwrap_or_else(|| stderr.into_owned());
         return Err(format!("spawn: claude ended with {}: {}", code(raw), head(&why, 300)));
     }
     let Some(json) = json.as_ref() else { return Err("output: claude printed no JSON result".into()) };
+    if is_error && result.is_some_and(auth_refused) {
+        return Err(CLAUDE_EXPIRED.into());
+    }
     if is_error {
         return Err(format!("output: claude reported an error: {}", head(result.unwrap_or(""), 300)));
     }
@@ -335,7 +370,11 @@ fn codex_reply(raw: &Raw) -> Result<Reply, String> {
         if failures.iter().any(|m| m.contains("401 Unauthorized")) {
             return Err("login: Codex is not logged in; log in on a Bare Codex tab first".into());
         }
-        let why = failures.last().map(|m| m.to_string()).unwrap_or_else(|| String::from_utf8_lossy(&raw.stderr).into_owned());
+        let stderr = String::from_utf8_lossy(&raw.stderr);
+        if failures.iter().any(|m| auth_refused(m)) || (failures.is_empty() && auth_refused(&stderr)) {
+            return Err(CODEX_EXPIRED.into());
+        }
+        let why = failures.last().map(|m| m.to_string()).unwrap_or_else(|| stderr.into_owned());
         return Err(format!("spawn: codex ended with {}: {}", code(raw), head(&why, 300)));
     }
     let text = events

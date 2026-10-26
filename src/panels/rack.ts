@@ -122,7 +122,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   const toolsCache = new Map<string, Promise<McpTool[]>>();
   const initialFocus = getFocusedSession();
   // seeded as refresh() derives them, so the first vidar-focus for the same tab is a no-op
-  let { project, profile, agent, tab } = mcpFocus(initialFocus);
+  let { project, profile, agent, tab, row } = mcpFocus(initialFocus);
   let visibility = "";
   let retryRead = false;
   let disposed = false;
@@ -211,7 +211,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   if (signal?.aborted) dispose();
 
   const rebuild = async (next: string | null, nextProfile: string | null, nextAgent: string | null,
-    nextTab: string | null, mine: number, hidden: Set<string>) => {
+    nextTab: string | null, nextRow: string | null, mine: number, hidden: Set<string>) => {
   if (disposed) return;
   menu?.close();
   if (hidden.has("rack:container")) {
@@ -228,8 +228,8 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   try {
     // a rail drawer (`only`) shows the focused Codex tab's own row, like the rail button that opened it
     rack = nextAgent === "codex" && !opts.lmStudioOnly
-      ? await invoke("read_codex_mcp_servers", { tab: nextTab, profile: nextProfile })
-      : await invoke("read_mcp_servers", { project: next, profile: nextProfile });
+      ? await invoke("read_codex_mcp_servers", { tab: nextTab, profile: nextProfile, row: nextRow })
+      : await invoke("read_mcp_servers", { project: next, profile: nextProfile, tab: nextTab, row: nextRow });
   } catch (e) {
     failed = true;
     // the command itself failing is the one case worth shouting about — an
@@ -504,17 +504,18 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   };
 
   const refresh = (focus: FocusedSession | null) => {
-    const { project: next, profile: nextProfile, agent: nextAgent, tab: nextTab } = mcpFocus(focus);
+    const { project: next, profile: nextProfile, agent: nextAgent, tab: nextTab, row: nextRow } = mcpFocus(focus);
     const hidden = new Set(getPref("modules.hidden") ?? []);
     const nextVisibility = [...hidden].sort().join("\0");
-    if (next === project && nextProfile === profile && nextAgent === agent && nextTab === tab
+    if (next === project && nextProfile === profile && nextAgent === agent && nextTab === tab && nextRow === row
       && nextVisibility === visibility && !retryRead) return;
     project = next;
     profile = nextProfile;
     agent = nextAgent;
     tab = nextTab;
+    row = nextRow;
     visibility = nextVisibility;
-    void rebuild(next, nextProfile, nextAgent, nextTab, ++generation, hidden);
+    void rebuild(next, nextProfile, nextAgent, nextTab, nextRow, ++generation, hidden);
   };
   document.addEventListener("vidar-focus", (e) => {
     const focus = (e as CustomEvent<FocusedSession | null>).detail;
@@ -525,6 +526,6 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
     refresh(focus);
   }, { signal: lifetime.signal });
   visibility = [...new Set(getPref("modules.hidden") ?? [])].sort().join("\0");
-  await rebuild(project, profile, agent, tab, ++generation, new Set(getPref("modules.hidden") ?? []));
+  await rebuild(project, profile, agent, tab, row, ++generation, new Set(getPref("modules.hidden") ?? []));
   return dispose;
 }

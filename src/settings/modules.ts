@@ -49,12 +49,14 @@ function focusedRead(): { key: string; read: () => Promise<McpRack> } {
   const s = getFocusedSession();
   const profile = (s?.agent === "claude" || s?.agent === "codex") && s.profile ? s.profile : null;
   if (s?.agent === "codex" && moduleOn("codex")) {
-    return { key: JSON.stringify(["codex", s.id, profile]),
-      read: () => invoke("read_codex_mcp_servers", { tab: s.id, profile }) };
+    return { key: JSON.stringify(["codex", s.id, profile, s.rowKey ?? null]),
+      read: () => invoke("read_codex_mcp_servers", { tab: s.id, profile, row: s.rowKey ?? null }) };
   }
   const project = s?.agent === "claude" && !isGateway(s.art) && s.cwd ? s.cwd : null;
-  return { key: JSON.stringify(["claude", project, profile]),
-    read: () => invoke("read_mcp_servers", { project, profile }) };
+  // a profiled (Bare) Claude tab reads the combination home its own session runs on
+  const tab = s?.agent === "claude" && profile ? s.id : null, row = tab ? s?.rowKey ?? null : null;
+  return { key: JSON.stringify(["claude", project, profile, tab, row]),
+    read: () => invoke("read_mcp_servers", { project, profile, tab, row }) };
 }
 
 function groups(): Group[] {

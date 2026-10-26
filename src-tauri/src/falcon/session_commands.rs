@@ -17,9 +17,13 @@ use super::reader_control::ReaderControl;
 use super::{read_registry, reusable_lease, Agent, Falcon, Hosted, Op, SpawnParams};
 // `falcon.rs` imports the shared protocol under a different root per build.
 #[cfg(falcon_shell)]
-use crate::protocol::CAPABILITY_CODEX_BARE;
+use crate::protocol::{SetRef, CAPABILITY_CODEX_BARE, CAPABILITY_SETS_ECHO};
 #[cfg(not(falcon_shell))]
-use super::protocol::{CodexBareSpawn, CAPABILITY_CODEX_BARE, CODEX_BARE_SPAWN_KEY};
+use super::protocol::{CodexBareSpawn, SetRef, CAPABILITY_CODEX_BARE, CAPABILITY_SETS_ECHO, CODEX_BARE_SPAWN_KEY};
+#[cfg(falcon_shell)]
+type LaunchSetRef = SetRef;
+#[cfg(not(falcon_shell))]
+type LaunchSetRef = crate::bare::LaunchSetRef;
 
 /// Views this process still holds (`Falcon::held_views`). Non-empty at
 /// frontend boot means a webview reload; `launcher/readopt.ts` moves each onto
@@ -77,6 +81,8 @@ pub async fn falcon_spawn(
     profile: Option<String>,
     agent: Option<String>,
     row_key: Option<String>,
+    sets: Option<Vec<LaunchSetRef>>,
+    vault: Option<String>,
 ) -> Result<Value, String> {
     let falcon = falcon.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -95,6 +101,8 @@ pub async fn falcon_spawn(
             gateway,
             profile,
             row_key,
+            sets,
+            vault,
         )
     })
     .await
@@ -116,13 +124,22 @@ fn falcon_spawn_blocking(
     gateway: Option<String>,
     profile: Option<String>,
     row_key: Option<String>,
+    sets: Option<Vec<LaunchSetRef>>,
+    vault: Option<String>,
 ) -> Result<Value, String> {
     let rules_file = none_if_blank(rules_file);
     let tab_name = none_if_blank(tab_name).map(|n| n.trim().to_string());
     let profile = none_if_blank(profile);
     let gateway = none_if_blank(gateway);
     let row_key = none_if_blank(row_key);
+    let vault = none_if_blank(vault).map(|v| v.trim().to_string());
     row_key_shape(row_key.as_deref(), profile.as_deref())?;
+    vault_shape(vault.as_deref(), profile.as_deref())?;
+    // A named vault is the whole loadout (model R2): the transition pick is never read beside it.
+    let sets = if vault.is_some() { None } else { sets };
+    if sets.is_some() && row_key.is_none() {
+        return Err("A set pick rides only a Bare row key; spawn refused".into());
+    }
     let agent = spawn_agent(agent.as_deref())?;
     // Shape first, so a malformed id never gets as far as preparing a home.
     if let Some(r) = resume.as_deref() {
@@ -130,17 +147,24 @@ fn falcon_spawn_blocking(
             return Err("resume id is not a UUID".into());
         }
     }
+    // A stale or hand-made Codex Bare call is refused before opening the host.
+    #[cfg(not(falcon_shell))]
+    if agent == Agent::Codex && profile.is_some()
+        && !hosted_codex_gate(crate::config::load().config.falcon.as_ref()) {
+        return Err(HOSTED_CODEX_OFF.into());
+    }
+    // Negotiate before any Bare prepare, including an explicit empty pick.
+    let capabilities = if agent == Agent::Codex || sets.is_some() {
+        Some(host_capabilities(&falcon)?)
+    } else {
+        None
+    };
+    sets_capability_check(sets.as_deref(), capabilities.as_deref().unwrap_or_default())?;
     if agent == Agent::Codex {
-        // Hosted Codex Bare rides the same opt-in as hosted Codex (Q1): the webview routes it
-        // here only with the gate on, and a stale or hand-made call is refused before the host.
-        #[cfg(not(falcon_shell))]
-        if profile.is_some() && !hosted_codex_gate(crate::config::load().config.falcon.as_ref()) {
-            return Err(HOSTED_CODEX_OFF.into());
-        }
         // Asked of the host, before any child: a host that runs Codex but not
         // its turns would start a tab that can never take a prompt.
-        let capabilities = host_capabilities(&falcon)?;
-        if let Some(refusal) = agent_refusal(agent, &capabilities) {
+        let capabilities = capabilities.as_deref().unwrap_or_default();
+        if let Some(refusal) = agent_refusal(agent, capabilities) {
             return Err(refusal);
         }
         // Refused here, before a bare home is prepared for a session the host
@@ -163,7 +187,7 @@ fn falcon_spawn_blocking(
         Some(p) if agent == Agent::Codex => {
             crate::bare::admit_rendered(p, Some("codex"), rules_file.as_deref())?;
             let row_key = crate::bare::admit_row_key(row_key.clone(), Some(p), None)?;
-            let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), ..Default::default() };
+            let opts = launch_opts(row_key.as_deref(), sets.as_deref(), vault.as_deref());
             // Serialised with the Raw and in-process prepares (`pty::BARE_PREPARE`); released at the
             // end of this arm, before the host is asked to spawn.
             let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
@@ -171,11 +195,18 @@ fn falcon_spawn_blocking(
         }
         Some(p) => {
             crate::bare::admit_hosted(p, rules_file.as_deref(), gateway.as_deref())?;
-            let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), ..Default::default() };
+            let opts = launch_opts(row_key.as_deref(), sets.as_deref(), vault.as_deref());
             let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
             Some(BareLaunch::Claude(crate::bare::prepare_hosted_for(p, &opts)?))
         }
         None => None,
+    };
+    // D-c: a fresh Claude Bare session starts in its vault's `mode` rune (read after the prepare, which
+    // made a stock vault exist); a resume keeps the mode the tab had. No mode rune keeps the tab's.
+    #[cfg(not(falcon_shell))]
+    let permission_mode = match (agent, vault.as_deref(), resume.as_deref()) {
+        (Agent::Claude, Some(v), None) => vault_mode(v).unwrap_or(permission_mode),
+        _ => permission_mode,
     };
     if let Some(r) = resume.as_deref() {
         // Exclusivity is decided here, at spawn, not at menu-open: two processes on
@@ -228,14 +259,29 @@ fn falcon_spawn_blocking(
         .map(|p| p.to_string_lossy().into_owned());
     #[cfg(falcon_shell)]
     let payload_file: Option<String> = None;
-    // A Claude row's rune-set plugin folders (`bare/set_plugin.rs`), admitted again by the host.
     #[cfg(not(falcon_shell))]
-    let set_plugin_dirs: Vec<String> = hosted_launch
-        .as_ref()
-        .map(BareLaunch::set_plugin_dirs)
-        .unwrap_or_default();
+    let mcp_file = hosted_launch.as_ref().and_then(BareLaunch::mcp_file)
+        .map(|p| p.to_string_lossy().into_owned());
     #[cfg(falcon_shell)]
-    let set_plugin_dirs: Vec<String> = Vec::new();
+    let mcp_file: Option<String> = None;
+    let sets_wire = protocol_sets(sets.as_deref());
+    // A row's set-combination home (`bare/agent_homes.rs`), admitted again by the host: Codex's
+    // CODEX_HOME, Claude's CLAUDE_CONFIG_DIR (fold W2 L2a; set plugins are gone, so none are sent).
+    #[cfg(not(falcon_shell))]
+    let codex_home = hosted_launch.as_ref().and_then(BareLaunch::codex_home)
+        .map(|p| p.to_string_lossy().into_owned());
+    #[cfg(falcon_shell)]
+    let codex_home: Option<String> = None;
+    #[cfg(not(falcon_shell))]
+    let claude_config_dir = hosted_launch.as_ref().and_then(BareLaunch::claude_config_dir)
+        .map(|p| p.to_string_lossy().into_owned());
+    #[cfg(falcon_shell)]
+    let claude_config_dir: Option<String> = None;
+    // The vault's plugin runes by name; Falcon admits each from <root>\plugins (L2b).
+    #[cfg(not(falcon_shell))]
+    let plugin_names = hosted_launch.as_ref().map(BareLaunch::plugin_names).unwrap_or_default();
+    #[cfg(falcon_shell)]
+    let plugin_names: Vec<String> = Vec::new();
     let payload = falcon.control(Op::Spawn(SpawnParams {
         agent: Some(agent),
         cwd,
@@ -251,7 +297,12 @@ fn falcon_spawn_blocking(
         profile: profile.clone(),
         payload_file: payload_file.clone(),
         row_key: row_key.clone(),
-        set_plugin_dirs,
+        set_plugin_dirs: Vec::new(),
+        sets: sets_wire.clone(),
+        mcp_file: mcp_file.clone(),
+        codex_home: codex_home.clone(),
+        claude_config_dir,
+        plugin_names,
     }))?;
     let summary = payload
         .get("session")
@@ -282,11 +333,16 @@ fn falcon_spawn_blocking(
         let ended = if end_unhonoured_spawn(&falcon, &session) { "the session was ended" } else { "ending the session failed" };
         return Err(format!("{stale} ({ended})"));
     }
+    if let Err(stale) = sets_echo_check(sets_wire.as_deref(), summary)
+        .and_then(|_| mcp_echo_check(mcp_file.as_deref(), summary)) {
+        let ended = if end_unhonoured_spawn(&falcon, &session) { "the session was ended" } else { "ending the session failed" };
+        return Err(format!("{stale} ({ended})"));
+    }
     // Codex Bare: what the host ran (`codex_bare` beside `session`) becomes the record's binary
     // and the tab's version/shell warning. A host that ran it without saying what is ended.
     #[cfg(not(falcon_shell))]
     if let Some(BareLaunch::Codex(launch)) = hosted_launch.as_mut() {
-        match codex_bare_reply(&payload) {
+        match codex_bare_reply(&payload).and_then(|ran| codex_home_echo_check(codex_home.as_deref(), &ran).map(|_| ran)) {
             Ok(ran) => {
                 launch.record_host(&ran.executable, ran.version.as_deref(), ran.pwsh.as_deref());
             }
@@ -455,6 +511,17 @@ fn codex_bare_reply(payload: &Value) -> Result<CodexBareSpawn, String> {
     serde_json::from_value(raw.clone()).map_err(|e| format!("Falcon's {CODEX_BARE_SPAWN_KEY} reply is malformed ({e}). {STALE_HOST}"))
 }
 
+/// A Codex Bare spawn that asked for a set-combination home must see it echoed: an older host
+/// ignores `codex_home` and runs the profile's own home, without the sets' MCP servers.
+#[cfg(not(falcon_shell))]
+fn codex_home_echo_check(requested: Option<&str>, ran: &CodexBareSpawn) -> Result<(), String> {
+    match (requested, ran.codex_home.as_deref()) {
+        (None, None) | (Some(_), Some(_)) => Ok(()),
+        (Some(_), None) => Err(format!("Falcon did not run the set combination's Codex home. {STALE_HOST}")),
+        (None, Some(h)) => Err(format!("Falcon ran a Codex home it was not asked for ({h}). {STALE_HOST}")),
+    }
+}
+
 /// A profiled spawn's prepared home: Claude's (Falcon builds the env, the sidecar maps the
 /// profile) or Codex's (config.toml and payload written, the home lock held until dropped).
 #[cfg(not(falcon_shell))]
@@ -472,10 +539,34 @@ impl BareLaunch {
         }
     }
 
-    /// Claude only: Codex Bare carries no plugins.
-    fn set_plugin_dirs(&self) -> Vec<String> {
+    fn mcp_file(&self) -> Option<&std::path::PathBuf> {
         match self {
-            BareLaunch::Claude(l) => l.set_plugin_dirs.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+            BareLaunch::Claude(l) => l.mcp_file.as_ref(),
+            BareLaunch::Codex(_) => None,
+        }
+    }
+
+    /// Codex only: the set combination's home, when the launch runs on one.
+    fn codex_home(&self) -> Option<&std::path::PathBuf> {
+        match self {
+            BareLaunch::Claude(_) => None,
+            BareLaunch::Codex(l) => l.codex_home.as_ref(),
+        }
+    }
+
+    /// Claude only: the launch's config dir (its set combination's, or the profile's own), checked
+    /// by `check_claude_config_dir` in the prepare.
+    fn claude_config_dir(&self) -> Option<&std::path::PathBuf> {
+        match self {
+            BareLaunch::Claude(l) => l.claude_config_dir.as_ref(),
+            BareLaunch::Codex(_) => None,
+        }
+    }
+
+    /// Claude only: the vault's plugin rune names (run 2026-10-25-rune-vault L2b).
+    fn plugin_names(&self) -> Vec<String> {
+        match self {
+            BareLaunch::Claude(l) => l.plugin_names.clone(),
             BareLaunch::Codex(_) => Vec::new(),
         }
     }
@@ -504,6 +595,41 @@ fn row_key_shape(row_key: Option<&str>, profile: Option<&str>) -> Result<(), Str
     Ok(())
 }
 
+/// A Rune Vault loads only into a profiled (Bare) session (model R2); a default spawn carrying one
+/// would run without it.
+fn vault_shape(vault: Option<&str>, profile: Option<&str>) -> Result<(), String> {
+    if vault.is_some() && profile.is_none() {
+        return Err("A Rune Vault rides only a Bare spawn; spawn refused".into());
+    }
+    Ok(())
+}
+
+/// The spawn's launch options: a named vault, else the transition pick (`launch_row::vault_for`).
+#[cfg(not(falcon_shell))]
+fn launch_opts<'a>(row_key: Option<&'a str>, sets: Option<&'a [LaunchSetRef]>, vault: Option<&'a str>) -> crate::bare::LaunchOpts<'a> {
+    crate::bare::LaunchOpts { row_key, custom_sets: if vault.is_some() { None } else { sets }, vault, ..Default::default() }
+}
+
+/// D-c: the `mode` of vault `id`'s first Claude permission rune, if it has one.
+#[cfg(not(falcon_shell))]
+fn vault_mode(id: &str) -> Option<String> {
+    let resolved = crate::bare::vault::store::Store::open(&crate::paths::root()).resolve(id).ok()?;
+    resolved.runes.iter().find_map(|r| rune_mode(&r.body))
+}
+
+/// A permission rune's `mode:` header, unless the rune names another agent.
+#[cfg(not(falcon_shell))]
+fn rune_mode(body: &str) -> Option<String> {
+    use crate::bare::vault::store::header_value;
+    if header_value(body, "kind").as_deref() != Some("permission") {
+        return None;
+    }
+    if header_value(body, "agent").is_some_and(|a| a != "claude") {
+        return None;
+    }
+    header_value(body, "mode").filter(|m| !m.is_empty())
+}
+
 /// The connected host's negotiate-reply capabilities. With no control
 /// connection yet, one `list` opens it (launching the host on demand, as a
 /// spawn would); the pending mark keeps that `list` from idling the
@@ -528,6 +654,36 @@ fn none_if_blank(rules_file: Option<String>) -> Option<String> {
 
 /// Shown verbatim to the user when the host dropped a requested `rules_file`.
 const STALE_HOST: &str = "Falcon host is out of date: run tools/release/falcon-refresh.ps1 (this ends every hosted session)";
+
+fn sets_capability_check(sets: Option<&[LaunchSetRef]>, capabilities: &[String]) -> Result<(), String> {
+    if sets.is_some() && !capabilities.iter().any(|c| c == CAPABILITY_SETS_ECHO) {
+        return Err(format!("a set pick needs a Falcon host with the '{CAPABILITY_SETS_ECHO}' capability. {STALE_HOST}"));
+    }
+    Ok(())
+}
+
+fn protocol_sets(sets: Option<&[LaunchSetRef]>) -> Option<Vec<SetRef>> {
+    sets.map(|pick| pick.iter().map(|r| SetRef { library: r.library.clone(), set: r.set.clone() }).collect())
+}
+
+fn sets_echo_check(requested: Option<&[SetRef]>, summary: &Value) -> Result<(), String> {
+    if let Some(requested) = requested {
+        let expected = serde_json::to_value(requested).map_err(|e| e.to_string())?;
+        if summary.get("sets") != Some(&expected) {
+            return Err(format!("Falcon did not honour the set pick. {STALE_HOST}"));
+        }
+    }
+    Ok(())
+}
+
+fn mcp_echo_check(requested: Option<&str>, summary: &Value) -> Result<(), String> {
+    if let Some(requested) = requested {
+        if summary.get("mcp_file").and_then(Value::as_str) != Some(requested) {
+            return Err(format!("Falcon did not honour the MCP file. {STALE_HOST}"));
+        }
+    }
+    Ok(())
+}
 
 /// The B1 stale-host proof: a spawn that asked for `rules_file` must get it
 /// back in the reply's `SessionSummary.rules_file`.
@@ -707,6 +863,8 @@ fn falcon_adopt_blocking(
         .get("generation")
         .and_then(Value::as_u64)
         .ok_or("hosted session has no generation")?;
+    #[cfg(not(falcon_shell))]
+    adopt_record(&id, &session, summary);
 
     // A view this process already holds for `session` (a webview reload dropped
     // its tab, not this entry) moves here with its lease: a second
@@ -759,6 +917,55 @@ fn falcon_adopt_blocking(
     Ok(view_generation)
 }
 
+/// D-g: a Bare session adopted with no session record gets one, its host-echoed sets made a Custom
+/// vault (`session::adopt`), so the tab names that vault after a relaunch (R4) and its first send
+/// locks it. Best effort: a session the host echoes no sets for keeps no record.
+#[cfg(not(falcon_shell))]
+fn adopt_record(tab: &str, session: &str, summary: &Value) {
+    use crate::bare::vault::session as records;
+    if summary.get("profile").and_then(Value::as_str).is_none() {
+        return;
+    }
+    let root = crate::paths::root();
+    if matches!(records::find(&root, "", Some(session), None), Ok(Some(_))) {
+        return;
+    }
+    let Some(echoed) = summary.get("sets").and_then(Value::as_array) else { return };
+    let Some(sources) = echoed_sources(echoed, rules_library_name().as_deref()) else { return };
+    let agent = match summary_agent(summary) {
+        Some(Agent::Codex) => "codex",
+        _ => "claude",
+    };
+    if let Err(e) = records::adopt(&root, agent, tab, session, &sources) {
+        eprintln!("[falcon] adopt of {session}: no vault record ({e})");
+    }
+}
+
+/// The host-echoed set refs as vault sources; an absent library is `rulesLibrary`'s folder name
+/// (as `launch_row::vault_for` reads it). `None` when one cannot be named.
+#[cfg(not(falcon_shell))]
+fn echoed_sources(echoed: &[Value], default_lib: Option<&str>) -> Option<Vec<crate::bare::vault::SetSource>> {
+    echoed.iter().map(|s| {
+        let set = s.get("set").and_then(Value::as_str)?;
+        let (library, set) = match (s.get("library").and_then(Value::as_str), set.split_once('/')) {
+            (Some(lib), _) => (lib, set),
+            (None, Some((lib, set))) => (lib, set),
+            (None, None) => (default_lib?, set),
+        };
+        Some(crate::bare::vault::SetSource { library: library.to_string(), set: set.to_string() })
+    }).collect()
+}
+
+/// vidar.json's `rulesLibrary` folder name, if set.
+#[cfg(not(falcon_shell))]
+fn rules_library_name() -> Option<String> {
+    let text = std::fs::read_to_string(crate::paths::config_path()).ok()?;
+    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let rel = v.get("rulesLibrary")?.as_str()?.trim();
+    let name = std::path::Path::new(rel).file_name()?.to_string_lossy().into_owned();
+    (!name.is_empty()).then_some(name)
+}
+
 /// Async wrapper: `hosted_request` blocks on the shared control pipe for up
 /// to `COMMAND_REQUEST_TIMEOUT`, which must never run on the Tauri main
 /// thread (precedent: `falcon_spawn`, above).
@@ -773,6 +980,15 @@ pub async fn falcon_send(
         serde_json::from_str(&line).map_err(|error| format!("agent line is not JSON: {error}"))?;
     let falcon = falcon.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // R3: a user turn locks the session's vault first; a lock refusal (the vault moved off the
+        // hash this session loaded) refuses the send, so the composer keeps its text (D-d).
+        #[cfg(not(falcon_shell))]
+        if parsed.get("type").and_then(Value::as_str) == Some("user") {
+            let session = falcon.hosted.lock().map_err(|_| "falcon client poisoned")?.get(&id).map(|e| e.session.clone());
+            if let Some(session) = session {
+                crate::agent::lock_first_send(&id, Some(&session), &format!("{id}\0{session}"))?;
+            }
+        }
         falcon
             .hosted_request(&id, gen, |entry| to_operation(&parsed, entry))
             .map(|_| ())
@@ -929,6 +1145,87 @@ mod tests {
     }
 
     #[test]
+    fn picked_sets_need_echo_capability_before_prepare() {
+        let empty: Vec<LaunchSetRef> = Vec::new();
+        let old: Vec<String> = Vec::new();
+        let modern = vec![CAPABILITY_SETS_ECHO.to_string()];
+        assert!(sets_capability_check(None, &old).is_ok(), "legacy spawn needs no new capability");
+        let refusal = sets_capability_check(Some(&empty), &old).unwrap_err();
+        assert!(refusal.contains("'sets-echo' capability") && refusal.contains("falcon-refresh.ps1"), "{refusal}");
+        assert!(sets_capability_check(Some(&empty), &modern).is_ok());
+    }
+
+    #[test]
+    fn picked_sets_keep_explicit_empty_and_echo_exactly() {
+        let empty: Vec<LaunchSetRef> = Vec::new();
+        assert_eq!(protocol_sets(Some(&empty)), Some(Vec::new()));
+        assert_eq!(protocol_sets(None), None);
+        let echoed = serde_json::json!({ "sets": [] });
+        assert!(sets_echo_check(protocol_sets(Some(&empty)).as_deref(), &echoed).is_ok());
+        assert!(sets_echo_check(protocol_sets(Some(&empty)).as_deref(), &serde_json::json!({})).is_err());
+        let pick = vec![LaunchSetRef { library: Some("kit".into()), set: "sample-set".into() }];
+        let wire = protocol_sets(Some(&pick)).unwrap();
+        assert_eq!(serde_json::to_value(&wire).unwrap(), serde_json::json!([{ "library": "kit", "set": "sample-set" }]));
+        assert!(sets_echo_check(Some(&wire), &serde_json::json!({ "sets": [{ "library": "kit", "set": "other" }] })).is_err());
+        assert!(sets_echo_check(None, &serde_json::json!({})).is_ok());
+    }
+
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn picked_sets_reach_both_hosted_launch_opts() {
+        let pick = vec![LaunchSetRef { library: None, set: "sample-set".into() }];
+        let opts = launch_opts(Some("claude-rendered-bare"), Some(&pick), None);
+        assert_eq!(opts.custom_sets.unwrap(), pick.as_slice());
+        assert_eq!(opts.vault, None);
+        assert_eq!(launch_opts(Some("codex-rendered-bare"), Some(&[]), None).custom_sets, Some(&[][..]));
+    }
+
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn a_named_vault_wins_over_the_transition_pick() {
+        let pick = vec![LaunchSetRef { library: None, set: "sample-set".into() }];
+        let opts = launch_opts(None, Some(&pick), Some("team-kit"));
+        assert_eq!(opts.vault, Some("team-kit"));
+        assert_eq!(opts.custom_sets, None, "a vault id skips the Custom transition");
+    }
+
+    #[test]
+    fn a_vault_rides_only_a_bare_spawn() {
+        assert!(vault_shape(Some("stock-claude"), None).is_err());
+        assert!(vault_shape(Some("stock-claude"), Some("bare")).is_ok());
+        assert!(vault_shape(None, None).is_ok());
+    }
+
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn mode_comes_from_a_claude_permission_rune_only() {
+        assert_eq!(rune_mode("---\nname: mode-auto\nkind: permission\nagent: claude\nmode: auto\n---\n").as_deref(), Some("auto"));
+        assert_eq!(rune_mode("---\nkind: permission\nmode: plan\n---\n").as_deref(), Some("plan"));
+        assert_eq!(rune_mode("---\nkind: permission\nagent: codex\nmode: plan\n---\n"), None, "another agent's mode");
+        assert_eq!(rune_mode("---\nkind: permission\nallow:\n  - Read\n---\n"), None, "no mode");
+        assert_eq!(rune_mode("---\nkind: rule\nmode: plan\n---\n"), None, "not a permission rune");
+    }
+
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn adopted_sets_name_their_library() {
+        let echoed = vec![serde_json::json!({ "set": "base" }), serde_json::json!({ "library": "kit", "set": "x" }), serde_json::json!({ "set": "team/y" })];
+        let got = echoed_sources(&echoed, Some("tracked")).unwrap();
+        let pairs: Vec<(&str, &str)> = got.iter().map(|s| (s.library.as_str(), s.set.as_str())).collect();
+        assert_eq!(pairs, vec![("tracked", "base"), ("kit", "x"), ("team", "y")]);
+        assert!(echoed_sources(&echoed[..1], None).is_none(), "no rulesLibrary, no vault");
+    }
+
+    #[test]
+    fn mcp_file_echo_must_match_exactly() {
+        let requested = r"C:\home\layer\mcp-0123456789ab.json";
+        assert!(mcp_echo_check(Some(requested), &serde_json::json!({})).is_err());
+        assert!(mcp_echo_check(Some(requested), &serde_json::json!({ "mcp_file": "other" })).is_err());
+        assert!(mcp_echo_check(Some(requested), &serde_json::json!({ "mcp_file": requested })).is_ok());
+        assert!(mcp_echo_check(None, &serde_json::json!({})).is_ok());
+    }
+
+    #[test]
     fn spawn_reply_carries_bare_warnings_only_when_there_are_some() {
         let with = spawn_reply(7, &["no guard hooks".to_string(), "git identity".to_string()]);
         assert_eq!(with, serde_json::json!({ "view_generation": 7, "bare_warnings": ["no guard hooks", "git identity"] }));
@@ -975,7 +1272,9 @@ mod tests {
             profile: None,
             payload_file: None,
             row_key: None,
-            set_plugin_dirs: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            sets: None,
+            mcp_file: None,
         });
         let wire = serde_json::to_value(&op).unwrap();
         assert_eq!(wire["agent"], "codex", "{wire}");
@@ -1037,6 +1336,29 @@ mod tests {
         assert_eq!((bare.version, bare.pwsh), (None, None));
         assert!(codex_bare_reply(&serde_json::json!({ "session": {} })).unwrap_err().contains("did not report the Codex"));
         assert!(codex_bare_reply(&serde_json::json!({ "codex_bare": { "source": "bundle" } })).unwrap_err().contains("malformed"));
+    }
+
+    /// A spawn carrying a combination home sends it on the wire and needs it echoed: an older
+    /// host's reply (no `codex_home`) is stale, and so is an echo nobody asked for.
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn a_spawn_carrying_a_codex_home_needs_its_echo() {
+        let home = r"C:\h\codex-homes\0123456789ab";
+        let mut params: SpawnParams = serde_json::from_value(serde_json::json!({ "cwd": "C:\\w", "permission_mode": "default" })).unwrap();
+        assert!(serde_json::to_value(&params).unwrap().get("codex_home").is_none(), "None stays off the wire");
+        params.codex_home = Some(home.into());
+        assert_eq!(serde_json::to_value(&params).unwrap()["codex_home"], home);
+        let ran = |echo: Option<&str>| {
+            let mut v = serde_json::json!({ "codex_bare": { "executable": "x", "source": "bundle" } });
+            if let Some(e) = echo {
+                v["codex_bare"]["codex_home"] = e.into();
+            }
+            codex_bare_reply(&v).unwrap()
+        };
+        assert!(codex_home_echo_check(Some(home), &ran(Some(home))).is_ok());
+        assert!(codex_home_echo_check(None, &ran(None)).is_ok());
+        assert!(codex_home_echo_check(Some(home), &ran(None)).unwrap_err().contains("did not run the set combination"));
+        assert!(codex_home_echo_check(None, &ran(Some(home))).unwrap_err().contains("not asked for"));
     }
 
     /// `falcon_list` keeps the host's payload and adds `host_warning` and `capabilities`

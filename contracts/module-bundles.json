@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "bundles": {
+    "unreal": {
+      "mcp": [{ "name": "proxy", "http": { "url": "http://127.0.0.1:8399/mcp" }, "reads": [] }],
+      "skills": [], "agents": [], "guards": []
+    },
+    "changes": {
+      "mcp": [{ "name": "p4", "stdio": { "command": "p4mcp-server", "args": ["--readonly", "--toolsets", "files", "changelists", "shelves", "workspaces", "jobs"], "envFrom": ["P4PORT", "P4USER", "P4CLIENT"] }, "reads": "*", "optional": true }],
+      "skills": [], "agents": [], "guards": []
+    },
+    "jira": {
+      "mcp": [{ "name": "atlassian", "http": { "url": "https://mcp.atlassian.com/v2/mcp" }, "reads": [] }],
+      "skills": [], "agents": [], "guards": []
+    },
+    "notion": {
+      "mcp": [{ "name": "notion", "http": { "url": "https://mcp.notion.com/mcp" }, "reads": [] }],
+      "skills": [], "agents": [], "guards": []
+    },
+    "slack": {
+      "mcp": [{ "name": "slack", "http": { "url": "https://mcp.slack.com/mcp" }, "agents": ["claude"], "reads": [] }],
+      "skills": [], "agents": [], "guards": []
+    }
+  }
+}

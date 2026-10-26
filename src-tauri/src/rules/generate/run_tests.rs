@@ -183,7 +183,7 @@ fn the_classification_table() {
         ("claude", raw(Some(0), "garbage", "")),
         ("claude", raw(Some(0), "[1,2]", "")),
         ("claude", raw(Some(0), "{\"is_error\":false}", "")),
-        ("claude", raw(Some(0), &CLAUDE_AUTH.replace("Not logged in", "Oops"), "")),
+        ("claude", raw(Some(0), &CLAUDE_AUTH.replace("Not logged in · Please run /login", "Oops"), "")),
         ("codex", raw(Some(0), "garbage", "")),
         ("codex", raw(Some(0), "{\"type\":\"turn.completed\",\"usage\":{}}\n", "")),
     ] {
@@ -195,6 +195,46 @@ fn the_classification_table() {
     assert!(classify("claude", &over).unwrap_err().starts_with("output: stdout went over 4 MB"));
     let late = Raw { timed_out: true, ..raw(Some(1), CLAUDE_OK, "") };
     assert!(classify("claude", &late).unwrap_err().starts_with("timeout"));
+}
+
+/// A Claude `-p` JSON result with `is_error` and `text` as its `result`.
+fn claude_error(text: &str) -> String {
+    serde_json::json!({ "type": "result", "is_error": true, "result": text, "total_cost_usd": 0.0 }).to_string()
+}
+
+#[test]
+fn a_refused_login_is_login_for_both_agents() {
+    // Claude Code's wordings for an expired, revoked or rotated login (inferred from its known messages: the
+    // 2026-10-25 run's text was not kept).
+    for text in [
+        "Failed to authenticate. API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"OAuth token has expired. Please obtain a new token or refresh your existing token.\"}}",
+        "OAuth token revoked · Please run /login",
+        "Invalid API key · Please run /login",
+        "OAuth error: invalid_grant: refresh token not found or invalid",
+    ] {
+        for exit in [Some(1), Some(0)] {
+            let e = classify("claude", &raw(exit, &claude_error(text), "")).unwrap_err();
+            assert_eq!(e, "login: Claude's login has expired or was revoked; log in on a Bare Claude tab first", "{text}");
+        }
+    }
+    // No JSON at all: stderr decides.
+    let e = classify("claude", &raw(Some(1), "", "OAuth token has expired")).unwrap_err();
+    assert!(e.starts_with("login: Claude's login has expired"), "{e}");
+    // "Not logged in" keeps its own text.
+    assert_eq!(classify("claude", &raw(Some(1), CLAUDE_AUTH, "")).unwrap_err(), "login: Claude is not logged in; log in on a Bare Claude tab first");
+    // Codex: a refused refresh in a failure event, or on stderr when no event says why.
+    let refused = "{\"type\":\"turn.failed\",\"error\":{\"message\":\"Your access token could not be refreshed: refresh_token_reused. Please log out and sign in again.\"}}\n";
+    let e = classify("codex", &raw(Some(1), refused, "")).unwrap_err();
+    assert_eq!(e, "login: Codex's login has expired or was revoked; log in on a Bare Codex tab first");
+    assert!(classify("codex", &raw(Some(1), "", "error: invalid_grant")).unwrap_err().starts_with("login: Codex's login"));
+    // Not an auth failure: still spawn.
+    for (agent, r) in [
+        ("claude", raw(Some(1), &claude_error("Credit balance is too low"), "")),
+        ("claude", raw(Some(1), &claude_error("API Error: 500 Internal server error"), "")),
+        ("codex", raw(Some(1), "{\"type\":\"turn.failed\",\"error\":{\"message\":\"model overloaded\"}}\n", "")),
+    ] {
+        assert!(classify(agent, &r).unwrap_err().starts_with("spawn: "), "{agent}");
+    }
 }
 
 #[test]

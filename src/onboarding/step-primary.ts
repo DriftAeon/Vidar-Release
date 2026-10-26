@@ -62,6 +62,7 @@ function setupCard(id: PrimaryAgent): HTMLElement {
 registerStep({
   id: "primary",
   title: "Primary Agent",
+  hideTitle: true, // user, 2026-10-24: the label crossed the seam and added nothing
   mount(body: HTMLElement, ctx: StepCtx) {
     const root = el("div", "ob-primary");
     body.appendChild(root);

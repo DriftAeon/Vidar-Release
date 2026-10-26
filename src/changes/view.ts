@@ -1,20 +1,27 @@
 // Changes tab DOM (changes.css): the branch head with rename and the Sync split, the held error or
 // commit strip, the Staged and Changes groups with the Revert All confirm in place, the empty
 // states, and the commit bar. State and IPC live in panels/changes.ts; this file only draws and
-// reports clicks. The list and head are redrawn only when their content changes, so a 5 s poll
+// reports clicks. The Git / Perforce switch ends every head, and in p4 mode the pane is the read-only
+// changelist list. The list and head are redrawn only when their content changes, so a 5 s poll
 // never steals focus from a row button or the rename field.
 import { iconImg } from "../icon-img";
 import { lucide, type LucideName } from "../icons";
 import { clearEmptyState, fillEmptyState, goButton } from "../panels/empty-state";
-import type { ChangesStatus } from "../ipc";
+import type { ChangesStatus, P4Status } from "../ipc";
 import { fileType, focusAfter, headFocusClass, truncatePath, type FocusMark, type HeadMark, type Groups, type Row } from "./model";
+import { buildBackendSwitch, drawP4Group, p4Icon, type Backend } from "./p4-view";
 import type { SyncMode } from "./actions";
 
+export type { Backend };
 export type RepoStatus = Extract<ChangesStatus, { repo: true }>;
 export type Busy = null | "commit" | "commit-sync" | "sync" | "act" | "rename";
 
 export interface ViewState {
-  mode: "loading" | "no-folder" | "no-repo" | "repo";
+  /** "p4" = the Perforce side has answered; `p4` holds the answer (connected or not). */
+  mode: "loading" | "no-folder" | "no-repo" | "repo" | "p4";
+  /** Which side the switch shows; every mode, the loading ones included, draws the switch. */
+  backend: Backend;
+  p4: P4Status | null;
   cwd: string;
   status: RepoStatus | null;
   groups: Groups;
@@ -41,6 +48,7 @@ export interface Handlers {
   renameCancel(): void;
   dismiss(): void;
   gitPrompt(): void;
+  backend(b: Backend): void;
 }
 
 export interface View {
@@ -100,6 +108,12 @@ export function buildView(h: Handlers): View {
   btns.append(commitBtn, commitSyncBtn);
   bar.append(message, btns);
   root.append(head, strip, list, empty, bar);
+
+  // Git / Perforce switch, last in the head (p4-view.ts)
+  const backendSwitch = buildBackendSwitch((b) => h.backend(b));
+  const backendBox = backendSwitch.box;
+  const backendInput = backendSwitch.input;
+  const paintBackend = backendSwitch.paint;
 
   // where focus returns after the next unlocked render: a list click's mark, or a bar element
   let mark: FocusMark | HTMLElement | null = null;
@@ -163,8 +177,26 @@ export function buildView(h: Handlers): View {
     (m.firstElementChild as HTMLElement | null)?.focus();
   }
 
+  /** The head of every mode: the mode's own part, then the backend switch last. */
   function drawHead(s: ViewState) {
     head.replaceChildren();
+    if (s.mode === "repo" && s.status) {
+      drawGitHead(s);
+    } else if (s.mode === "p4" && s.p4?.kind === "p4") {
+      const branch = el("span", "cx-branch");
+      branch.append(iconImg("folder"));
+      const name = el("span", "cx-branch-name");
+      name.textContent = s.p4.client;
+      name.title = `${s.p4.user}@${s.p4.port}`;
+      branch.append(name);
+      head.append(branch, el("span", "cx-grow"));
+    } else {
+      head.append(el("span", "cx-grow"));
+    }
+    head.append(backendBox);
+  }
+
+  function drawGitHead(s: ViewState) {
     const st = s.status!;
     const locked = s.busy !== null;
     const branch = el("span", "cx-branch");
@@ -296,6 +328,10 @@ export function buildView(h: Handlers): View {
     return sec;
   }
 
+  function drawNoP4(reason: string) {
+    fillEmptyState(empty, { icon: p4Icon("icn es-icon", ""), title: "Perforce Not Connected", note: reason });
+  }
+
   function drawConfirm(s: ViewState): HTMLElement {
     const n = s.revertable.length;
     const card = el("div", "cx-confirm");
@@ -386,6 +422,7 @@ export function buildView(h: Handlers): View {
   function applyLock(s: ViewState) {
     const locked = s.busy !== null;
     for (const b of rowBtns) b.disabled = locked;
+    backendInput.disabled = locked; // the switch cannot flip mid git action
     if (revertBtn) revertBtn.disabled = locked || s.revertable.length === 0;
     if (confirmBtns) {
       confirmBtns.no.disabled = locked;
@@ -444,18 +481,26 @@ export function buildView(h: Handlers): View {
     if (!s.renaming) renameDraft = null;
     // head: redrawn when its inputs move; under an open rename field only the lock redraws it, and the
     // typed name survives that (renameDraft)
-    const hk = !repo ? ""
-      : s.renaming ? JSON.stringify([st!.root, s.busy, "renaming"])
-      : JSON.stringify([st!.root, st!.branch, st!.detached, st!.upstream, st!.ahead, st!.behind, s.busy]);
-    if (hk !== headKey) { headKey = hk; closeMenu(); if (repo) drawHead(s); else head.replaceChildren(); }
-    head.hidden = !repo;
+    const p4 = s.mode === "p4" ? s.p4 : null;
+    const p4ok = p4 !== null && p4.kind === "p4" ? p4 : null;
+    const hk = repo ? (
+      s.renaming ? JSON.stringify(["git", st!.root, s.busy, "renaming"])
+      : JSON.stringify(["git", st!.root, st!.branch, st!.detached, st!.upstream, st!.ahead, st!.behind, s.busy])
+    ) : p4ok ? JSON.stringify(["p4", p4ok.client, p4ok.user, p4ok.port])
+      : JSON.stringify(["none", s.mode]);
+    const switchHadFocus = document.activeElement === backendInput;
+    if (hk !== headKey) { headKey = hk; closeMenu(); drawHead(s); }
+    paintBackend(s.backend);
+    if (switchHadFocus && document.activeElement !== backendInput) backendInput.focus();
+    head.hidden = false;
     drawStrip(s);
     const total = s.groups.staged.length + s.groups.changes.length;
+    const p4n = p4ok ? p4ok.changes.length : 0;
     // the key (root, files, confirm, revertable; not busy) is built only when one of those references moved
-    const refs = repo ? [st!.root, st!.files, s.confirm, s.revertable] : [];
+    const refs = repo ? [st!.root, st!.files, s.confirm, s.revertable] : p4ok ? ["p4", p4ok.client, p4ok.changes] : [];
     if (refs.length !== listRefs.length || refs.some((v, i) => v !== listRefs[i])) {
       listRefs = refs;
-      const lk = repo ? JSON.stringify(refs) : "";
+      const lk = refs.length ? JSON.stringify(refs) : "";
       if (lk !== listKey) {
         listKey = lk;
         list.replaceChildren();
@@ -466,15 +511,20 @@ export function buildView(h: Handlers): View {
         if (repo) {
           if (s.groups.staged.length) list.append(drawGroup(s, "staged"));
           if (s.groups.changes.length) list.append(drawGroup(s, "changes"));
+        } else if (p4ok) {
+          for (const c of p4ok.changes) list.append(drawP4Group(c, PATH_BUDGET));
         }
       }
     }
     applyLock(s);
-    list.hidden = !repo || total === 0;
+    list.hidden = !(repo && total > 0) && !(p4ok && p4n > 0);
+    const noP4 = p4 !== null && p4.kind === "no-p4" ? p4 : null;
     if (s.mode === "no-folder") drawEmpty("folder", "No Folder", null);
     else if (s.mode === "no-repo") drawNoRepo(s.cwd, s.note);
+    else if (noP4) drawNoP4(noP4.reason);
     else if (repo && total === 0) drawEmpty(null, "No Changes", null);
-    empty.hidden = !(s.mode === "no-folder" || s.mode === "no-repo" || (repo && total === 0));
+    else if (p4ok && p4n === 0) drawEmpty(null, "No Opened Files", null);
+    empty.hidden = !(s.mode === "no-folder" || s.mode === "no-repo" || noP4 !== null || (repo && total === 0) || (p4ok !== null && p4n === 0));
     bar.hidden = !repo;
     syncBar();
     const committing = s.busy === "commit" || s.busy === "commit-sync";

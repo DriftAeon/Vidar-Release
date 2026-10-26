@@ -47,15 +47,20 @@ pub async fn read_codex_loadout(
     app: AppHandle,
     tab: Option<String>,
     profile: Option<String>,
+    row: Option<String>,
     cwd: String,
 ) -> Result<CodexLoadout, String> {
-    tauri::async_runtime::spawn_blocking(move || read_codex_loadout_now(&app, tab, profile, cwd))
+    tauri::async_runtime::spawn_blocking(move || read_codex_loadout_now(&app, tab, profile, row, cwd))
         .await
         .map_err(|e| e.to_string())
 }
 
-fn read_codex_loadout_now(app: &AppHandle, tab: Option<String>, profile: Option<String>, cwd: String) -> CodexLoadout {
-    let home = match codex_config::home_for(app, tab.as_deref(), profile.as_deref()) {
+fn read_codex_loadout_now(app: &AppHandle, tab: Option<String>, profile: Option<String>, row: Option<String>, cwd: String) -> CodexLoadout {
+    read_codex_loadout_home(codex_config::home_for_row(app, tab.as_deref(), profile.as_deref(), row.as_deref()), &cwd)
+}
+
+fn read_codex_loadout_home(home: Home, cwd: &str) -> CodexLoadout {
+    let home = match home {
         Home::Live(path) | Home::Profile(path) | Home::Default(Some(path)) => path,
         Home::NotRunning => {
             return CodexLoadout {
@@ -75,7 +80,7 @@ fn read_codex_loadout_now(app: &AppHandle, tab: Option<String>, profile: Option<
         Ok(None) => (None, Some("No Codex config.toml".to_string())),
         Err(error) => (None, Some(error)),
     };
-    let mut loadout = build(Some(home), config, Path::new(&cwd));
+    let mut loadout = build(Some(home), config, Path::new(cwd));
     if let Some(note) = note {
         loadout.notes.push(note);
     }
@@ -249,6 +254,25 @@ mod tests {
                     .into_owned()
             })
             .collect()
+    }
+
+    #[test]
+    fn selected_row_home_supplies_loadout_config() {
+        let fixture = Fixture::new();
+        let legacy = fixture.file("legacy/config.toml", b"model = 'legacy-model'\n");
+        let picked = fixture.file("picked/config.toml", b"model = 'picked-model'\n");
+        let home = codex_config::resolve_row(
+            None, Some("bare"), Some("codex-rendered-bare"),
+            |_| Ok(legacy.parent().unwrap().to_path_buf()),
+            |_, row| {
+                assert_eq!(row, "codex-rendered-bare");
+                Ok(picked.parent().unwrap().to_path_buf())
+            },
+            None,
+        );
+        let loadout = read_codex_loadout_home(home, fixture.0.to_str().unwrap());
+        assert_eq!(loadout.model.as_deref(), Some("picked-model"));
+        assert_eq!(loadout.home.as_deref(), picked.parent().unwrap().to_str());
     }
 
     #[test]

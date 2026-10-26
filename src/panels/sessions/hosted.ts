@@ -7,6 +7,7 @@ import { attachRenderedBody, detachRenderedBody, retireRenderedBody } from "./re
 import { hostedCloseDecision } from "./hosted-close";
 import { closeInBackground } from "./close-flow";
 import { reportCloseFailure } from "./close-notice";
+import { showSessionsToast } from "./zoom";
 import type { RenderedBody } from "../rendered";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
@@ -218,4 +219,12 @@ export async function jettisonSession(id: string): Promise<{ ok: boolean; reason
   } finally {
     jettisonBusy.delete(id);
   }
+}
+
+/** The tab menu's Jettison row: the reopened menu's "Failed" row went with the next keystroke and
+ *  the early returns showed nothing at all (2026-10-25), so every failure also gets a toast. */
+export async function jettisonFromMenu(id: string): Promise<{ ok: boolean; reason?: string }> {
+  const result = await jettisonSession(id);
+  if (!result.ok) showSessionsToast(`Jettison Failed — ${result.reason ?? "unknown error"}`, 4000);
+  return result;
 }

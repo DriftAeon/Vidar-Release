@@ -110,12 +110,22 @@ import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
 import { stepBudget, resetBudget, budgetStatus, armedFromEnv } from "./drive-budget.mjs";
-import { ledgerFile, armsLedger, liveLedger, writeLedger, clearLedger, snapshotRecord, spawnedHosted, leftoverLocal, leftoverSessions } from "./drive-ledger.mjs";
+import { ledgerFile, armsLedger, liveLedger, writeLedger, snapshotRecord } from "./drive-ledger.mjs";
+import { parseArgs } from "./args.mjs";
+import { verbs } from "./verbs/index.mjs";
+import { explorerRefusal, logVerb } from "./drive-input.mjs";
 
 // The Falcon shell runs on its own debug port (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=
 // --remote-debugging-port=9223), so VIDAR_CDP_PORT lets this same script drive it too.
-const CDP = `http://127.0.0.1:${process.env.VIDAR_CDP_PORT ?? 9222}`;
+const PORT = String(process.env.VIDAR_CDP_PORT ?? 9222);
+const CDP = `http://127.0.0.1:${PORT}`;
+// Budget and ledger files are keyed by port off the two live-window ports (9222, 9223 keep today's
+// names), so a sandbox on its own port never shares or resets the live window's budget.
+const PORT_KEY = PORT === "9222" || PORT === "9223" ? "" : `-${PORT}`;
 const [cmd, a1, a2] = process.argv.slice(2);
+const { flags } = parseArgs(process.argv.slice(2));
+const refused = explorerRefusal(cmd, process.env, PORT); if (refused) { console.error(refused); process.exit(2); } // allowlist, send cap
+if (cmd === "finding") process.exit((await import("./verbs/finding.mjs")).findingMain(process.argv.slice(3), process.env)); // file-only: no CDP, no budget
 if (!cmd) { console.error("usage: eval|invoke|click|text|shot|open|send|answer|card|state|shortcut|paste|console|close-spawned|check-clean|budget …"); process.exit(2); }
 if (cmd === "shortcut" && a1 === undefined) {
   console.error("usage: node tools\\drive\\vidar-drive.mjs shortcut <id>");
@@ -179,9 +189,28 @@ if (cmd === "answer" && a2 === undefined) {
 // in docs, usage text or messages.
 // `answer` approves tool-permission cards, so it is gated exactly like `card`: otherwise an agent
 // could approve its own permission request.
+// Dev exception (tools/sandbox/dev-cards.mjs, export-ignored): the card sandbox's own Vidar may be
+// answered without the grant. Module absent (release copy) → today's behaviour exactly; any other
+// import error refuses. A grant also needs the root attestation right before the answer/card eval.
+let devCards = null;
+let grantRoot = null;
 if ((cmd === "card" || cmd === "answer") && process.env.VIDAR_DRIVE_CARDS !== "1") {
-  console.error("card answers are the user's; use the Vidar card");
-  process.exit(2);
+  let reason = "";
+  try {
+    devCards = await import(new URL("../sandbox/dev-cards.mjs", import.meta.url).href);
+    const pre = devCards.preConnect({ port: PORT });
+    if (pre.ok) grantRoot = pre.appRoot;
+    else { reason = pre.reason; devCards = null; }
+  } catch (e) {
+    devCards = null;
+    // module-not-found for dev-cards.mjs itself only; a missing import inside it names another file
+    const missing = /Cannot find module '([^']+)'/.exec(String(e?.message))?.[1];
+    if (!(e?.code === "ERR_MODULE_NOT_FOUND" && missing && /[\\/]dev-cards\.mjs$/.test(missing))) reason = `dev-cards import failed: ${e?.message ?? e}`;
+  }
+  if (!devCards) {
+    console.error(`card answers are the user's; use the Vidar card${reason ? `\n(sandbox exception refused: ${reason})` : ""}`);
+    process.exit(2);
+  }
 }
 if (cmd === "card" && (a1 === undefined || (a2 !== "approve" && a2 !== "deny"))) {
   console.error("usage: node tools\\drive\\vidar-drive.mjs card <id> approve|deny ['<json {choice?, comment?}>']");
@@ -198,8 +227,7 @@ if (cmd === "card" && cardOpts !== undefined) {
   }
 }
 
-const BUDGET_FILE = path.join(os.tmpdir(), "vidar-drive-budget.json");
-
+const BUDGET_FILE = path.join(os.tmpdir(), `vidar-drive-budget${PORT_KEY}.json`);
 // `budget` alone is read-only: what binds now, never a reset and never a step.
 if (cmd === "budget" && a1 === undefined) {
   const s = budgetStatus(BUDGET_FILE);
@@ -234,11 +262,9 @@ if (step?.envIgnored || envUnset) {
   console.error(`${why}: the armed budget binds, ${step.remaining} of ${step.armed} calls left; lock expires ${lockExpiry()}; see \`budget\``);
 }
 
-const CONNECT_MS = 5000; // /json/list and the websocket open
-const EVAL_MS = 15000;   // one Runtime.evaluate / screenshot
+const CONNECT_MS = 5000, EVAL_MS = 15000; // /json/list + websocket open; one Runtime.evaluate / screenshot
 const timing = !!process.env.VIDAR_DRIVE_TIME;
-const phases = [];
-let last = performance.now();
+const phases = []; let last = performance.now();
 const lap = (name) => { const now = performance.now(); phases.push(`${name} ${Math.round(now - last)} ms`); last = now; };
 const withTimeout = (p, ms, what) => Promise.race([
   p,
@@ -249,8 +275,8 @@ let targets;
 try { targets = await (await fetch(`${CDP}/json/list`, { signal: AbortSignal.timeout(CONNECT_MS) })).json(); }
 catch (e) {
   console.error(e?.name === "TimeoutError"
-    ? `DevTools /json/list on 9222 timed out after ${CONNECT_MS} ms (port open, listener stalled)`
-    : "no DevTools on 9222 — launch Vidar with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222");
+    ? `DevTools /json/list on ${PORT} timed out after ${CONNECT_MS} ms (port open, listener stalled)`
+    : `no DevTools on ${PORT} — launch Vidar with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=${PORT}`);
   process.exit(1);
 }
 lap("list");
@@ -262,8 +288,7 @@ const ws = new WebSocket(page.webSocketDebuggerUrl);
 try { await withTimeout(new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; }), CONNECT_MS, "DevTools websocket open"); }
 catch (e) { console.error(String(e.message ?? e)); process.exit(1); }
 lap("ws");
-let id = 0;
-const pending = new Map();
+let id = 0; const pending = new Map();
 const events = []; // CDP events (no id); only the `console` verb enables a domain that sends any
 ws.onmessage = (ev) => {
   const m = JSON.parse(ev.data);
@@ -272,12 +297,23 @@ ws.onmessage = (ev) => {
 };
 const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); });
 
-async function evalJs(expression) {
-  const r = await withTimeout(send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }), EVAL_MS, "Runtime.evaluate");
+async function evalJs(expression, ms = EVAL_MS) {
+  const r = await withTimeout(send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }), ms, "Runtime.evaluate");
   if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
   return r.result.value;
 }
 const q = (s) => JSON.stringify(s);
+
+// Sandbox exception only (devCards set): the page must report the sandbox's own install root, with
+// its own longer timeout (detect_dependencies runs version probes). Any miss is today's refusal.
+async function attestSandbox() {
+  if (!devCards) return;
+  const r = await devCards.attest(grantRoot, (js, ms) => evalJs(js, ms));
+  if (!r.ok) {
+    console.error(`card answers are the user's; use the Vidar card\n(sandbox exception refused: ${r.reason})`);
+    process.exit(2);
+  }
+}
 
 // Run ledger (drive-ledger.mjs): the first verb of a smoke snapshots the hosted tabs' Falcon
 // session ids (tab ids change on reload); close-spawned
@@ -303,7 +339,8 @@ const PROBE_JS = `(async () => {
   } catch { falcon = null; }
   return { state, page: performance.timeOrigin, falcon };
 })()`;
-const LEDGER = ledgerFile();
+const LEDGER = PORT_KEY ? path.join(path.dirname(ledgerFile()), `ledger${PORT_KEY}.json`) : ledgerFile();
+const LEDGER_REL = LEDGER;
 const ledgerVerb = cmd === "close-spawned" || cmd === "check-clean";
 let ledger = liveLedger(LEDGER, budgetStatus(BUDGET_FILE));
 if (!ledger && armsLedger(cmd)) {
@@ -321,151 +358,20 @@ if (!ledger && ledgerVerb) {
 }
 const ledgerAt = () => new Date(ledger.at).toISOString();
 
-// close-spawned: the tab X path (`.session-close` → closeSession → closeHostedTab → falcon_kill),
-// not a direct falcon_kill invoke, which needs the tab's view generation and silently no-ops on a
-// wrong one. Waits up to 8 s for the tabs to leave state.
-// Unresolved hosted tabs (no Falcon session, not seen at snapshot) are reported, never closed.
-async function closeSpawned() {
-  const { spawned: ids, unresolved } = spawnedHosted(ledger, await evalJs(STATE_JS));
-  if (ids.length === 0) return { since: ledgerAt(), closed: [], missing: [], remaining: [], unresolved };
-  return { since: ledgerAt(), unresolved, ...await evalJs(`(async (ids) => {
-    const closed = [], missing = [];
-    for (const id of ids) {
-      const x = document.querySelector('.session-btn[data-id="' + CSS.escape(id) + '"] .session-close');
-      if (x) { x.click(); closed.push(id); } else missing.push(id);
-    }
-    const live = async () => new Set((await window.__vidarDrive.state()).tabs.map((t) => t.id));
-    for (const t0 = Date.now(); Date.now() - t0 < 8000; await new Promise((r) => setTimeout(r, 250))) {
-      const now = await live();
-      if (ids.every((id) => !now.has(id))) break;
-    }
-    const now = await live();
-    return { closed, missing, remaining: ids.filter((id) => now.has(id)) };
-  })(${JSON.stringify(ids)})`) };
-}
-
-// `console`: errors and warnings the page logged since it loaded. The page keeps its own console
-// store for the document's lifetime whether or not DevTools is attached, and Runtime.enable /
-// Log.enable replay it to each new session — so a fresh connection sees load-time messages
-// (WebGL shader errors are missed if capture begins after the reveal). Sources:
-// Runtime.consoleAPICalled (console.error/warn/assert), Runtime.exceptionThrown (uncaught), and
-// Log.entryAdded (browser-side: WebGL, network, security, deprecation). A Log entry with the same
-// level and text as a Runtime one is the same message reported twice and is merged.
-const CONSOLE_SETTLE_MS = 300; // replay arrives with the enable calls; this catches stragglers
-async function consoleSinceLoad() {
-  await withTimeout(send("Runtime.enable"), EVAL_MS, "Runtime.enable");
-  await withTimeout(send("Log.enable"), EVAL_MS, "Log.enable");
-  await new Promise((r) => setTimeout(r, CONSOLE_SETTLE_MS));
-  const argText = (a) => a.value !== undefined ? (typeof a.value === "string" ? a.value : JSON.stringify(a.value))
-    : a.unserializableValue ?? a.description ?? a.type;
-  const at = (url, line) => (url ? `${url}:${(line ?? 0) + 1}` : "");
-  const messages = [];
-  for (const e of events) {
-    const p = e.params ?? {};
-    if (e.method === "Runtime.consoleAPICalled" && ["error", "warning", "assert"].includes(p.type)) {
-      const f = p.stackTrace?.callFrames?.[0];
-      messages.push({ level: p.type === "warning" ? "warning" : "error", source: `console.${p.type}`,
-        text: (p.args ?? []).map(argText).join(" "), at: at(f?.url, f?.lineNumber) });
-    } else if (e.method === "Runtime.exceptionThrown") {
-      const d = p.exceptionDetails ?? {};
-      messages.push({ level: "error", source: "exception", text: d.exception?.description ?? d.text ?? "", at: at(d.url, d.lineNumber) });
-    } else if (e.method === "Log.entryAdded" && ["error", "warning"].includes(p.entry?.level)) {
-      const x = p.entry;
-      const twin = messages.find((m) => !m.merged && m.level === x.level && !m.source.startsWith("log.") && m.text === x.text);
-      if (twin) { twin.merged = true; continue; }
-      messages.push({ level: x.level, source: `log.${x.source}`, text: x.text, at: at(x.url, x.lineNumber) });
-    }
-  }
-  for (const m of messages) delete m.merged;
-  return {
-    errors: messages.filter((m) => m.level === "error").length,
-    warnings: messages.filter((m) => m.level === "warning").length,
-    since: "page load (replayed console store)",
-    messages,
-  };
-}
-
 try {
   let out;
-  switch (cmd) {
-    case "eval":
-      out = await evalJs(a1);
-      break;
-    case "invoke":
-      out = await evalJs(`window.__TAURI_INTERNALS__.invoke(${q(a1)}, ${a2 ?? "{}"})`);
-      break;
-    case "click":
-      out = await evalJs(`(() => { const el = document.querySelector(${q(a1)}); if (!el) throw new Error("no match: " + ${q(a1)}); el.click(); return el.tagName + (el.className ? "." + String(el.className).split(" ").join(".") : ""); })()`);
-      break;
-    case "text":
-      out = await evalJs(`[...document.querySelectorAll(${q(a1)})].map((e) => e.textContent.trim())`);
-      break;
-    case "shot": {
-      const r = await withTimeout(send("Page.captureScreenshot", { format: "png" }), EVAL_MS, "Page.captureScreenshot");
-      fs.mkdirSync(path.dirname(path.resolve(a1)), { recursive: true });
-      fs.writeFileSync(a1, Buffer.from(r.data, "base64"));
-      out = `wrote ${a1}`;
-      break;
-    }
-    case "open":
-      out = await evalJs(`(() => { if (!window.__vidarDrive) throw new Error("no __vidarDrive hook — old build?"); return window.__vidarDrive.openTab(${JSON.stringify(openArg)}); })()`);
-      break;
-    case "send":
-      out = await evalJs(`(() => { if (!window.__vidarDrive) throw new Error("no __vidarDrive hook — old build?"); return window.__vidarDrive.send(${q(a1)}, ${q(a2)}); })()`);
-      break;
-    case "answer":
-      out = await evalJs(`(() => { if (!window.__vidarDrive) throw new Error("no __vidarDrive hook — old build?"); return window.__vidarDrive.answer(${q(a1)}, ${a2}); })()`);
-      break;
-    case "state":
-      out = await evalJs(`(() => { if (!window.__vidarDrive) throw new Error("no __vidarDrive hook — old build?"); return window.__vidarDrive.state(); })()`);
-      break;
-    case "shortcut":
-      out = await evalJs(`(() => { if (!window.__vidarDrive?.shortcut) throw new Error("no __vidarDrive.shortcut — old build?"); return window.__vidarDrive.shortcut(${q(a1)}); })()`);
-      break;
-    case "paste":
-      out = await evalJs(`(() => { if (!window.__vidarDrive?.paste) throw new Error("no __vidarDrive.paste — old build?"); return window.__vidarDrive.paste(${q(a1)}, ${JSON.stringify(pasteArg)}); })()`);
-      break;
-    case "card":
-      out = await evalJs(`(() => { if (!window.__vidarDrive?.card) throw new Error("no __vidarDrive.card — old build?"); return window.__vidarDrive.card(${q(a1)}, ${q(a2)}, ${cardOpts ?? "{}"}); })()`);
-      break;
-    case "console":
-      out = await consoleSinceLoad();
-      break;
-    case "close-spawned":
-      out = await closeSpawned();
-      break;
-    case "check-clean": {
-      const probe = await evalJs(PROBE_JS);
-      lap(cmd);
-      const { spawned: left, unresolved } = spawnedHosted(ledger, probe.state);
-      const loc = leftoverLocal(ledger, probe);
-      const ses = leftoverSessions(ledger, probe);
-      const lines = [];
-      if (left.length > 0) lines.push(`not clean: ${left.length} hosted tab(s) opened since ${ledgerAt()} remain: ${left.join(", ")}; run close-spawned`);
-      if (unresolved.length > 0) lines.push(`not clean: ${unresolved.length} hosted tab(s) with no Falcon session, not seen at ${ledgerAt()}: ${unresolved.join(", ")}; close them by hand`);
-      for (const id of loc.spawned) lines.push(`not clean: local tab ${id} opened since ${ledgerAt()}; close tab ${id} with its X`);
-      for (const id of loc.unresolved) lines.push(`not clean: local tab ${id} cannot be told from the snapshot's: page reloaded since the snapshot; close or keep these, then rerun check-clean after deleting runtime/bridge/driver/ledger.json`);
-      for (const s of ses.spawned) lines.push(s.kind === "shell"
-        ? `not clean: Falcon session ${s.session} opened since ${ledgerAt()} is held by the Falcon shell; end it with Close Session in the Falcon shell`
-        : `not clean: Falcon session ${s.session} opened since ${ledgerAt()} is parked; close its row in the launcher's Falcon row`);
-      for (const u of ses.unresolved) lines.push(`not clean: ${u}; rerun check-clean with Falcon up, or delete runtime/bridge/driver/ledger.json to end the run by hand`);
-      if (lines.length > 0) {
-        for (const l of lines) console.error(l);
-        process.exit(4);
-      }
-      clearLedger(LEDGER);
-      out = `clean: no tab or Falcon session opened since ${ledgerAt()} remains; ledger cleared`;
-      break;
-    }
-    default:
-      throw new Error(`unknown command ${cmd}`);
-  }
+  const handler = verbs[cmd];
+  if (!handler) throw new Error(`unknown command ${cmd}`);
+  out = await handler({ a1, a2, flags, openArg, pasteArg, cardOpts, evalJs, send, withTimeout, EVAL_MS, q, events, PORT,
+    attestSandbox, ledger, ledgerAt, STATE_JS, PROBE_JS, lap, LEDGER, LEDGER_REL });
   lap(cmd);
   if (timing) console.error(phases.join(" · "));
-  console.log(typeof out === "string" ? out : JSON.stringify(out, null, 2));
+  logVerb(process.env, cmd, PORT, [a1, a2], out, 0);
+  console.log(typeof out === "string" ? out : JSON.stringify(out, null, process.env.VIDAR_DRIVE_EXPLORER === "1" ? 0 : 2));
   process.exit(0);
 } catch (e) {
   lap(cmd);
   console.error(String(e.message ?? e) + (timing || /timed out/.test(String(e.message)) ? `  [${phases.join(" · ")}]` : ""));
-  process.exit(1);
+  logVerb(process.env, cmd, PORT, [a1, a2], undefined, e.exitCode ?? 1);
+  process.exit(e.exitCode ?? 1);
 }

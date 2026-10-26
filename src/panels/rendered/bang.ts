@@ -43,6 +43,8 @@ export interface BangDeps {
   toolStart: (id: string, name: string, input: unknown, truncated: number | undefined, parent: string | null) => void;
   toolDone: (id: string, content: string, isError: boolean, structured: unknown, truncated: number | undefined, parent: string | null) => void;
   noticeBlock: (text: string, level: "info" | "warn" | "error", quiet?: boolean) => void;
+  /** Opens a finished pill (and fills its lazy output); the user's own `!` line shows its result. */
+  openPill: (id: string) => void;
 }
 
 export interface Bang {
@@ -64,7 +66,7 @@ export interface Bang {
 }
 
 export function createBang(S: Pick<RenderedState, "pillCwd">, deps: BangDeps): Bang {
-  const { enabled, hostOk, sealGroup, toolStart, toolDone, noticeBlock } = deps;
+  const { enabled, hostOk, sealGroup, toolStart, toolDone, noticeBlock, openPill } = deps;
   let held: BangRun[] = [];
   let running = false;
   let n = 0;
@@ -94,11 +96,13 @@ export function createBang(S: Pick<RenderedState, "pillCwd">, deps: BangDeps): B
       const extra = res.timedOut ? "[timed out]" : bad ? `[exit code ${res.code}]` : "";
       const stderr = extra ? (res.stderr ? `${res.stderr}\n${extra}` : extra) : res.stderr;
       toolDone(id, output({ stdout: res.stdout, stderr }), bad, undefined, undefined, null);
+      openPill(id);
       held.push({ command, stdout: res.stdout, stderr });
       noticeBlock("Output goes with your next message.", "info");
     }, (error) => {
       if (mark !== gen) return;
       toolDone(id, String(error instanceof Error ? error.message : error), true, undefined, undefined, null);
+      openPill(id);
     }).finally(() => { running = false; });
   }
 

@@ -1,0 +1,482 @@
+{
+  "claude-kit": {
+    "rowKey": "claude-kit",
+    "libraries": [
+      {
+        "library": "kit",
+        "source": null,
+        "scope": "global",
+        "sourceGone": false,
+        "bricks": [],
+        "sets": [
+          {
+            "set": "kit",
+            "editable": true,
+            "skills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "agents": [
+              "<HOME>/.claude/agents/e2e-hound.md"
+            ],
+            "guards": [],
+            "codexSkills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "modules": {
+              "jira": {
+                "off": []
+              },
+              "openai-docs": {
+                "off": []
+              }
+            },
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      }
+    ]
+  },
+  "claude-bare": {
+    "rowKey": "claude-bare",
+    "libraries": [
+      {
+        "library": "claude-user",
+        "source": "<HOME>/.claude/CLAUDE.md",
+        "scope": "global",
+        "sourceGone": false,
+        "importedOn": "<DATE>",
+        "bricks": [
+          {
+            "id": "keep-answers-short",
+            "section": [
+              "Style"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/claude-user/rules/keep-answers-short.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Style",
+            "body": "Keep answers short.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:3"
+          },
+          {
+            "id": "name-the-file",
+            "section": [
+              "Style"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/claude-user/rules/name-the-file.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Style",
+            "body": "Name the file beside the claim.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:4"
+          },
+          {
+            "id": "never-destructive",
+            "section": [
+              "Safety"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/claude-user/rules/never-destructive.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Safety",
+            "body": "Never run destructive commands without asking.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:8"
+          }
+        ],
+        "sets": [
+          {
+            "set": "row-claude-bare",
+            "editable": true,
+            "skills": [],
+            "agents": [],
+            "guards": [],
+            "codexSkills": [],
+            "modules": {},
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      },
+      {
+        "library": "<MEMORY_LIB>",
+        "source": "<HOME>/.claude/projects/<WORK_SLUG>/memory",
+        "scope": "project",
+        "sourceGone": false,
+        "importedOn": "<DATE>",
+        "bricks": [
+          {
+            "id": "reply-in-three-lines",
+            "section": [
+              "Short replies"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/<MEMORY_LIB>/rules/reply-in-three-lines.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Short replies",
+            "body": "Reply in three lines or fewer.",
+            "origin": "<DATE> ~\\.claude\\projects\\<WORK_SLUG>\\memory:3"
+          }
+        ],
+        "sets": [
+          {
+            "set": "row-claude-bare",
+            "editable": true,
+            "skills": [],
+            "agents": [],
+            "guards": [],
+            "codexSkills": [],
+            "modules": {},
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      },
+      {
+        "library": "kit",
+        "source": null,
+        "scope": "global",
+        "sourceGone": false,
+        "bricks": [],
+        "sets": [
+          {
+            "set": "kit",
+            "editable": true,
+            "skills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "agents": [
+              "<HOME>/.claude/agents/e2e-hound.md"
+            ],
+            "guards": [],
+            "codexSkills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "modules": {
+              "jira": {
+                "off": []
+              },
+              "openai-docs": {
+                "off": []
+              }
+            },
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      }
+    ]
+  },
+  "claude-rendered-bare": {
+    "rowKey": "claude-rendered-bare",
+    "libraries": [
+      {
+        "library": "kit",
+        "source": null,
+        "scope": "global",
+        "sourceGone": false,
+        "bricks": [],
+        "sets": [
+          {
+            "set": "kit",
+            "editable": true,
+            "skills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "agents": [
+              "<HOME>/.claude/agents/e2e-hound.md"
+            ],
+            "guards": [],
+            "codexSkills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "modules": {
+              "jira": {
+                "off": []
+              },
+              "openai-docs": {
+                "off": []
+              }
+            },
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      },
+      {
+        "library": "gen-claude-rendered-bare-5e1d0a7c",
+        "source": null,
+        "scope": "global",
+        "sourceGone": false,
+        "bricks": [
+          {
+            "id": "short-answers",
+            "section": [
+              "Style"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/rules/short-answers.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Keep answers short",
+            "body": "Keep answers short and name the file beside the claim.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:3"
+          },
+          {
+            "id": "braces-draft",
+            "section": [
+              "Style"
+            ],
+            "studs": 3,
+            "on": false,
+            "state": "off",
+            "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/facts/braces-draft.md",
+            "kind": "fact",
+            "activate": "always",
+            "description": "Template note",
+            "body": "Fill {{name}} before use.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:4"
+          },
+          {
+            "id": "ask-before-destroying",
+            "section": [
+              "Safety"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/rules/ask-before-destroying.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Ask before destructive commands",
+            "body": "Ask before running a destructive command.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:8"
+          }
+        ],
+        "generated": {
+          "agent": "claude",
+          "model": "haiku",
+          "effort": "low",
+          "date": "<DATE>",
+          "inputs": [
+            "~\\.claude\\CLAUDE.md"
+          ],
+          "warnings": [],
+          "encodedChars": null
+        },
+        "sets": [
+          {
+            "set": "row-claude-rendered-bare",
+            "editable": true,
+            "skills": [],
+            "agents": [],
+            "guards": [],
+            "codexSkills": [],
+            "modules": {},
+            "warnings": []
+          },
+          {
+            "set": "fork-short",
+            "editable": true,
+            "skills": [],
+            "agents": [],
+            "guards": [],
+            "codexSkills": [],
+            "modules": {},
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      }
+    ]
+  },
+  "codex-bare": {
+    "rowKey": "codex-bare",
+    "libraries": [
+      {
+        "library": "codex-user",
+        "source": "<HOME>/.codex/AGENTS.md",
+        "scope": "global",
+        "sourceGone": false,
+        "importedOn": "<DATE>",
+        "bricks": [
+          {
+            "id": "keep-diffs-small",
+            "section": [
+              "Codex"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/codex-user/rules/keep-diffs-small.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Codex",
+            "body": "Keep diffs small.",
+            "origin": "<DATE> ~\\.codex\\AGENTS.md:3"
+          }
+        ],
+        "sets": [
+          {
+            "set": "row-codex-bare",
+            "editable": true,
+            "skills": [],
+            "agents": [],
+            "guards": [],
+            "codexSkills": [],
+            "modules": {},
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      },
+      {
+        "library": "gen-claude-rendered-bare-5e1d0a7c",
+        "source": null,
+        "scope": "global",
+        "sourceGone": false,
+        "bricks": [
+          {
+            "id": "short-answers",
+            "section": [
+              "Style"
+            ],
+            "studs": 3,
+            "on": true,
+            "state": "on",
+            "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/rules/short-answers.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Keep answers short",
+            "body": "Keep answers short and name the file beside the claim.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:3"
+          },
+          {
+            "id": "braces-draft",
+            "section": [
+              "Style"
+            ],
+            "studs": 3,
+            "on": false,
+            "state": "off",
+            "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/facts/braces-draft.md",
+            "kind": "fact",
+            "activate": "always",
+            "description": "Template note",
+            "body": "Fill {{name}} before use.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:4"
+          },
+          {
+            "id": "ask-before-destroying",
+            "section": [
+              "Safety"
+            ],
+            "studs": 3,
+            "on": false,
+            "state": "off",
+            "path": "<APP>/runtime/runes/gen-claude-rendered-bare-5e1d0a7c/rules/ask-before-destroying.md",
+            "kind": "rule",
+            "activate": "always",
+            "description": "Ask before destructive commands",
+            "body": "Ask before running a destructive command.",
+            "origin": "<DATE> ~\\.claude\\CLAUDE.md:8"
+          }
+        ],
+        "generated": {
+          "agent": "claude",
+          "model": "haiku",
+          "effort": "low",
+          "date": "<DATE>",
+          "inputs": [
+            "~\\.claude\\CLAUDE.md"
+          ],
+          "warnings": [],
+          "encodedChars": null
+        },
+        "sets": [
+          {
+            "set": "fork-short",
+            "editable": true,
+            "skills": [],
+            "agents": [],
+            "guards": [],
+            "codexSkills": [],
+            "modules": {},
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      }
+    ]
+  },
+  "codex-rendered-bare": {
+    "rowKey": "codex-rendered-bare",
+    "libraries": [
+      {
+        "library": "kit",
+        "source": null,
+        "scope": "global",
+        "sourceGone": false,
+        "bricks": [],
+        "sets": [
+          {
+            "set": "kit",
+            "editable": true,
+            "skills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "agents": [
+              "<HOME>/.claude/agents/e2e-hound.md"
+            ],
+            "guards": [],
+            "codexSkills": [
+              "<HOME>/.claude/skills/e2e-review"
+            ],
+            "modules": {
+              "jira": {
+                "off": []
+              },
+              "openai-docs": {
+                "off": []
+              }
+            },
+            "warnings": []
+          }
+        ],
+        "overrideOff": [],
+        "overrideDrift": false,
+        "overrideShadow": []
+      }
+    ]
+  }
+}

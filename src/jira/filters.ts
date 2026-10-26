@@ -230,8 +230,11 @@ export function buildFilterBar(h: BarHandlers): FilterBar {
       btn.disabled = failed || loading;
       if (loading) btn.setAttribute("aria-busy", "true"); else btn.removeAttribute("aria-busy");
       btn.title = failed ? LIST_FAILED : kind === "status" && s.scope === "mine" && !s.blankJql ? STATUS_NARROWS : "";
-      n.textContent = counts[kind];
-      n.hidden = !counts[kind];
+      // a count after the label read badly (user, 2026-10-24): the accent edge marks a set pick;
+      // only Assignee, a single choice, names its value
+      const shown = kind === "assignee" ? counts[kind] : "";
+      n.textContent = shown;
+      n.hidden = !shown;
       btn.classList.toggle("set", !!counts[kind]);
     }
     if (input.value !== f.text) input.value = f.text;

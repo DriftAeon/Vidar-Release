@@ -41,6 +41,11 @@ function spawnResponder(topic, { noReply = false } = {}) {
   return { child, ready };
 }
 
+// Each measured span includes spawning a fresh node child, which a loaded machine stretches by seconds, so a
+// tight millisecond window measures the load. The asserts that matter are "did not wait out the 300s default";
+// 30s is far below that and far above any load stall.
+const CEILING_MS = 30_000;
+
 function runRequest(topic, payload, { timeoutMs } = {}) {
   const args = [CLIENT, "request", topic, "--json", JSON.stringify(payload)];
   if (timeoutMs !== undefined) args.push("--timeout", String(timeoutMs));
@@ -60,7 +65,7 @@ test("bus-client loopback (request/respond round trip and a no-responder timeout
     return;
   }
 
-  await t.test("a request reaches a responder and the echo round-trips under 200ms", async () => {
+  await t.test("a request reaches a responder and the echo round-trips without waiting on the timeout", async () => {
     const topic = `bus-client-test.echo.${process.pid}.${Date.now()}`;
     const { child, ready } = spawnResponder(topic);
     try {
@@ -72,7 +77,7 @@ test("bus-client loopback (request/respond round trip and a no-responder timeout
       assert.equal(result.code, 0, result.stderr);
       const reply = JSON.parse(result.stdout);
       assert.deepEqual(reply, { ok: true, echo: payload });
-      assert.ok(elapsed < 200, `round trip took ${elapsed}ms`);
+      assert.ok(elapsed < CEILING_MS, `round trip took ${elapsed}ms`);
     } finally {
       child.kill();
     }
@@ -84,7 +89,7 @@ test("bus-client loopback (request/respond round trip and a no-responder timeout
     const result = await runRequest(topic, {}, { timeoutMs: 300_000 });
     const elapsed = Date.now() - started;
     assert.equal(result.code, 3, result.stderr);
-    assert.ok(elapsed < 500, `should exit well under the 300s timeout, took ${elapsed}ms`);
+    assert.ok(elapsed < CEILING_MS, `should exit well under the 300s timeout, took ${elapsed}ms`);
   });
 
   await t.test("a subscriber that never replies still times out with exit 2", async () => {
@@ -96,7 +101,10 @@ test("bus-client loopback (request/respond round trip and a no-responder timeout
       const result = await runRequest(topic, {}, { timeoutMs: 300 });
       const elapsed = Date.now() - started;
       assert.equal(result.code, 2, result.stderr);
-      assert.ok(elapsed < 500, `timeout took ${elapsed}ms`);
+      // The timer cannot fire early (allow 50ms of clock rounding), so this proves the exit came from the
+      // 300ms timeout and not from a dropped pipe. The ceiling only has to prove it was not the 300s default.
+      assert.ok(elapsed >= 250, `exited before the 300ms timeout, after ${elapsed}ms`);
+      assert.ok(elapsed < CEILING_MS, `timeout took ${elapsed}ms`);
     } finally {
       child.kill();
     }

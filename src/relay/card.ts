@@ -1,4 +1,5 @@
-// Relay card: one pending item in the stack (relay/stack.ts). Head (kind chip, title, unread dot; a
+// Relay card: one pending item in the stack (relay/stack.ts). Head (kind chip, title, unread dot; an ask or
+// approval card wears the amber bar instead: mark, title, time, no chip or dot; a
 // display or ask card adds icon-only Open Large right after the title, a display card also its file
 // actions top right with its HH:MM on the file line, the others keep HH:MM in the head), then the body: a display item paints its own thumbnail through its own renderer and
 // carries its own action strip, so its verdict binds to the bytes on this card; an ask carries its
@@ -75,11 +76,14 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
   // the chip leads, flush with the thumb's left edge; the unread dot rides the right end (2026-10-11)
   const isDisplay = item.view.type === "display";
   // a display or ask card shows icon-only Open Large right after the title (2026-10-11); a spacer then
-  // pushes the rest right: a display card's file actions (its time is on the file line), an ask card's time
-  const openHost = isDisplay || item.view.type === "question" ? span("relay-card-actions relay-card-open") : null;
+  // pushes the rest right: a display card's file actions (its time is on the file line), an ask card's time.
+  // A single-question ask fits its card, so only a multi-question ask gets it (user, 2026-10-24).
+  const roomy = item.view.type === "question" && item.view.record.questions.length > 1;
+  const openHost = isDisplay || roomy ? span("relay-card-actions relay-card-open") : null;
   const cluster = isDisplay ? div("relay-card-actions") : null;
   // an ask card's head is the amber title bar (2026-10-22): mark, Question, For <tab>, Open Large, time; no chip, no dot
   const isAsk = item.view.type === "question";
+  const isApproval = item.view.type === "card";
   const forTab = span("relay-card-for");
   const askMark = labelledMark("awaiting", "Question");
   const sep = span("relay-card-sep");
@@ -87,6 +91,10 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
     el.classList.add("relay-ask-card");
     title.textContent = "Question";
     head.append(askMark, title, sep, forTab);
+  } else if (isApproval) {
+    // an approval card wears the ask shell (user pick, 2026-10-24): amber bar, mark, title, time; no chip, no dot
+    el.classList.add("relay-ask-card");
+    head.append(labelledMark("awaiting", "Approval"), title);
   } else {
     head.append(span("relay-chip", KIND_CHIP[item.kind]), title);
   }
@@ -94,7 +102,7 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
   head.append(span("relay-card-gap"));
   if (!isDisplay) head.append(time);
   if (cluster) head.append(cluster);
-  if (!isAsk) head.append(dot);
+  if (!isAsk && !isApproval) head.append(dot);
   el.append(head);
 
   const openBtn = document.createElement("button");

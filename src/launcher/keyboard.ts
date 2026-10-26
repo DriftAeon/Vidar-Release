@@ -27,6 +27,21 @@ let openLauncher!: () => void;
 export let kbNav = false;
 let kbPointer: { x: number; y: number } | null = null;
 
+/** mousemove on the root menu and on every flyout column (columns.ts): the second move at a new
+ *  spot ends keyboard mode. On the root alone, a pointer that went straight to a column after a
+ *  keyboard walk found every hover there dead until it crossed the root menu. */
+export function kbPointerMove(e: MouseEvent): void {
+  if (!kbNav) return;
+  if (kbPointer && (e.clientX !== kbPointer.x || e.clientY !== kbPointer.y)) endKbNav();
+  else kbPointer = { x: e.clientX, y: e.clientY };
+}
+
+/** Back to pointer mode; the launcher's close calls it so keyboard mode never outlives an opening. */
+export function endKbNav(): void {
+  kbNav = false;
+  kbPointer = null;
+}
+
 export function openLauncherByKeyboard() {
   if (onboardingOpen()) return; // onboarding gate: no new tab chord while the overlay is up
   // mid-edit in "Add new…": the chord must not yank focus out of the form
@@ -67,15 +82,7 @@ export function colKeydown(e: KeyboardEvent) {
 
 export function initLauncherKeyboard(deps: LauncherKeyboardDeps): void {
   ({ launcherMenu, launcherSub, launcherCols, col, openLauncher } = deps);
-  launcherMenu.addEventListener("mousemove", (e) => {
-    if (!kbNav) return;
-    if (kbPointer && (e.clientX !== kbPointer.x || e.clientY !== kbPointer.y)) {
-      kbNav = false;
-      kbPointer = null;
-    } else {
-      kbPointer = { x: e.clientX, y: e.clientY };
-    }
-  });
+  launcherMenu.addEventListener("mousemove", kbPointerMove);
 
   launcherMenu.addEventListener("keydown", (e) => {
     const row = e.target as HTMLElement;

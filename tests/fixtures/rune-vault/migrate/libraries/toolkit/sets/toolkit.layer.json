@@ -1,0 +1,60 @@
+{
+  "skills": [
+    "~\\.claude\\skills\\alpha-review",
+    "~\\.claude\\skills\\beta-notes",
+    "~\\.claude\\skills\\gamma"
+  ],
+  "agents": [
+    "~\\.claude\\agents\\scout.md",
+    "~\\.claude\\agents\\Builder-O.md"
+  ],
+  "guards": [
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit",
+      "run": [
+        "~\\.claude\\hooks\\fail-closed.mjs",
+        "~\\.claude\\hooks\\guard-one.mjs"
+      ]
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "run": [
+        "~\\.claude\\hooks\\fail-closed.mjs",
+        "~\\.claude\\hooks\\guard-two.mjs"
+      ]
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Agent|Task",
+      "run": [
+        "~\\.claude\\hooks\\fail-closed.mjs",
+        "~\\.claude\\hooks\\guard-three.mjs"
+      ]
+    }
+  ],
+  "codexSkills": [
+    "~\\.codex\\memories\\skills\\delta-review"
+  ],
+  "codexGuards": [
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash|apply_patch",
+      "run": [
+        "~\\.claude\\hooks\\fail-closed.mjs",
+        "~\\.claude\\hooks\\guard-one.mjs",
+        "~\\.claude\\hooks\\guard-two.mjs"
+      ],
+      "open": [
+        "~\\.claude\\hooks\\guard-four.mjs"
+      ]
+    }
+  ],
+  "modules": {
+    "unreal": {},
+    "jira": {},
+    "notion": {},
+    "slack": {}
+  }
+}

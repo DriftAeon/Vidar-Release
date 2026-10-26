@@ -33,15 +33,6 @@ cli_auth_credentials_store = "file"
 # The hosted tables themselves are not here: Vidar appends them per spawn (src-tauri/src/bare/codex_mcp.rs).
 mcp_oauth_credentials_store = "file"
 
-[mcp_servers.vidar_drive]
-# Vidar's control tools (list tabs, prompt or spawn, wait, show, ask). The one MCP server a bare tab may
-# carry: home.rs pins these four keys exactly. env_vars passes the per-spawn control identity through the
-# scrubbed env: VIDAR_CTL_TOKEN in-process, FALCON_SESSION + VIDAR_CTL_SECRET when Falcon hosts the tab.
-command = "node"
-args = ["{{root}}\\tools\\mcp\\vidar-drive\\server.mjs"]
-env_vars = ["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_CTL_SECRET"]
-tool_timeout_sec = 3700
-
 [skills]
 # No skills block at all: repo `.agents/skills` at the cwd still load under the two keys above.
 # Vidar appends one [projects.'<launch folder, lowercased>'] table with trust_level = "trusted"

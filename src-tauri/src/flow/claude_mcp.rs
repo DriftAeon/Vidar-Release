@@ -1,8 +1,9 @@
 //! A Flow Claude stage's extras on the Bare home (run 2026-10-19-codex-primary, W3e2): the Bare
-//! profile's static payload and the user's own URL-only MCP servers, as sidecar argv.
+//! profile's static payload, the user's own URL-only MCP servers and (fold W2 L2a) Flow's
+//! drive-only MCP file, as sidecar argv.
 //!
 //! Argv shape, appended after the sidecar's fixed args (gateway-model nodes get none of it):
-//!   `--flow-payload bare --root <abs Vidar root> [--mcp-servers <json>]`
+//!   `--flow-payload bare --root <abs Vidar root> [--mcp-servers <json>] --mcp-file <file> --home <bare home>`
 //! `--flow-payload` makes the sidecar read the profile's `payload` file and send its text as
 //! `systemPrompt.append` (tools/claude-sidecar-bare.mjs `flowPayload`); the CLI never sees a path.
 //! `--mcp-servers` is a JSON object `{"<name>":{"type":"http"|"sse","url":"<url>"}}`, the SDK's
@@ -113,8 +114,10 @@ pub(super) fn url_only_servers(user_json: Option<&str>, bare_names: &[String]) -
 }
 
 /// Pure: the sidecar argv a stage on `need` gets, and its warnings. Gateway (and Codex) nodes get
-/// nothing, so their spawn stays as before.
-pub(super) fn stage_args(need: Need, root: &Path, carry: Carry) -> (Vec<String>, Vec<String>) {
+/// nothing, so their spawn stays as before. `drive` is Flow's drive-only MCP file and the Bare home
+/// it sits under (`<home>\layer\mcp-<hash12>.json`, fold W2 L2a): `--mcp-file <file> --home <home>`,
+/// which the sidecar loads strict beside the carried servers.
+pub(super) fn stage_args(need: Need, root: &Path, carry: Carry, drive: Option<(&Path, &Path)>) -> (Vec<String>, Vec<String>) {
     if need != Need::Claude {
         return (Vec::new(), Vec::new());
     }
@@ -128,6 +131,9 @@ pub(super) fn stage_args(need: Need, root: &Path, carry: Carry) -> (Vec<String>,
         args.push("--mcp-servers".to_string());
         args.push(Value::Object(carry.servers).to_string());
     }
+    if let Some((file, home)) = drive {
+        args.extend(["--mcp-file".to_string(), file.display().to_string(), "--home".to_string(), home.display().to_string()]);
+    }
     (args, carry.warnings)
 }
 
@@ -138,16 +144,19 @@ pub(super) fn defined_names(json: Option<&str>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Production: reads `~\.claude.json` and the Bare config dir's `.claude.json` (absent: none).
-pub(super) fn for_stage(need: Need, bare_config_dir: Option<&Path>) -> (Vec<String>, Vec<String>) {
+/// Production: reads `~\.claude.json` and Flow's config dir's `.claude.json` (absent: none), and
+/// adds Flow's drive-only MCP file.
+pub(super) fn for_stage(need: Need, ce: &crate::bare::ClaudeFlowEnv) -> (Vec<String>, Vec<String>) {
     if need != Need::Claude {
         return (Vec::new(), Vec::new());
     }
     let read = |p: Option<std::path::PathBuf>| p.filter(|p| p.is_file()).and_then(|p| crate::fsx::read_text(&p).ok());
     let user = read(crate::bare::claude_dir::claude_json_for(None));
-    let bare = read(bare_config_dir.map(|d| d.join(".claude.json")));
+    let bare = read(Some(ce.config_dir.join(".claude.json")));
     let carry = url_only_servers(user.as_deref(), &defined_names(bare.as_deref()));
-    stage_args(need, &crate::paths::root(), carry)
+    // `<home>\layer\mcp-<hash12>.json`: the home is two folders up.
+    let home = ce.mcp_file.parent().and_then(Path::parent);
+    stage_args(need, &crate::paths::root(), carry, home.map(|h| (ce.mcp_file.as_path(), h)))
 }
 
 #[cfg(test)]
@@ -229,7 +238,8 @@ mod tests {
     #[test]
     fn stage_args_for_claude_vs_gateway() {
         let root = Path::new(r"C:\Vidar");
-        let (args, warnings) = stage_args(Need::Claude, root, url_only_servers(Some(USER), &["vidar_drive".to_string()]));
+        let drive = Some((Path::new(r"C:\H\layer\mcp-0123456789ab.json"), Path::new(r"C:\H")));
+        let (args, warnings) = stage_args(Need::Claude, root, url_only_servers(Some(USER), &["vidar_drive".to_string()]), drive);
         assert_eq!(
             args,
             [
@@ -239,12 +249,15 @@ mod tests {
                 r"C:\Vidar",
                 "--mcp-servers",
                 r#"{"proxy":{"type":"http","url":"http://127.0.0.1:8765/mcp"},"events":{"type":"sse","url":"https://events.example/sse"}}"#,
+                "--mcp-file",
+                r"C:\H\layer\mcp-0123456789ab.json",
+                "--home",
+                r"C:\H",
             ]
         );
         assert_eq!(warnings.len(), 6);
-        let (args, _) = stage_args(Need::Claude, root, Carry::default());
+        let (args, _) = stage_args(Need::Claude, root, Carry::default(), None);
         assert_eq!(args, ["--flow-payload", "bare", "--root", r"C:\Vidar"]);
-        assert_eq!(stage_args(Need::Gateway, root, url_only_servers(Some(USER), &[])), (Vec::new(), Vec::new()));
-        assert_eq!(for_stage(Need::Gateway, None), (Vec::new(), Vec::new()));
+        assert_eq!(stage_args(Need::Gateway, root, url_only_servers(Some(USER), &[]), drive), (Vec::new(), Vec::new()));
     }
 }

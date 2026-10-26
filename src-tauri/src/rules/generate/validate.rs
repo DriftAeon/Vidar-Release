@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use super::items;
 use super::render::{Meta, Rendered, KEYS};
 use crate::bare::home::{guard_brick, Guard};
 use crate::bare::layer::{self, RowSets, SetRef};
@@ -76,7 +77,9 @@ pub fn validate(rendered: &Rendered, meta: &Meta, payload: &PayloadCtx) -> Check
         if let Err(e) = rune::parse(text) {
             c.structural.push(format!("`{rel}`: {e}"));
         }
-        for k in header_keys(text).iter().filter(|k| !KEYS.contains(&k.as_str())) {
+        // Item runes (`items.rs`) carry the L1a item keys; only text runes keep to the frozen subset.
+        let item = meta.items.iter().any(|i| *rel == format!("{}/{}.md", items::folder(i.kind), i.id));
+        for k in header_keys(text).iter().filter(|k| !item && !KEYS.contains(&k.as_str())) {
             c.structural.push(format!("`{rel}`: header key `{k}` is not in the rune header subset"));
         }
     }
@@ -99,7 +102,7 @@ pub fn validate(rendered: &Rendered, meta: &Meta, payload: &PayloadCtx) -> Check
             return c;
         }
     };
-    let set = format!("row-{}", meta.row_key);
+    let set = meta.set.to_string();
     let built = match build::build_in(&lib, std::slice::from_ref(&set), &RenderCtx::bare(BTreeSet::new())) {
         Ok(b) => b,
         Err(f) => {
@@ -110,7 +113,7 @@ pub fn validate(rendered: &Rendered, meta: &Meta, payload: &PayloadCtx) -> Check
     };
     c.warnings.extend(built.warnings);
     let text = String::from_utf8_lossy(&built.bytes).replace('\r', "");
-    if text.trim().is_empty() {
+    if text.trim().is_empty() && meta.items.is_empty() {
         c.structural.push(format!("Rune set `{set}` built empty: no rune is On"));
         return c;
     }
@@ -180,8 +183,9 @@ mod tests {
 
     fn meta() -> Meta<'static> {
         Meta {
-            library: "gen-claude-rendered-bare-0a1b2c3d",
-            row_key: "claude-rendered-bare",
+            library: "gen-0a1b2c3d",
+            set: "generated-20261017",
+            items: &[],
             agent: "claude",
             model: "sonnet",
             effort: "medium",
@@ -235,6 +239,7 @@ mod tests {
             description: format!("About {id}"),
             body: body.into(),
             sources: vec![Source { path: PATH.into(), line }],
+            ..Default::default()
         }
     }
 
@@ -258,12 +263,12 @@ mod tests {
         assert!(skill.len() < 6 * 1024, "SKILL.md is {} bytes", skill.len());
         let shown = fenced(&skill, "text");
         let inputs = parse_input_text(shown);
-        assert_eq!(input_text(&inputs, "claude", None), shown, "the documented input form drifted from input_text");
+        assert_eq!(input_text(&inputs, "claude"), shown, "the documented input form drifted from input_text");
         let p = check(fenced(&skill, "json"), &inputs, "claude").unwrap_or_else(|e| panic!("{e:?}"));
         assert_eq!((p.runes, p.on), (3, 3));
         assert!(p.warnings.is_empty(), "{:?}", p.warnings);
         assert_eq!(p.encoded_chars, None);
-        let set = file(&p, "sets/row-claude-rendered-bare.md");
+        let set = file(&p, "sets/generated-20261017.md");
         assert!(set.contains("## Git\n\n- <?rune no-force-push?>\n- <?rune test-before-commit?>\n\n## Layout\n\n- <?rune source-layout?>\n"), "{set}");
         let rule = file(&p, "rules/no-force-push.md");
         assert!(rule.contains("origin: \"2026-10-17 ~\\\\.claude\\\\CLAUDE.md:3\"\n"), "{rule}");
@@ -289,7 +294,7 @@ mod tests {
         let e = lib.entry("repo-fact").unwrap().expect("repo-fact");
         assert_eq!((e.kind, e.folder), ("fact", "facts"));
         assert_eq!(lib.load(&e).unwrap().activate, "always");
-        let built = build::build(&lib, &["row-claude-rendered-bare".to_string()]).map_err(|f| f.errors).unwrap();
+        let built = build::build(&lib, &["generated-20261017".to_string()]).map_err(|f| f.errors).unwrap();
         assert!(String::from_utf8(built.bytes).unwrap().contains("- Sources live in src/."));
     }
 
@@ -307,7 +312,7 @@ mod tests {
         let br = file(&p, "rules/braces.md");
         assert!(br.contains("state: draft\n") && !br.contains("!bare"), "{br}");
         assert!(file(&p, "rules/keep-me.md").contains("state: active\n"));
-        let set = file(&p, "sets/row-claude-rendered-bare.md");
+        let set = file(&p, "sets/generated-20261017.md");
         assert!(set.contains("<?rune keep-me?>") && !set.contains("profile-path") && !set.contains("braces"), "{set}");
         let locked: Vec<&str> = p.manifest.runes.iter().filter(|r| r.locked).map(|r| r.id.as_str()).collect();
         assert_eq!(locked, ["profile-path", "braces"]);
@@ -328,6 +333,33 @@ mod tests {
         assert!(n > 12_000, "{n}");
         assert!(p.warnings.is_empty(), "{:?}", p.warnings);
         assert_eq!(p.manifest.encoded_chars, Some(n));
+    }
+
+    #[test]
+    fn item_runes_validate_beside_text_runes_and_alone() {
+        use super::super::items::{Hook, ItemSpec};
+        let items = vec![
+            ItemSpec { id: "my-skill".into(), kind: "skill", description: "A skill".into(), source: Some(r"~\.claude\skills\my-skill".into()), hook: None, agent: None },
+            ItemSpec {
+                id: "guard-cwd".into(),
+                kind: "hook",
+                description: "Local hook guard-cwd on PreToolUse".into(),
+                source: None,
+                hook: Some(Hook { event: "PreToolUse".into(), matcher: Some("Bash".into()), run: vec![r"~\.claude\hooks\guard-cwd.mjs".into()] }),
+                agent: Some("claude"),
+            },
+        ];
+        let tpl = template("claude");
+        let g = guard();
+        let ctx = PayloadCtx { agent: "claude", template: &tpl, row: None, root: r"D:\Vidar", home: r"D:\Home", guard: &g };
+        let m = Meta { items: &items, ..meta() };
+        let r = reply(vec![rune("core-rule", "rule", "Never guess.", 1)]);
+        let p = prepare(&r, &input(1), &m, &ctx).unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(file(&p, "hooks/guard-cwd.md").contains("event: \"PreToolUse\"\n"));
+        assert!(file(&p, "sets/generated-20261017.md").contains("## Items\n\n- <?rune my-skill?>\n- <?rune guard-cwd?>\n"));
+        let empty = Envelope { runes: Vec::new(), sections: Vec::new(), dropped: Vec::new() };
+        let p = super::super::prepare_envelope(&empty, &[], &m, &ctx).unwrap_or_else(|e| panic!("{e:?}"));
+        assert_eq!(p.on, 2);
     }
 
     #[test]

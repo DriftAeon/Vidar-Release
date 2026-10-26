@@ -18,15 +18,15 @@
 // view writes nothing, sends no handshake and keeps no pending request ids.
 
 import type { AdapterStart, AgentAdapter, AgentEvent, Effort, LoginMethod, PermissionMode, Usage } from "./protocol";
-import { codexStructured } from "./codex-diff";
 import { CodexSettings } from "./codex-settings";
 import { codexTurnPolicy, threadParams } from "./codex-permissions";
 import { KNOWN_NOTIFICATIONS } from "./codex-methods";
 import { CodexRequests } from "./codex-requests";
 import { CodexProgress, codexPlan, rememberCodexPlan } from "./codex-progress";
 import { CodexHistory } from "./codex-history";
-import { asyncAskEvents, asyncAskQuestions } from "./codex-async-ask";
-import { codexItemCompleted, codexItemStarted } from "./codex-items";
+import { codexItemEvents, parseChanges } from "./codex-items";
+import type { ItemState } from "./codex-items";
+import { codexRateLimits, codexTokenUsage } from "./codex-usage";
 import { codexPlans } from "./codex-plan-store";
 import { downgradeEvents, reviewerDowngrade, reviewerError, reviewNotice } from "./codex-review";
 import { CodexSkills } from "./codex-skills";
@@ -39,25 +39,6 @@ type Json = Record<string, unknown>;
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
-const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-interface Change { path: string; kind: string; diff: string }
-interface ItemState {
-  type: string;
-  output: string;
-  changes: Change[];
-  thinking: boolean;
-  asyncAsk?: boolean; // codex-async-ask.ts: its deltas are the flattened questions, never drawn
-}
-
-function parseChanges(v: unknown): Change[] {
-  return arr(v).map((c) => {
-    const o = obj(c) ?? {};
-    // PatchChangeKind is an object: { type: "add"|"delete"|"update", move_path? }
-    const k = obj(o.kind);
-    const kind = k ? `${str(k.type, "change")}${str(k.move_path) ? ` → ${str(k.move_path)}` : ""}` : str(o.kind, "change");
-    return { path: str(o.path), kind, diff: str(o.diff) };
-  });
-}
 
 export class CodexAdapter implements AgentAdapter {
   private send: (line: string) => unknown = () => {};
@@ -390,32 +371,12 @@ export class CodexAdapter implements AgentAdapter {
         return this.requests.resolved(rid, "resolved by Codex");
       }
       case "thread/tokenUsage/updated": {
-        const tu = obj(p.tokenUsage) ?? {};
-        const last = obj(tu.last) ?? {};
-        // inputTokens is the prompt side of the last request (INFERRED to include
-        // the cached part; cacheRead/cacheCreate stay 0 so the body does not
-        // double count) — checked against the TUI's gauge at implementation
-        this.lastUsage = {
-          inputTokens: num(last.inputTokens) ?? 0,
-          outputTokens: num(last.outputTokens) ?? 0,
-          cacheRead: 0,
-          cacheCreate: 0,
-        };
-        this.contextWindow = num(tu.modelContextWindow) ?? this.contextWindow;
+        const tu = codexTokenUsage(p);
+        this.lastUsage = tu.usage;
+        this.contextWindow = tu.contextWindow ?? this.contextWindow;
         return [];
       }
-      case "account/rateLimits/updated": {
-        const rl = obj(p.rateLimits) ?? {};
-        const out: AgentEvent[] = [];
-        for (const k of ["primary", "secondary"]) {
-          const w = obj(rl[k]);
-          if (!w) continue;
-          const mins = num(w.windowDurationMins);
-          const window = mins === 300 ? "five_hour" : mins === 10080 ? "seven_day" : `other-${mins ?? k}`;
-          out.push({ kind: "rate_limit", window, utilization: num(w.usedPercent), resetsAt: num(w.resetsAt), status: "allowed" });
-        }
-        return out;
-      }
+      case "account/rateLimits/updated": return codexRateLimits(p);
       case "turn/completed": {
         const turn = obj(p.turn) ?? {};
         const status = str(turn.status, "completed");
@@ -473,64 +434,11 @@ export class CodexAdapter implements AgentAdapter {
   }
 
   private itemStarted(item: Json): AgentEvent[] {
-    const id = str(item.id);
-    const type = str(item.type);
-    const it = this.item(id, type);
-    switch (type) {
-      case "collabAgentToolCall": return this.progress.started(item);
-      case "agentMessage": it.asyncAsk = asyncAskQuestions(item) !== null; return [];
-      case "userMessage": case "plan": return [];
-      case "reasoning":
-        if (it.thinking) return [];
-        it.thinking = true;
-        return [{ kind: "thinking", blockId: id, done: false }];
-      case "commandExecution":
-        return [{ kind: "tool_start", toolUseId: id, name: "Command", input: { command: str(item.command), cwd: str(item.cwd) }, parentToolUseId: null }];
-      case "fileChange": {
-        it.changes = parseChanges(item.changes);
-        return [{ kind: "tool_start", toolUseId: id, name: "Edit", input: { changes: it.changes.map((c) => ({ path: c.path, kind: c.kind })) }, parentToolUseId: null }];
-      }
-      case "mcpToolCall":
-        return [{ kind: "tool_start", toolUseId: id, name: `${str(item.server, "mcp")}.${str(item.tool, "tool")}`, input: item.arguments, parentToolUseId: null }];
-      case "webSearch":
-        return [{ kind: "tool_start", toolUseId: id, name: "WebSearch", input: { query: str(item.query) }, parentToolUseId: null }];
-      default:
-        return codexItemStarted(item) ?? [{ kind: "tool_start", toolUseId: id, name: type || "item", input: item, parentToolUseId: null }];
-    }
+    return codexItemEvents.started(item, this.item(str(item.id), str(item.type)), this.progress);
   }
 
   private itemCompleted(item: Json): AgentEvent[] {
-    const id = str(item.id);
-    const type = str(item.type);
-    const it = this.items.get(id);
-    const status = str(item.status, "completed");
-    const failed = status !== "completed" && status !== "inProgress";
-    switch (type) {
-      case "collabAgentToolCall": return this.progress.completed(item, !this.history.active);
-      case "userMessage": return [];
-      case "agentMessage": return asyncAskEvents(item) ?? [{ kind: "text_done", blockId: id, markdown: str(item.text), parentToolUseId: null }];
-      case "plan":
-        return [{ kind: "text_done", blockId: id, markdown: str(item.text), parentToolUseId: null }];
-      case "reasoning":
-        return [{ kind: "thinking", blockId: id, done: true }];
-      case "commandExecution": {
-        const content = typeof item.aggregatedOutput === "string" ? item.aggregatedOutput : it?.output ?? "";
-        return [{ kind: "tool_done", toolUseId: id, content, isError: failed, structured: { status, exitCode: item.exitCode ?? null, durationMs: item.durationMs ?? null }, parentToolUseId: null }];
-      }
-      case "fileChange": {
-        const changes = parseChanges(item.changes);
-        const list = changes.length ? changes : it?.changes ?? [];
-        return [{ kind: "tool_done", toolUseId: id, content: list.map((c) => `${c.kind} ${c.path}\n${c.diff}`).join("\n\n"), isError: failed, structured: codexStructured(list, status), parentToolUseId: null }];
-      }
-      case "mcpToolCall": {
-        const error = obj(item.error);
-        return [{ kind: "tool_done", toolUseId: id, content: pretty(error ?? item.result ?? ""), isError: failed || !!error, parentToolUseId: null }];
-      }
-      case "webSearch":
-        return [{ kind: "tool_done", toolUseId: id, content: pretty(item.results ?? item.action ?? ""), isError: false, parentToolUseId: null }];
-      default:
-        return codexItemCompleted(item, !!it) ?? [{ kind: "tool_done", toolUseId: id, content: pretty(item), isError: failed, parentToolUseId: null }];
-    }
+    return codexItemEvents.completed(item, this.items.get(str(item.id)), this.progress, !this.history.active);
   }
 
   /* ---- outbound ---- */

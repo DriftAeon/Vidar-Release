@@ -2,9 +2,9 @@
 // (never process.env): a shim dir first on PATH, temp profile folders, no real CLI or config home.
 // The shim logs argv and the two config-home vars; a preflight asserts both CLIs resolve to the shim.
 // Skips without pwsh like the other pwsh-backed tests.
-import test from "node:test";
+import test, { describe } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn as spawnChild, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -58,14 +58,24 @@ function rig() {
     CODEX_HOME: dirs.codex,
     HOSTED_ADD_LOCALAPPDATA: dirs.local, // test-only: stands in for the known folder
   };
-  const spawn = (args, env) => spawnSync(pwshExe, ["-NoProfile", "-NonInteractive", ...args], { encoding: "utf8", env, cwd: base });
-  const run = (scriptArgs, extraEnv = {}) => {
+  // Async so cases overlap; resolves {status, stdout, stderr} like spawnSync (stdin closed, as spawnSync's was).
+  const spawn = (args, env) =>
+    new Promise((res, rej) => {
+      const c = spawnChild(pwshExe, ["-NoProfile", "-NonInteractive", ...args], { env, cwd: base, stdio: ["ignore", "pipe", "pipe"] });
+      let stdout = "";
+      let stderr = "";
+      c.stdout.setEncoding("utf8").on("data", (d) => (stdout += d));
+      c.stderr.setEncoding("utf8").on("data", (d) => (stderr += d));
+      c.on("error", rej);
+      c.on("close", (status) => res({ status, stdout, stderr }));
+    });
+  const run = async (scriptArgs, extraEnv = {}) => {
     const env = { ...baseEnv, ...extraEnv };
-    const pre = spawn(["-Command", "(Get-Command claude).Source; (Get-Command codex).Source"], env);
+    const pre = await spawn(["-Command", "(Get-Command claude).Source; (Get-Command codex).Source"], env);
     const sources = pre.stdout.split(/\r?\n/).filter(Boolean);
     assert.equal(sources.length, 2, `preflight: ${plain(pre)}`);
     for (const s of sources) assert.ok(s.toLowerCase().startsWith(dirs.shim.toLowerCase()), `CLI resolves outside the shim dir: ${s}`);
-    const r = spawn(["-ExecutionPolicy", "Bypass", "-File", SCRIPT, ...scriptArgs], env);
+    const r = await spawn(["-ExecutionPolicy", "Bypass", "-File", SCRIPT, ...scriptArgs], env);
     return { ...r, text: plain(r), log: readLog() };
   };
   const readLog = () => {
@@ -76,18 +86,13 @@ function rig() {
   return { base, dirs, run, bareHome, cleanup: () => rmSync(base, { recursive: true, force: true }) };
 }
 
-const withRig = (name, fn) =>
-  test(name, { skip }, () => {
-    const r = rig();
-    try {
-      fn(r);
-    } finally {
-      r.cleanup();
-    }
-  });
+// Each case owns its rig (temp dir, shim, env), so they share nothing; the cases only compete for CPU
+// (two pwsh starts per run, ~0.7 s each). 8 keeps the pwsh starts from thrashing a typical 8-16 thread box.
+const cases = [];
+const withRig = (name, fn) => cases.push({ name, fn });
 
-withRig("claude default: all three servers get the vendor argv, CLAUDE_CONFIG_DIR stays unset", (r) => {
-  const res = r.run(["-Agent", "claude"]);
+withRig("claude default: all three servers get the vendor argv, CLAUDE_CONFIG_DIR stays unset", async (r) => {
+  const res = await r.run(["-Agent", "claude"]);
   assert.equal(res.status, 0, res.text);
   assert.deepEqual(res.log.map((l) => [l.cli, ...l.argv]), [
     ["claude", ...claudeAdd("notion")],
@@ -99,93 +104,56 @@ withRig("claude default: all three servers get the vendor argv, CLAUDE_CONFIG_DI
   assert.match(res.text, /Open a new Raw Claude tab, run \/mcp, then Authenticate each\./);
 });
 
-withRig("claude: -Port sets the callback port on a single server, and is refused with all or slack", (r) => {
-  const ok = r.run(["-Agent", "claude", "-Server", "notion", "-Port", "8080"]);
+withRig("claude: -Port sets the callback port on a single server, and is refused with all or slack", async (r) => {
+  const ok = await r.run(["-Agent", "claude", "-Server", "notion", "-Port", "8080"]);
   assert.equal(ok.status, 0, ok.text);
   assert.deepEqual(ok.log[0].argv, ["mcp", "add", "-s", "user", "-t", "http", "--callback-port", "8080", "notion", URLS.notion]);
-  assert.equal(r.run(["-Agent", "claude", "-Port", "8080"]).status, 2);
-  assert.equal(r.run(["-Agent", "claude", "-Server", "slack", "-Port", "8080"]).status, 2);
-  assert.equal(r.run(["-Agent", "codex", "-Server", "notion", "-Port", "8080"]).status, 2);
-  assert.equal(r.run(["-Agent", "claude", "-Server", "notion", "-WhatIf"]).log.length, 1, "refusals ran no CLI; only the first case logged");
+  assert.equal((await r.run(["-Agent", "claude", "-Port", "8080"])).status, 2);
+  assert.equal((await r.run(["-Agent", "claude", "-Server", "slack", "-Port", "8080"])).status, 2);
+  assert.equal((await r.run(["-Agent", "codex", "-Server", "notion", "-Port", "8080"])).status, 2);
+  assert.equal((await r.run(["-Agent", "claude", "-Server", "notion", "-WhatIf"])).log.length, 1, "refusals ran no CLI; only the first case logged");
 });
 
-withRig("claude bare: target is the install's claude-config, passed to the child; missing folder refuses", (r) => {
-  const missing = r.run(["-Agent", "claude", "-Home", "bare"]);
-  assert.equal(missing.status, 2);
-  assert.match(missing.text, /No Bare home at .*Open a Bare tab once first\./);
-  assert.equal(missing.log.length, 0);
-
-  mkdirSync(r.bareHome, { recursive: true });
-  const res = r.run(["-Agent", "claude", "-Home", "bare", "-Server", "slack"]);
-  assert.equal(res.status, 0, res.text);
-  assert.equal(res.log.length, 1);
-  assert.deepEqual(res.log[0].argv, SLACK_ARGS);
-  assert.equal(res.log[0].CLAUDE_CONFIG_DIR.toLowerCase(), r.bareHome.toLowerCase());
-  assert.ok(res.text.toLowerCase().includes(`target: ${r.bareHome.toLowerCase()}`));
-});
-
-withRig("claude bare: VIDAR_AGENT_HOME or CLAUDE_CONFIG_DIR must equal the target, case-insensitive", (r) => {
-  mkdirSync(r.bareHome, { recursive: true });
-  const other = join(r.dirs.local, "elsewhere");
-  for (const v of ["VIDAR_AGENT_HOME", "CLAUDE_CONFIG_DIR"]) {
-    const bad = r.run(["-Agent", "claude", "-Home", "bare", "-Server", "notion"], { [v]: other });
-    assert.equal(bad.status, 2, bad.text);
-    assert.match(bad.text, /not this install's Bare home/);
-    const good = r.run(["-Agent", "claude", "-Home", "bare", "-Server", "notion"], { [v]: r.bareHome.toUpperCase().replace(/\\$/, "") + "\\" });
-    assert.equal(good.status, 0, good.text);
+withRig("claude bare: refuses every server before resolving a home or invoking the CLI", async (r) => {
+  for (const server of ["all", "notion", "slack", "atlassian"]) {
+    const res = await r.run(["-Agent", "claude", "-Home", "bare", "-Server", server], {
+      HOSTED_ADD_LOCALAPPDATA: "",
+      CLAUDE_CONFIG_DIR: r.bareHome,
+    });
+    assert.equal(res.status, 2, res.text);
+    assert.match(res.text, /module MCP is ticked per rune set in the Runes tab/);
+    assert.doesNotMatch(res.text, /Target:/);
+    assert.equal(res.log.length, 0);
   }
-  assert.equal(r.run(["-Agent", "claude", "-Home", "bare", "-Server", "notion"]).log.length, 3, "two accepted matches plus this run; refusals logged nothing");
 });
 
-withRig("claude bare: inside a real Bare tab (LOCALAPPDATA redirected) the home is not nested", (r) => {
-  mkdirSync(r.bareHome, { recursive: true });
-  const redirected = join(r.bareHome, "AppData", "Local");
-  mkdirSync(redirected, { recursive: true });
-  const res = r.run(["-Agent", "claude", "-Home", "bare", "-Server", "notion"], {
-    LOCALAPPDATA: redirected,
-    VIDAR_AGENT_HOME: r.bareHome,
-    CLAUDE_CONFIG_DIR: r.bareHome,
-  });
-  assert.equal(res.status, 0, res.text);
-  assert.equal(res.log.length, 1);
-  assert.equal(res.log[0].CLAUDE_CONFIG_DIR.toLowerCase(), r.bareHome.toLowerCase());
-});
-
-withRig("claude bare: without the test override, a redirected USERPROFILE does not move the base", (r) => {
-  const res = r.run(["-Agent", "claude", "-Home", "bare", "-Server", "notion", "-WhatIf"], { HOSTED_ADD_LOCALAPPDATA: "" });
-  const m = res.text.match(/(?:Target: |No Bare home at )([^\r\n]*?)(?: \(claude\)|\. Open)/);
-  assert.ok(m, res.text);
-  assert.ok(!m[1].toLowerCase().startsWith(r.dirs.profile.toLowerCase()), `base follows the redirected profile: ${m[1]}`);
-  assert.ok(m[1].toLowerCase().endsWith(join(...AGENT_HOMES_REL, installRootKey(ROOT), "claude-config").toLowerCase()), m[1]);
-});
-
-withRig("codex: -Force refuses and runs nothing", (r) => {
-  const res = r.run(["-Agent", "codex", "-Force"]);
+withRig("codex: -Force refuses and runs nothing", async (r) => {
+  const res = await r.run(["-Agent", "codex", "-Force"]);
   assert.equal(res.status, 2);
   assert.match(res.text, /-Force is Claude only\./);
   assert.equal(res.log.length, 0);
 });
 
-withRig("codex: a multi-line string in config.toml refuses as ambiguous", (r) => {
+withRig("codex: a multi-line string in config.toml refuses as ambiguous", async (r) => {
   for (const q of ["'''", '"""']) {
     writeFileSync(join(r.dirs.codex, "config.toml"), `note = ${q}\n[mcp_servers.notion]\n${q}\n`);
-    const res = r.run(["-Agent", "codex"]);
+    const res = await r.run(["-Agent", "codex"]);
     assert.equal(res.status, 2, res.text);
     assert.match(res.text, /notion: can't tell if notion exists; check config\.toml/);
     assert.equal(res.log.length, 0);
   }
 });
 
-withRig("refuses a Bare/profile env: claude default, codex, and codex -Home bare", (r) => {
+withRig("refuses a Bare/profile env: claude default, codex, and codex -Home bare", async (r) => {
   for (const extra of [{ VIDAR_AGENT_HOME: r.dirs.local }, { CLAUDE_CONFIG_DIR: r.dirs.local }]) {
-    const res = r.run(["-Agent", "claude"], extra);
+    const res = await r.run(["-Agent", "claude"], extra);
     assert.equal(res.status, 2, res.text);
     assert.match(res.text, /VIDAR_AGENT_HOME or CLAUDE_CONFIG_DIR is set/);
   }
-  const codex = r.run(["-Agent", "codex"], { VIDAR_AGENT_HOME: r.dirs.local });
+  const codex = await r.run(["-Agent", "codex"], { VIDAR_AGENT_HOME: r.dirs.local });
   assert.equal(codex.status, 2);
   assert.match(codex.text, /VIDAR_AGENT_HOME is set/);
-  const bare = r.run(["-Agent", "codex", "-Home", "bare"], { VIDAR_AGENT_HOME: r.dirs.local });
+  const bare = await r.run(["-Agent", "codex", "-Home", "bare"], { VIDAR_AGENT_HOME: r.dirs.local });
   assert.equal(bare.status, 2);
   assert.match(bare.text, /VIDAR_AGENT_HOME is .*not this install's Bare home/);
   assert.equal(bare.log.length, 0);
@@ -193,70 +161,72 @@ withRig("refuses a Bare/profile env: claude default, codex, and codex -Home bare
 
 // The rig sets CODEX_HOME to a foreign dir; a plain terminal for Bare has none.
 const NOCH = { CODEX_HOME: "" };
-const CODEX_TABLES = (names) => names.map((n) => `[mcp_servers.${n}]\nurl = "${URLS[n]}"\n`).join("\n");
 
-withRig("codex bare: login only, CODEX_HOME is the Bare codex-home, never add", (r) => {
+withRig("codex bare: login uses legacy CODEX_HOME from a combination tab, never adds", async (r) => {
   const home = join(dirname(r.bareHome), "codex-home");
   mkdirSync(home, { recursive: true });
-  writeFileSync(join(home, "config.toml"), `${CODEX_TABLES(["notion"])}\n[mcp_servers.vidar_drive]\ncommand = "x"\n`);
-  const res = r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion"], NOCH);
+  writeFileSync(join(home, "config.toml"), 'mcp_oauth_credentials_store = "file"\n');
+  const combo = join(dirname(r.bareHome), "codex-homes", "abcdef012345");
+  mkdirSync(combo, { recursive: true });
+  writeFileSync(join(combo, "config.toml"), "# per-set home must not be used for login\n");
+  const res = await r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion"], {
+    CODEX_HOME: combo,
+    VIDAR_AGENT_HOME: combo,
+  });
   assert.equal(res.status, 0, res.text);
-  assert.deepEqual(res.log.map((l) => [l.cli, ...l.argv]), [["codex", "mcp", "login", "notion"]]);
+  assert.deepEqual(res.log.map((l) => [l.cli, ...l.argv]), [["codex", "-c", `mcp_servers.notion.url="${URLS.notion}"`, "mcp", "login", "notion"]]);
   assert.equal(res.log[0].CODEX_HOME.toLowerCase(), home.toLowerCase());
   assert.ok(!res.log.some((l) => l.argv.includes("add")));
-  const wi = r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion", "-WhatIf"], NOCH);
+  assert.match(res.text, /Codex Bare login uses the legacy codex-home\./);
+  assert.match(res.text, /Tokens stay in the legacy codex-home\./);
+  const wi = await r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion", "-WhatIf"], NOCH);
   assert.equal(wi.status, 0, wi.text);
   assert.equal(wi.log.length, 1, "-WhatIf ran no CLI");
-  assert.match(wi.text, /WhatIf: codex mcp login notion/);
+  assert.match(wi.text, /WhatIf: codex -c mcp_servers\.notion\.url=.* mcp login notion/);
 });
 
-withRig("codex bare: a missing config or table refuses; slack refuses", (r) => {
+withRig("codex bare: missing legacy config and slack refuse", async (r) => {
   const home = join(dirname(r.bareHome), "codex-home");
   mkdirSync(home, { recursive: true });
-  const msg = /notion is not enabled for Codex Bare: add it to bareCodexMcp in vidar\.json and open a Codex Bare tab once/;
-  const noFile = r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion"], NOCH);
+  const noFile = await r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion"], NOCH);
   assert.equal(noFile.status, 2, noFile.text);
-  assert.match(noFile.text, msg);
-  writeFileSync(join(home, "config.toml"), CODEX_TABLES(["atlassian"]));
-  const noTable = r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion"], NOCH);
-  assert.equal(noTable.status, 2, noTable.text);
-  assert.match(noTable.text, msg);
-  const slack = r.run(["-Agent", "codex", "-Home", "bare", "-Server", "slack"], NOCH);
+  assert.match(noFile.text, /No legacy Codex Bare config at .*Open a Codex Bare tab once first\./);
+  const slack = await r.run(["-Agent", "codex", "-Home", "bare", "-Server", "slack"], NOCH);
   assert.equal(slack.status, 2, slack.text);
   assert.match(slack.text, /slack is manual only for Codex; see docs\/reference\/hosted-mcp\.md/);
   assert.equal(slack.log.length, 0);
-  assert.equal(r.run(["-Agent", "codex", "-Home", "bare", "-Server", "notion"], NOCH).log.length, 0);
+  assert.equal(noFile.log.length, 0);
 });
 
-withRig("-WhatIf prints every command and calls no CLI", (r) => {
-  const res = r.run(["-Agent", "claude", "-WhatIf"]);
+withRig("-WhatIf prints every command and calls no CLI", async (r) => {
+  const res = await r.run(["-Agent", "claude", "-WhatIf"]);
   assert.equal(res.status, 0, res.text);
   assert.equal(res.log.length, 0);
   assert.equal((res.text.match(/^WhatIf: claude mcp add /gm) ?? []).length, 3);
   assert.match(res.text, /WhatIf: nothing was run\./);
-  const codex = r.run(["-Agent", "codex", "-WhatIf"]);
+  const codex = await r.run(["-Agent", "codex", "-WhatIf"]);
   assert.equal(codex.status, 0, codex.text);
   assert.equal(codex.log.length, 0);
   assert.equal((codex.text.match(/^WhatIf: codex mcp add /gm) ?? []).length, 2);
 });
 
-withRig("claude: an existing entry is skipped; -Force removes then adds", (r) => {
+withRig("claude: an existing entry is skipped; -Force removes then adds", async (r) => {
   writeFileSync(join(r.dirs.profile, ".claude.json"), JSON.stringify({ mcpServers: { notion: { type: "http", url: "https://old.example/mcp" } } }));
-  const skipRun = r.run(["-Agent", "claude"]);
+  const skipRun = await r.run(["-Agent", "claude"]);
   assert.equal(skipRun.status, 0, skipRun.text);
   assert.match(skipRun.text, /notion: already in .*skipped \(-Force replaces it\)\./);
   assert.deepEqual(skipRun.log.map((l) => l.argv.at(-2)), ["slack", "atlassian"]);
 
-  const force = r.run(["-Agent", "claude", "-Server", "notion", "-Force"]);
+  const force = await r.run(["-Agent", "claude", "-Server", "notion", "-Force"]);
   assert.equal(force.status, 0, force.text);
   assert.deepEqual(force.log.slice(2).map((l) => l.argv), [["mcp", "remove", "-s", "user", "notion"], claudeAdd("notion")]);
 });
 
-withRig("claude -Force: a failed add restores the old entry through add-json and exits non-zero", (r) => {
+withRig("claude -Force: a failed add restores the old entry through add-json and exits non-zero", async (r) => {
   const old = { type: "http", url: "https://old.example/mcp", headers: { "X-Test": 'a "quoted" value' } };
   writeFileSync(join(r.dirs.profile, ".claude.json"), JSON.stringify({ mcpServers: { notion: old } }));
   writeFileSync(join(r.dirs.shim, "fail-add"), "");
-  const res = r.run(["-Agent", "claude", "-Server", "notion", "-Force"]);
+  const res = await r.run(["-Agent", "claude", "-Server", "notion", "-Force"]);
   assert.notEqual(res.status, 0);
   assert.deepEqual(res.log.map((l) => l.argv.slice(0, 2).join(" ")), ["mcp remove", "mcp add", "mcp add-json"]);
   const restore = res.log[2].argv;
@@ -266,18 +236,18 @@ withRig("claude -Force: a failed add restores the old entry through add-json and
   assert.ok(!res.text.includes("old.example"), "the saved entry is not echoed");
 });
 
-withRig("claude -Force: restore keeps CMD metacharacters in the saved entry intact", (r) => {
+withRig("claude -Force: restore keeps CMD metacharacters in the saved entry intact", async (r) => {
   const old = { type: "http", url: "https://old.example/mcp?a=1&b=2", headers: { "X-Test": 'a|b ^c %PATH% "q" & echo hi' } };
   writeFileSync(join(r.dirs.profile, ".claude.json"), JSON.stringify({ mcpServers: { notion: old } }));
   writeFileSync(join(r.dirs.shim, "fail-add"), "");
-  const res = r.run(["-Agent", "claude", "-Server", "notion", "-Force"]);
+  const res = await r.run(["-Agent", "claude", "-Server", "notion", "-Force"]);
   assert.notEqual(res.status, 0);
   assert.deepEqual(JSON.parse(res.log[2].argv[5]), old);
   assert.match(res.text, /previous entry restored\./);
 });
 
-withRig("codex: all adds notion and atlassian only; slack is skipped with a pointer", (r) => {
-  const res = r.run(["-Agent", "codex"]);
+withRig("codex: all adds notion and atlassian only; slack is skipped with a pointer", async (r) => {
+  const res = await r.run(["-Agent", "codex"]);
   assert.equal(res.status, 0, res.text);
   assert.deepEqual(res.log.map((l) => [l.cli, ...l.argv]), [
     ["codex", "mcp", "add", "notion", "--url", URLS.notion],
@@ -288,23 +258,23 @@ withRig("codex: all adds notion and atlassian only; slack is skipped with a poin
   assert.match(res.text, /slack: not added for Codex; see docs\/reference\/hosted-mcp\.md \(Codex Slack\)\./);
 });
 
-withRig("codex: -Server slack refuses and runs nothing", (r) => {
-  const res = r.run(["-Agent", "codex", "-Server", "slack"]);
+withRig("codex: -Server slack refuses and runs nothing", async (r) => {
+  const res = await r.run(["-Agent", "codex", "-Server", "slack"]);
   assert.equal(res.status, 2);
   assert.match(res.text, /Slack on Codex is manual only; see docs\/reference\/hosted-mcp\.md \(Codex Slack\)\./);
   assert.equal(res.log.length, 0);
 });
 
-withRig("codex: an existing [mcp_servers.<name>] header is skipped, never removed", (r) => {
+withRig("codex: an existing [mcp_servers.<name>] header is skipped, never removed", async (r) => {
   writeFileSync(join(r.dirs.codex, "config.toml"), 'model = "x"\n\n[ mcp_servers . "notion" ]\nurl = "https://old.example/mcp"\n\n[mcp_servers.other]\nurl = "https://o.example"\n');
-  const res = r.run(["-Agent", "codex"]);
+  const res = await r.run(["-Agent", "codex"]);
   assert.equal(res.status, 0, res.text);
   assert.match(res.text, /notion: already in .*run codex mcp remove notion first\./);
   assert.deepEqual(res.log.map((l) => l.argv[2]).slice(-1), ["atlassian"]);
-  assert.ok(!r.run(["-Agent", "codex"]).log.some((l) => l.argv[0] === "mcp" && l.argv[1] === "remove"));
+  assert.ok(!(await r.run(["-Agent", "codex"])).log.some((l) => l.argv[0] === "mcp" && l.argv[1] === "remove"));
 });
 
-withRig("codex: an unreadable mcp_servers form (inline table, dotted keys) refuses", (r) => {
+withRig("codex: an unreadable mcp_servers form (inline table, dotted keys) refuses", async (r) => {
   const forms = {
     inline: 'mcp_servers = { notion = { url = "https://x" } }\n',
     dotted: 'mcp_servers.notion.url = "https://x"\n',
@@ -312,13 +282,26 @@ withRig("codex: an unreadable mcp_servers form (inline table, dotted keys) refus
   };
   for (const [form, text] of Object.entries(forms)) {
     writeFileSync(join(r.dirs.codex, "config.toml"), text);
-    const res = r.run(["-Agent", "codex"]);
+    const res = await r.run(["-Agent", "codex"]);
     assert.equal(res.status, 2, `${form}: ${res.text}`);
     assert.match(res.text, /notion: can't tell if notion exists; check config\.toml/);
     assert.equal(res.log.length, 0, form);
   }
   writeFileSync(join(r.dirs.codex, "config.toml"), '# mcp_servers live below\n[mcp_servers.other]\nurl = "https://o.example"\n');
-  assert.equal(r.run(["-Agent", "codex", "-WhatIf"]).status, 0);
+  assert.equal((await r.run(["-Agent", "codex", "-WhatIf"])).status, 0);
+});
+
+describe("hosted-add.ps1", { concurrency: 8 }, () => {
+  for (const { name, fn } of cases) {
+    test(name, { skip }, async () => {
+      const r = rig();
+      try {
+        await fn(r);
+      } finally {
+        r.cleanup();
+      }
+    });
+  }
 });
 
 test("the script file is UTF-8 without a BOM", () => {

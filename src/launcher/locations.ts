@@ -18,17 +18,19 @@ import { hideColsFrom, hoverOpen, openColumn, placeColumn } from "./columns";
 import { markFor, menuRow } from "./menu-rows";
 import { ago } from "./ago";
 import { openRecent } from "./recent";
+import { prefetchCodexRecent } from "./codex-recent";
 import { pickWorkspace } from "./workspaces";
 import { showSessionsToast } from "../panels/sessions/zoom";
 import { prepareRules } from "../rules/prepare";
 import { isGateway } from "./agent-kind";
+import { attachSetPick } from "./set-pick";
 import { bodyOrder, launcherLead, resumeVariant } from "./body-order";
 
 // spawnFrom closes the launcher before it resolves a `{vidar}` cwd, so its rejection ("Vidar Folder
 // Unknown", vidar-path.ts) has no menu left to land in; every click here goes through this so the
 // reason reaches the toast instead of an unhandled rejection.
-function go(t: AgentType, loc: Location, title?: string): void {
-  spawnFrom(t, loc, title).catch((e) => showSessionsToast(e instanceof Error ? e.message : String(e), 6000));
+function go(t: AgentType, loc: Location, title?: string, vault?: string): void {
+  spawnFrom(t, loc, title, undefined, undefined, undefined, undefined, vault).catch((e) => showSessionsToast(e instanceof Error ? e.message : String(e), 6000));
 }
 
 export function openLocations(t: AgentType, anchor: HTMLElement, locations: Location[]) {
@@ -189,11 +191,11 @@ function openBodies(t: AgentType, rendered: AgentType | undefined, bare: AgentTy
     if (cwd) b.title = cwd;
     return b;
   };
-  const rows: { row: HTMLButtonElement; launch: (l: Location) => void; bare?: boolean }[] = [];
+  const rows: { row: HTMLButtonElement; launch: (l: Location) => void; bare?: AgentType }[] = [];
   for (const o of bodyOrder(!!rendered, bare, launcherLead())) {
     if (o.kind === "raw") rows.push({ row: bodyRow("Raw", loc?.cwd ?? ""), launch: (l) => go(t, l) });
     else if (o.kind === "rendered" && rendered) rows.push({ row: bodyRow("Rendered", loc?.cwd ?? ""), launch: (l) => go({ ...rendered, cwd: undefined }, l) });
-    else if (o.kind === "bare") rows.push({ row: bodyRow(typeLabel(o.variant), loc?.cwd ?? ""), launch: (l) => go({ ...o.variant, cwd: undefined }, l), bare: true });
+    else if (o.kind === "bare") rows.push({ row: bodyRow(typeLabel(o.variant), loc?.cwd ?? ""), launch: (l) => go({ ...o.variant, cwd: undefined }, l), bare: o.variant });
   }
   if (!loc) {
     for (const r of rows) {
@@ -206,7 +208,14 @@ function openBodies(t: AgentType, rendered: AgentType | undefined, bare: AgentTy
     placeColumn(1, anchor);
     return;
   }
-  for (const r of rows) r.row.addEventListener("click", () => r.launch(loc));
+  for (const r of rows) {
+    r.row.addEventListener("click", () => r.launch(loc));
+    // Pick Vault: every Bare row loads one Rune Vault; a plain click launches the pre-pick
+    if (r.bare) {
+      const variant = { ...r.bare, cwd: undefined };
+      attachSetPick(r.row, { variant: r.bare, launch: (vault) => go(variant, loc, undefined, vault), place: () => placeColumn(1, anchor) });
+    }
+  }
   // Resume serves the Rendered variant the launcher leads with (Bare Rendered when it leads, or
   // when it is the only one shown)
   const resumeRow = resumeVariant([...(rendered ? [rendered] : []), ...bare], launcherLead());
@@ -214,6 +223,7 @@ function openBodies(t: AgentType, rendered: AgentType | undefined, bare: AgentTy
     // Claude: the transcript store and session registry; Codex: thread/list (codex-recent.ts)
     const resume = bodyRow("Resume", loc.cwd);
     resume.classList.add("has-sub");
+    if (agentKind(t.id) === "codex") prefetchCodexRecent(resumeRow, loc); // warm the list before Resume is hovered
     const open = () => void openRecent(t, resumeRow, loc, resume);
     hoverOpen(resume, 2, open);
     resume.addEventListener("click", (e) => { e.stopPropagation(); open(); });

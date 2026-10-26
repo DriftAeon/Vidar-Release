@@ -1,0 +1,31 @@
+{
+  "loadout": {
+    "rules": [],
+    "onDemand": [
+      {
+        "id": "search-notes-first",
+        "kind": "rule"
+      }
+    ],
+    "skills": [
+      "<HOME>/.claude/skills/e2e-review"
+    ],
+    "agents": [
+      "<HOME>/.claude/agents/e2e-hound.md"
+    ],
+    "guards": [],
+    "mcp": [
+      "atlassian",
+      "openaiDeveloperDocs"
+    ],
+    "permissions": {
+      "allow": [],
+      "ask": [],
+      "mode": null
+    },
+    "outputStyle": null,
+    "unsupported": [],
+    "hash": "<HASH12>"
+  },
+  "warnings": []
+}

@@ -24,7 +24,7 @@ function exactMembers<U extends string>() {
 export const SESSION_SUMMARY_KEYS = exactKeys<FalconSessionSummary>()([
   "session", "generation", "agent", "cwd", "conversation", "pid", "model", "permission_mode",
   "attached", "exited", "queued_prompts", "pending_permissions", "degraded", "last_holder", "rules_file", "tab_name",
-  "gateway", "profile", "env_names", "payload_file", "row_key",
+  "gateway", "profile", "env_names", "payload_file", "row_key", "sets", "mcp_file",
 ]);
 export const DECISION_KEYS = exactKeys<Decision>()(["file", "sha256", "verdict", "comment", "atMs", "request"]);
 export const DECISION_VIEW_KEYS = exactKeys<DecisionView>()(["decision", "current"]);

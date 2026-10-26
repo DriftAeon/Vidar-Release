@@ -30,6 +30,10 @@ export interface RuneItem {
   state: RuneState;
   activate: string;
   description: string;
+  origin?: string;
+  closesWhen?: string;
+  why?: string;
+  example?: string;
   path: string;
   body: string;
 }
@@ -48,13 +52,32 @@ export interface RunesCatalog {
   libraries: RuneLibrary[];
 }
 
+/** The runeLoadHistory file (`runes_load_history` reply). Dates are `YYYY-MM-DD`. */
+export interface LoadHistoryTranscript { len: number; mtime: number; head: string; partial: boolean }
+export interface LoadHistory {
+  version: 1;
+  since: string;
+  lastSweep: string;
+  transcripts: Record<string, LoadHistoryTranscript>;
+  paths: Record<string, string>;
+  reads: Record<string, string>;
+  runeReads: Record<string, string>;
+  skills: Record<string, string>;
+  /** `<library>/<set>`. */
+  bareSets: Record<string, string>;
+}
+
 export interface RunesLoadedFile {
   path: string;
   memoryType: string;
   /** `start`: instructions at session start; `touch`: nested memory loaded on a file touch. */
   when: "start" | "touch";
+  /** File named by the preceding unambiguous assistant file-tool message, when known. */
+  trigger?: string;
+  /** Codex rows only: where the row came from. Absent on Claude rows. */
+  source?: "vault" | "rollout";
 }
 
 export type RunesLoaded =
-  | { source: "transcript"; files: RunesLoadedFile[]; truncated: boolean }
-  | { source: "none"; reason: string; files: RunesLoadedFile[]; truncated: boolean };
+  | { source: "transcript" | "vault" | "rollout"; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; skills?: string[]; truncated: boolean }
+  | { source: "none"; reason: string; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; skills?: string[]; truncated: boolean };

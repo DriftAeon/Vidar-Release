@@ -40,6 +40,7 @@ export interface FocusedSession {
   role?: LaunchOpts["role"];
   /** launch profile of the tab ("bare"): observers read that profile's own Claude home */
   profile?: string;
+  rowKey?: string;
 }
 
 /** Claude session ids held by rendered tabs right now (the launcher's Resume list greys them) */
@@ -67,8 +68,8 @@ export function noteRawCodexSpawn(id: string, ms = Date.now()): void {
   rawSpawnMs.set(id, ms);
 }
 
-type RolloutFetch = (cwd: string, profile: string | null) => Promise<RolloutThread[]>;
-const fetchRollouts: RolloutFetch = (cwd, profile) => invoke("codex_rollout_threads", { cwd, profile });
+type RolloutFetch = (cwd: string, profile: string | null, tab: string | null) => Promise<RolloutThread[]>;
+const fetchRollouts: RolloutFetch = (cwd, profile, tab) => invoke("codex_rollout_threads", { cwd, profile, tab });
 
 /** Re-resolve every live Raw Codex tab's thread from its own home's rollouts (codex-thread.ts
  *  pickRawThreads). One read per (home, cwd). A read that fails leaves its tabs on their launch
@@ -82,20 +83,22 @@ export async function refreshRawCodexThreads(fetch: RolloutFetch = fetchRollouts
     if (sid) held.push(sid);
     const spawnedMs = rawSpawnMs.get(id);
     if (s.body !== "terminal" || spawnedMs === undefined || !s.cwd) continue;
-    raws.push({ id, cwd: s.cwd, profile: s.profile ?? null, spawnedMs, launchThread: launchLineThread(s.launchArgs) });
+    // A Bare tab's own id keys its rollout read (`row`, codex-thread.ts rolloutKey): the host reads the
+    // home its session recorded, so two tabs of one profile never share one list.
+    raws.push({ id, cwd: s.cwd, profile: s.profile ?? null, row: s.profile ? id : null, spawnedMs, launchThread: launchLineThread(s.launchArgs) });
   }
   for (const id of rawSpawnMs.keys()) if (!sessions.has(id)) rawSpawnMs.delete(id);
   const rollouts = new Map<string, RolloutThread[]>();
-  await Promise.all([...new Set(raws.map((t) => rolloutKey(t.profile, t.cwd)))].map(async (key) => {
-    const t = raws.find((r) => rolloutKey(r.profile, r.cwd) === key)!;
+  await Promise.all([...new Set(raws.map((t) => rolloutKey(t.profile, t.cwd, t.row)))].map(async (key) => {
+    const t = raws.find((r) => rolloutKey(r.profile, r.cwd, r.row) === key)!;
     try {
-      rollouts.set(key, await fetch(t.cwd, t.profile));
+      rollouts.set(key, await fetch(t.cwd, t.profile, t.row ?? null));
     } catch (e) {
       console.error("codex rollout threads:", e);
     }
   }));
   // a tab whose home could not be read keeps its launch line (never resolved)
-  const readable = raws.filter((t) => rollouts.has(rolloutKey(t.profile, t.cwd)));
+  const readable = raws.filter((t) => rollouts.has(rolloutKey(t.profile, t.cwd, t.row)));
   rawThreads = pickRawThreads(readable, rollouts, held);
 }
 
@@ -216,7 +219,7 @@ export function getFocusedSession(): FocusedSession | null {
   // A page tab reads null: every listener clears its target on null, while
   // skipping the event would leave them pointing at the previous shell tab.
   return s && s.alive && s.body !== "page"
-    ? { id: s.id, title: s.container.dataset.title ?? s.id, agent: s.agent, art: s.button.dataset.art ?? s.agent, cwd: s.cwd, model: s.model, launchArgs: s.launchArgs, role: s.role, profile: s.profile }
+    ? { id: s.id, title: s.container.dataset.title ?? s.id, agent: s.agent, art: s.button.dataset.art ?? s.agent, cwd: s.cwd, model: s.model, launchArgs: s.launchArgs, role: s.role, profile: s.profile, rowKey: s.rowKey }
     : null;
 }
 
@@ -259,13 +262,26 @@ export function sessionLaunchInfo(id: string): {
   rules?: RulesLaunch;
   profile?: string;
   rowKey?: string;
+  vault?: string;
 } | null {
   const s = sessions.get(id);
   if (!s || s.body === "page") return null; // a page tab has no successor to spawn
   // the successor keeps the tab's rules; its warnings were shown once already
   const rules = s.rules ? { ...s.rules, warnings: [] } : undefined;
   // and its launch profile: a bare tab's successor is bare, never a default tab
-  return { agent: s.agent, cwd: s.cwd, model: s.model, launchArgs: s.launchArgs, permissionMode: s.permissionMode, rules, profile: s.profile, rowKey: s.rowKey };
+  return { agent: s.agent, cwd: s.cwd, model: s.model, launchArgs: s.launchArgs, permissionMode: s.permissionMode, rules, profile: s.profile, rowKey: s.rowKey, ...(s.vault ? { vault: s.vault } : {}) };
+}
+
+/** The Rune Vault a session loaded, from its session record (bare/vault/session.rs `find`): by Falcon
+ *  session, then thread id, then tab. Null when no record names one (a non-Bare tab, or a Bare
+ *  session from before vaults), or the read fails; a respawn then needs the tab's launch vault. */
+export async function recordedVault(tab: string, falconSession?: string | null, threadId?: string | null): Promise<string | null> {
+  try {
+    const rec = await invoke("rune_vault_session", { tab, falconSession: falconSession ?? null, threadId: threadId ?? null });
+    return rec?.vault.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** the focused tab's START cwd (the workspace review binds to it) */

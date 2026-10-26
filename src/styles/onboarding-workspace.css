@@ -15,6 +15,7 @@
 .ob-ws-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-dim); font-size: var(--font-12); }
 .ob-workspace .ob-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-8);
+  align-self: center; /* settings-modal.css pins .ws-btn.ws-add to flex-start */
   height: calc(var(--row-32) + var(--space-8)); padding: 0 var(--space-24);
   font-size: var(--font-16); font-weight: var(--weight-bold); color: var(--fg-bright); border-radius: var(--radius-6);
 }

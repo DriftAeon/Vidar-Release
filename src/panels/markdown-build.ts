@@ -1,19 +1,21 @@
 // Markdown/text -> inert DOM for Document, Rendered messages and plan cards.
 //
-// Rendering: markdown-it 14.3.1 as a TOKENIZER only — we walk md.parse()'s
+// Rendering: markdown-it 15.0.3 as a TOKENIZER only — we walk md.parse()'s
 // token stream and build DOM from text nodes ourselves. No md.render(), no
 // innerHTML. html:false makes source HTML plain text; links become inert spans;
 // images become a text marker (a Markdown image is a fetch). Every block that
 // the parser gives a line map gets data-line-start/end (zero-based,
 // end-exclusive, exactly markdown-it's map) — the anchor for passage comments.
 
-import MarkdownIt from "markdown-it";
-
-type Token = ReturnType<MarkdownIt["parse"]>[number];
+import MarkdownIt, { type Token } from "markdown-it";
 
 const INPUT_CAP = 2 * 1024 * 1024;
 const TOKEN_CAP = 200_000; // counts inline children; checked after parse (bounds the builder, not the parser)
 const DEPTH_CAP = 64; // the builder's own; the parser's maxNesting stays at its default 100
+const attr = (t: Token, name: string): string | null => {
+  const v = t.attrGet(name); // 15's typings widen this to string | number | null
+  return v === null ? null : String(v);
+};
 const md = new MarkdownIt({ html: false, linkify: false, typographer: false, breaks: false });
 
 interface Built { el: HTMLElement; dropped: Record<string, number>; fellBack: false | { reason: string } }
@@ -113,7 +115,7 @@ function buildTokens(tokens: Token[], dropped: Record<string, number>, softBr: b
       case "bullet_list_open": push(openEl("ul", t), "list"); break;
       case "ordered_list_open": {
         const ol = openEl("ol", t);
-        const start = t.attrGet("start");
+        const start = attr(t, "start");
         if (start && /^\d+$/.test(start)) ol.setAttribute("start", start);
         push(ol, "list"); break;
       }
@@ -142,7 +144,7 @@ function buildTokens(tokens: Token[], dropped: Record<string, number>, softBr: b
       case "tr_close": pop("tr", t.type); break;
       case "th_open": case "td_open": {
         const cell = openEl(t.type === "th_open" ? "th" : "td", t); // cells carry no map
-        const st = t.attrGet("style"); // alignment arrives as style="text-align:…"
+        const st = attr(t, "style"); // alignment arrives as style="text-align:…"
         const m = st ? ALIGN.exec(st) : null;
         if (m) cell.style.setProperty("text-align", m[1].toLowerCase());
         push(cell, "cell"); break;
@@ -187,7 +189,7 @@ function buildInline(children: Token[], parent: HTMLElement, dropped: Record<str
       case "link_open": { // inert: never an <a>; autolinks arrive here too
         const span = document.createElement("span");
         span.className = "doc-link";
-        const href = c.attrGet("href");
+        const href = attr(c, "href");
         if (href) span.title = href;
         push(span, "link"); break;
       }

@@ -3,7 +3,7 @@
 // The token is read from its field once, on submit, and the field is emptied at once: no state,
 // attribute or later render holds it.
 import { lucide } from "../icons";
-import { iconImg } from "../icon-img";
+import { iconImg, type ColorIcon } from "../icon-img";
 import { brandIcon, clearEmptyState, connectActions, fillEmptyState } from "../panels/empty-state";
 import { groupIssues, statusLabel, statusTone, typeIcon, typeKind, type Group, type Issue, type Scope } from "./model";
 import { renderTypeIcon } from "./type-icon";
@@ -58,9 +58,9 @@ const TITLES: Record<Exclude<ErrorKind, "unset" | "site">, string> = {
   endpoint: "Jira Couldn't Load the Issues",
 };
 /** Only for the client-side normaliseSite refusal; a Rust `site` error takes the endpoint title. */
-const SCOPES: [Scope, string, string][] = [
-  ["mine", "Mine", "Your saved query, or your open items when none is saved."],
-  ["all", "All", "Every open item you can see, 50 at a time."],
+const SCOPES: [Scope, string, string, ColorIcon][] = [
+  ["mine", "Mine", "Your saved query, or your open items when none is saved.", "person"],
+  ["all", "All", "Every open item you can see, 50 at a time.", "people-community"],
 ];
 const MORE_LABEL = "Load 50 More";
 const SITE_NOTE = "Use a name.atlassian.net address.";
@@ -75,7 +75,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLEle
   return node;
 }
 
-function iconBtn(icon: Node, label: string, tip: string, cls = "cx-ico wb-card-btn"): HTMLButtonElement {
+function iconBtn(icon: Node, label: string, tip: string, cls = "cx-ico"): HTMLButtonElement {
   const b = el("button", cls);
   b.type = "button";
   b.title = tip;
@@ -165,8 +165,8 @@ export function buildView(h: Handlers): View {
     site.title = state.site;
     const scope = el("span", "jx-scope wb-actions");
     scope.setAttribute("role", "group");
-    for (const [value, label, tip] of SCOPES) {
-      const b = textBtn(label, value === state.scope ? "jx-scope-btn wb-card-btn on" : "jx-scope-btn wb-card-btn", tip);
+    for (const [value, label, tip, icon] of SCOPES) {
+      const b = iconBtn(iconImg(icon), label, tip, value === state.scope ? "jx-scope-btn wb-card-btn on" : "jx-scope-btn wb-card-btn");
       b.setAttribute("aria-pressed", String(value === state.scope));
       b.addEventListener("click", () => h.setScope(value));
       scope.append(b);

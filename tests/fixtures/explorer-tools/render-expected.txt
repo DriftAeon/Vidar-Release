@@ -1,0 +1,14 @@
+# Explorer Report
+Findings: 3 · Not Driven: 33.3%
+## Fail
+## Wanted
+## Blocked
+## Detour
+## Stale
+## Not Driven
+## Pass
+### G1
+### G2
+Goal: `g1`
+./shot-1.png
+Maybe duplicate of review/earlier.md

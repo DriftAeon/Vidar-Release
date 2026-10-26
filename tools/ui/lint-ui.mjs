@@ -23,6 +23,8 @@
 //              without a `/* motion: … */` comment on that line. In a shorthand the second time is a
 //              delay and is ignored.
 //   important  !important.
+//   compound   a selector whose subject compound joins 2+ SHARED_CLASSES (.ws-btn.ws-add) with no ancestor
+//              scope (combinator, :is()/:where(), id); scope it under its view root. Reported per declaration.
 //
 // Baseline: tools/ui/lint-baseline.json, a multiset keyed by file (repo-relative, forward slashes),
 // selector, property, value, check → count. Line numbers are not part of the key.
@@ -32,8 +34,11 @@
 //   --file <path>       extra .css/.html file to check (repeatable)
 //   --update-baseline   rewrite the baseline from the current findings (refused with a non-default --root)
 //   --all               print every finding, ignoring the baseline
+//   <path>...           repo-relative files; scan only those the full walk covers (none = whole tree)
+//   --staged            with paths: judge each file's staged blob (`git show :path`), not the working copy
 // Exit: 1 if any finding is printed (new ones, or any with --all), else 0.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -58,7 +63,9 @@ const TOKEN_PREFIX = { space: "--space-", font: "--font-", radius: "--radius-", 
 const tokenName = (fam, n) => (fam === "radius" && n === 9999 ? "--radius-full" : `${TOKEN_PREFIX[fam]}${n}`);
 const LEGACY_VAR = /var\(\s*--(?:space-(?:3|5|6|10|20)|radius-(?:3|5|8|12)|font-(?:10|14|18)|accent2)(?![\w-])/gi;
 const MOTION_LIMIT_MS = 250;
-const CHECKS = ["token", "legacy", "family", "colour", "motion", "important"];
+const CHECKS = ["token", "legacy", "family", "colour", "motion", "important", "compound"];
+// Component classes reused across sheets; an unscoped compound joining two of them leaks into every view (compound check).
+const SHARED_CLASSES = new Set(["ws-btn", "ws-add"]);
 
 // The new-ui token(s) closest to n in px (both when equidistant).
 function nearestNew(fam, n) {
@@ -68,16 +75,30 @@ function nearestNew(fam, n) {
 
 // ---------- args ----------
 function parseArgs(argv) {
-  const a = { root: REPO, files: [], update: false, all: false, customRoot: false };
+  const a = { root: REPO, files: [], paths: [], staged: false, update: false, all: false, customRoot: false };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--root") { a.root = resolve(argv[++i]); a.customRoot = a.root !== REPO; }
     else if (k === "--file") a.files.push(resolve(argv[++i]));
     else if (k === "--update-baseline") a.update = true;
     else if (k === "--all") a.all = true;
-    else { console.error(`lint:ui: unknown argument ${k}`); process.exit(2); }
+    else if (k === "--staged") a.staged = true;
+    else if (k.startsWith("--")) { console.error(`lint:ui: unknown argument ${k}`); process.exit(2); }
+    else a.paths.push(k);
   }
   return a;
+}
+
+// True when the whole-tree walk would scan this repo-relative path.
+export function covers(rel) {
+  const p = rel.split("\\").join("/");
+  return p.startsWith("src/") && !p.split("/").includes("node_modules") && /\.(css|ts)$/i.test(p) && !/\.d\.ts$/i.test(p);
+}
+
+// Staged blob text (`git show :path`); null when nothing is staged at that path (a deletion).
+function stagedText(rel) {
+  const r = spawnSync("git", ["show", `:${rel}`], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 28 });
+  return r.status === 0 ? r.stdout : null;
 }
 
 // ---------- inputs ----------
@@ -164,6 +185,7 @@ function declarations(text) {
     const to = lineOf(segStart + lead + body.length - 1);
     decls.push({
       selector: stack.map((s) => s.prelude).join(" "),
+      own: stack[stack.length - 1].prelude,
       property: body.slice(0, colon).trim().toLowerCase(),
       value: body.slice(colon + 1).trim().replace(/\s+/g, " "),
       from, to,
@@ -265,7 +287,24 @@ function check(d, only) {
   }
 
   if (on("important") && /!\s*important/i.test(v)) add("important", "!important");
+
+  if (on("compound") && d.own) {
+    const hit = unscopedShared(d.own);
+    if (hit) add("compound", `${hit} joins shared classes with no view scope; scope it under its view root`);
+  }
   return out;
+}
+
+// The first selector in a rule's prelude whose subject compound joins 2+ SHARED_CLASSES with no ancestor scope.
+function unscopedShared(prelude) {
+  if (prelude.startsWith("@") || /[#&]|:(?:is|where)\(/i.test(prelude)) return null;
+  for (const sel of splitTop(prelude)) {
+    const s = sel.trim().replace(/\([^)]*\)|\[[^\]]*\]/g, "");
+    if (!s || /[\s>+~]/.test(s)) continue; // a combinator before the subject is an ancestor scope
+    const classes = new Set([...s.matchAll(/\.([\w-]+)/g)].map((m) => m[1]));
+    if ([...classes].filter((c) => SHARED_CLASSES.has(c)).length >= 2) return sel.trim();
+  }
+  return null;
 }
 
 // ---------- TS inline styles ----------
@@ -372,11 +411,24 @@ function main() {
     console.error("lint:ui: --update-baseline is refused with a non-default --root (it would baseline fixtures)");
     process.exit(2);
   }
-  const inputs = [...walkCss(join(args.root, "src")).sort(), ...args.files];
+  if (args.update && args.paths.length) {
+    console.error("lint:ui: --update-baseline is refused with a path list (it would drop the other files' entries)");
+    process.exit(2);
+  }
+  // A path list restricts the scan to those repo-relative files the full walk would cover; none = whole tree.
+  const scanned = args.paths.length
+    ? args.paths.filter(covers).map((p) => resolve(args.root, p)).sort()
+    : walkCss(join(args.root, "src")).sort();
+  const inputs = [...scanned, ...args.files];
   const findings = [];
   for (const path of inputs) {
     let text;
-    try { text = readFileSync(path, "utf8"); } catch { console.error(`lint:ui: cannot read ${path}`); process.exit(2); }
+    if (args.staged && args.paths.length && scanned.includes(path)) {
+      text = stagedText(relative(args.root, path).split("\\").join("/"));
+      if (text === null) continue;
+    } else {
+      try { text = readFileSync(path, "utf8"); } catch { console.error(`lint:ui: cannot read ${path}`); process.exit(2); }
+    }
     const ext = extname(path).toLowerCase();
     if (ext === ".html" || ext === ".htm") text = htmlToCss(text);
     const file = relative(REPO, path).split("\\").join("/");

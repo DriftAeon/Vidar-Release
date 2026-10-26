@@ -1,5 +1,5 @@
 //! Vidar-drawn caption row over a decorated window; DWM keeps painting min/max/close.
-//! WM_NCCALCSIZE drops only the caption (maximized: the off-screen frame inset stays out), the
+//! WM_NCCALCSIZE drops only the caption (maximized: the off-screen frame inset stays client), the
 //! frame is extended down over the row so DWM still draws its buttons, and the WRY_WEBVIEW child
 //! gets a window region with the button rect and the top resize band cut out: the parent window
 //! receives the hit tests there, DWM answers the buttons (HTMAXBUTTON gives Snap Layouts), this
@@ -113,33 +113,28 @@ impl Metrics {
     }
 }
 
-/// Client top after WM_NCCALCSIZE: the window top (caption and top frame gone), or, maximized,
-/// below the frame inset that sits off-screen above the monitor.
-pub(crate) fn client_top(window_top: i32, m: Metrics, maximized: bool) -> i32 {
-    if maximized {
-        window_top + m.inset()
+/// Client top after WM_NCCALCSIZE: the window top (caption and top frame gone), maximized too, so
+/// the frame inset hanging off-screen above the monitor stays client. DwmDefWindowProc hit-tests
+/// its buttons only when the client starts at the window top: with any top non-client strip (1 px
+/// to the full inset) it declines every point, so DWM never tracks hover (probed 2026-10-24). A
+/// top auto-hide appbar is the exception: its reveal strip needs the client 1 px below the monitor.
+pub(crate) fn client_top(window_top: i32, m: Metrics, maximized: bool, autohide_top: bool) -> i32 {
+    if maximized && autohide_top {
+        window_top + m.inset() + 1
     } else {
         window_top
     }
 }
 
-/// Height of the drawn row: today's native caption, i.e. the distance from the visible window top
-/// to the old client top (frame inset plus caption normally; the caption alone when maximized).
-pub(crate) fn caption_height(m: Metrics, maximized: bool) -> i32 {
-    if maximized {
-        m.cy_caption
-    } else {
-        m.cy_caption + m.inset()
-    }
+/// Height of the drawn row: today's native caption, frame inset plus caption, less `offset`, the
+/// client top's distance below the window top (0 except under a top auto-hide appbar).
+pub(crate) fn caption_height(m: Metrics, offset: i32) -> i32 {
+    (m.cy_caption + m.inset() - offset).max(0)
 }
 
-/// Top resize band thickness: none when maximized.
-pub(crate) fn band_height(m: Metrics, maximized: bool) -> i32 {
-    if maximized {
-        0
-    } else {
-        m.inset()
-    }
+/// The row's top strip above the caption: the resize band restored, the off-screen inset maximized.
+pub(crate) fn band_height(m: Metrics, offset: i32) -> i32 {
+    (m.inset() - offset).max(0)
 }
 
 /// Button rect when DWM reports none: min/max/close are three SM_CXSIZE-wide buttons, right-aligned
@@ -189,7 +184,8 @@ pub(crate) fn hit_test(x: i32, y: i32, l: &Layout, maximized: bool) -> u32 {
         };
     }
     if l.buttons.contains(x, y) {
-        // DWM declines these points when maximized: answer min/max/close by thirds ourselves.
+        // Points DWM declined (under a top auto-hide appbar it declines them all): answer
+        // min/max/close by thirds ourselves.
         let third = ((x - l.buttons.left) * 3 / (l.buttons.right - l.buttons.left)).clamp(0, 2);
         return [HTMINBUTTON, HTMAXBUTTON, HTCLOSE][third as usize];
     }
@@ -209,13 +205,14 @@ pub(crate) fn button_command(code: u32, maximized: bool) -> Option<u32> {
     }
 }
 
-/// Rects cut out of the webview's region: the button rect and, unless maximized, the top band.
-pub(crate) fn carve(l: &Layout, maximized: bool) -> Vec<Rect> {
+/// Rects cut out of the webview's region: the button rect and the top band (maximized, the
+/// off-screen inset, so the page never paints past the monitor edge).
+pub(crate) fn carve(l: &Layout) -> Vec<Rect> {
     let mut out = Vec::new();
     if !l.buttons.is_empty() {
         out.push(l.buttons);
     }
-    if !maximized && l.band > 0 {
+    if l.band > 0 {
         out.push(Rect { left: 0, top: 0, right: l.width, bottom: l.band });
     }
     out
@@ -238,6 +235,18 @@ fn metrics(hwnd: HWND) -> (Metrics, u32) {
             padded: GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi),
         };
         (m, dpi)
+    }
+}
+
+/// The client top's distance below the window top (measured, not assumed); 0 on failure.
+fn top_offset(hwnd: HWND) -> i32 {
+    unsafe {
+        let mut win = RECT::default();
+        let mut origin = POINT::default();
+        if GetWindowRect(hwnd, &mut win).is_err() || !ClientToScreen(hwnd, &mut origin).as_bool() {
+            return 0;
+        }
+        origin.y - win.top
     }
 }
 
@@ -271,10 +280,11 @@ fn layout(hwnd: HWND) -> (Layout, bool, u32) {
         let _ = GetClientRect(hwnd, &mut rc);
     }
     let width = rc.right - rc.left;
-    let caption = caption_height(m, max);
+    let offset = top_offset(hwnd);
+    let caption = caption_height(m, offset);
     let buttons = button_rect(hwnd)
         .unwrap_or_else(|| fallback_buttons(width, caption, unsafe { GetSystemMetricsForDpi(SM_CXSIZE, dpi) }));
-    let l = Layout { width, caption, band: band_height(m, max), buttons };
+    let l = Layout { width, caption, band: band_height(m, offset), buttons };
     (l, max, dpi)
 }
 
@@ -286,7 +296,7 @@ fn extend_frame(hwnd: HWND, l: &Layout) {
 }
 
 /// Region on WRY_WEBVIEW: everything minus the carve, in the webview's own coordinates.
-fn apply_region(hwnd: HWND, l: &Layout, max: bool) {
+fn apply_region(hwnd: HWND, l: &Layout) {
     unsafe {
         let Ok(webview) = FindWindowExW(Some(hwnd), None, w!("WRY_WEBVIEW"), None) else {
             return;
@@ -299,7 +309,7 @@ fn apply_region(hwnd: HWND, l: &Layout, max: bool) {
         let mut at = POINT { x: wr.left, y: wr.top };
         let _ = ScreenToClient(hwnd, &mut at);
         // Unbounded right/bottom: tauri may resize the webview after this WM_SIZE.
-        let rects = carve(l, max);
+        let rects = carve(l);
         let key = (webview.0 as isize, at.x, at.y, rects.clone());
         if let Ok(mut last) = LAST_REGION.lock() {
             if last.as_ref() == Some(&key) {
@@ -327,14 +337,14 @@ fn refresh(hwnd: HWND) {
     if !has_caption(hwnd) {
         return;
     }
-    let (l, max, _) = layout(hwnd);
+    let (l, _, _) = layout(hwnd);
     extend_frame(hwnd, &l);
-    apply_region(hwnd, &l, max);
+    apply_region(hwnd, &l);
 }
 
 pub fn install(window: &tauri::WebviewWindow) {
     let hwnd = match window.hwnd() {
-        Ok(h) => h,
+        Ok(h) => HWND(h.0),
         Err(e) => {
             eprintln!("caption: {e}");
             return;
@@ -374,8 +384,8 @@ fn schedule_refresh(hwnd: HWND) {
 pub struct CaptionMetrics {
     /// Row height in physical pixels.
     height: i32,
-    /// Top resize band inside the row in physical pixels (0 when maximized): the DWM band the
-    /// restored row's icon and title centre below.
+    /// Top strip inside the row in physical pixels, the band icon and title centre below: DWM's
+    /// resize band restored, the frame inset hanging off-screen maximized.
     band: i32,
     /// Width of the DWM button rect in physical pixels (0 when DWM reports none).
     buttons_width: i32,
@@ -388,7 +398,7 @@ pub fn caption_metrics(window: tauri::WebviewWindow) -> Result<CaptionMetrics, S
     if !INSTALLED.load(Ordering::SeqCst) {
         return Err("caption subclass not installed".into());
     }
-    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    let hwnd = window.hwnd().map(|h| HWND(h.0)).map_err(|e| e.to_string())?;
     let (l, max, dpi) = layout(hwnd);
     Ok(CaptionMetrics {
         height: l.caption,
@@ -425,12 +435,14 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             let result = DefSubclassProc(hwnd, msg, wparam, lparam);
             let (m, _) = metrics(hwnd);
             let max = maximized(hwnd);
-            params.rgrc[0].top = client_top(window_top, m, max);
+            let edges = if max { autohide_edges() } else { AutoHide::default() };
+            params.rgrc[0].top = client_top(window_top, m, max, edges.top);
             if max {
                 let r = params.rgrc[0];
+                // client_top already left the top reveal strip.
                 let r = leave_autohide_edges(
                     Rect { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
-                    autohide_edges(),
+                    AutoHide { top: false, ..edges },
                 );
                 params.rgrc[0] = RECT { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
             }
@@ -495,42 +507,49 @@ mod tests {
     const M120: Metrics = Metrics { cy_caption: 27, cy_frame: 5, padded: 5 };
     const M144: Metrics = Metrics { cy_caption: 34, cy_frame: 6, padded: 6 };
 
-    fn layout96(maximized: bool) -> Layout {
+    /// Restored and maximized share one geometry: the client starts at the window top in both.
+    fn layout96() -> Layout {
         Layout {
             width: 1000,
-            caption: caption_height(M96, maximized),
-            band: band_height(M96, maximized),
+            caption: caption_height(M96, 0),
+            band: band_height(M96, 0),
             buttons: Rect { left: 862, top: 0, right: 1000, bottom: 30 },
         }
     }
 
     #[test]
-    fn client_top_keeps_the_window_top_and_drops_the_offscreen_inset_when_maximized() {
-        assert_eq!(client_top(100, M96, false), 100);
-        assert_eq!(client_top(-8, M96, true), 0);
-        assert_eq!(client_top(-10, M120, true), 0);
-        assert_eq!(client_top(-12, M144, true), 0);
+    fn client_top_stays_at_the_window_top_even_maximized() {
+        assert_eq!(client_top(100, M96, false, false), 100);
+        // Maximized: the off-screen inset stays client, or DWM declines its button hit tests.
+        assert_eq!(client_top(-8, M96, true, false), -8);
+        assert_eq!(client_top(-12, M144, true, false), -12);
+        // A top auto-hide appbar keeps its 1 px reveal strip below the monitor top.
+        assert_eq!(client_top(-8, M96, true, true), 1);
+        assert_eq!(client_top(-10, M120, true, true), 1);
+        // Restored ignores the appbar.
+        assert_eq!(client_top(100, M96, false, true), 100);
     }
 
     #[test]
     fn caption_height_matches_the_native_caption_per_dpi() {
-        assert_eq!(caption_height(M96, false), 31);
-        assert_eq!(caption_height(M120, false), 37);
-        assert_eq!(caption_height(M144, false), 46);
-        assert_eq!(caption_height(M96, true), 23);
-        assert_eq!(caption_height(M144, true), 34);
+        assert_eq!(caption_height(M96, 0), 31);
+        assert_eq!(caption_height(M120, 0), 37);
+        assert_eq!(caption_height(M144, 0), 46);
+        // Under a top auto-hide appbar the client starts inset + 1 below the window top.
+        assert_eq!(caption_height(M96, 9), 22);
+        assert_eq!(caption_height(M96, 100), 0);
     }
 
     #[test]
-    fn band_is_the_frame_inset_and_none_when_maximized() {
-        assert_eq!(band_height(M96, false), 8);
-        assert_eq!(band_height(M144, false), 12);
-        assert_eq!(band_height(M96, true), 0);
+    fn band_is_the_frame_inset_less_the_client_offset() {
+        assert_eq!(band_height(M96, 0), 8);
+        assert_eq!(band_height(M144, 0), 12);
+        assert_eq!(band_height(M96, 9), 0);
     }
 
     #[test]
     fn hit_test_top_band_resizes_with_corners() {
-        let l = layout96(false);
+        let l = layout96();
         assert_eq!(hit_test(500, 0, &l, false), HTTOP);
         assert_eq!(hit_test(500, 7, &l, false), HTTOP);
         assert_eq!(hit_test(3, 2, &l, false), HTTOPLEFT);
@@ -539,13 +558,13 @@ mod tests {
 
     #[test]
     fn hit_test_band_wins_over_the_button_rect() {
-        let l = layout96(false);
+        let l = layout96();
         assert_eq!(hit_test(900, 4, &l, false), HTTOP);
     }
 
     #[test]
     fn hit_test_button_rect_left_by_dwm_splits_into_thirds() {
-        let l = layout96(true);
+        let l = layout96();
         assert_eq!(hit_test(870, 10, &l, true), HTMINBUTTON);
         assert_eq!(hit_test(930, 10, &l, true), HTMAXBUTTON);
         assert_eq!(hit_test(990, 10, &l, true), HTCLOSE);
@@ -553,7 +572,7 @@ mod tests {
         // The row left of the buttons stays draggable.
         assert_eq!(hit_test(861, 10, &l, true), HTCAPTION);
         // Restored: the top band still wins over the button rect.
-        assert_eq!(hit_test(900, 4, &layout96(false), false), HTTOP);
+        assert_eq!(hit_test(900, 4, &layout96(), false), HTTOP);
     }
 
     #[test]
@@ -567,7 +586,7 @@ mod tests {
 
     #[test]
     fn hit_test_caption_row_drags_below_the_band() {
-        let l = layout96(false);
+        let l = layout96();
         assert_eq!(hit_test(300, 8, &l, false), HTCAPTION);
         assert_eq!(hit_test(300, 30, &l, false), HTCAPTION);
         assert_eq!(hit_test(300, 31, &l, false), HTCLIENT);
@@ -575,11 +594,13 @@ mod tests {
 
     #[test]
     fn hit_test_maximized_has_no_band() {
-        let l = layout96(true);
+        let l = layout96();
         assert_eq!(hit_test(500, 0, &l, true), HTCAPTION);
         assert_eq!(hit_test(2, 0, &l, true), HTCAPTION);
-        assert_eq!(hit_test(500, 22, &l, true), HTCAPTION);
-        assert_eq!(hit_test(500, 23, &l, true), HTCLIENT);
+        // The off-screen strip over the buttons is the button, not a resize band.
+        assert_eq!(hit_test(930, 4, &l, true), HTMAXBUTTON);
+        assert_eq!(hit_test(500, 30, &l, true), HTCAPTION);
+        assert_eq!(hit_test(500, 31, &l, true), HTCLIENT);
     }
 
     #[test]
@@ -601,12 +622,13 @@ mod tests {
     }
 
     #[test]
-    fn carve_cuts_buttons_and_band_but_only_buttons_when_maximized() {
-        let l = layout96(false);
-        assert_eq!(carve(&l, false), vec![l.buttons, Rect { left: 0, top: 0, right: 1000, bottom: 8 }]);
-        let m = layout96(true);
-        assert_eq!(carve(&m, true), vec![m.buttons]);
-        let none = Layout { buttons: Rect::default(), ..m };
-        assert!(carve(&none, true).is_empty());
+    fn carve_cuts_buttons_and_the_top_band() {
+        // Restored the band is the resize band; maximized it is the off-screen inset.
+        let l = layout96();
+        assert_eq!(carve(&l), vec![l.buttons, Rect { left: 0, top: 0, right: 1000, bottom: 8 }]);
+        let no_band = Layout { band: 0, ..l };
+        assert_eq!(carve(&no_band), vec![l.buttons]);
+        let none = Layout { buttons: Rect::default(), ..no_band };
+        assert!(carve(&none).is_empty());
     }
 }

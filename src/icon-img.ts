@@ -26,9 +26,12 @@ export const BACKEND_ICONS_MAP = new Map(
 ) as ReadonlyMap<string, readonly ColorIcon[]>;
 export const BACKEND_ICON_MAP = new Map([...BACKEND_ICONS_MAP].map(([k, v]) => [k, v[0]])) as ReadonlyMap<string, ColorIcon>;
 
+/** Icons drawn as one flat grey (dark mode, user 2026-10-25): `.icn-grey` is `filter: grayscale(1)` in rendered.css. */
+const GREY_ICONS: ReadonlySet<ColorIcon> = new Set<ColorIcon>(["mic", "person", "people-community"]);
+
 export function iconImg(name: ColorIcon): HTMLImageElement {
   const img = document.createElement("img");
-  img.className = "icn";
+  img.className = GREY_ICONS.has(name) ? "icn icn-grey" : "icn";
   img.src = `/icons/color/${name}.${PNG_ICONS.has(name) ? "png" : "svg"}`;
   img.alt = "";
   img.draggable = false;

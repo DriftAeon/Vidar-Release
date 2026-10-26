@@ -6,7 +6,7 @@ import { invoke } from "../ipc";
 import { DASH } from "../format";
 import type { FalconSessionSummary } from "../ipc";
 import { activate, createSession, dropUnadoptedTab, findTabByFalconSession, findTabByFalconSessionHosted, openFalconSessionIds } from "../panels/sessions";
-import { nextTabName, tabTitleTaken } from "../panels/sessions/lookup";
+import { nextTabName, recordedVault, tabTitleTaken } from "../panels/sessions/lookup";
 import { hostedNames } from "./hosted-names-pref";
 import { finishAdopt, shouldShowShellAfterDrop, startAdopt } from "./adopt-settle";
 import { adoptAgent, adoptRefusal, heldElsewhere } from "./readopt";
@@ -200,6 +200,9 @@ export async function adoptHosted(
   draft?: string,
   opts: { background?: boolean; dropOnFail?: boolean; restoreSlot?: boolean } = {},
 ): Promise<string> {
+  // D-g: a Bare session respawns (/clear, Retry) on the vault its session record names. Read before
+  // the held-tab check below, so no await sits between that check and createSession.
+  const vault = s.profile ? await recordedVault("", s.session) : null;
   // Already in a tab (readopt racing a Falcon-row click or a Dock):
   // focus that tab instead of adopting a second time. Checked now, not from a
   // snapshot; the sync re-check closes the gap across the async lookup's awaits.
@@ -227,6 +230,7 @@ export async function adoptHosted(
     profile: s.profile,
     // and its row: a /clear respawn rebuilds that row's payload (the host echoes the key)
     rowKey: s.profile ? s.row_key : undefined,
+    ...(vault ? { vault } : s.sets !== undefined ? { sets: s.sets } : {}),
     body: "rendered",
     cwd: s.cwd,
     model: s.model ?? undefined,

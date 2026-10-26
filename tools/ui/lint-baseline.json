@@ -546,6 +546,78 @@
       "count": 1
     },
     {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add, .approval-actions button.approval-allow",
+      "property": "background",
+      "value": "var(--approve-grad)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add, .approval-actions button.approval-allow",
+      "property": "border-color",
+      "value": "var(--approve-edge)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add, .approval-actions button.approval-allow",
+      "property": "box-shadow",
+      "value": "var(--approve-shadow)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve:active:not(:disabled), .relay-approve:active:not(:disabled), .swap-yes:active:not(:disabled), .release-build__go:active:not(:disabled), .ws-btn.ws-add:active:not(:disabled), .approval-actions button.approval-allow:active:not(:disabled)",
+      "property": "background",
+      "value": "var(--approve-grad-press)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve:active:not(:disabled), .relay-approve:active:not(:disabled), .swap-yes:active:not(:disabled), .release-build__go:active:not(:disabled), .ws-btn.ws-add:active:not(:disabled), .approval-actions button.approval-allow:active:not(:disabled)",
+      "property": "border-color",
+      "value": "var(--approve-edge)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve:active:not(:disabled), .relay-approve:active:not(:disabled), .swap-yes:active:not(:disabled), .release-build__go:active:not(:disabled), .ws-btn.ws-add:active:not(:disabled), .approval-actions button.approval-allow:active:not(:disabled)",
+      "property": "box-shadow",
+      "value": "var(--approve-shadow-press)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve:hover:not(:disabled), .relay-approve:hover:not(:disabled), .swap-yes:hover:not(:disabled), .release-build__go:hover:not(:disabled), .ws-btn.ws-add:hover:not(:disabled), .approval-actions button.approval-allow:hover:not(:disabled)",
+      "property": "background",
+      "value": "var(--approve-grad-hover)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve:hover:not(:disabled), .relay-approve:hover:not(:disabled), .swap-yes:hover:not(:disabled), .release-build__go:hover:not(:disabled), .ws-btn.ws-add:hover:not(:disabled), .approval-actions button.approval-allow:hover:not(:disabled)",
+      "property": "border-color",
+      "value": "var(--approve-edge)",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/decision-pair.css",
+      "selector": ".flow-approve-approve:hover:not(:disabled), .relay-approve:hover:not(:disabled), .swap-yes:hover:not(:disabled), .release-build__go:hover:not(:disabled), .ws-btn.ws-add:hover:not(:disabled), .approval-actions button.approval-allow:hover:not(:disabled)",
+      "property": "box-shadow",
+      "value": "var(--approve-shadow-hover)",
+      "check": "compound",
+      "count": 1
+    },
+    {
       "file": "src/styles/display.css",
       "selector": ".display-render.display-staging",
       "property": "height",
@@ -2139,6 +2211,14 @@
     },
     {
       "file": "src/styles/settings-modal.css",
+      "selector": ".ws-btn.ws-add",
+      "property": "align-self",
+      "value": "flex-start",
+      "check": "compound",
+      "count": 1
+    },
+    {
+      "file": "src/styles/settings-modal.css",
       "selector": ".ws-list",
       "property": "gap",
       "value": "var(--space-6)",
@@ -2830,14 +2910,6 @@
       "selector": "#workbench.wb-dropping",
       "property": "border-radius",
       "value": "var(--radius-3)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/workbench.css",
-      "selector": "#workbench",
-      "property": "padding",
-      "value": "var(--space-8) var(--space-10)",
       "check": "legacy",
       "count": 1
     },

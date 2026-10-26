@@ -1,6 +1,6 @@
 // src\launcher\reopen-workspace.ts — the refused Codex tab's Select Workspace… (a home-folder refusal,
 // codex_cwd.rs): pick a folder, open a tab of the same agent, body and Bare profile there, close the
-// refused one. Also the trust card's Refresh: the same tab again in its own folder. main.ts binds both
+// refused one. Also the trust card's Refresh: the same tab again in its own folder (worktree and Refresh carry the tab's rune sets). main.ts binds both
 // into the rendered body (panels/sessions/rendered-body.ts).
 import { invoke } from "../ipc";
 import type { TerminalSession } from "../panels/sessions/types";
@@ -35,7 +35,7 @@ export async function reopenInWorkspace(s: TerminalSession): Promise<void> {
 export async function reopenInWorktree(s: TerminalSession): Promise<void> {
   const row = rowOf(s);
   const path = await invoke("vidar_worktree_open");
-  await spawnFrom({ ...row, cwd: undefined }, { label: folderName(path), cwd: path });
+  await spawnFrom({ ...row, cwd: undefined }, { label: folderName(path), cwd: path }, undefined, undefined, undefined, undefined, s.sets);
   closeSession(s.id);
 }
 
@@ -43,6 +43,6 @@ export async function reopenInWorktree(s: TerminalSession): Promise<void> {
  *  tab open (it holds a chat); a failed spawn rejects and keeps the tab either way. */
 export async function reopenHere(s: TerminalSession, keepThis: boolean): Promise<void> {
   const row = rowOf(s);
-  await spawnFrom({ ...row, cwd: undefined }, { label: folderName(s.cwd), cwd: s.cwd });
+  await spawnFrom({ ...row, cwd: undefined }, { label: folderName(s.cwd), cwd: s.cwd }, undefined, undefined, undefined, undefined, s.sets);
   if (!keepThis) closeSession(s.id);
 }

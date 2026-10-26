@@ -6,16 +6,16 @@
 #   pwsh -File tools/mcp/hosted-add.ps1 -Agent codex [-Home default|bare] [-Server all|notion|atlassian] [-WhatIf]
 # Claude runs `claude mcp add -s user -t http`; slack carries Slack's published client id and callback port 3118.
 # Codex runs `codex mcp add <name> --url <url>`; sign-in is a browser login, `codex mcp login <name>` if none opened.
-# Codex -Home bare runs only `codex mcp login <name>` with CODEX_HOME = <Bare home>\codex-home for the child; never
-# `mcp add`, because Vidar writes that config.toml on every spawn (servers are enabled by bareCodexMcp in vidar.json).
+# Claude -Home bare refuses: strict MCP loads the servers ticked per rune set in the Runes tab.
+# Codex -Home bare runs `codex -c mcp_servers.<name>.url=<url> mcp login <name>` with CODEX_HOME =
+# <Bare home>\codex-home for the child. In-process tabs get MCP on the launch line; hosted tabs keep
+# bareCodexMcp tables in that legacy config.toml.
 # Refuses:
 #   - Claude default home when VIDAR_AGENT_HOME or CLAUDE_CONFIG_DIR is set (a profile or Bare tab);
-#   - Claude bare when either is set to anything but the Bare home of this install root, or when that home
-#     does not exist yet (open a Bare tab once first);
+#   - Claude bare (module MCP is ticked per rune set in the Runes tab);
 #   - Codex default when VIDAR_AGENT_HOME is set; -Port with Codex; -Force with Codex;
-#   - Codex bare when VIDAR_AGENT_HOME or CODEX_HOME is set to anything but this install's Bare home (or its
-#     codex-home), or when config.toml lacks [mcp_servers.<name>]:
-#     "<name> is not enabled for Codex Bare: add it to bareCodexMcp in vidar.json and open a Codex Bare tab once";
+#   - Codex bare when VIDAR_AGENT_HOME or CODEX_HOME points outside this install's Bare home,
+#     its codex-home, or a codex-homes\<hash12> home, or when legacy config.toml is absent;
 #   - Codex Slack (manual only; Bare: "slack is manual only for Codex; see docs/reference/hosted-mcp.md"),
 #     Codex default config.toml with an mcp_servers form it cannot read.
 # An existing entry is skipped. -Force (Claude only) removes it and re-adds; a failed add restores the old entry.
@@ -52,6 +52,9 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path
 
 # ---- Argument checks ----
 $names = if ($Server -eq 'all') { @($servers.Keys) } else { @($Server) }
+if ($Agent -eq 'claude' -and $HomeKind -eq 'bare') {
+    Stop-Refuse 'Claude Bare module MCP is ticked per rune set in the Runes tab.'
+}
 if ($PSBoundParameters.ContainsKey('Port')) {
     if ($Agent -ne 'claude') { Stop-Refuse '-Port is Claude only.' }
     if ($Server -in 'all', 'slack') { Stop-Refuse '-Port needs a single server, notion or atlassian (slack keeps its registered callback port).' }
@@ -96,9 +99,14 @@ $targetFile = $null        # file read for the existing-entry check
 if ($Agent -eq 'codex' -and $HomeKind -eq 'bare') {
     $bareRoot = Get-BareHomeRoot
     $targetDir = Join-Path $bareRoot 'codex-home'
+    $comboRoot = Get-Norm (Join-Path $bareRoot 'codex-homes')
     foreach ($pair in @(@('VIDAR_AGENT_HOME', $env:VIDAR_AGENT_HOME), @('CODEX_HOME', $env:CODEX_HOME))) {
-        if ($pair[1] -and (Get-Norm $pair[1]) -ne (Get-Norm $targetDir) -and (Get-Norm $pair[1]) -ne (Get-Norm $bareRoot)) {
-            Stop-Refuse "$($pair[0]) is $($pair[1]), not this install's Bare home ($targetDir); refusing."
+        if ($pair[1]) {
+            $given = Get-Norm $pair[1]
+            $isCombo = ([IO.Path]::GetDirectoryName($given) -eq $comboRoot) -and ([IO.Path]::GetFileName($given) -match '^[0-9a-f]{12}$')
+            if ($given -ne (Get-Norm $targetDir) -and $given -ne (Get-Norm $bareRoot) -and -not $isCombo) {
+                Stop-Refuse "$($pair[0]) is $($pair[1]), not this install's Bare home ($targetDir); refusing."
+            }
         }
     }
     $codexHomeDir = $targetDir
@@ -132,6 +140,7 @@ if ($Agent -eq 'codex' -and $HomeKind -eq 'bare') {
     $targetFile = Join-Path $targetDir 'config.toml'
 }
 Write-Host "Target: $targetDir ($Agent)"
+if ($Agent -eq 'codex' -and $HomeKind -eq 'bare') { Write-Host 'Codex Bare login uses the legacy codex-home.' }
 
 # ---- Existing entries ----
 function Get-ClaudeEntry([string] $Name) {
@@ -161,11 +170,8 @@ function Test-CodexEntry([string] $Name) {
     return [regex]::IsMatch($codexText, "(?m)^\s*\[\s*mcp_servers\s*\.\s*`"?$esc`"?\s*(\.[^\]\r\n]*)?\]")
 }
 if ($Agent -eq 'codex' -and $HomeKind -eq 'bare') {
-    # Vidar writes this config.toml on every spawn; a table missing here is enabled through vidar.json, never added by hand.
-    foreach ($n in $names) {
-        if (-not (Test-CodexEntry $n)) {
-            Stop-Refuse "$n is not enabled for Codex Bare: add it to bareCodexMcp in vidar.json and open a Codex Bare tab once"
-        }
+    if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf)) {
+        Stop-Refuse "No legacy Codex Bare config at $targetFile. Open a Codex Bare tab once first."
     }
 }
 
@@ -226,7 +232,7 @@ foreach ($name in $names) {
         }
         $added += $name
     } elseif ($HomeKind -eq 'bare') {
-        $cliArgs = @('mcp', 'login', $name)
+        $cliArgs = @('-c', "mcp_servers.$name.url=`"$url`"", 'mcp', 'login', $name)
         $code = Invoke-Cli 'codex' $cliArgs ('codex ' + ($cliArgs -join ' '))
         if ($code -ne 0) { [Console]::Error.WriteLine("$name`: codex mcp login failed (exit $code)."); exit 1 }
         $added += $name
@@ -251,6 +257,6 @@ if ($added.Count -eq 0) { Write-Host 'Nothing added.'; exit 0 }
 if ($Agent -eq 'claude') {
     Write-Host "Added: $($added -join ', '). Open a new Raw Claude tab, run /mcp, then Authenticate each."
 } else {
-    if ($HomeKind -eq 'bare') { Write-Host "Signed in: $($added -join ', '). Tokens stay in the Codex Bare home." }
+    if ($HomeKind -eq 'bare') { Write-Host "Signed in: $($added -join ', '). Tokens stay in the legacy codex-home." }
     else { Write-Host "Added: $($added -join ', '). If no browser sign-in opened, run codex mcp login <name>." }
 }

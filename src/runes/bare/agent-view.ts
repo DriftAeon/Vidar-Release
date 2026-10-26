@@ -10,7 +10,7 @@ import {
   generating, type BareActiveLibrary, type BareFlow, type BareLocalSources, type GenOutcome, type GenState,
 } from "./flow";
 import {
-  elapsedLabel, emptyProgress, progressCards, reduceProgress, stopProgress, type ProgressState,
+  ADD_TO_VAULT_LABEL, elapsedLabel, emptyProgress, progressCards, reduceProgress, stopProgress, type GeneratedRef, type ProgressState,
 } from "./progress";
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
@@ -74,6 +74,8 @@ export interface AgentViewDeps {
   done(): void;
   /** The clock for the card timers; tests inject one so nothing waits in real time. */
   clock?: CardClock;
+  /** Add to Vault on the Done line: puts the generated runeset in the tab's vault; true once it landed. Absent, no button. */
+  addToVault?(r: GeneratedRef): Promise<boolean>;
 }
 
 /** `now` in ms and a repeating tick whose returned function stops it. */
@@ -115,7 +117,7 @@ export interface AgentView {
   generatingView(): HTMLElement[];
   /** The Done line kept at the top of Actives after a run. */
   doneLine(): HTMLElement | null;
-  /** Warning lines and the Codex size note under a generated library's header. */
+  /** Warning lines under a generated library's header (no Codex size note is drawn). */
   libraryExtras(lib: BareActiveLibrary): HTMLElement[];
   /** Stops the card timer; the tab calls it on unmount. */
   dispose(): void;
@@ -129,7 +131,7 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
   let runId: string | null = null;
   let outcome: GenOutcome | null = null;
   let phase: "idle" | "running" | "ended" = "idle";
-  let doneText: { model: string; title: string } | null = null;
+  let doneText: { model: string; title: string; gen: GeneratedRef; added: boolean } | null = null;
   let progress: ProgressState = emptyProgress();
 
   const modelLabel = (v: string): string => ctx().models.find((m) => m.value === v)?.label ?? v;
@@ -161,7 +163,7 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
     phase = "ended";
     syncTimer();
     if (res.state === "done" && res.result) {
-      doneText = { model: used.label, title: doneTitle(used.label, used.effort, res.result) };
+      doneText = { model: used.label, title: doneTitle(used.label, used.effort, res.result), gen: { library: res.result.library, set: res.result.set }, added: false };
       deps.done();
     } else deps.paint();
   }
@@ -264,7 +266,19 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
       timeEls.clear();
     },
     doneLine() {
-      return doneText ? lineRow("done", "Done", doneText.title) : null;
+      if (!doneText) return null;
+      const line = lineRow("done", "Done", doneText.title);
+      const add = deps.addToVault;
+      if (add && !doneText.added) {
+        const d = doneText;
+        const b = btn(ADD_TO_VAULT_LABEL, "ws-btn", () => {
+          b.disabled = true;
+          b.setAttribute("aria-busy", "true");
+          void add(d.gen).then((ok) => { if (ok) d.added = true; }, () => undefined).finally(() => { b.disabled = false; b.removeAttribute("aria-busy"); deps.paint(); });
+        });
+        line.querySelector(".runes-bare-line")?.appendChild(b);
+      }
+      return line;
     },
     libraryExtras(lib) {
       const g = lib.generated;

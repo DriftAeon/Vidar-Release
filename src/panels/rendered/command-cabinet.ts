@@ -3,14 +3,14 @@
 // the slash palette's pick does (palette.ts): the composer takes "/name " unsent and keeps focus.
 
 import { DASH } from "../../format";
-import { iconImg } from "../../icon-img";
+import { iconImg, type ColorIcon } from "../../icon-img";
 import { btn, el } from "./dom";
 import type { RenderedState } from "./state";
 
 /** Answered by the body itself (events.ts LOCAL_COMMANDS), so they work when typed whatever the session lists. */
 const RENDERED_CONTROLS = ["model", "effort", "resume", "clear"];
 
-export interface CabinetGroup { title: string; commands: string[] }
+export interface CabinetGroup { title: string; icon: ColorIcon; commands: string[] }
 
 /** The session's command names grouped by source: Rendered controls, plugin commands (`plugin:name`), then the rest. */
 export function groupCommands(commands: readonly string[], query = ""): CabinetGroup[] {
@@ -20,9 +20,9 @@ export function groupCommands(commands: readonly string[], query = ""): CabinetG
   const controls = RENDERED_CONTROLS.filter(keep);
   const rest = names.filter((c) => !RENDERED_CONTROLS.includes(c) && keep(c));
   const groups: CabinetGroup[] = [
-    { title: "Skills", commands: rest.filter((c) => !c.includes(":")).sort() },
-    { title: "Plugins", commands: rest.filter((c) => c.includes(":")).sort() },
-    { title: "Rendered Controls", commands: controls },
+    { title: "Skills", icon: "skill", commands: rest.filter((c) => !c.includes(":")).sort() },
+    { title: "Plugins", icon: "toolbox", commands: rest.filter((c) => c.includes(":")).sort() },
+    { title: "Rendered Controls", icon: "set-general", commands: controls },
   ];
   return groups.filter((g) => g.commands.length);
 }
@@ -41,6 +41,7 @@ export function createCommandCabinet(S: RenderedState, deps: CabinetDeps) {
 
   let panel: HTMLElement | null = null;
   let offAway: (() => void) | null = null;
+  const collapsed = new Set<string>(); // group titles the user folded; kept across redraws and reopens (2026-10-24)
 
   function close(refocus = false) {
     offAway?.(); offAway = null;
@@ -78,24 +79,35 @@ export function createCommandCabinet(S: RenderedState, deps: CabinetDeps) {
     const draw = () => {
       list.textContent = "";
       const groups = groupCommands(S.commands, search.value);
+      const searching = search.value.trim() !== ""; // matches stay visible; forced-open states are not remembered
       for (const g of groups) {
-        list.append(el("div", "cabinet-group", g.title));
-        for (const c of g.commands) list.append(btn(`/${c}`, "cabinet-row", () => pick(c)));
+        const set = el("details", "cabinet-set");
+        set.open = searching || !collapsed.has(g.title);
+        const head = el("summary", "cabinet-group");
+        head.append(iconImg(g.icon), g.title);
+        set.append(head);
+        for (const c of g.commands) set.append(btn(`/${c}`, "cabinet-row", () => pick(c)));
+        set.addEventListener("toggle", () => {
+          if (!searching) { if (set.open) collapsed.delete(g.title); else collapsed.add(g.title); }
+          place(p);
+        });
+        list.append(set);
       }
       if (!groups.length) list.append(el("p", "cabinet-empty", DASH));
       place(p);
     };
+    const openRows = () => [...list.querySelectorAll<HTMLButtonElement>("details[open] > button")];
     search.addEventListener("input", draw);
     p.addEventListener("keydown", (e) => {
       if (e.key === "Escape") { e.preventDefault(); close(true); return; }
       if (e.key === "Enter" && e.target === search) {
         e.preventDefault();
-        list.querySelector<HTMLButtonElement>("button")?.click();
+        openRows()[0]?.click();
         return;
       }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
-      const rows = [...list.querySelectorAll<HTMLButtonElement>("button")];
+      const rows = openRows();
       if (!rows.length) return;
       const i = rows.indexOf(document.activeElement as HTMLButtonElement);
       const step = e.key === "ArrowDown" ? 1 : -1;

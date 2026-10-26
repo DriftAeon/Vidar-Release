@@ -60,6 +60,9 @@ fn falcon_list_full_session_matches_an_exhaustive_literal() {
             "C:\\Users\\test\\AppData\\Local\\Vidar\\homes\\1c49ff625c89a9b8\\layer\\payload-0123456789ab.md".into(),
         ),
         row_key: Some("claude-bare".into()),
+        mcp_file: Some("C:\\Users\\test\\AppData\\Local\\Vidar\\homes\\1c49ff625c89a9b8\\layer\\mcp-0123456789ab.json".into()),
+        sets: Some(vec![crate::protocol::SetRef { library: Some("vidar".into()), set: "base".into() }]),
+        claude_config_dir: None,
     };
     assert_eq!(serde_json::to_value(&literal).unwrap(), full);
 }

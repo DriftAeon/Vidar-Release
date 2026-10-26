@@ -89,7 +89,8 @@ fn exchange(mut send: impl FnMut(&Value) -> Result<(), String>, rx: &Receiver<St
 /// Spawns, asks, ends. Every return after the spawn goes through the kill below.
 fn fetch() -> Result<Vec<Value>, String> {
     crate::bare::admit_rendered("bare", Some("codex"), None)?;
-    let opts = crate::bare::LaunchOpts { row_key: None, config: None, claude_json: None };
+    // The model list asks Codex on the stock vault, never a row's sets (run 2026-10-25-rune-vault, L2a).
+    let opts = crate::bare::LaunchOpts { row_key: None, config: None, claude_json: None, vault: Some("stock-codex"), custom_sets: None };
     // Bare prepares stay serialized in-process (agent.rs, pty.rs); held until the spawn is in.
     let prepare_guard = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
     // No launch folder: config.toml gets no trusted project, and nothing runs in a project.

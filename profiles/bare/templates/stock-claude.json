@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "stock-claude",
+  "name": "Stock Claude",
+  "runesets": [],
+  "runes": [
+    { "library": "stock", "id": "bare-identity" },
+    { "library": "stock", "id": "vidar-app" },
+    { "library": "stock", "id": "gate" },
+    { "library": "stock", "id": "drive-allow" },
+    { "library": "stock", "id": "mode-auto" },
+    { "library": "stock", "id": "mcp-write-asks" },
+    { "library": "stock", "id": "guard-driver" },
+    { "library": "stock", "id": "mcp-gate" }
+  ]
+}

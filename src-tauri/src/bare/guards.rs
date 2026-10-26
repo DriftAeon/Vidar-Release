@@ -1,9 +1,10 @@
 //! src-tauri\src\bare\guards.rs — guard hook copies for a Claude Bare home (Bare slice 1, W3).
 //! `bareGuards` in vidar.json (`[{ event, matcher?, run: ["<abs .mjs>", ...] }]`, filled from
 //! `tools/bare/guard-probe.mjs --emit`, each `run` keeping its wrapper first) names the guard hooks
-//! a Bare tab keeps. On every spawn, Raw or hosted, each `run` file is copied to
-//! `<home>\layer\hooks\<file name>` and the entry becomes `node "<copy>" ...` appended to
-//! `hooks.<event>` of the generated settings.json, so both paths write the same file. The home
+//! a Bare tab keeps. Since fold W2 L2a a Claude launch takes its guards from its sets
+//! (`Loadout.guard_items`, `from_items`), not `bareGuards`. On every spawn, Raw or hosted, each `run`
+//! file is copied to `<config dir>\hooks\<file name>` and the entry becomes `node "<copy>" ...`
+//! appended to `hooks.<event>` of that home's settings.json, so both paths write the same file. The home
 //! never reads `~\.claude` on its own: only the files named here are copied. Refusals: an
 //! unreadable vidar.json or a malformed `bareGuards`; an event that is not one of Claude Code's
 //! (`HOOK_EVENTS`, exact case); a `run` led by `fail-closed.mjs` (PreToolUse-only) on another event
@@ -33,32 +34,69 @@ pub struct BareGuard {
     pub run: Vec<String>,
 }
 
+/// A rune imported from a hooks.json command. The command is kept verbatim, with no script copy.
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RawHook {
+    pub event: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matcher: Option<String>,
+    pub command: String,
+}
+
+/// Stable public identity for a raw hook. This is only a row key; the discovery reference also
+/// carries a SHA-256 digest, which is what protects a pick against a changed source entry.
+pub(crate) fn raw_id(event: &str, matcher: Option<&str>, command: &str) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in event.bytes().chain([0]).chain(matcher.unwrap_or("").bytes()).chain([0]).chain(command.bytes()) {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
+}
+
+/// A command hook has exactly one command and no run/open script list.
+pub fn raw_hook(value: &Value) -> Result<Option<RawHook>, String> {
+    if value.get("command").is_none() { return Ok(None); }
+    let raw: RawHook = serde_json::from_value(value.clone()).map_err(|_| "Raw hook must contain only event, matcher? and a command string".to_string())?;
+    if raw.event.is_empty() || raw.command.is_empty() {
+        return Err("Raw hook event and command must not be empty".into());
+    }
+    Ok(Some(raw))
+}
+
+/// The native hook group an agent writes for a raw command.
+pub fn raw_group(raw: &RawHook, codex: bool) -> HookEntry {
+    let mut hook = json!({ "type": "command", "command": raw.command });
+    if codex { hook["commandWindows"] = json!(raw.command); }
+    let mut group = json!({ "hooks": [hook] });
+    if let Some(m) = &raw.matcher { group["matcher"] = json!(m); }
+    (raw.event.clone(), group)
+}
+
 /// A generated hook group for `hooks.<event>`: `(event, { matcher?, hooks: [command] })`.
 pub type HookEntry = (String, Value);
 
 /// Claude Code's hook events a guard may name, compared exactly (case included).
 pub const HOOK_EVENTS: &[&str] = &["PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop", "SubagentStop", "SessionStart", "SessionEnd", "Notification", "PreCompact"];
 
+/// Whether Claude Bare can carry a hook event and tool matcher unchanged.
+pub(crate) fn claude_unsupported(event: &str, matcher: Option<&str>) -> Option<String> {
+    if !HOOK_EVENTS.contains(&event) {
+        return Some(format!("Claude has no {event} hook event"));
+    }
+    if !matches!(event, "PreToolUse" | "PostToolUse") { return None; }
+    let Some(m) = matcher.filter(|m| !m.is_empty() && *m != "*") else { return None };
+    if m.contains("mcp__") { return None; }
+    let re = match regex::Regex::new(&format!("^(?:{m})$")) {
+        Ok(re) => re,
+        Err(_) => return Some("Matcher is not a valid regex for Claude".into()),
+    };
+    let tools = ["Bash", "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Task", "WebFetch", "WebSearch", "NotebookEdit"];
+    (!tools.iter().any(|t| re.is_match(t))).then(|| format!("Matcher {m:?} names no Claude tool"))
+}
+
 /// The global PreToolUse-only wrapper: a `run` starting with it wraps the guard after it.
 const FAIL_CLOSED: &str = "fail-closed.mjs";
-
-/// `bareGuards` from vidar.json at `config`, parsed read-only (never `config::load`). A missing
-/// file or key gives none, quietly (Settings > Agents shows the count); an unreadable file or a
-/// malformed value refuses.
-pub fn read(config: &Path) -> Result<Vec<BareGuard>, String> {
-    let text = match crate::fsx::read_text(config) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(format!("vidar.json {} is unreadable ({e}); Bare spawn refused", config.display())),
-    };
-    let root: Value = serde_json::from_str(crate::fsx::strip_bom(&text))
-        .map_err(|e| format!("vidar.json {} is unreadable ({e}); Bare spawn refused", config.display()))?;
-    match root.get("bareGuards") {
-        None | Some(Value::Null) => Ok(Vec::new()),
-        Some(v) => serde_json::from_value(v.clone())
-            .map_err(|e| format!("vidar.json `bareGuards` is not a list of {{ event, matcher?, run }} ({e}); Bare spawn refused")),
-    }
-}
 
 /// What `copy` made: the hook groups for `generate_settings` and the copied file names (sorted,
 /// for the launch manifest).
@@ -73,7 +111,7 @@ pub type GuardFiles = BTreeMap<String, (PathBuf, PathBuf)>;
 
 /// The checks a spawn runs on `bareGuards` before copying anything (event, `run`, the
 /// `fail-closed.mjs` lead, absolute existing `.mjs` files, one folder per file name). Errors carry
-/// no suffix: `copy` adds "Bare spawn refused", `bare_layer_set` its own.
+/// no suffix: `copy` adds "Bare spawn refused".
 pub fn validate(guards: &[BareGuard]) -> Result<GuardFiles, String> {
     validate_for(guards, HOOK_EVENTS, "a Claude Code")
 }
@@ -118,22 +156,66 @@ fn validate_for(guards: &[BareGuard], events: &[&str], agent: &str) -> Result<Gu
     Ok(files)
 }
 
-/// Checks every entry (`validate`), then copies each `run` file to `<home>\layer\hooks\<file name>`
-/// (fresh on every spawn) and returns the hook groups for `generate_settings`. Takes the caller's
+/// A loadout's Claude guard items (`Loadout.guard_items`: `{ event, matcher?, run, open? }`, run
+/// paths absolute) as `BareGuard`s, each checked with the ones accepted before it. `open` files are
+/// dropped (Claude Code has no shim for them); a malformed or failing guard is skipped. Each drop is
+/// one warning (the wording the per-set plugin used, fold W2 L2a).
+pub fn from_items(items: &[Value]) -> (Vec<BareGuard>, Vec<String>) {
+    let mut accepted: Vec<BareGuard> = Vec::new();
+    let mut warnings = Vec::new();
+    for g in items {
+        if g.get("open").and_then(Value::as_array).is_some_and(|o| !o.is_empty()) {
+            warnings.push(format!("guard for {} has `open` files, which Claude Code has no shim for; they were dropped", g["event"].as_str().unwrap_or("?")));
+        }
+        let mut plain = g.clone();
+        if let Some(o) = plain.as_object_mut() {
+            o.remove("open");
+        }
+        let guard: BareGuard = match serde_json::from_value(plain) {
+            Ok(b) => b,
+            Err(e) => {
+                warnings.push(format!("guard {g} is not an event, matcher? and run list ({e}); skipped"));
+                continue;
+            }
+        };
+        let mut trial = accepted.clone();
+        trial.push(guard.clone());
+        if let Err(e) = validate(&trial) {
+            warnings.push(format!("guard for {}: {e}; skipped", guard.event));
+            continue;
+        }
+        accepted.push(guard);
+    }
+    (accepted, warnings)
+}
+
+/// Checks every entry (`validate`), then copies each `run` file to `<dir>\<file name>` (the launch's
+/// Claude config dir's `hooks\`; written only when its bytes differ, and a file no guard names any
+/// more is removed) and returns the hook groups for `generate_settings`. Takes the caller's
 /// `HomeLock` (it is not reentrant, so this never locks). Nothing is copied unless every check
-/// passes; no guards: nothing is written and `layer\` is never made.
-pub fn copy(_lock: &HomeLock, home_dir: &Path, guards: &[BareGuard]) -> Result<Copied, String> {
+/// passes; no guards: nothing is written and `dir` is never made.
+pub fn copy(_lock: &HomeLock, dir: &Path, guards: &[BareGuard]) -> Result<Copied, String> {
     let files = validate(guards).map_err(|e| format!("{e}; Bare spawn refused"))?;
+    let keep: Vec<std::ffi::OsString> = files.values().map(|(src, _)| src.file_name().unwrap_or_default().to_ascii_lowercase()).collect();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let stale = !keep.contains(&e.file_name().to_ascii_lowercase());
+            if stale && e.file_type().is_ok_and(|t| t.is_file()) {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
     if guards.is_empty() {
         return Ok(Copied::default());
     }
 
-    let dir = home_dir.join("layer").join("hooks");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Bare guard copies {}: {e}; Bare spawn refused", dir.display()))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("Bare guard copies {}: {e}; Bare spawn refused", dir.display()))?;
     for (src, _) in files.values() {
         let bytes = std::fs::read(src).map_err(|e| format!("Bare guard script {}: {e}; Bare spawn refused", src.display()))?;
         let dest = dir.join(src.file_name().unwrap_or_default());
-        crate::fsx::atomic_write(&dest, &bytes).map_err(|e| format!("Bare guard copy {}: {e}; Bare spawn refused", dest.display()))?;
+        if std::fs::read(&dest).ok().as_deref() != Some(bytes.as_slice()) {
+            crate::fsx::atomic_write(&dest, &bytes).map_err(|e| format!("Bare guard copy {}: {e}; Bare spawn refused", dest.display()))?;
+        }
     }
     let mut names: Vec<String> = files.values().map(|(src, _)| src.file_name().unwrap_or_default().to_string_lossy().into_owned()).collect();
     names.sort();
@@ -189,23 +271,6 @@ pub const CODEX_SHIM: &str = "codex-shim.mjs";
 /// Codex tool names a PreToolUse matcher can hit (`apply_patch` also answers to `Edit` and `Write`).
 const CODEX_TOOLS: &[&str] = &["Bash", "apply_patch", "Edit", "Write"];
 
-/// `bareCodexGuards` from vidar.json at `config`, read-only, with `read`'s rules. An absent key is
-/// the plain empty list: a fresh install launches quietly and Settings shows the state.
-pub fn read_codex(config: &Path) -> Result<Vec<BareCodexGuard>, String> {
-    let text = match crate::fsx::read_text(config) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(format!("vidar.json {} is unreadable ({e}); Bare spawn refused", config.display())),
-    };
-    let root: Value = serde_json::from_str(crate::fsx::strip_bom(&text))
-        .map_err(|e| format!("vidar.json {} is unreadable ({e}); Bare spawn refused", config.display()))?;
-    match root.get("bareCodexGuards") {
-        None | Some(Value::Null) => Ok(Vec::new()),
-        Some(v) => serde_json::from_value(v.clone())
-            .map_err(|e| format!("vidar.json `bareCodexGuards` is not a list of {{ event, matcher?, run, open? }} ({e}); Bare spawn refused")),
-    }
-}
-
 /// One generated Codex hook group: its event and the `{ matcher?, hooks: [handler] }` object.
 pub type CodexGroup = (String, Value);
 
@@ -226,6 +291,23 @@ fn matcher_hits_codex(m: &str) -> Result<bool, String> {
     }
     let re = regex::Regex::new(&format!("^(?:{m})$")).map_err(|e| format!("Bare Codex guard matcher {m:?} is not a valid regex ({e})"))?;
     Ok(CODEX_TOOLS.iter().any(|t| re.is_match(t)))
+}
+
+/// Why Codex cannot carry a guard on `event` with `matcher`, by the rules `copy_codex` applies (its
+/// events, and a tool-event matcher that must hit a Codex tool); `None` when Codex carries it.
+pub(crate) fn codex_unsupported(event: &str, matcher: Option<&str>) -> Option<String> {
+    if !CODEX_HOOK_EVENTS.contains(&event) {
+        return Some(format!("Codex has no {event} hook event"));
+    }
+    let tool_event = matches!(event, "PreToolUse" | "PostToolUse" | "PermissionRequest");
+    match (tool_event, matcher) {
+        (true, Some(m)) => match matcher_hits_codex(m) {
+            Ok(true) => None,
+            Ok(false) => Some(format!("Matcher {m:?} names no Codex tool ({})", CODEX_TOOLS.join(", "))),
+            Err(e) => Some(e),
+        },
+        _ => None,
+    }
 }
 
 /// `s` as a PowerShell single-quoted string (a `'` doubled), so no `$` or backtick in a path expands.
@@ -340,4 +422,22 @@ pub fn append(settings: &mut Value, hooks: &[HookEntry]) -> Result<(), String> {
         groups.as_array_mut().ok_or_else(|| format!("Bare settings template: hooks.{event} is not an array"))?.push(group.clone());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod raw_tests {
+    use super::*;
+
+    #[test]
+    fn command_hook_has_one_payload_and_agent_specific_events() {
+        let raw = json!({ "event": "Interrupt", "command": "pwsh -NoProfile -Command 'exit 7'" });
+        assert!(raw_hook(&raw).unwrap().is_some());
+        assert!(raw_hook(&json!({ "event": "Stop", "run": ["a.mjs"], "command": "pwsh" })).is_err());
+        assert!(codex_unsupported("Interrupt", None).is_none());
+        assert_eq!(claude_unsupported("Interrupt", None).as_deref(), Some("Claude has no Interrupt hook event"));
+        assert!(codex_unsupported("Notification", None).is_some());
+        assert!(claude_unsupported("Notification", None).is_none());
+        assert!(codex_unsupported("PreToolUse", Some("not_a_tool")).is_some());
+        assert!(claude_unsupported("PreToolUse", Some("apply_patch")).is_some());
+    }
 }

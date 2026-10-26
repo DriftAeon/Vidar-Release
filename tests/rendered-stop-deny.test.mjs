@@ -1,7 +1,7 @@
 // Stop with a card open denies it first (A7): an interrupt that lands while the agent waits on a
 // permission makes the SDK throw, so stopAgent (shutdown, Close Session, /clear) and the composer's
 // interrupt (Steer) settle every open card as deny, as Esc does, before the interrupt goes out.
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
@@ -72,10 +72,17 @@ test("a hosted deny that never lands does not hold the stop past its short wait"
   const { body, sent, feed } = await mount("stop-deny-5", 15, true, Infinity);
   feed(TURN, CARD);
   await settle();
-  const t0 = Date.now();
-  await body.shutdown();
+  // the stop holds for the short wait (DENY_WAIT_MS, 2 s) and no longer: fake the clock past it
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const stopped = body.shutdown();
+    for (let i = 0; i < 7; i++) await new Promise(setImmediate);
+    mock.timers.tick(2000);
+    await stopped;
+  } finally {
+    mock.timers.reset();
+  }
   assert.deepEqual(kinds(sent), ["interrupt", "kill"]);
-  assert.ok(Date.now() - t0 < 5000, `shutdown took ${Date.now() - t0} ms`);
   body.dispose();
 });
 
@@ -99,21 +106,28 @@ test("a hosted Steer whose deny hangs: a repeat press waits, the interrupt goes 
   const { body, sent, feed } = await mount("stop-deny-6", 16, true, Infinity);
   feed(TURN, CARD);
   await settle();
-  // host-queued prompts (no steer op on this transport: Steer falls back to the interrupt)
-  const steerOne = async (prompt) => {
-    dom.ipc.listeners["agent-event"]({ payload: { id: "stop-deny-6", gen: 16, batch: [{ hostRecord: { body: { record: "prompt-queued", prompt, content: prompt } } }] } });
-    await settle();
-    const steer = [...body.el.querySelectorAll(".queued-send")].pop();
-    assert.ok(steer, "the mid-turn message was not queued");
-    steer.click();
-    await settle();
-  };
-  await steerOne("first");
-  await steerOne("second");
-  assert.deepEqual(kinds(sent).filter((k) => k === "interrupt"), [], "an interrupt went out with the card open");
-  await new Promise((r) => setTimeout(r, 2300));
-  await settle();
-  assert.deepEqual(kinds(sent).filter((k) => k === "interrupt"), ["interrupt"]);
+  // setTimeout is faked from here: settle() flushes through a timer, so this stretch spins on setImmediate
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const spin = async () => { for (let i = 0; i < 7; i++) await new Promise(setImmediate); };
+    // host-queued prompts (no steer op on this transport: Steer falls back to the interrupt)
+    const steerOne = async (prompt) => {
+      dom.ipc.listeners["agent-event"]({ payload: { id: "stop-deny-6", gen: 16, batch: [{ hostRecord: { body: { record: "prompt-queued", prompt, content: prompt } } }] } });
+      await spin();
+      const steer = [...body.el.querySelectorAll(".queued-send")].pop();
+      assert.ok(steer, "the mid-turn message was not queued");
+      steer.click();
+      await spin();
+    };
+    await steerOne("first");
+    await steerOne("second");
+    assert.deepEqual(kinds(sent).filter((k) => k === "interrupt"), [], "an interrupt went out with the card open");
+    mock.timers.tick(2300);
+    await spin();
+    assert.deepEqual(kinds(sent).filter((k) => k === "interrupt"), ["interrupt"]);
+  } finally {
+    mock.timers.reset();
+  }
   body.dispose();
 });
 

@@ -370,8 +370,13 @@ pub struct Session {
     /// `SessionSummary` (Vidar's honoured-profile proof and its manifest). Set once by `serve::spawn`.
     pub profile: std::sync::OnceLock<String>,
     pub env_names: std::sync::OnceLock<Vec<String>>,
-    /// Admitted `--payload` path and `row_key`, echoed like `profile` (re-adopt rebuilds the row).
-    pub payload_file: std::sync::OnceLock<String>, pub row_key: std::sync::OnceLock<String>,
+    /// Admitted layer paths and launch identity, echoed for re-adopt.
+    pub payload_file: std::sync::OnceLock<String>,
+    pub mcp_file: std::sync::OnceLock<String>,
+    pub row_key: std::sync::OnceLock<String>,
+    pub sets: std::sync::OnceLock<Vec<crate::protocol::SetRef>>,
+    /// The admitted per-spawn `CLAUDE_CONFIG_DIR` (`SpawnParams.claude_config_dir`).
+    pub claude_config_dir: std::sync::OnceLock<String>,
     /// Prompts accepted from clients, owned by Falcon rather than the sidecar.
     queue: Mutex<PromptQueue>,
     /// Why this session can no longer promise durability, once it cannot.
@@ -828,7 +833,11 @@ impl Session {
             tab_name: self.tab_name.get().cloned(),
             gateway: self.gateway.get().copied(),
             profile: self.profile.get().cloned(), env_names: self.env_names.get().cloned(),
-            payload_file: self.payload_file.get().cloned(), row_key: self.row_key.get().cloned(),
+            payload_file: self.payload_file.get().cloned(),
+            mcp_file: self.mcp_file.get().cloned(),
+            row_key: self.row_key.get().cloned(),
+            sets: self.sets.get().cloned(),
+            claude_config_dir: self.claude_config_dir.get().cloned(),
         }
     }
 }
@@ -859,58 +868,6 @@ impl Registry {
 struct Inner {
     sessions: HashMap<String, Arc<Session>>,
     reservations: Reservations,
-}
-
-/// `(agent, conversation id) -> owning session id`, for every conversation this
-/// host holds. Separate from `sessions` so a reservation can be taken before
-/// the child exists and released independently of the session entry.
-///
-/// The value is never anonymous: [`Registry::reserve`] writes the id of the
-/// session it is about to build, so a pending spawn's claim is as identifiable
-/// as a committed one. Every mutation below is an ownership check.
-#[derive(Default)]
-struct Reservations(HashMap<(&'static str, String), String>);
-
-impl Reservations {
-    /// Claim `key` for `holder`. Idempotent for the holder it already names,
-    /// refused for anyone else: adoption fails closed instead of stealing, and
-    /// the loser of a race learns who won.
-    fn claim(&mut self, key: (&'static str, String), holder: &str) -> Result<(), String> {
-        if let Some(existing) = self.0.get(&key) {
-            if existing == holder {
-                return Ok(());
-            }
-            return Err(format!(
-                "conversation {} is already hosted by session {existing}",
-                key.1
-            ));
-        }
-        self.0.insert(key, holder.to_string());
-        Ok(())
-    }
-
-    /// Release one key, and only when `holder` owns it. Returns whether it did.
-    fn release_key(&mut self, key: &(&'static str, String), holder: &str) -> bool {
-        if self.0.get(key).map(String::as_str) != Some(holder) {
-            return false;
-        }
-        self.0.remove(key);
-        true
-    }
-
-    /// Release every key `holder` owns. A session can own more than one: a CLI
-    /// that reports a second conversation keeps the first (see
-    /// [`Registry::adopt_conversation`]), and this is where those are freed.
-    fn release_all(&mut self, holder: &str) -> usize {
-        let before = self.0.len();
-        self.0.retain(|_, owner| owner.as_str() != holder);
-        before - self.0.len()
-    }
-
-    #[cfg(test)]
-    fn holder(&self, agent: &'static str, conversation: &str) -> Option<String> {
-        self.0.get(&(agent, conversation.to_string())).cloned()
-    }
 }
 
 /// A reservation taken but not yet committed to a session. Dropping it without
@@ -1177,7 +1134,11 @@ pub fn new_session(
         gateway: std::sync::OnceLock::new(),
         profile: std::sync::OnceLock::new(),
         env_names: std::sync::OnceLock::new(),
-        payload_file: std::sync::OnceLock::new(), row_key: std::sync::OnceLock::new(),
+        payload_file: std::sync::OnceLock::new(),
+        mcp_file: std::sync::OnceLock::new(),
+        row_key: std::sync::OnceLock::new(),
+        sets: std::sync::OnceLock::new(),
+        claude_config_dir: std::sync::OnceLock::new(),
         queue: Mutex::new(PromptQueue::default()),
         degraded: Mutex::new(None),
         unattended_watched: Mutex::new(std::collections::HashSet::new()),
@@ -1195,6 +1156,8 @@ mod hydrate;
 mod history;
 mod lease;
 mod unattended;
+mod reservations;
+use reservations::Reservations;
 
 #[cfg(test)]
 pub(crate) mod tests;

@@ -6,6 +6,7 @@ import type { SearchAddon } from "@xterm/addon-search";
 import type { RenderedBody } from "../rendered";
 import type { Effort, PermissionMode } from "../../agents/protocol";
 import type { RulesLaunch } from "../../rules/inject";
+import type { SetRef } from "../../ipc";
 
 /** A tab has one BODY: an xterm over a pty (terminal), or a Rendered
  *  transcript over a headless agent (panels/rendered.ts). The body is fixed
@@ -53,6 +54,10 @@ export interface TerminalSession {
   profile?: string;
   /** the launching row's `key`: every spawn_pty of a profiled tab carries it, so Rust finds the row's sets */
   rowKey?: string;
+  /** Explicit launch set override; absence lets the backend read the row. */
+  sets?: SetRef[];
+  /** The Rune Vault this tab launched on; a respawn prefers the vault its session record names. */
+  vault?: string;
   container: HTMLElement;
   button: HTMLButtonElement;
   alive: boolean;
@@ -94,6 +99,10 @@ export interface LaunchOpts {
   profile?: string;
   /** the row's `key` (AgentType.key), sent as spawn_pty `rowKey` with a profile */
   rowKey?: string;
+  /** Explicit launch set override; an empty list is meaningful. */
+  sets?: SetRef[];
+  /** The Rune Vault a profiled tab launches on (rune_vault_list id); wins over `sets`. */
+  vault?: string;
   /** adopt this existing Falcon-hosted Claude session; never spawns a second Claude */
   falconSession?: string;
   /** Internal startup restore identity; ordinary opens receive a fresh key. */

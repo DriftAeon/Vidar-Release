@@ -257,11 +257,14 @@ fn node_runs_a_script_given_by_absolute_path() {
     );
 }
 
-/// The actual slice-1 live failure. `std::fs::canonicalize` returns a
-/// verbatim `\\?\C:\...` path, and node's `realpathSync` mis-parses that
-/// root, ending up calling `lstat` on the bare drive letter.
+/// The slice-1 live failure and its guard. `std::fs::canonicalize` returns a
+/// verbatim `\\?\C:\...` path; the node of that time mis-parsed that root in
+/// `realpathSync`, called `lstat` on the bare drive letter and died with
+/// `EISDIR`. Node 24.22.1 (installed 2026-10-20) runs the same path fine, so
+/// whether the raw verbatim path fails depends on the node on PATH. What must
+/// hold on every node is the guard: `plain_path` of the canonical path runs.
 #[test]
-fn node_cannot_run_a_script_named_by_a_verbatim_path() {
+fn node_runs_a_canonical_script_once_plain_path_strips_it() {
     let dir = std::env::temp_dir().join(format!("falcon-verbatim-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let script = dir.join("probe.mjs");
@@ -306,11 +309,21 @@ fn node_cannot_run_a_script_named_by_a_verbatim_path() {
         "plain path must work"
     );
 
+    let (stripped, _) = run(&plain_path(&canonical));
     let (verbatim, errors) = run(&canonical);
     let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        stripped,
+        vec!["verbatim-ok".to_string()],
+        "plain_path of the canonical path must work on every node"
+    );
+    // Older node: the live EISDIR failure. Newer node: runs the script. Any
+    // third outcome is a new node behaviour and needs a look.
+    let old_failure = verbatim.is_empty() && errors.iter().any(|line| line.contains("EISDIR"));
+    let runs = verbatim == vec!["verbatim-ok".to_string()];
     assert!(
-        verbatim.is_empty() && errors.iter().any(|line| line.contains("EISDIR")),
-        "expected the verbatim path to reproduce the live EISDIR failure; \
+        old_failure || runs,
+        "the raw verbatim path neither ran nor hit the known EISDIR failure; \
          stdout={verbatim:?} stderr={errors:?}"
     );
 }

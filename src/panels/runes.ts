@@ -1,22 +1,25 @@
 // Runes tab: the rune libraries (Global, then Vidar) traced against what the focused tab loaded.
 // The catalog is cached until Refresh; `runes_loaded` runs only while the tab is on screen (on show,
 // on `vidar-focus` while shown, on `vidar-reply-done` for the focused tab while shown, on Refresh).
-// A Rendered tab's session id is read at query time. A Bare tab reads no instruction files, so its
-// trace lists what the launch carried (`bare_launch`, the tab's newest manifest) before any loads.
-import { invoke, type BareLaunch } from "../ipc";
+// A Rendered tab's session id is read at query time. Bare content comes from its session vault.
+import { invoke } from "../ipc";
 import type { ReplyDoneDetail } from "./reply-events";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 import { paneShell } from "./pane-shell";
-import { getFocusedSession, renderedSessionId, sessionLaunchInfo, type FocusedSession } from "./sessions/lookup";
+import { getFocusedSession, renderedBody, renderedSessionId, type FocusedSession } from "./sessions/lookup";
+import type { VaultEditIo } from "../runes/bare/vault-edit";
+import { tabVaultEditIo } from "../runes/bare/vault-edit-io";
 import { mountBareView, type BareViewHandle } from "../runes/bare/view";
 import { createBareIo } from "../runes/bare/io";
+import { bareViewKey, type VaultIo, type VaultView } from "../runes/bare/cake";
 import { BARE_SCOPE, openKeys, reopen, runeIconKey, setSection, type CardCtx } from "../runes/cards";
 import type { GenCtx } from "../runes/bare/agent-view";
 import { wiredModels } from "../flow/roster";
 import { getPref } from "../prefs";
 import { ensureCodexModels } from "../agents/codex-models";
 import { canLoad, traceRunes } from "../runes/trace";
+import { runeLedger } from "../runes/ledger";
 import type { RunesCatalog, RunesLoaded } from "../runes/types";
 import { trustCard, type TrustOffer } from "./rendered/notice-actions";
 
@@ -123,6 +126,7 @@ function traceParts(res: RunesLoaded | null): HTMLElement[] {
   if (catalog) {
     const trace = traceRunes(catalog, res, repoRootOf(catalog));
     for (const t of trace.libraries) {
+      const ledger = runeLedger(t, res);
       const group = el("section", "runes-group");
       group.appendChild(el("h3", "runes-group-head", GROUP_NAME[t.lib.key] ?? t.lib.key));
       if (!t.lib.present) {
@@ -137,7 +141,7 @@ function traceParts(res: RunesLoaded | null): HTMLElement[] {
         const tier = s.set.tier;
         if (tier !== lastTier && TIER_DIVIDER[tier]) group.appendChild(el("div", "runes-div", TIER_DIVIDER[tier]));
         lastTier = tier;
-        group.appendChild(setSection(t, s, ctx));
+        group.appendChild(setSection(t, s, ctx, ledger));
       }
       parts.push(group);
     }
@@ -166,12 +170,12 @@ function traceParts(res: RunesLoaded | null): HTMLElement[] {
   return parts;
 }
 
-const hasLoads = (res: RunesLoaded | null): boolean => !!res && res.source === "transcript" && res.files.length > 0;
+const hasLoads = (res: RunesLoaded | null): boolean => !!res && res.source !== "none" && res.files.length > 0;
 
 /** A Bare tab's state line: with a launch recorded, the trace body speaks for it, so no "nothing
  *  loaded" reason shows; the strip still names the tab when the transcript has loads. */
-function bareStateLine(f: FocusedSession, res: RunesLoaded | null, err: string | null, launch: BareLaunch | null): [string, boolean, boolean] {
-  if (err || !launch) return stateLine(f, res, err);
+function bareStateLine(f: FocusedSession, res: RunesLoaded | null, err: string | null): [string, boolean, boolean] {
+  if (err) return stateLine(f, res, err);
   return hasLoads(res) ? [f.title, false, true] : ["", false, false];
 }
 
@@ -179,7 +183,8 @@ function bareStateLine(f: FocusedSession, res: RunesLoaded | null, err: string |
 const dismissedWarns = new Set<string>();
 
 /** One launch warning, compact: icon and one truncated line (the full text in its tooltip), then a Dismiss button. */
-function warnLine(text: string, tabId: string): HTMLElement {
+export function vaultWarningLine(text: string, tabId: string): HTMLElement | null {
+  if (dismissedWarns.has(`${tabId}\n${text}`)) return null;
   const row = el("div", "runes-err runes-warn-line");
   row.title = text;
   const msg = el("span", "runes-warn-text", text);
@@ -199,18 +204,10 @@ function warnLine(text: string, tabId: string): HTMLElement {
   return row;
 }
 
-/** The Bare trace, drawn once in View: the launch's warnings, then today's file-load rows when the
- *  transcript has any. The set, skill and hook name lists repeat the config and are not drawn. */
-export function bareTraceParts(launch: BareLaunch | null, launchErr: string | null, res: RunesLoaded | null, tabId = "", trust: TrustOffer | null = null): HTMLElement[] {
+/** The Bare trace shows today's transcript loads; vault warnings are drawn from the vault read. */
+export function bareTraceParts(res: RunesLoaded | null, tabId = "", trust: TrustOffer | null = null): HTMLElement[] {
   const parts: HTMLElement[] = [];
-  if (launchErr) parts.push(el("div", "runes-err", launchErr));
-  else if (launch) {
-    // the untrusted-folder warning becomes the chat's trust card (Trust Folder, Dismiss) while the tab has an offer
-    for (const w of launch.warnings) {
-      if (trust && w === trust.text) parts.push(trustCard(tabId, trust));
-      else if (!dismissedWarns.has(`${tabId}\n${w}`)) parts.push(warnLine(w, tabId));
-    }
-  }
+  if (trust) parts.push(trustCard(tabId, trust));
   if (hasLoads(res)) parts.push(...traceParts(res));
   return parts;
 }
@@ -227,8 +224,8 @@ export function codexModelsReady(agent: string): Promise<void> | undefined {
 }
 
 /** Bare tab: the import and actives view replaces the tab's body; the load trace sits collapsed below it. */
-function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null, launch: BareLaunch | null, launchErr: string | null, trust: TrustOffer | null) {
-  const [text, bad, strip] = bareStateLine(f, res, err, launch);
+function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null, trust: TrustOffer | null) {
+  const [text, bad, strip] = bareStateLine(f, res, err);
   stateEl.textContent = strip ? "" : text;
   stateEl.classList.toggle("runes-err", bad);
   stripEl.hidden = !strip;
@@ -239,9 +236,8 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
   refreshBtn.hidden = !(bad || catalogErr);
   showKey(true);
   drawnKey = null;
-  const rowKey = sessionLaunchInfo(f.id)?.rowKey ?? null;
-  const key = rowKey ? `${f.agent}|${rowKey}|${f.cwd}` : `tab|${f.id}`;
-  const drawKey = JSON.stringify([res, err, catalogErr, catalogVer, launch, launchErr, trust]);
+  const key = bareViewKey(f.id);
+  const drawKey = JSON.stringify([res, err, catalogErr, catalogVer, trust]);
   const fresh = freshNext || f.id !== lastTabId;
   freshNext = false;
   let e = bareViews.get(key);
@@ -252,13 +248,15 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
       listEl,
       {
         agent: f.agent,
-        rowKey,
         cwd: f.cwd,
         profile: "bare",
-        traceParts: bareTraceParts(launch, launchErr, res, f.id, trust),
+        traceParts: bareTraceParts(res, f.id, trust),
+        warningLine: (warning) => trust && warning === trust.text ? null : vaultWarningLine(warning, f.id),
         card: ctx,
         gen: () => genModels(f.agent),
         modelsReady: codexModelsReady(f.agent),
+        vault: vaultIo(f.id),
+        vaultEdit: vaultEditIo(f.id),
       },
       createBareIo(),
     );
@@ -266,7 +264,7 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
     bareViews.set(key, e);
   } else {
     if (e.drawKey !== drawKey) {
-      e.handle.setTrace(bareTraceParts(launch, launchErr, res, f.id, trust));
+      e.handle.setTrace(bareTraceParts(res, f.id, trust));
       e.drawKey = drawKey;
     }
     if (fresh) e.handle.reload();
@@ -277,11 +275,26 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
     }
   }
   shownBare = e;
-  // the View / Modify switch sits on the Key's last line, at the right
+  // the View / Modify switch sits on the Key's last line, at the right, with Lock before it
   if (keyEl && e.handle.modeButton.parentNode !== keyEl) {
-    keyEl.querySelector(".runes-mode")?.remove();
-    keyEl.appendChild(e.handle.modeButton);
+    keyEl.querySelectorAll(".runes-mode, .runes-lock").forEach((b) => b.remove());
+    keyEl.append(e.handle.lockButton, e.handle.modeButton);
   }
+}
+
+/** The Rune Vault calls for tab `tab`: its session record, the vault at the hash it loaded, and the Lock button. */
+function vaultIo(tab: string): VaultIo {
+  return {
+    session: () => invoke("rune_vault_session", { tab }),
+    read: (id, hash) => invoke("rune_vault_read", { id, hash }) as Promise<VaultView>,
+    lock: (id, expectHash) => invoke("rune_vault_lock", { id, by: "button", expectHash }),
+  };
+}
+
+/** Modify's vault writes for tab `tab` (src/runes/bare/vault-edit.ts): the current vault, the edit, the Make Variant
+ *  move of its session record, and a fresh respawn of its Rendered body (the /clear route; a Raw tab has none). */
+function vaultEditIo(tab: string): VaultEditIo {
+  return tabVaultEditIo(tab, async () => { await renderedBody(tab)?.respawnFresh(); });
 }
 
 async function refresh(reloadCatalog: boolean) {
@@ -311,25 +324,16 @@ async function refresh(reloadCatalog: boolean) {
       err = String(e);
     }
   }
-  let launch: BareLaunch | null = null;
-  let launchErr: string | null = null;
-  if (f?.profile === "bare" && my === seq && viewEl) {
-    try {
-      launch = (await invoke("bare_launch", { tab: f.id })) ?? null;
-    } catch (e) {
-      launchErr = String(e);
-    }
-  }
   // a Codex tab whose folder the user's config does not trust has an offer; the chat reads it the same way (transport.ts)
   let trust: TrustOffer | null = null;
-  if (f?.profile === "bare" && f.agent === "codex" && launch && my === seq && viewEl) {
+  if (f?.profile === "bare" && f.agent === "codex" && my === seq && viewEl) {
     try { trust = (await invoke("codex_trust_offer", { id: f.id })) ?? null; } catch { trust = null; }
   }
   if (my !== seq || !viewEl) return; // a newer query or disposal owns the view
   refreshBtn.disabled = false;
   refreshBtn.removeAttribute("aria-busy");
   if (f?.profile === "bare") {
-    drawBare(f, res, err, launch, launchErr, trust);
+    drawBare(f, res, err, trust);
     lastTabId = f.id;
     return;
   }

@@ -11,6 +11,7 @@ const SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'to
 function run(args) {
   const env = { ...process.env, VIDAR_CDP_PORT: '1' };
   delete env.VIDAR_DRIVE_CARDS;
+  delete env.VIDAR_SANDBOX_ROOT;
   delete env.VIDAR_DRIVE_BUDGET;
   return spawnSync(process.execPath, [SCRIPT, ...args], { env, encoding: 'utf8', timeout: 20_000 });
 }
@@ -29,6 +30,7 @@ test('card is refused without VIDAR_DRIVE_CARDS', () => {
 
 test('answer with VIDAR_DRIVE_CARDS=0 is still refused', () => {
   const env = { ...process.env, VIDAR_CDP_PORT: '1', VIDAR_DRIVE_CARDS: '0' };
+  delete env.VIDAR_SANDBOX_ROOT;
   delete env.VIDAR_DRIVE_BUDGET;
   const r = spawnSync(process.execPath, [SCRIPT, 'answer', 'tab-1', '{"decision":"allow"}'], { env, encoding: 'utf8', timeout: 20_000 });
   assert.equal(r.status, 2, r.stderr);

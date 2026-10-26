@@ -5,8 +5,10 @@
 //! agent call its own `calls\<name>\{config, user-home, work}` (`call`), removed together at the end (`remove_calls`):
 //! - `config\` is `CLAUDE_CONFIG_DIR` / `CODEX_HOME`: Claude gets `.credentials.json` and `settings.json` (`{}`),
 //!   Codex `auth.json` and a `config.toml` with no `developer_instructions` (not `generate_codex_config`, which
-//!   carries the static payload). The credential is a hard link to the Bare home's file (copy when the link fails),
-//!   which W0 proved works and leaves the source unchanged. A missing Bare credential is `login:`.
+//!   carries the static payload). The credential is a hard link to the run's login source (copy when the link
+//!   fails), which W0 proved works and leaves the source unchanged: the newer of the shared store's file and the
+//!   Bare home's own (`login_back::source`). A missing login is `login:`. After each call `hand_back` puts a login
+//!   the CLI refreshed by rename back over the source (`login_back::write_back`), before `remove_calls` drops it.
 //! - `user-home\AppData\{Roaming,Local\Temp}` are the folders the env overlay (`USERPROFILE`, `APPDATA`, `TEMP`...)
 //!   points at, as `tools/bare/probe-generate.ps1` `Overlay-For` makes them.
 //! - `work\` is the call's fresh empty cwd; the run's `skill.md` (Claude) is the `--system-prompt-file` copy.
@@ -70,7 +72,9 @@ pub struct RunHome {
     pub agent: &'static str,
     /// `<Bare home>\gen-<agent>`.
     pub dir: PathBuf,
-    /// The Bare home's credential file the call homes link to.
+    /// The Bare home (its lock guards the hand-back).
+    bare_home: PathBuf,
+    /// The login file the call homes link to (`login_back::source`).
     source: PathBuf,
     pub skill: PathBuf,
     /// `None` when the run has no merge pass.
@@ -83,10 +87,10 @@ pub fn build_run(agent: &str, bare_home: &Path, run_id: &str, skill_text: &str, 
     let name = dir_name(agent)?;
     check_name("run id", run_id)?;
     let (folder, file) = credential(agent);
-    let source = bare_home.join(folder).join(file);
-    if !source.is_file() {
-        return Err(format!("login: no {agent} login at {}; log in on a Bare {agent} tab first", source.display()));
-    }
+    let Some(source) = super::login_back::source(bare_home, agent, folder, file) else {
+        let own = bare_home.join(folder).join(file);
+        return Err(format!("login: no {agent} login at {}; log in on a Bare {agent} tab first", own.display()));
+    };
     let dir = bare_home.join(name);
     if dir.exists() {
         std::fs::remove_dir_all(&dir).map_err(|e| format!("spawn: generator home {} not cleared ({e})", dir.display()))?;
@@ -103,7 +107,21 @@ pub fn build_run(agent: &str, bare_home: &Path, run_id: &str, skill_text: &str, 
         }
         None => None,
     };
-    Ok(RunHome { agent: if agent == "claude" { "claude" } else { "codex" }, dir, source, skill, merge_skill })
+    Ok(RunHome { agent: if agent == "claude" { "claude" } else { "codex" }, dir, bare_home: bare_home.to_path_buf(), source, skill, merge_skill })
+}
+
+/// After a call, success or failure: its login goes back over the run's source when the CLI refreshed it into a
+/// file of its own (`login_back::write_back`). A failed hand-back is not the call's failure; it is printed (paths
+/// only) and the next run starts from the source as it is.
+pub fn hand_back(run: &RunHome, call: &GenHome) -> Option<super::login_back::Back> {
+    let (_, file) = credential(run.agent);
+    match super::login_back::write_back(&run.bare_home, &run.source, &call.config.join(file)) {
+        Ok(back) => Some(back),
+        Err(e) => {
+            eprintln!("rune generator: {e}");
+            None
+        }
+    }
 }
 
 /// Makes `calls\<name>\{config, user-home, work}` for one agent call: the credential hard-linked (copied when the

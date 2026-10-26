@@ -1,6 +1,6 @@
 // The Codex Resume list (launcher codex-recent.ts): the Rendered Bare row passes its profile so
 // list_codex_threads (codex_threads.rs) reads the Bare home; the default row passes none. A body's
-// /resume serves its own row (resumeVariant). No CLI or host is started; IPC
+// /resume row choice is recent-resume-variant.test.mjs. No CLI or host is started; IPC
 // and sessions are stubs.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -20,7 +20,6 @@ const dom = setupDom({
 });
 
 const { BUILTIN_AGENTS, setRoster, rosterView } = await import("../src/launcher/roster.ts");
-const { resumeVariant } = await import("../src/launcher/body-order.ts");
 const { openCodexRecent } = await import("../src/launcher/codex-recent.ts");
 
 setRoster(BUILTIN_AGENTS);
@@ -32,16 +31,8 @@ const variants = [...(variantsOf.get(launcherTypes.find((t) => t.key === "codex"
 const byKey = (k) => variants.find((v) => v.key === k);
 const LOC = { label: "Work", cwd: "C:\\work" };
 
-test("the Resume list follows the launcher lead; a Bare tab's own row wins", () => {
-  assert.ok(byKey("codex-rendered-bare"), "the Bare row is in the Codex Bare flyout");
-  assert.equal(resumeVariant(variants, "raw")?.key, "codex-rendered");
-  assert.equal(resumeVariant(variants, "bare")?.key, "codex-rendered-bare");
-  assert.equal(resumeVariant(variants, "raw", { profile: "bare", rowKey: "codex-rendered-bare" })?.key, "codex-rendered-bare");
-  // with the default row hidden, the Bare row serves it
-  assert.equal(resumeVariant(variants.filter((v) => v.key !== "codex-rendered"), "raw")?.key, "codex-rendered-bare");
-});
-
 test("openCodexRecent: the Bare row lists with its profile; the default row passes none", async () => {
+  assert.ok(byKey("codex-rendered-bare"), "the Bare row is in the Codex Bare flyout");
   const anchor = document.createElement("button");
   document.body.append(anchor);
   const calls = () => dom.ipc.invoked.filter((c) => c === "list_codex_threads").length;

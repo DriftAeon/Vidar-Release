@@ -103,6 +103,7 @@ function enter(l: Live, step: OnboardingStep): void {
   save(l, false);
   const view = stepView(step);
   l.label.textContent = view?.title ?? "";
+  l.label.hidden = !!view?.hideTitle;
   l.body.replaceChildren();
   setSeam(l, null);
   renderFooter(l);

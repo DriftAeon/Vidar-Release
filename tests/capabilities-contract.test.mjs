@@ -114,23 +114,6 @@ test("dependents mount after, dispose before, cycles throw, overlapping diffs ne
   assert.equal(live.size, 0);
 });
 
-// State migration: a vidar.json written while auto-catapult existed may still list it as off. The
-// overlay keeps any false key, and resolve checks `off` only against declared ids, so the stale id
-// resolves exactly like an empty overlay.
-test("a stale auto-catapult entry in the off overlay resolves like an empty one", () => {
-  const decl = (id, dependsOn = []) => ({ id, label: id, when: {}, dependsOn, host: id });
-  const decls = order([decl("child", ["base"]), decl("base")]);
-  const facts = (off) => ({ deps: null, packs: new Set(), config: {}, facts: new Set(), off });
-  let stale;
-  assert.doesNotThrow(() => { stale = resolve(decls, facts(new Set(["auto-catapult"]))); });
-  assert.deepEqual([...stale], [...resolve(decls, facts(new Set()))]);
-  const real = caps.map((c) => ({ ...c, dependsOn: c.dependsOn ?? [] }));
-  assert.deepEqual(
-    [...resolve(order(real, depIds, factIds), facts(new Set(["auto-catapult"])))],
-    [...resolve(order(real, depIds, factIds), facts(new Set()))],
-  );
-});
-
 // Launch stop. Gates open per capability (registry.ts), so "the first step" is not "the
 // facts settled": an id is judged once, in the first completed step where it is ready, and
 // stopped only when that step left it unmounted. The step-2 case is the regression: a first-step

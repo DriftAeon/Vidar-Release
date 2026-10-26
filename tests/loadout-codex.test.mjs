@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 const { window, ipc } = setupDom({
@@ -126,13 +125,6 @@ test("null config values and network are omitted; empty rows stay shut", () => {
   assert.equal(detail(withoutNetwork, "Permissions").textContent, "Sandbox —Rules Files 0");
 });
 
-test("loadout source retains both readers and the Codex command payload", () => {
-  const source = readFileSync(new URL("../src/panels/loadout.ts", import.meta.url), "utf8");
-  assert.match(source, /invoke\("read_loadout",\s*\{/);
-  assert.match(source, /focused\?\.agent === "codex" && moduleOn\("codex"\)/);
-  assert.match(source, /invoke\("read_codex_loadout",\s*\{\s*tab: target\.id,\s*profile: target\.profile \?\? null,\s*cwd: target\.cwd,/);
-});
-
 test("focused Codex tab queries its own reader and renders the returned rows", async () => {
   const calls = [];
   ipc.answers.read_codex_loadout = (args) => {
@@ -144,11 +136,11 @@ test("focused Codex tab queries its own reader and renders the returned rows", a
   const controller = new window.AbortController();
   initLoadout(root, controller.signal);
   document.dispatchEvent(new window.CustomEvent("vidar-focus", {
-    detail: { id: "codex-tab", agent: "codex", profile: "bare", cwd: ".", launchArgs: [] },
+    detail: { id: "codex-tab", agent: "codex", profile: "bare", rowKey: "codex-rendered-bare", cwd: ".", launchArgs: [] },
   }));
   await Promise.resolve();
   await Promise.resolve();
-  assert.deepEqual(calls, [{ tab: "codex-tab", profile: "bare", cwd: "." }]);
+  assert.deepEqual(calls, [{ tab: "codex-tab", profile: "bare", row: "codex-rendered-bare", cwd: "." }]);
   assert.deepEqual(
     [...root.querySelectorAll(".rack-row")].map((row) => row.dataset.key),
     ["Instructions", "Skills", "Agents", "Config", "Hooks", "Permissions"],

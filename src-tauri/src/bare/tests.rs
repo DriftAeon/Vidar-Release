@@ -2,7 +2,13 @@
 //! temp home (never the real agent homes) with the binary lookup and version read faked.
 
 use super::*;
+use super::launch_row::TEST_NO_VAULT;
 use std::ffi::OsString;
+
+/// Launch-mechanics tests spawn with no vault, on the profile's own home (L2a; `TEST_NO_VAULT`).
+fn no_vault() -> LaunchOpts<'static> {
+    LaunchOpts { vault: Some(TEST_NO_VAULT), ..Default::default() }
+}
 
 struct TempDir(PathBuf);
 impl TempDir {
@@ -21,6 +27,11 @@ impl Drop for TempDir {
 
 fn guard() -> home::Guard {
     home::Guard { user_profile: Some(r"C:\Users\testuser".into()), username: Some("testuser".into()) }
+}
+
+/// Probes for a hosted prepare, which resolves no binary and calls none of them.
+fn hprobes() -> Probes<'static> {
+    Probes { find: &|_, _| None, version: &|_, _| None, remote_control: &|| false }
 }
 
 fn inherited() -> Vec<(OsString, OsString)> {
@@ -111,7 +122,7 @@ fn a_profile_missing_an_isolation_switch_refuses_before_the_home() {
         args.drain(at..at + 2);
     });
     let home = t.0.join("agent-home");
-    let e = prepare_with("bare", &no_sources, &home, inherited(), &guard(), &probes, &LaunchOpts::default()).err().unwrap();
+    let e = prepare_with("bare", &no_sources, &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).err().unwrap();
     assert!(e.contains("--setting-sources user"), "{e}");
     assert!(!home.exists(), "the home was touched before the refusal");
 
@@ -119,7 +130,7 @@ fn a_profile_missing_an_isolation_switch_refuses_before_the_home() {
     let no_mds = root_with_profile(&t2, |v| {
         v["overlay"]["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "0".into();
     });
-    let e = prepare_with("bare", &no_mds, &t2.0.join("agent-home"), inherited(), &guard(), &probes, &LaunchOpts::default()).err().unwrap();
+    let e = prepare_with("bare", &no_mds, &t2.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).err().unwrap();
     assert!(e.contains("CLAUDE_CODE_DISABLE_CLAUDE_MDS=1"), "{e}");
 }
 
@@ -132,9 +143,9 @@ fn a_claude_config_dir_outside_the_home_refuses_raw_and_hosted() {
             v["overlay"]["CLAUDE_CONFIG_DIR"] = outside.into();
         });
         let home = t.0.join("agent-home");
-        let e = prepare_with("bare", &root, &home, inherited(), &guard(), &probes, &LaunchOpts::default()).err().unwrap();
+        let e = prepare_with("bare", &root, &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).err().unwrap();
         assert!(e.contains("CLAUDE_CONFIG_DIR outside the bare home"), "raw {outside}: {e}");
-        let e = prepare_hosted_with("bare", &root, &home, &guard(), &LaunchOpts::default()).err().unwrap();
+        let e = prepare_hosted_with("bare", &root, &home, inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).err().unwrap();
         assert!(e.contains("CLAUDE_CONFIG_DIR outside the bare home"), "hosted {outside}: {e}");
         assert!(!home.exists(), "the home was touched before the refusal");
     }
@@ -155,10 +166,11 @@ fn remote_control_flag_follows_the_users_setting() {
     let t = TempDir::new("prepare-rc-off");
     let home = t.0.join("agent-home");
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-    let launch = prepare_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let launch = prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     let line = &launch.args[2];
     assert!(!line.contains("remote-control"), "{line}");
-    assert!(line.ends_with("'--permission-mode' 'auto'"), "{line}");
+    // No vault: no mode rune, so no --permission-mode (L2b).
+    assert!(!line.contains("--permission-mode") && line.contains("'--mcp-config' '") && line.ends_with("'--strict-mcp-config'"), "{line}");
 }
 
 #[test]
@@ -175,7 +187,7 @@ fn prepare_builds_the_spawn_line_env_and_manifest() {
     let root = crate::paths::root();
     let home = t.0.join("agent-home");
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| true };
-    let mut launch = prepare_with("bare", &root, &home, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let mut launch = prepare_with("bare", &root, &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
 
     assert_eq!(launch.program, PathBuf::from(r"X:\bin\pwsh.exe"));
     assert_eq!(&launch.args[..2], ["-NoProfile", "-Command"], "no -NoExit: no half-bare shell after Claude exits");
@@ -183,10 +195,13 @@ fn prepare_builds_the_spawn_line_env_and_manifest() {
     let line = &launch.args[2];
     let r = root.display();
     let payload = format!("{r}\\profiles\\bare\\payload.md");
+    // No vault: no plugin, allowed-tools or mode rune rides the line (L2b).
     let expected = format!(
-        "& 'X:\\bin\\claude.exe' '--setting-sources' 'user' '--append-system-prompt-file' '{payload}' '--plugin-dir' '{r}\\plugins\\vidar-app' '--allowedTools' 'mcp__plugin_vidar_drive' '--permission-mode' 'auto' '--remote-control'"
+        "& 'X:\\bin\\claude.exe' '--setting-sources' 'user' '--append-system-prompt-file' '{payload}' '--remote-control'"
     );
-    assert_eq!(line, &expected);
+    assert!(line.starts_with(&expected), "{line}");
+    let tail = &line[expected.len()..];
+    assert!(tail.starts_with(" '--mcp-config' '") && tail.ends_with(".json' '--strict-mcp-config'"), "{tail}");
     assert!(launch.manifest.binary.warning.is_none());
 
     let h = home.display();
@@ -226,12 +241,12 @@ fn prepare_builds_the_spawn_line_env_and_manifest() {
     let m = launch.write_manifest("s1-ab", names.iter().map(String::as_str)).unwrap();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
     assert_eq!(v["binary"]["version"], pinned("claude").as_str());
-    assert_eq!(v["plugins"], serde_json::json!(["vidar-app"]));
+    assert_eq!(v["plugins"], serde_json::json!([]), "no vault, no plugin rune");
     assert!(v["payload"]["marker"].as_str().unwrap().starts_with("VIDAR-PAYLOAD-"));
     // No sets: the static payload.md, no `payload.sets`, and `layer\` is never made.
     assert_eq!(v["payload"]["path"], payload);
     assert!(v["payload"].get("sets").is_none());
-    assert!(!home.join("layer").exists(), "layer\\ made with no row sets");
+    assert!(layer_files(&home).is_empty(), "layer\\ files made with no row sets");
     let text = std::fs::read_to_string(&m).unwrap();
     assert!(!text.contains("sk-test"), "an env value reached the manifest");
     assert!(m.starts_with(home.join("manifests")));
@@ -242,7 +257,7 @@ fn prepare_builds_the_spawn_line_env_and_manifest() {
 fn a_version_mismatch_warns_and_still_launches() {
     let t = TempDir::new("version");
     let probes = Probes { find: &fake_find, version: &|_, _| Some("0.0.1".into()), remote_control: &|| false };
-    let launch = prepare_with("bare", &crate::paths::root(), &t.0.join("agent-home"), inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let launch = prepare_with("bare", &crate::paths::root(), &t.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     let w = launch.manifest.binary.warning.clone().unwrap();
     assert!(w.contains("0.0.1") && w.contains(&pinned("claude")) && w.ends_with("Verify: node tools/bare/verify-pin.mjs"), "{w}");
     assert!(launch.args[2].starts_with("Write-Host '[Vidar Bare: Claude 0.0.1"), "{}", launch.args[2]);
@@ -256,12 +271,12 @@ fn a_generation_failure_or_missing_binary_refuses_the_launch() {
     // settings.json is a folder: the generation fails, so prepare fails.
     home::prepare_dirs(&home, &["claude-config".into()]).unwrap();
     std::fs::create_dir_all(home.join("claude-config").join("settings.json")).unwrap();
-    assert!(prepare_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &ok, &LaunchOpts::default()).is_err());
+    assert!(prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &ok, &no_vault()).is_err());
     assert!(std::fs::read_dir(home.join("manifests")).map(|d| d.count()).unwrap_or(0) == 0, "a refused launch left a manifest");
 
     let t2 = TempDir::new("refuse-bin");
     let none = Probes { find: &|_, _| None, version: &|_, _| None, remote_control: &|| false };
-    let e = prepare_with("bare", &crate::paths::root(), &t2.0.join("agent-home"), inherited(), &guard(), &none, &LaunchOpts::default()).err().unwrap();
+    let e = prepare_with("bare", &crate::paths::root(), &t2.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &none, &no_vault()).err().unwrap();
     assert!(e.contains("not on the allowlisted Path"), "{e}");
 }
 
@@ -280,14 +295,15 @@ fn a_hosted_spawn_refuses_an_unknown_profile_rules_or_a_gateway() {
 fn prepare_hosted_readies_the_home_and_records_falcons_env_names() {
     let t = TempDir::new("hosted");
     let home = t.0.join("agent-home");
-    let mut launch = prepare_hosted_with("bare", &crate::paths::root(), &home, &guard(), &LaunchOpts::default()).unwrap();
+    let mut launch = prepare_hosted_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).unwrap();
     assert!(home.join("claude-config").join("settings.json").is_file());
     assert!(home.join("user-home").join("AppData").join("Local").join("Temp").is_dir());
     let m = launch.write_manifest("s1-ab", "s1234abcd-00000001", ["=C:", "CLAUDE_CONFIG_DIR", "Path"]).unwrap();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
     assert_eq!(v["falconSession"], "s1234abcd-00000001");
     assert_eq!(v["envNames"], serde_json::json!(["=C:", "CLAUDE_CONFIG_DIR", "Path"]));
-    assert_eq!(v["plugins"], serde_json::json!(["vidar-app", "gate"]), "the rendered set, gate included");
+    assert_eq!(v["plugins"], serde_json::json!([]), "no vault, no plugin rune");
+    assert!(launch.plugin_names.is_empty());
     assert_eq!(v["homes"]["claudeConfig"], format!("{}\\claude-config", home.display()));
     assert!(v["payload"]["marker"].as_str().unwrap().starts_with("VIDAR-PAYLOAD-"));
     assert!(m.starts_with(home.join("manifests")));
@@ -302,7 +318,7 @@ fn a_profile_without_a_rendered_block_refuses_a_hosted_spawn_before_the_home() {
         v.as_object_mut().unwrap().remove("rendered");
     });
     let home = t.0.join("agent-home");
-    let e = prepare_hosted_with("bare", &root, &home, &guard(), &LaunchOpts::default()).err().unwrap();
+    let e = prepare_hosted_with("bare", &root, &home, inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).err().unwrap();
     assert!(e.contains("no rendered block"), "{e}");
     assert!(!home.exists(), "the home was touched before the refusal");
 }
@@ -313,8 +329,8 @@ fn a_profile_without_a_rendered_block_refuses_a_hosted_spawn_before_the_home() {
 fn the_raw_bare_profile_output_is_unchanged_by_the_rendered_block() {
     let t = TempDir::new("raw-unchanged");
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-    let launch = prepare_with("bare", &crate::paths::root(), &t.0.join("agent-home"), inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
-    assert_eq!(launch.manifest.plugins, vec!["vidar-app".to_string()]);
+    let launch = prepare_with("bare", &crate::paths::root(), &t.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
+    assert!(launch.manifest.plugins.is_empty(), "no vault, no plugin rune");
     assert!(!launch.args[2].contains("gate"), "{}", launch.args[2]);
     assert!(!launch.env.contains("CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"));
     // And the same line as a profile with no rendered block at all.
@@ -327,9 +343,16 @@ fn the_raw_bare_profile_output_is_unchanged_by_the_rendered_block() {
         std::fs::copy(under(&crate::paths::root(), rel), &to).unwrap();
     }
     std::fs::create_dir_all(root.join("plugins").join("vidar-app")).unwrap();
-    let bare = prepare_with("bare", &root, &t2.0.join("agent-home"), inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    // A drive server entry whose script is the file itself, so the placeholder resolves without a tools tree.
+    std::fs::write(
+        under(&root, "plugins/vidar-app/.mcp.json"),
+        r#"{"mcpServers":{"drive":{"type":"stdio","command":"node","args":["${CLAUDE_PLUGIN_ROOT}/.mcp.json"]}}}"#,
+    ).unwrap();
+    let bare = prepare_with("bare", &root, &t2.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     let swap = |s: &str| s.replace(&root.display().to_string(), "<root>");
-    assert_eq!(swap(&bare.args[2]), launch.args[2].replace(&crate::paths::root().display().to_string(), "<root>"));
+    // The strict MCP tail names a per-home hash file, so compare the line up to it.
+    let head = |s: String| s.split(" '--mcp-config'").next().unwrap().to_string();
+    assert_eq!(head(swap(&bare.args[2])), head(launch.args[2].replace(&crate::paths::root().display().to_string(), "<root>")));
     let names = |e: &Env| e.names().join(",");
     assert_eq!(names(&bare.env), names(&launch.env));
 }
@@ -349,7 +372,17 @@ impl RowFx {
         let lib = t.0.join("lib");
         std::fs::create_dir_all(&lib).unwrap();
         std::fs::write(lib.join("tombstones.md"), "| id | date | superseded_by |\n|----|------|---------------|\n").unwrap();
-        let config = t.0.join("row-config.json");
+        // At the temp root's vidar.json: the vault store (pointed here by `TEST_VAULT_ROOT`) finds the
+        // rulesLibrary by its folder name through that file (L2a).
+        let config = crate::paths::config_path_in(&t.0);
+        super::vault_spawn::TEST_VAULT_ROOT.with(|r| *r.borrow_mut() = Some(t.0.clone()));
+        // An empty stock template per agent: a Custom vault refuses without its floor's template.
+        let templates = crate::paths::rune_templates_dir_in(&t.0);
+        std::fs::create_dir_all(&templates).unwrap();
+        for (id, name) in [("stock-claude", "Stock Claude"), ("stock-codex", "Stock Codex")] {
+            let t = super::vault::Template { version: 1, id: id.into(), name: name.into(), runesets: vec![], runes: vec![] };
+            std::fs::write(templates.join(format!("{id}.json")), serde_json::to_string(&t).unwrap()).unwrap();
+        }
         RowFx { t, lib, config }
     }
     fn rune(&self, folder: &str, id: &str, body: &str) {
@@ -362,22 +395,130 @@ impl RowFx {
         let v = serde_json::json!({ "rulesLibrary": self.lib.to_string_lossy(), "agents": agents });
         std::fs::write(&self.config, serde_json::to_string_pretty(&v).unwrap()).unwrap();
     }
+    /// What the launcher sends until L3a: the row's sets as the per-launch pick, which the spawn turns
+    /// into a Custom vault (the test reads its own vidar.json in the launcher's place). A row with no
+    /// sets spawns with no vault on the profile's own home.
     fn opts<'a>(&'a self, key: &'a str) -> LaunchOpts<'a> {
-        LaunchOpts { row_key: Some(key), config: Some(&self.config), claude_json: None }
+        migrate_sidecars(&self.lib);
+        let sets =fixture_row_sets(&self.config, key).map(|r| r.sets).unwrap_or_default();
+        if sets.is_empty() {
+            return LaunchOpts { row_key: Some(key), config: Some(&self.config), vault: Some(TEST_NO_VAULT), ..Default::default() };
+        }
+        let pick: Vec<LaunchSetRef> = sets.into_iter().map(|s| LaunchSetRef { library: s.library, set: s.set }).collect();
+        LaunchOpts { row_key: Some(key), config: Some(&self.config), custom_sets: Some(Box::leak(pick.into_boxed_slice())), ..Default::default() }
     }
     fn home(&self, tag: &str) -> PathBuf {
         self.t.0.join(format!("home-{tag}"))
     }
+    /// What the startup fold migration does on an install with a legacy Codex home (an earlier
+    /// launch made it): adopts it for the Rendered row's combination.
+    fn adopt_rendered(&self, home: &Path) {
+        let row = fixture_row_sets(&self.config, "codex-rendered-bare").unwrap();
+        let (hash, entry) = agent_homes::adoption(Agent::Codex, home, &home.join("codex-home"), &row).expect("an adoption");
+        let lock = home::lock(home, home::LOCK_WAIT).unwrap();
+        agent_homes::adopt(Agent::Codex, &lock, home, &hash, &entry).unwrap();
+    }
     fn raw(&self, home: &Path, key: &str) -> Result<Launch, String> {
         let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-        prepare_with("bare", &crate::paths::root(), home, inherited(), &guard(), &probes, &self.opts(key))
+        prepare_with("bare", &crate::paths::root(), home, inherited(), &Ambient::default(), &guard(), &probes, &self.opts(key))
     }
     fn hosted(&self, home: &Path, key: &str) -> Result<HostedLaunch, String> {
-        prepare_hosted_with("bare", &crate::paths::root(), home, &guard(), &self.opts(key))
+        prepare_hosted_with("bare", &crate::paths::root(), home, inherited(), &Ambient::default(), &guard(), &hprobes(), &self.opts(key))
     }
 }
 
+/// What the vault migration (plan § Migration step 2) does to a legacy `<set>.layer.json` sidecar, run
+/// by the fixture before each spawn: each item becomes an item rune `sc-<set>-<n>` in the library,
+/// slotted into the set (L2a: a vault loads item runes only; nothing rides beside runes). A sidecar
+/// rewritten with fewer items drops the extra slots. `outputStyle` has no rune kind and is not carried.
+fn migrate_sidecars(lib: &Path) {
+    use serde_json::Value;
+    let Ok(rd) = std::fs::read_dir(lib.join("sets")) else { return };
+    let bundles = bundles::load(&crate::paths::root()).0;
+    let list = |key: &str, items: Option<&Vec<Value>>| -> String {
+        let items: Vec<&str> = items.into_iter().flatten().filter_map(Value::as_str).collect();
+        if items.is_empty() {
+            return String::new();
+        }
+        format!("{key}:\n{}", items.iter().map(|i| format!("  - {i}\n")).collect::<String>())
+    };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(set) = name.strip_suffix(".layer.json") else { continue };
+        let md = lib.join("sets").join(format!("{set}.md"));
+        let Ok(text) = std::fs::read_to_string(&md) else { continue };
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(e.path()).unwrap()).unwrap_or_default();
+        let mut runes: Vec<(&str, String)> = Vec::new();
+        for (keys, folder) in [(["skills", "codexSkills"], "skills"), (["agents", "codexAgents"], "agents")] {
+            for k in keys {
+                for s in v[k].as_array().into_iter().flatten().filter_map(Value::as_str) {
+                    runes.push((folder, format!("source: {s}\n")));
+                }
+            }
+        }
+        for k in ["guards", "codexGuards"] {
+            for g in v[k].as_array().into_iter().flatten() {
+                let mut h = format!("event: {}\n", g["event"].as_str().unwrap_or_default());
+                if let Some(m) = g["matcher"].as_str() {
+                    h += &format!("matcher: {m}\n");
+                }
+                if let Some(c) = g["command"].as_str() {
+                    h += &format!("command: {c}\n");
+                }
+                match g["run"].as_str() {
+                    // A malformed sidecar entry migrates as written, for the rune build to refuse.
+                    Some(s) => h += &format!("run: {s}\n"),
+                    None => h += &list("run", g["run"].as_array()),
+                }
+                h += &list("open", g["open"].as_array());
+                runes.push(("hooks", h));
+            }
+        }
+        for (module, tick) in v["modules"].as_object().into_iter().flatten() {
+            let off: Vec<&str> = tick["off"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+            for m in bundles.bundles.get(module).map(|b| b.mcp.clone()).unwrap_or_default() {
+                if !off.contains(&format!("mcp:{}", m.name).as_str()) {
+                    runes.push(("mcp", format!("module: {module}\nserver: {}\n", m.name)));
+                }
+            }
+        }
+        if let Some(p) = v.get("permissions") {
+            let mut h = list("allow", p["allow"].as_array()) + &list("ask", p["ask"].as_array());
+            if let Some(m) = p["mode"].as_str() {
+                h += &format!("mode: {m}\n");
+            }
+            if !h.is_empty() {
+                runes.push(("permissions", h));
+            }
+        }
+        let mut slots = String::new();
+        for (n, (folder, h)) in runes.iter().enumerate() {
+            // The id carries the item's content, so a changed sidecar is a changed runeset: a new Custom
+            // vault rather than the earlier one, which a Raw spawn locked.
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(h, &mut hasher);
+            let id = format!("sc-{set}-{n}-{:06x}", std::hash::Hasher::finish(&hasher) & 0xff_ffff);
+            let kind = crate::rules::rune::KINDS.iter().find(|(f, _)| f == folder).unwrap().1;
+            std::fs::create_dir_all(lib.join(folder)).unwrap();
+            std::fs::write(lib.join(folder).join(format!("{id}.md")), format!("---\nname: {id}\nkind: {kind}\nscope: [global]\n{h}---\n")).unwrap();
+            slots += &format!("\n<?rune {id}?>\n");
+        }
+        let prefix = format!("<?rune sc-{set}-");
+        let kept: String = text.lines().filter(|l| !l.starts_with(&prefix)).map(|l| format!("{l}\n")).collect();
+        std::fs::write(&md, format!("{}\n{slots}", kept.trim_end())).unwrap();
+    }
+}
+
+/// The home's layer files other than the per-launch MCP config (every Bare Claude launch writes that one).
 fn layer_files(home: &Path) -> Vec<PathBuf> {
+    all_layer_files(home).into_iter().filter(|p| !p.file_name().unwrap().to_string_lossy().starts_with("mcp-")).collect()
+}
+
+fn mcp_files(home: &Path) -> Vec<PathBuf> {
+    all_layer_files(home).into_iter().filter(|p| p.file_name().unwrap().to_string_lossy().starts_with("mcp-")).collect()
+}
+
+fn all_layer_files(home: &Path) -> Vec<PathBuf> {
     std::fs::read_dir(home.join("layer")).map(|d| d.filter_map(Result::ok).map(|e| e.path()).collect()).unwrap_or_default()
 }
 
@@ -410,7 +551,7 @@ fn a_bare_payload_carries_each_set_in_order_with_a_matching_marker() {
     assert!(launch.args[2].contains(&format!("'--append-system-prompt-file' '{}'", file.display())), "{}", launch.args[2]);
     let m = launch.write_manifest("s1-ab", ["Path"]).unwrap();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
-    assert_eq!(v["payload"]["sets"], serde_json::json!(["beta", "alpha"]));
+    assert_eq!(v["payload"]["sets"], serde_json::json!(["lib/beta", "lib/alpha"]));
     assert_eq!(v["payload"]["marker"], marker.as_str());
     assert_eq!(v["payload"]["path"], file.to_string_lossy().as_ref());
     drop(launch);
@@ -421,6 +562,81 @@ fn a_bare_payload_carries_each_set_in_order_with_a_matching_marker() {
     assert_ne!(other.manifest.payload.marker, marker);
 }
 
+fn pick(set: &str) -> LaunchSetRef {
+    LaunchSetRef { library: None, set: set.to_string() }
+}
+
+/// The vault a per-launch pick becomes (`launch_row::vault_for`, L2a), on the fixture's temp store.
+fn pick_sets(fx: &RowFx, row_key: Option<&str>, picked: &[LaunchSetRef]) -> Result<Option<super::vault::Vault>, String> {
+    let opts = LaunchOpts { row_key, custom_sets: Some(picked), config: Some(&fx.config), ..Default::default() };
+    vault_for(&fx.t.0, &opts, super::agent_homes::Agent::Claude)
+}
+
+#[test]
+fn a_launch_pick_becomes_a_custom_vault_and_the_rows_own_sets_never_load() {
+    let fx = RowFx::new("pick-replaces");
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.rune("sets", "beta", "Beta set text.\n");
+    fx.agents(serde_json::json!([{ "key": "claude-bare-review", "sets": [{ "set": "alpha" }] }]));
+    let v = pick_sets(&fx, Some("claude-bare-review"), &[pick("beta")]).unwrap().unwrap();
+    assert!(v.id.starts_with("custom-"), "{}", v.id);
+    assert_eq!(v.runesets.iter().map(|c| format!("{}/{}", c.source.library, c.source.set)).collect::<Vec<_>>(), ["lib/beta"]);
+    // End to end: the payload carries the pick, not the row's own set.
+    let home = fx.home("pick");
+    let picked = [pick("beta")];
+    let opts = LaunchOpts { custom_sets: Some(&picked), vault: None, ..fx.opts("claude-bare-review") };
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let launch = prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &opts).unwrap();
+    assert_eq!(launch.manifest.payload.sets, vec!["lib/beta".to_string()]);
+}
+
+#[test]
+fn an_empty_launch_pick_is_an_empty_vault_and_builds_no_layer_payload() {
+    let fx = RowFx::new("pick-empty");
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.agents(serde_json::json!([{ "key": "claude-bare-review", "sets": [{ "set": "alpha" }] }]));
+    let v = pick_sets(&fx, Some("claude-bare-review"), &[]).unwrap().unwrap();
+    assert!(v.runesets.is_empty() && v.runes.is_empty());
+    let home = fx.home("empty");
+    let opts = LaunchOpts { custom_sets: Some(&[]), vault: None, ..fx.opts("claude-bare-review") };
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let launch = prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &opts).unwrap();
+    assert!(launch.manifest.payload.sets.is_empty());
+    assert!(layer_files(&home).is_empty(), "{:?}", layer_files(&home));
+}
+
+
+#[test]
+fn a_spawn_with_no_vault_or_an_unknown_one_refuses() {
+    let fx = RowFx::new("pick-novault");
+    fx.agents(serde_json::json!([{ "key": "claude-bare-review", "sets": [{ "set": "alpha" }] }]));
+    // A row with sets but no vault and no pick: the row's sets never load (model R1).
+    let none = LaunchOpts { row_key: Some("claude-bare-review"), config: Some(&fx.config), ..Default::default() };
+    let e = vault_for(&fx.t.0, &none, super::agent_homes::Agent::Claude).unwrap_err();
+    assert!(e.contains("vault") && e.contains("refused"), "{e}");
+    let unknown = LaunchOpts { vault: Some("no-such-vault"), ..none };
+    let e = vault_for(&fx.t.0, &unknown, super::agent_homes::Agent::Claude).unwrap_err();
+    assert!(e.contains("vault") && e.contains("refused") && e.contains("no-such-vault"), "{e}");
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let e = prepare_with("bare", &crate::paths::root(), &fx.home("nv2"), inherited(), &Ambient::default(), &guard(), &probes, &none).err().unwrap();
+    assert!(e.contains("vault") && e.contains("refused"), "{e}");
+    assert!(!fx.home("nv2").join("claude-homes").exists(), "a refused spawn made a home");
+}
+
+#[test]
+fn a_launch_pick_with_a_bad_set_or_library_name_refuses() {
+    let fx = RowFx::new("pick-bad");
+    fx.agents(serde_json::json!([{ "key": "claude-bare-review" }]));
+    // `lib/set` is a resumed thread's recorded id (L2a); one more segment is not.
+    for bad in ["", "a/b/c", "a\\b", "c:x", "..", "a..b"] {
+        let e = pick_sets(&fx, Some("claude-bare-review"), &[pick(bad)]).unwrap_err();
+        assert!(e.contains("not a plain set name") && e.contains(&format!("{bad:?}")), "{e}");
+    }
+    let lib = LaunchSetRef { library: Some("Bad Lib".into()), set: "alpha".into() };
+    let e = pick_sets(&fx, Some("claude-bare-review"), &[lib]).unwrap_err();
+    assert!(e.contains("\"Bad Lib\"") && e.contains("not a library name"), "{e}");
+}
+
 #[test]
 fn a_failing_set_build_refuses_the_spawn_and_writes_nothing() {
     let fx = RowFx::new("row-fail");
@@ -429,21 +645,42 @@ fn a_failing_set_build_refuses_the_spawn_and_writes_nothing() {
     fx.rune("rules", "plain", "A plain rule.\n");
     fx.rune("sets", "hollow", "\n");
     for (set, needle) in [
-        ("ghost", "`ghost` is not in the rules library"),
-        ("old", "`old` is tombstoned"),
-        ("plain", "is a rule, not a set"),
+        ("ghost", "has no set \"ghost\""),
+        ("old", "tombstoned"),
+        ("plain", "is a rule, not a runeset"),
         ("hollow", "built empty"),
     ] {
         fx.agents(serde_json::json!([{ "key": "row", "sets": [{ "set": set }] }]));
         let home = fx.home(set);
-        let e = fx.raw(&home, "row").err().unwrap();
-        assert!(e.contains(needle) && e.contains("spawn refused"), "raw {set}: {e}");
+        let e = fx.raw(&home, "row").err().unwrap_or_else(|| panic!("raw {set}: spawned"));
+        assert!(e.contains(needle) && e.contains("refused"), "raw {set}: {e}");
         let e = fx.hosted(&home, "row").err().unwrap();
         assert!(e.contains(needle), "hosted {set}: {e}");
         assert!(!home.join("layer").exists(), "{set}: layer\\ written by a refused spawn");
         assert!(!home.join("claude-config").join("settings.json").exists(), "{set}: settings written by a refused spawn");
         assert_eq!(manifest_count(&home), 0, "{set}: a refused spawn left a manifest");
     }
+}
+
+#[test]
+fn a_failing_set_with_recall_writes_no_rune_skill() {
+    let fx = RowFx::new("row-fail-recall");
+    let profile = fx.t.0.join("profiles/bare/claude.json");
+    std::fs::create_dir_all(profile.parent().unwrap()).unwrap();
+    std::fs::copy(crate::paths::root().join("profiles/bare/claude.json"), &profile).unwrap();
+    let rule = fx.lib.join("rules/remember.md");
+    std::fs::create_dir_all(rule.parent().unwrap()).unwrap();
+    std::fs::write(rule, "---\nname: remember\nkind: rule\nscope: [global]\nactivate: recall\ndescription: Remember this\n---\nRecall body.\n").unwrap();
+    // L2a: a missing slot warns and is skipped (the vault store); a pick naming a set the library lacks
+    // refuses before any home, payload or rune skill is written.
+    fx.rune("sets", "broken", "- <?rune remember?>\n- <?rune missing?>\n");
+    fx.agents(serde_json::json!([{ "key": "row", "sets": [{ "set": "broken" }, { "set": "ghost" }] }]));
+    let home = fx.home("broken");
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let error = prepare_with("bare", &fx.t.0, &home, inherited(), &Ambient::default(), &guard(), &probes, &fx.opts("row")).err().unwrap();
+    assert!(error.contains("has no set \"ghost\"") && error.contains("refused"), "{error}");
+    assert!(!crate::paths::rune_skills_dir_in(&fx.t.0).exists());
+    assert!(!home.join("layer").exists());
 }
 
 impl RowFx {
@@ -460,7 +697,7 @@ fn a_set_ref_without_library_resolves_through_rules_library() {
     // `rulesLibrary` relative to the root, as vidar.json holds it.
     let cfg = serde_json::json!({ "rulesLibrary": "lib", "agents": [{ "key": "k", "sets": [{ "set": "alpha" }] }] });
     std::fs::write(&fx.config, cfg.to_string()).unwrap();
-    let row = layer::row_sets(&fx.config, "k").unwrap();
+    let row = fixture_row_sets(&fx.config, "k").unwrap();
     assert_eq!(row.sets, vec![layer::SetRef { library: None, set: "alpha".into() }]);
     assert_eq!(row.rules_library.as_deref(), Some("lib"));
     let home = fx.home("lib");
@@ -601,7 +838,8 @@ fn two_libraries_on_one_row_build_in_ref_order_without_duplicates() {
     assert_eq!(text.matches("Beta only.").count(), 1, "a repeated ref built twice: {text}");
     let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} missing: {text}"));
     assert!(at("Shared from beta.") < at("Beta only.") && at("Beta only.") < at("Alpha only.") && at("Alpha only.") < at("Local set text."), "{text}");
-    assert!(text.contains("- Beta only.\n\n- Alpha only.\n\nLocal set text."), "{text}");
+    assert!(text.contains("<!-- rune: b-only-1 -->\n- Beta only.\n\n<!-- rune: a-only-1 -->\n- Alpha only.\n\nLocal set text."), "{text}");
+    assert_eq!(text.matches("<!-- rune: shared-1 -->").count(), 1, "{text}");
     let sets: Vec<&str> = built.sets.iter().map(String::as_str).collect();
     assert_eq!(sets, ["beta/row-k", "alpha/row-k", "beta/row-k", "local"]);
     let dup: Vec<&String> = built.warnings.iter().filter(|w| w.contains("already placed")).collect();
@@ -633,6 +871,23 @@ fn guard_brick_refuses_a_profile_path_or_placeholder_and_passes_home_paths() {
     home::guard_brick("Ask testuser before a push.", root, home_s, &g).unwrap();
 }
 
+/// The test's stand-in launcher: the sets a fixture vidar.json row names (the last keyed entry with
+/// `sets`), which a test hands the spawn as its pick. No production code reads a row's sets any more.
+pub(super) fn fixture_row_sets(config: &Path, row_key: &str) -> Result<layer::RowSets, String> {
+    let row_key = row_key.trim();
+    if row_key.is_empty() {
+        return Ok(layer::RowSets::default());
+    }
+    let Ok(text) = crate::fsx::read_text(config) else { return Ok(layer::RowSets::default()) };
+    let root: serde_json::Value = serde_json::from_str(crate::fsx::strip_bom(&text)).map_err(|e| e.to_string())?;
+    let row = root.get("agents").and_then(serde_json::Value::as_array)
+        .and_then(|a| a.iter().rev().find(|r| r.get("key").and_then(serde_json::Value::as_str) == Some(row_key) && r.get("sets").is_some()));
+    let Some(sets) = row.and_then(|r| r.get("sets")).filter(|s| !s.is_null()) else { return Ok(layer::RowSets::default()) };
+    let sets: Vec<layer::SetRef> = serde_json::from_value(sets.clone()).map_err(|e| e.to_string())?;
+    let rules_library = root.get("rulesLibrary").and_then(serde_json::Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+    Ok(layer::RowSets { sets, rules_library })
+}
+
 #[test]
 fn the_last_keyed_entry_for_a_row_key_supplies_its_sets() {
     let fx = RowFx::new("row-lookup");
@@ -646,13 +901,11 @@ fn the_last_keyed_entry_for_a_row_key_supplies_its_sets() {
         { "key": "cleared", "sets": [{ "set": "x" }] },
         { "key": "cleared", "sets": null }
     ]));
-    let ids = |key: &str| layer::row_sets(&fx.config, key).unwrap().sets.into_iter().map(|s| s.set).collect::<Vec<_>>();
+    let ids = |key: &str| fixture_row_sets(&fx.config, key).unwrap().sets.into_iter().map(|s| s.set).collect::<Vec<_>>();
     assert_eq!(ids("r"), ["last", "more"]);
     assert!(ids("ghost").is_empty(), "an unknown key has no sets");
     assert!(ids("plain").is_empty(), "a row without sets has none");
-    // The frontend overlay merges same-key entries field by field: a later label-only entry
-    // keeps the row's sets, so Rust must not launch it without them.
-    assert_eq!(ids("relabelled"), ["kept"], "a label-only override dropped the row's sets");
+    assert_eq!(ids("relabelled"), ["kept"]);
     assert!(ids("cleared").is_empty(), "a later `sets: null` clears them");
 
     // A keyed row with no sets launches on the static payload, `layer\` untouched.
@@ -661,22 +914,22 @@ fn the_last_keyed_entry_for_a_row_key_supplies_its_sets() {
     let home = fx2.home("plain");
     let launch = fx2.raw(&home, "plain").unwrap();
     assert!(launch.manifest.payload.path.ends_with("payload.md"), "{}", launch.manifest.payload.path);
-    assert!(!home.join("layer").exists());
+    assert!(layer_files(&home).is_empty());
 }
 
 #[test]
-fn an_unreadable_config_refuses_a_row_key_spawn() {
+fn an_unreadable_config_refuses_a_pick_that_names_no_library() {
+    // L2a: a spawn reads vidar.json only for the pick's default library (`rulesLibrary`), never a row.
     let fx = RowFx::new("row-unreadable");
     std::fs::write(&fx.config, "{ \"agents\": [ not json").unwrap();
     let home = fx.home("bad");
-    let e = fx.raw(&home, "claude-bare").err().unwrap();
-    assert!(e.contains("unreadable") && e.contains("spawn refused"), "{e}");
-    let e = fx.hosted(&home, "claude-bare").err().unwrap();
-    assert!(e.contains("unreadable"), "{e}");
+    let opts = LaunchOpts { config: Some(&fx.config), custom_sets: Some(&[LaunchSetRef { library: None, set: "alpha".into() }]), ..Default::default() };
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let e = prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &opts).err().unwrap();
+    assert!(e.contains("names no library") && e.contains("refused"), "{e}");
+    let e = prepare_hosted_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &hprobes(), &opts).err().unwrap();
+    assert!(e.contains("names no library"), "{e}");
     assert!(!home.exists(), "the home was touched before the refusal");
-    // Sets that are not a list of refs refuse too.
-    fx.agents(serde_json::json!([{ "key": "k", "sets": ["alpha"] }]));
-    assert!(fx.raw(&home, "k").err().unwrap().contains("not a list"));
 }
 
 #[test]
@@ -711,12 +964,12 @@ fn a_hosted_prepare_with_row_sets_records_the_built_payload() {
     let m = launch.write_manifest("s1-ab", "s1234abcd-00000001", ["Path"]).unwrap();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
     assert_eq!(v["payload"]["path"], file.to_string_lossy().as_ref());
-    assert_eq!(v["payload"]["sets"], serde_json::json!(["alpha"]));
+    assert_eq!(v["payload"]["sets"], serde_json::json!(["lib/alpha"]));
     assert_eq!(v["payload"]["marker"], marker.as_str());
     // The lock spans the payload write and is released before the host round-trip.
     assert!(home::lock(&home, Duration::from_millis(50)).is_ok());
     // No row key: the profile's own payload, nothing to hand Falcon.
-    let plain = prepare_hosted_with("bare", &crate::paths::root(), &fx.home("plain"), &guard(), &LaunchOpts::default()).unwrap();
+    let plain = prepare_hosted_with("bare", &crate::paths::root(), &fx.home("plain"), inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).unwrap();
     assert!(plain.payload_file.is_none());
 }
 
@@ -726,20 +979,13 @@ fn a_blank_row_key_is_no_key() {
     assert_eq!(row_key_of(Some(String::new())), None);
     assert_eq!(row_key_of(None), None);
     assert_eq!(row_key_of(Some(" claude-bare ".into())).as_deref(), Some("claude-bare"));
-    // A blank key reads no vidar.json, so even an unreadable one cannot refuse the spawn.
     let fx = RowFx::new("row-blank");
-    std::fs::write(&fx.config, "{ not json").unwrap();
-    assert!(layer::row_sets(&fx.config, "  ").unwrap().sets.is_empty());
     // An entry whose key is the same blank string is not this spawn's row.
     fx.agents(serde_json::json!([{ "key": "  ", "sets": [{ "set": "ghost" }] }]));
     let home = fx.home("blank");
     let launch = fx.raw(&home, "  ").unwrap();
     assert!(launch.manifest.payload.path.ends_with("payload.md"), "{}", launch.manifest.payload.path);
     drop(launch);
-    // A padded key finds its row.
-    fx.rune("sets", "alpha", "Alpha set text.\n");
-    fx.agents(serde_json::json!([{ "key": "k", "sets": [{ "set": "alpha" }] }]));
-    assert_eq!(layer::row_sets(&fx.config, " k ").unwrap().sets.len(), 1);
 }
 
 #[test]
@@ -747,7 +993,7 @@ fn a_sets_template_without_exactly_one_slot_is_refused_before_any_write() {
     let fx = RowFx::new("row-slot");
     fx.rune("sets", "alpha", "Alpha set text.\n");
     fx.agents(serde_json::json!([{ "key": "k", "sets": [{ "set": "alpha" }] }]));
-    let row = layer::row_sets(&fx.config, "k").unwrap();
+    let row = fixture_row_sets(&fx.config, "k").unwrap();
     let home = fx.home("slot");
     std::fs::create_dir_all(&home).unwrap();
     let lock = home::lock(&home, home::LOCK_WAIT).unwrap();
@@ -763,7 +1009,7 @@ fn an_unchanged_row_payload_is_not_rewritten() {
     let fx = RowFx::new("row-same");
     fx.rune("sets", "alpha", "Alpha set text.\n");
     fx.agents(serde_json::json!([{ "key": "k", "sets": [{ "set": "alpha" }] }]));
-    let row = layer::row_sets(&fx.config, "k").unwrap();
+    let row = fixture_row_sets(&fx.config, "k").unwrap();
     let home = fx.home("same");
     std::fs::create_dir_all(&home).unwrap();
     let lock = home::lock(&home, home::LOCK_WAIT).unwrap();
@@ -797,7 +1043,7 @@ fn rune_build_warnings_reach_the_hosted_manifest() {
     let raw = fx.raw(&home, "k").unwrap();
     assert!(raw.args[2].contains("is disabled") && !raw.manifest.payload.warnings.is_empty());
     drop(raw);
-    let plain = prepare_hosted_with("bare", &crate::paths::root(), &fx.home("plain"), &guard(), &LaunchOpts::default()).unwrap();
+    let plain = prepare_hosted_with("bare", &crate::paths::root(), &fx.home("plain"), inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).unwrap();
     assert!(plain.manifest.payload.warnings.is_empty());
 }
 
@@ -806,7 +1052,7 @@ fn bare_layer_and_sets_payload_errors_say_the_spawn_was_refused() {
     let fx = RowFx::new("row-errs");
     fx.rune("sets", "alpha", "Alpha set text.\n");
     fx.agents(serde_json::json!([{ "key": "k", "sets": [{ "set": "alpha" }] }]));
-    let row = layer::row_sets(&fx.config, "k").unwrap();
+    let row = fixture_row_sets(&fx.config, "k").unwrap();
     // `layer` taken by a file: the directory cannot be made.
     let home = fx.home("errs");
     std::fs::create_dir_all(&home).unwrap();
@@ -819,12 +1065,12 @@ fn bare_layer_and_sets_payload_errors_say_the_spawn_was_refused() {
     let t = TempDir::new("row-errs-root");
     let root = root_with_profile(&t, |v| v["setsPayload"] = serde_json::json!("profiles/bare/missing-sets.md"));
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-    let e = prepare_with("bare", &root, &fx.home("tpl"), inherited(), &guard(), &probes, &fx.opts("k")).err().unwrap();
+    let e = prepare_with("bare", &root, &fx.home("tpl"), inherited(), &Ambient::default(), &guard(), &probes, &fx.opts("k")).err().unwrap();
     assert!(e.starts_with("Bare sets payload") && e.ends_with("; Bare spawn refused"), "{e}");
 }
 
 #[test]
-fn a_row_payload_keeps_a_hook_claim_only_when_bare_guards_carry_it() {
+fn a_row_payload_keeps_a_hook_claim_only_when_a_set_guard_carries_it() {
     let fx = RowFx::new("row-hook-claim");
     let head = |name: &str, scope: &str, extra: &str| format!("---\nname: {name}\nkind: rule\nscope: {scope}\nactivate: always\n{extra}---\n");
     let rules = fx.lib.join("rules");
@@ -835,8 +1081,9 @@ fn a_row_payload_keeps_a_hook_claim_only_when_bare_guards_carry_it() {
     fx.rune("sets", "mixed", "<?rune hook-x?>\n\n<?rune bare-x?>\n\n<?rune plain-x?>\n");
     let script = fx.script("hooks", "guard-x.mjs", "// guard x\n");
     let config = |guards: serde_json::Value| {
-        let v = serde_json::json!({ "rulesLibrary": fx.lib.to_string_lossy(), "agents": [{ "key": "k", "sets": [{ "set": "mixed" }] }], "bareGuards": guards });
+        let v = serde_json::json!({ "rulesLibrary": fx.lib.to_string_lossy(), "agents": [{ "key": "k", "sets": [{ "set": "mixed" }] }] });
         std::fs::write(&fx.config, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+        fx.sidecar("mixed", serde_json::json!({ "guards": guards }));
     };
     let payload_of = |l: &Launch| String::from_utf8(std::fs::read(&l.manifest.payload.path).unwrap()).unwrap();
 
@@ -861,7 +1108,7 @@ fn a_row_payload_keeps_a_hook_claim_only_when_bare_guards_carry_it() {
     assert!(hosted.manifest.payload.warnings.is_empty(), "{:?}", hosted.manifest.payload.warnings);
 }
 
-// ---- Guard copies (Bare slice 1, W3) ----
+// ---- Guard copies (Bare slice 1, W3; set guards in the combination home since fold W2 L2a) ----
 
 impl RowFx {
     /// A script under the fixture's temp dir (never a machine path); returns its absolute path.
@@ -872,24 +1119,52 @@ impl RowFx {
         std::fs::write(&p, body).unwrap();
         p.to_string_lossy().into_owned()
     }
+    /// Set `g` carrying `guards` (its sidecar's `guards`), picked by row `g`.
     fn guards(&self, guards: serde_json::Value) {
-        let v = serde_json::json!({ "rulesLibrary": self.lib.to_string_lossy(), "bareGuards": guards });
-        std::fs::write(&self.config, serde_json::to_string_pretty(&v).unwrap()).unwrap();
-    }
-    fn plain(&self) -> LaunchOpts<'_> {
-        LaunchOpts { row_key: None, config: Some(&self.config), claude_json: None }
+        self.rune("sets", "g", "G set text.\n");
+        self.sidecar("g", serde_json::json!({ "guards": guards }));
+        self.agents(serde_json::json!([{ "key": "g", "sets": [{ "set": "g" }] }]));
     }
     fn raw_plain(&self, home: &Path) -> Result<Launch, String> {
-        let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-        prepare_with("bare", &crate::paths::root(), home, inherited(), &guard(), &probes, &self.plain())
+        self.raw(home, "g")
     }
     fn hosted_plain(&self, home: &Path) -> Result<HostedLaunch, String> {
-        prepare_hosted_with("bare", &crate::paths::root(), home, &guard(), &self.plain())
+        self.hosted(home, "g")
     }
 }
 
+/// The vault home under `home` the latest Claude spawn wrote (L2a: homes are keyed per vault, and a
+/// changed pick is a new Custom vault, so a re-ticked set runs on a new home).
+fn combo_of(home: &Path) -> PathBuf {
+    let dirs: Vec<PathBuf> = std::fs::read_dir(home.join("claude-homes")).unwrap().filter_map(Result::ok).map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    let written = |p: &PathBuf| std::fs::metadata(p.join("settings.json")).and_then(|m| m.modified()).ok();
+    dirs.into_iter().max_by_key(written).expect("a vault home")
+}
+
 fn settings_of(home: &Path) -> Option<String> {
-    std::fs::read_to_string(home.join("claude-config").join("settings.json")).ok()
+    std::fs::read_to_string(combo_of(home).join("settings.json")).ok()
+}
+
+#[test]
+fn raw_command_hook_reaches_claude_settings_and_unsupported_event_does_not() {
+    let fx = RowFx::new("raw-claude-hook");
+    let command = "pwsh -NoProfile -Command '$token = \"sk-secret-1\"; exit 7'";
+    fx.guards(serde_json::json!([
+        { "event": "Stop", "command": command },
+        { "event": "Interrupt", "command": "pwsh exit 8" }
+    ]));
+    let home = fx.home("raw-claude-hook");
+    let launched = fx.raw_plain(&home).unwrap();
+    assert!(warned(&launched.manifest.warnings, &["Interrupt", "Not Carried by Claude"]), "{:?}", launched.manifest.warnings);
+    let settings: serde_json::Value = serde_json::from_str(&settings_of(&home).unwrap()).unwrap();
+    let groups = settings["hooks"]["Stop"].as_array().unwrap();
+    assert!(groups.iter().any(|g| g["hooks"][0]["command"] == command));
+    assert!(settings["hooks"].get("Interrupt").is_none());
+}
+
+/// Whether any warning of `w` contains every one of `parts`.
+fn warned(w: &[String], parts: &[&str]) -> bool {
+    w.iter().any(|w| parts.iter().all(|p| w.contains(p)))
 }
 
 #[test]
@@ -906,13 +1181,13 @@ fn copied_guards_land_in_settings_for_raw_and_hosted_alike() {
     drop(fx.raw_plain(&home).unwrap());
     let raw = settings_of(&home).unwrap();
 
-    let copies = home.join("layer").join("hooks");
+    let copies = combo_of(&home).join("hooks");
     for (name, body) in [("fail-closed.mjs", "// wrapper v1\n"), ("guard-crawl.mjs", "// crawl v1\n"), ("guard-install.mjs", "// install v1\n")] {
         assert_eq!(std::fs::read_to_string(copies.join(name)).unwrap(), body, "{name}");
     }
     let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
     let pre = v["hooks"]["PreToolUse"].as_array().unwrap();
-    assert!(pre.len() >= 3, "the template's own groups stay ahead of the guards: {pre:?}");
+    assert!(pre.len() >= 2, "the guards land after any group of the template's own: {pre:?}");
     let quoted = |n: &str| format!("\"{}\"", copies.join(n).display());
     let crawl_group = &pre[pre.len() - 2];
     assert_eq!(crawl_group["matcher"], "Bash");
@@ -933,35 +1208,36 @@ fn copied_guards_land_in_settings_for_raw_and_hosted_alike() {
     drop(fx.raw_plain(&home).unwrap());
     assert_eq!(std::fs::read_to_string(copies.join("guard-crawl.mjs")).unwrap(), "// crawl v2\n");
 
-    // No guards: no layer\ and the template's hooks alone, as before W3.
-    let none = fx.home("none");
+    // Unticked: a new vault whose home holds no copies; the template's hooks stand alone, as before W3.
     fx.guards(serde_json::json!([]));
-    drop(fx.raw_plain(&none).unwrap());
-    assert!(!none.join("layer").exists());
-    let v: serde_json::Value = serde_json::from_str(&settings_of(&none).unwrap()).unwrap();
-    assert_eq!(v["hooks"]["PreToolUse"].as_array().unwrap().len(), pre.len() - 2);
+    drop(fx.raw_plain(&home).unwrap());
+    assert_ne!(combo_of(&home), copies.parent().unwrap(), "a changed pick is a new vault home");
+    assert_eq!(std::fs::read_dir(combo_of(&home).join("hooks")).map(|d| d.count()).unwrap_or(0), 0);
+    let v: serde_json::Value = serde_json::from_str(&settings_of(&home).unwrap()).unwrap();
+    assert_eq!(v["hooks"]["PreToolUse"].as_array().map_or(0, Vec::len), pre.len() - 2);
 }
 
 #[test]
-fn a_missing_guard_script_refuses_the_spawn() {
+fn a_missing_guard_script_is_skipped_with_a_warning() {
     let fx = RowFx::new("guards-missing");
     let wrapper = fx.script("hooks", "fail-closed.mjs", "// wrapper\n");
     let gone = fx.t.0.join("hooks").join("guard-gone.mjs").to_string_lossy().into_owned();
     fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": [wrapper, gone] }]));
     let home = fx.home("missing");
-    let e = fx.raw_plain(&home).err().unwrap();
-    assert!(e.contains("missing") && e.contains("spawn refused"), "{e}");
-    let e = fx.hosted_plain(&home).err().unwrap();
-    assert!(e.contains("missing"), "{e}");
-    assert!(!home.join("layer").exists(), "a refused guard set copied something");
-    assert!(settings_of(&home).is_none(), "settings.json was written before the refusal");
-    assert_eq!(manifest_count(&home), 0);
-    // A malformed `bareGuards` refuses before the home is touched.
+    let l = fx.raw_plain(&home).unwrap();
+    assert!(warned(&l.manifest.warnings, &["missing", "skipped"]), "{:?}", l.manifest.warnings);
+    assert!(l.manifest.guards.is_empty());
+    drop(l);
+    let h = fx.hosted_plain(&home).unwrap();
+    assert!(warned(&h.manifest.warnings, &["missing"]), "{:?}", h.manifest.warnings);
+    assert!(!combo_of(&home).join("hooks").join("fail-closed.mjs").exists(), "a skipped guard copied something");
+    assert!(!settings_of(&home).unwrap().contains("guard-gone.mjs"));
+    // A malformed entry is skipped the same way.
     let bad = fx.home("malformed");
     fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": "not a list" }]));
-    let e = fx.raw_plain(&bad).err().unwrap();
-    assert!(e.contains("bareGuards") && e.contains("spawn refused"), "{e}");
-    assert!(!bad.exists());
+    let l = fx.raw_plain(&bad).unwrap();
+    assert!(l.manifest.guards.is_empty());
+    assert!(!l.manifest.warnings.is_empty() || !l.manifest.payload.warnings.is_empty(), "a malformed guard is named");
 }
 
 #[test]
@@ -971,19 +1247,20 @@ fn a_guard_script_must_be_an_absolute_mjs_path() {
     let home = fx.home("mjs");
     for run in [serde_json::json!([js]), serde_json::json!(["hooks\\guard-crawl.mjs"]), serde_json::json!([])] {
         fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": run }]));
-        let e = fx.raw_plain(&home).err().unwrap();
-        assert!(e.contains("spawn refused"), "{e}");
-        assert!(e.contains(".mjs") || e.contains("empty"), "{e}");
+        let l = fx.raw_plain(&home).unwrap();
+        assert!(l.manifest.guards.is_empty(), "{run}: {:?}", l.manifest.guards);
+        // A hook rune the mapper refuses warns with the rune build (payload), the writer's refusal on the home (L2a).
+        assert!(!l.manifest.warnings.is_empty() || !l.manifest.payload.warnings.is_empty(), "{run}: a refused guard is named");
     }
     let ok = fx.script("hooks", "guard-crawl.MJS", "// upper-case extension\n");
     fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": [ok] }]));
-    drop(fx.raw_plain(&home).unwrap());
+    assert_eq!(fx.raw_plain(&home).unwrap().manifest.guards, ["guard-crawl.MJS".to_string()]);
     fx.guards(serde_json::json!([{ "event": "Pre Tool", "run": [ok] }]));
-    assert!(fx.raw_plain(&home).err().unwrap().contains("hook event"));
+    assert!(fx.raw_plain(&home).unwrap().manifest.guards.is_empty());
 }
 
 #[test]
-fn guard_scripts_of_one_name_from_different_folders_are_refused() {
+fn guard_scripts_of_one_name_from_different_folders_keep_the_first() {
     let fx = RowFx::new("guards-names");
     let a = fx.script("a", "guard-crawl.mjs", "// a\n");
     let b = fx.script("b", "Guard-Crawl.mjs", "// b\n");
@@ -992,16 +1269,25 @@ fn guard_scripts_of_one_name_from_different_folders_are_refused() {
         { "event": "PreToolUse", "run": [a] },
         { "event": "PreToolUse", "run": [b] }
     ]));
-    let e = fx.raw_plain(&home).err().unwrap();
-    assert!(e.contains("different folders") && e.contains("spawn refused"), "{e}");
-    assert!(!home.join("layer").exists());
+    // The resolver already takes the second as the same guard by name (`set_layer::guard_name`).
+    let l = fx.raw_plain(&home).unwrap();
+    assert_eq!(l.manifest.guards, ["guard-crawl.mjs".to_string()], "{:?}", l.manifest.warnings);
+    drop(l);
+    let hooks = combo_of(&home).join("hooks");
+    assert_eq!(std::fs::read_to_string(hooks.join("guard-crawl.mjs")).unwrap(), "// a\n");
     // The same file named twice (a shared wrapper) is one copy, not a clash.
     fx.guards(serde_json::json!([
         { "event": "PreToolUse", "run": [a] },
         { "event": "Stop", "run": [a] }
     ]));
-    drop(fx.raw_plain(&home).unwrap());
-    assert_eq!(std::fs::read_dir(home.join("layer").join("hooks")).unwrap().count(), 1);
+    let l = fx.raw_plain(&home).unwrap();
+    assert!(l.manifest.warnings.is_empty(), "{:?}", l.manifest.warnings);
+    assert_eq!(std::fs::read_dir(combo_of(&home).join("hooks")).unwrap().count(), 1);
+    drop(l);
+    // Two folders' same-named files in one guard are refused by the copy's checks and skipped.
+    fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": [a, b] }]));
+    let l = fx.raw_plain(&home).unwrap();
+    assert!(l.manifest.guards.is_empty() && warned(&l.manifest.warnings, &["skipped"]), "{:?}", l.manifest.warnings);
 }
 
 #[test]
@@ -1010,27 +1296,31 @@ fn a_guard_event_must_be_a_claude_hook_event_and_the_wrapper_pre_tool_use_only()
     let wrapper = fx.script("hooks", "fail-closed.mjs", "// wrapper\n");
     let crawl = fx.script("hooks", "guard-crawl.mjs", "// crawl\n");
     let home = fx.home("events");
+    let skipped = |why: &str| {
+        let l = fx.raw_plain(&home).unwrap();
+        assert!(l.manifest.guards.is_empty(), "{why}: {:?}", l.manifest.guards);
+        assert!(warned(&l.manifest.warnings, &[why]), "{why}: {:?}", l.manifest.warnings);
+    };
     for event in ["pretooluse", "PreToolUSE", "OnSave", "Pre Tool"] {
         fx.guards(serde_json::json!([{ "event": event, "run": [crawl] }]));
-        let e = fx.raw_plain(&home).err().unwrap();
-        assert!(e.contains("not a Claude Code hook event") && e.ends_with("; Bare spawn refused"), "{event}: {e}");
+        skipped("Not Carried by Claude");
     }
     for event in guards::HOOK_EVENTS {
         fx.guards(serde_json::json!([{ "event": event, "run": [crawl] }]));
-        drop(fx.raw_plain(&home).unwrap_or_else(|e| panic!("{event}: {e}")));
+        let l = fx.raw_plain(&home).unwrap();
+        assert_eq!(l.manifest.guards, ["guard-crawl.mjs".to_string()], "{event}: {:?}", l.manifest.warnings);
     }
     fx.guards(serde_json::json!([{ "event": "Stop", "run": [wrapper, crawl] }]));
-    let e = fx.raw_plain(&home).err().unwrap();
-    assert!(e.contains("wraps PreToolUse only") && e.ends_with("; Bare spawn refused"), "{e}");
+    skipped("wraps PreToolUse only");
     fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": [wrapper] }]));
-    let e = fx.hosted_plain(&home).err().unwrap();
-    assert!(e.contains("no guard after it"), "{e}");
+    let h = fx.hosted_plain(&home).unwrap();
+    assert!(warned(&h.manifest.warnings, &["no guard after it"]), "{:?}", h.manifest.warnings);
     fx.guards(serde_json::json!([{ "event": "PreToolUse", "run": [wrapper, crawl] }]));
-    drop(fx.raw_plain(&home).unwrap());
+    assert_eq!(fx.raw_plain(&home).unwrap().manifest.guards.len(), 2);
 }
 
 #[test]
-fn the_manifest_names_the_guard_copies_and_a_missing_bare_guards_key_stays_quiet() {
+fn the_manifest_names_the_guard_copies_and_a_set_without_guards_stays_quiet() {
     let fx = RowFx::new("guards-visible");
     let wrapper = fx.script("hooks", "fail-closed.mjs", "// wrapper\n");
     let crawl = fx.script("hooks", "guard-crawl.mjs", "// crawl\n");
@@ -1042,11 +1332,13 @@ fn the_manifest_names_the_guard_copies_and_a_missing_bare_guards_key_stays_quiet
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
     assert_eq!(v["guards"], serde_json::json!(["fail-closed.mjs", "guard-crawl.mjs"]));
     assert!(v.get("warnings").is_none(), "{v}");
+    // the launch record also keeps the resolved guard entries and skill / agent paths (W6)
+    assert_eq!(v["items"]["guards"], serde_json::json!([{ "event": "PreToolUse", "run": [wrapper, crawl] }]));
+    assert_eq!((&v["items"]["skills"], &v["items"]["agents"]), (&serde_json::json!([]), &serde_json::json!([])));
     drop(raw);
 
-    // A readable vidar.json without the key is quiet: no banner, no warning;
-    // Settings > Agents shows the guard state.
-    fx.agents(serde_json::json!([]));
+    // A set without guards is quiet: no banner, no warning.
+    fx.sidecar("g", serde_json::json!({}));
     let raw = fx.raw_plain(&home).unwrap();
     assert!(!raw.args[2].contains("bareGuards"), "{}", raw.args[2]);
     assert_eq!(raw.manifest.guards, Vec::<String>::new());
@@ -1057,10 +1349,10 @@ fn the_manifest_names_the_guard_copies_and_a_missing_bare_guards_key_stays_quiet
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
     assert_eq!(v["guards"], serde_json::json!([]));
     assert!(v.get("warnings").is_none(), "{v}");
-    // An empty list and no vidar.json at all stay quiet too.
+    // An empty list and no vidar.json at all stay quiet too (the no-file launch runs on the own dir).
     fx.guards(serde_json::json!([]));
     assert!(fx.hosted_plain(&home).unwrap().manifest.warnings.is_empty());
-    let plain = prepare_hosted_with("bare", &crate::paths::root(), &fx.home("nofile"), &guard(), &LaunchOpts::default()).unwrap();
+    let plain = prepare_hosted_with("bare", &crate::paths::root(), &fx.home("nofile"), inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).unwrap();
     assert!(plain.manifest.warnings.is_empty());
 }
 
@@ -1130,15 +1422,13 @@ fn prepare_codex_builds_the_app_server_line_env_config_and_manifest() {
     let root = crate::paths::root();
     let home = t.0.join("agent-home");
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let mut launch = prepare_codex_with("bare", &root, &home, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let mut launch = prepare_codex_with("bare", &root, &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
 
     assert_eq!(launch.program, PathBuf::from(r"X:\bin\node.exe"));
     assert_eq!(launch.args[..2], [r"X:\npm\node_modules\@openai\codex\bin\codex.js".to_string(), "app-server".into()]);
-    // No sets: the built-in vidar-control skill still makes a layer payload, handed back as the text.
+    // No vault and no built-in skill (L2c): no layer payload; config.toml keeps the static text.
     assert_eq!(launch.args.len(), 2, "{:?}", launch.args);
-    let (_, built) = codex_payload(&home);
-    assert!(built.contains("- $vidar-control: "));
-    assert_eq!(launch.developer_instructions.as_deref(), Some(built.as_str()));
+    assert!(launch.developer_instructions.is_none());
     assert!(launch.warning.is_none());
     let h = home.display();
     assert_eq!(launch.codex_home, home.join("codex-home"));
@@ -1193,7 +1483,7 @@ fn the_bare_codex_path_drops_windowsapps_and_notify_keeps_the_store_pwsh() {
             _ => Some(PathBuf::from(r"X:\bin").join(name)),
         }
     };
-    let launch = prepare_codex_with("bare", &crate::paths::root(), &home, env_in, &guard(), &CodexProbes { find: &find, codex: &codex_probes_ok }, &LaunchOpts::default()).unwrap();
+    let launch = prepare_codex_with("bare", &crate::paths::root(), &home, env_in, &Ambient::default(), &guard(), &CodexProbes { find: &find, codex: &codex_probes_ok }, &no_vault()).unwrap();
     assert_eq!(launch.env.get("Path"), Some(std::ffi::OsStr::new(r"C:\Windows\system32;C:\Tools")));
     let doc = home::parse_toml_lite(&std::fs::read_to_string(home.join("codex-home").join("config.toml")).unwrap()).unwrap();
     let Some((_, home::Toml::Array(argv))) = doc.iter().find(|(k, _)| k == "notify") else { panic!("no notify") };
@@ -1215,7 +1505,7 @@ fn the_bare_codex_path_drops_windowsapps_and_notify_keeps_the_store_pwsh() {
             _ => Some(PathBuf::from(r"X:\bin").join(name)),
         }
     };
-    let launch = prepare_codex_with("bare", &crate::paths::root(), &home3, env_msi, &guard(), &CodexProbes { find: &find_msi, codex: &codex_probes_ok }, &LaunchOpts::default()).unwrap();
+    let launch = prepare_codex_with("bare", &crate::paths::root(), &home3, env_msi, &Ambient::default(), &guard(), &CodexProbes { find: &find_msi, codex: &codex_probes_ok }, &no_vault()).unwrap();
     assert_eq!(launch.env.get("Path"), Some(std::ffi::OsStr::new(&format!(r"C:\Windows\system32;{msi};C:\Tools"))));
     let doc = home::parse_toml_lite(&std::fs::read_to_string(home3.join("codex-home").join("config.toml")).unwrap()).unwrap();
     let Some((_, home::Toml::Array(argv))) = doc.iter().find(|(k, _)| k == "notify") else { panic!("no notify") };
@@ -1225,7 +1515,7 @@ fn the_bare_codex_path_drops_windowsapps_and_notify_keeps_the_store_pwsh() {
 
     let t2 = TempDir::new("codex-no-pwsh");
     let none = |_: &Env, name: &str| (name != "pwsh.exe").then(|| PathBuf::from(r"X:\bin").join(name));
-    let e = prepare_codex_with("bare", &crate::paths::root(), &t2.0.join("agent-home"), inherited(), &guard(), &CodexProbes { find: &none, codex: &codex_probes_ok }, &LaunchOpts::default()).err().unwrap();
+    let e = prepare_codex_with("bare", &crate::paths::root(), &t2.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &CodexProbes { find: &none, codex: &codex_probes_ok }, &no_vault()).err().unwrap();
     assert!(e.contains("pwsh.exe is not on the allowlisted Path"), "{e}");
 }
 
@@ -1233,7 +1523,7 @@ fn the_bare_codex_path_drops_windowsapps_and_notify_keeps_the_store_pwsh() {
 fn a_codex_version_mismatch_warns_and_a_missing_codex_refuses() {
     let t = TempDir::new("codex-version");
     let other = |_: &Env, _: &CodexBinary| Some((PathBuf::from(r"X:\c.js"), Some("0.170.0".into())));
-    let launch = prepare_codex_with("bare", &crate::paths::root(), &t.0.join("agent-home"), inherited(), &guard(), &CodexProbes { find: &fake_find, codex: &other }, &LaunchOpts::default()).unwrap();
+    let launch = prepare_codex_with("bare", &crate::paths::root(), &t.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &CodexProbes { find: &fake_find, codex: &other }, &no_vault()).unwrap();
     let w = launch.warning.clone().unwrap();
     assert!(w.contains("0.170.0") && w.contains(&pinned("codex")), "{w}");
     assert_eq!(launch.manifest.binary.warning.as_deref(), Some(w.as_str()));
@@ -1241,7 +1531,7 @@ fn a_codex_version_mismatch_warns_and_a_missing_codex_refuses() {
 
     let t2 = TempDir::new("codex-missing");
     let none = |_: &Env, _: &CodexBinary| None;
-    let e = prepare_codex_with("bare", &crate::paths::root(), &t2.0.join("agent-home"), inherited(), &guard(), &CodexProbes { find: &fake_find, codex: &none }, &LaunchOpts::default()).err().unwrap();
+    let e = prepare_codex_with("bare", &crate::paths::root(), &t2.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &CodexProbes { find: &fake_find, codex: &none }, &no_vault()).err().unwrap();
     assert!(e.contains("shim on the allowlisted Path"), "{e}");
 }
 
@@ -1255,7 +1545,7 @@ fn the_codex_home_lookup_matches_the_live_spawn_and_never_creates_a_home() {
     assert!(!home.exists(), "the lookup created the home");
 
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let launch = prepare_codex_with("bare", &root, &home, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let launch = prepare_codex_with("bare", &root, &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     assert_eq!(codex_home_for_profile_with("bare", &root, &home).unwrap(), launch.codex_home);
     drop(launch);
     assert!(codex_home_for_profile_with("nope", &root, &home).is_err());
@@ -1272,7 +1562,7 @@ fn a_codex_profile_without_its_home_refuses_before_the_home_is_touched() {
     std::fs::write(dir.join("codex.json"), serde_json::to_string(&v).unwrap()).unwrap();
     let home = t.0.join("agent-home");
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let e = prepare_codex_with("bare", &t.0.join("root"), &home, inherited(), &guard(), &probes, &LaunchOpts::default()).err().unwrap();
+    let e = prepare_codex_with("bare", &t.0.join("root"), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).err().unwrap();
     assert!(e.contains("CODEX_HOME"), "{e}");
     assert!(!home.exists(), "the home was touched before the refusal");
 }
@@ -1416,10 +1706,10 @@ fn identity_failure_writes_an_empty_file_and_spawns() {
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
     // A first launch carries a name (and makes the home with its ACL); the failing one must clear it.
     identity::fake_git(Ok(git_out(&[("user.name", Some("Earlier"))])));
-    drop(prepare_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap());
+    drop(prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap());
     assert!(std::fs::read_to_string(&gitconfig).unwrap().contains("Earlier"));
     identity::fake_git(Err(identity::Failure { reason: "timed out".into(), detail: Some("git config timed out after 2s".into()) }));
-    let mut launch = prepare_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let mut launch = prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     let text = std::fs::read_to_string(&gitconfig).unwrap();
     assert!(config_lines(&text).is_empty(), "a failed identity left config lines: {text}");
     assert!(text.contains("timed out"), "{text}");
@@ -1430,10 +1720,10 @@ fn identity_failure_writes_an_empty_file_and_spawns() {
     assert!(v["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("Git identity not carried")), "{v}");
     // Hosted and Codex launch through the same failure (the Raw launch's home lock released first).
     drop(launch);
-    let hosted = prepare_hosted_with("bare", &crate::paths::root(), &home, &guard(), &LaunchOpts::default()).unwrap();
+    let hosted = prepare_hosted_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &hprobes(), &no_vault()).unwrap();
     assert!(hosted.manifest.warnings.iter().any(|w| w.contains("Git identity")));
     let codex = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let c = prepare_codex_with("bare", &crate::paths::root(), &t.0.join("codex-home"), inherited(), &guard(), &codex, &LaunchOpts::default()).unwrap();
+    let c = prepare_codex_with("bare", &crate::paths::root(), &t.0.join("codex-home"), inherited(), &Ambient::default(), &guard(), &codex, &no_vault()).unwrap();
     assert!(c.manifest.git_keys.is_empty() && c.manifest.warnings.iter().any(|w| w.contains("Git identity")));
 }
 
@@ -1450,14 +1740,14 @@ fn raw_prepare_raises_the_bare_seen_counters_from_the_passed_file() {
     let home = t.0.join("agent-home");
     let (normal, bare) = seen_fixture(&t, &home);
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
-    let opts = LaunchOpts { claude_json: Some(&normal), ..Default::default() };
-    drop(prepare_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &opts).unwrap());
+    let opts = LaunchOpts { claude_json: Some(&normal), ..no_vault() };
+    drop(prepare_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &opts).unwrap());
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&bare).unwrap()).unwrap();
     assert_eq!(v["fooUpsellSeenCount"], 7);
     // No source path: the skip is a line in the home's logs, not stderr.
     let t2 = TempDir::new("seen-raw-none");
     let home2 = t2.0.join("agent-home");
-    drop(prepare_with("bare", &crate::paths::root(), &home2, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap());
+    drop(prepare_with("bare", &crate::paths::root(), &home2, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap());
     let log = std::fs::read_to_string(home2.join("logs").join("claude-seen-mirror.log")).unwrap();
     assert!(log.contains("mirror skipped: no normal .claude.json"), "{log}");
 }
@@ -1467,8 +1757,8 @@ fn hosted_prepare_raises_the_bare_seen_counters_from_the_passed_file() {
     let t = TempDir::new("seen-hosted");
     let home = t.0.join("agent-home");
     let (normal, bare) = seen_fixture(&t, &home);
-    let opts = LaunchOpts { claude_json: Some(&normal), ..Default::default() };
-    prepare_hosted_with("bare", &crate::paths::root(), &home, &guard(), &opts).unwrap();
+    let opts = LaunchOpts { claude_json: Some(&normal), ..no_vault() };
+    prepare_hosted_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &hprobes(), &opts).unwrap();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&bare).unwrap()).unwrap();
     assert_eq!(v["fooUpsellSeenCount"], 7);
 }
@@ -1482,20 +1772,20 @@ fn a_codex_launch_writes_the_trust_table_for_its_folder_and_validates() {
     let cwd_s = cwd.to_string_lossy().into_owned();
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
     // Untrusted in the user's own config: no table, a warning in the manifest.
-    let untrusted = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    let untrusted = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), Some(&cwd_s)).unwrap();
     let bare_text = std::fs::read_to_string(home.join("codex-home").join("config.toml")).unwrap();
     assert!(!home::parse_toml_lite(&bare_text).unwrap().iter().any(|(k, _)| k.starts_with("projects.")), "{bare_text}");
     assert!(untrusted.manifest.payload.warnings.iter().any(|w| w == codex_hosted::UNTRUSTED_FOLDER_WARNING));
     drop(untrusted);
     // The launch record the Runes tab reads joins the binary's and the payload's warnings: once.
-    let mut again = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    let mut again = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), Some(&cwd_s)).unwrap();
     assert!(again.warning.as_deref().is_some_and(|w| w.contains(codex_hosted::UNTRUSTED_FOLDER_WARNING)), "the tab banner keeps it");
     again.write_manifest("t-trust", ["Path"]).unwrap();
     let rec = manifest::launch_in(&home.join("manifests"), "t-trust").unwrap().unwrap();
     assert_eq!(rec.warnings.iter().filter(|w| w.contains(codex_hosted::UNTRUSTED_FOLDER_WARNING)).count(), 1, "{:?}", rec.warnings);
     drop(again);
     codex_hosted::TEST_TRUST.with(|t| t.borrow_mut().push(cwd_s.to_uppercase().replace('\\', "/")));
-    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), Some(&cwd_s)).unwrap();
     let text = std::fs::read_to_string(home.join("codex-home").join("config.toml")).unwrap();
     let key = home::trusted_project_key(&cwd_s).unwrap();
     assert!(text.contains(&home::trusted_project_table(&key)), "{text}");
@@ -1504,7 +1794,7 @@ fn a_codex_launch_writes_the_trust_table_for_its_folder_and_validates() {
     let tpl = home::parse_toml_lite(&std::fs::read_to_string(crate::paths::root().join("profiles").join("bare").join("codex.config.template.toml")).unwrap()).unwrap();
     let payload = doc.iter().find(|(k, _)| k == "developer_instructions").and_then(|(_, v)| if let home::Toml::Str(s) = v { Some(s.clone()) } else { None }).unwrap();
     let pwsh = fake_find(&Env::default(), "pwsh.exe").unwrap();
-    home::validate_codex_for(&doc, &tpl, &crate::paths::root(), &home, &pwsh, &payload, &guard(), Some(&key), &[]).unwrap();
+    home::validate_codex_for(&doc, &tpl, &crate::paths::root(), &home, &pwsh, &payload, &guard(), Some(&key), &super::codex_mcp::Tables::default()).unwrap();
     drop(launch);
 }
 
@@ -1518,13 +1808,13 @@ fn a_codex_launch_leaves_the_trust_warning_to_the_card_and_registers_the_hosted_
     let warning = codex_hosted::UNTRUSTED_FOLDER_WARNING;
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
     // In-process: untrusted, the manifest keeps the warning, the notice list drops it.
-    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), Some(&cwd_s)).unwrap();
     assert!(launch.is_untrusted());
     assert!(launch.manifest.payload.warnings.iter().any(|w| w == warning));
     assert!(!launch.bare_warnings().iter().any(|w| w == warning), "{:?}", launch.bare_warnings());
     drop(launch);
     // Hosted: the same, and the manifest write registers the folder for the card's offer.
-    let hosted = || codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &fake_find, &LaunchOpts::default(), &cwd_s).unwrap();
+    let hosted = || codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &fake_find, &no_vault(), &cwd_s).unwrap();
     let mut h = hosted();
     assert!(!h.bare_warnings().iter().any(|w| w == warning));
     h.write_manifest("t-ctrust-card", "s-1", ["Path"]).unwrap();
@@ -1536,7 +1826,7 @@ fn a_codex_launch_leaves_the_trust_warning_to_the_card_and_registers_the_hosted_
     again.write_manifest("t-ctrust-card", "s-2", ["Path"]).unwrap();
     assert!(codex_trust::codex_trust_offer("t-ctrust-card".into()).is_none());
     drop(again);
-    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), Some(&cwd_s)).unwrap();
     assert!(!launch.is_untrusted());
 }
 
@@ -1548,10 +1838,10 @@ fn a_folder_without_codex_settings_gets_no_trust_warning_or_offer() {
     std::fs::create_dir_all(&cwd).unwrap();
     let cwd_s = cwd.to_string_lossy().into_owned();
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &LaunchOpts::default(), Some(&cwd_s)).unwrap();
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), Some(&cwd_s)).unwrap();
     assert!(!launch.is_untrusted());
     drop(launch);
-    let mut h = codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), &home, inherited(), &guard(), &fake_find, &LaunchOpts::default(), &cwd_s).unwrap();
+    let mut h = codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &fake_find, &no_vault(), &cwd_s).unwrap();
     h.write_manifest("t-ctrust-none", "s-1", ["Path"]).unwrap();
     assert!(codex_trust::codex_trust_offer("t-ctrust-none".into()).is_none());
 }
@@ -1922,9 +2212,9 @@ fn a_codex_prepare_links_the_shared_login_into_a_fresh_home() {
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
     let (a, b) = (homes.join("aaaaaaaaaaaaaaaa"), homes.join("bbbbbbbbbbbbbbbb"));
     let root = crate::paths::root();
-    drop(prepare_codex_with("bare", &root, &a, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap());
+    drop(prepare_codex_with("bare", &root, &a, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap());
     std::fs::write(codex_auth(&a), "TOKEN").unwrap();
-    let launch = prepare_codex_with("bare", &root, &b, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let launch = prepare_codex_with("bare", &root, &b, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     assert_eq!(id(&codex_auth(&b)).0, id(&codex_auth(&a)).0, "the fresh home did not get the sibling's login");
     assert_eq!(id(&codex_store(&t)).0, id(&codex_auth(&a)).0);
     assert!(launch.warning.as_deref().is_none_or(|w| !w.contains("Shared Codex login")), "{:?}", launch.warning);
@@ -1945,7 +2235,7 @@ fn the_profile_shared_login_field_is_read() {
         let root = root_with_profile(&t, |v| {
             v["sharedLogin"][0]["file"] = bad.into();
         });
-        let e = prepare_with("bare", &root, &t.0.join("agent-home"), inherited(), &guard(), &probes, &LaunchOpts::default()).err().unwrap();
+        let e = prepare_with("bare", &root, &t.0.join("agent-home"), inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).err().unwrap();
         assert!(e.contains("sharedLogin"), "{bad}: {e}");
     }
 }
@@ -1977,7 +2267,7 @@ fn a_failed_link_restores_the_home_file_and_spawns() {
     let before = id(&cred(&b));
     let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
     let fault = Fault::at("link");
-    let raw = prepare_with("bare", &crate::paths::root(), &b, inherited(), &guard(), &probes, &LaunchOpts::default()).unwrap();
+    let raw = prepare_with("bare", &crate::paths::root(), &b, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).unwrap();
     drop(fault);
     assert_eq!(id(&cred(&b)), before, "the home's own file was not put back");
     assert_eq!(std::fs::read_to_string(cred(&b)).unwrap(), "TOKEN-B");
@@ -2086,8 +2376,8 @@ fn a_codex_profile_with_shared_login_refuses() {
     std::fs::write(dir.join("codex.json"), serde_json::to_string(&v).unwrap()).unwrap();
     let home = t.0.join("agent-home");
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let e = prepare_codex_with("bare", &t.0.join("root"), &home, inherited(), &guard(), &probes, &LaunchOpts::default()).err().unwrap();
-    assert!(e.contains("sharedLogin is not wired for Codex yet"), "{e}");
+    let e = prepare_codex_with("bare", &t.0.join("root"), &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault()).err().unwrap();
+    assert!(e.contains("a Codex profile takes no sharedLogin entry"), "{e}");
     assert!(!home.exists(), "the home was touched before the refusal");
     v.as_object_mut().unwrap().remove("sharedLogin");
     std::fs::write(dir.join("codex.json"), serde_json::to_string(&v).unwrap()).unwrap();
@@ -2099,12 +2389,12 @@ fn a_codex_profile_with_shared_login_refuses() {
 impl RowFx {
     fn codex(&self, home: &Path, key: &str) -> Result<CodexLaunch, String> {
         let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-        prepare_codex_with("bare", &crate::paths::root(), home, inherited(), &guard(), &probes, &self.opts(key))
+        prepare_codex_with("bare", &crate::paths::root(), home, inherited(), &Ambient::default(), &guard(), &probes, &self.opts(key))
     }
     /// The Raw Codex Bare line (the TUI in a PTY) on `home`, launched in `cwd`.
     fn tui(&self, home: &Path, key: &str, cwd: Option<&str>) -> Result<CodexLaunch, String> {
         let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-        prepare_codex_for(Surface::Tui, "bare", &crate::paths::root(), home, inherited(), &guard(), &probes, &self.opts(key), cwd)
+        prepare_codex_for(Surface::Tui, "bare", &crate::paths::root(), home, inherited(), &Ambient::default(), &guard(), &probes, &self.opts(key), cwd)
     }
     /// vidar.json with `rulesLibrary`, `agents` and any `extra` top-level keys.
     fn config_with(&self, agents: serde_json::Value, extra: serde_json::Value) {
@@ -2113,6 +2403,11 @@ impl RowFx {
             v[k] = x;
         }
         std::fs::write(&self.config, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+    }
+    /// Writes set `set`'s sidecar `<lib>\sets\<set>.layer.json`.
+    fn sidecar(&self, set: &str, v: serde_json::Value) {
+        std::fs::create_dir_all(self.lib.join("sets")).unwrap();
+        std::fs::write(self.lib.join("sets").join(format!("{set}.layer.json")), v.to_string()).unwrap();
     }
     /// A source skill folder `<temp>\src\<name>\` with a SKILL.md frontmatter.
     fn skill(&self, name: &str, description: &str) -> String {
@@ -2142,20 +2437,23 @@ fn a_codex_row_with_sets_passes_the_built_payload_as_developer_instructions() {
     fx.agents(serde_json::json!([{ "key": "codex-rendered-bare", "sets": [{ "set": "alpha" }] }]));
     let home = fx.home("cx");
     let plain = fx.codex(&home, "").unwrap();
-    // The built-in vidar-control skill gives even a no-sets spawn a layer payload; no spawn puts it on the line.
+    // No built-in skill any more (L2c): a no-vault spawn with nothing to carry builds no layer payload.
     assert_eq!(plain.args.len(), 2, "{:?}", plain.args);
+    assert!(plain.developer_instructions.is_none());
     drop(plain);
     let static_config = codex_config_bytes(&home);
-    let (plain_path, plain_text) = codex_payload(&home);
-    assert!(plain_text.contains("- $vidar-control: ") && !plain_text.contains("Alpha set text."), "{plain_text}");
-    std::fs::remove_file(plain_path).unwrap();
+    assert!(layer_files(&home).iter().all(|p| p.extension().is_none_or(|e| e != "md")), "{:?}", layer_files(&home));
 
+    fx.adopt_rendered(&home);
     let mut launch = fx.codex(&home, "codex-rendered-bare").unwrap();
     assert_eq!(codex_config_bytes(&home), static_config, "config.toml differs from a no-sets spawn");
     let (path, text) = codex_payload(&home);
-    assert!(text.starts_with("You are a Codex session in a Vidar Bare tab"), "{text}");
-    assert!(text.contains("Alpha set text.") && !text.contains("{{"), "{text}");
-    assert!(text.contains(&crate::paths::root().to_string_lossy().into_owned()), "{{root}} not filled: {text}");
+    // Only rune content: the identity text is a stock rune this vault does not carry.
+    assert!(text.starts_with("Alpha set text."), "{text}");
+    assert!(!text.contains("You are a Codex session") && !text.contains("{{"), "{text}");
+    // The vault home's config.toml keeps an inert developer_instructions baseline.
+    let vault_config = std::fs::read_to_string(launch.codex_home.join("config.toml")).unwrap();
+    assert!(vault_config.contains("developer_instructions = \"\""), "{vault_config}");
     let (marker, expected) = payload_marker(&text).unwrap();
     assert_eq!(marker, expected);
     assert_eq!(&launch.args[1..], &["app-server".to_string()]);
@@ -2165,10 +2463,12 @@ fn a_codex_row_with_sets_passes_the_built_payload_as_developer_instructions() {
     let raw = std::fs::read_to_string(&m).unwrap();
     let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(v["payload"]["marker"], marker.as_str());
-    assert_eq!(v["payload"]["sets"], serde_json::json!(["alpha"]));
+    assert_eq!(v["payload"]["sets"], serde_json::json!(["lib/alpha"]));
     assert_eq!(v["payload"]["path"], path.to_string_lossy().as_ref());
     assert_eq!(v["args"].as_array().unwrap().last().unwrap(), "app-server");
-    assert_eq!(v["homes"]["codexHome"], home.join("codex-home").to_string_lossy().as_ref());
+    // A vault runs on its own `vault:<id>` home; legacy adoption does not match vault keys (L2a).
+    let cx = std::path::PathBuf::from(v["homes"]["codexHome"].as_str().unwrap());
+    assert_eq!(cx.parent().unwrap(), home.join(codex_payload::CODEX_HOMES_DIR));
     assert!(!raw.contains("Alpha set text."), "the encoded text reached the manifest");
 }
 
@@ -2239,49 +2539,61 @@ fn codex_skills_copy_into_codex_home_with_their_own_ledger_and_are_listed() {
     // A plain spawn makes the home (prepare_dirs owns its ACL); then a user's own skill folder and
     // a Claude ledger, both there before Vidar copies anything.
     drop(fx.codex(&home, "").unwrap());
-    std::fs::remove_file(codex_payload(&home).0).unwrap();
-    let skills = home.join("codex-home").join("skills");
-    std::fs::create_dir_all(skills.join("mine")).unwrap();
-    std::fs::write(skills.join("mine").join("SKILL.md"), "---\nname: mine\n---\n").unwrap();
+    let mine = home.join("codex-home").join("skills").join("mine");
+    std::fs::create_dir_all(&mine).unwrap();
+    std::fs::write(mine.join("SKILL.md"), "---\nname: mine\n---\n").unwrap();
     std::fs::create_dir_all(home.join("layer")).unwrap();
     let claude_ledger = home.join("layer").join("copies.json");
     std::fs::write(&claude_ledger, "{\"skills\":{},\"agents\":{}}").unwrap();
 
-    // Skills and no sets: built instructions holding the listing only.
-    fx.config_with(serde_json::json!([]), serde_json::json!({ "bareSkills": [tidy], "bareAgents": [agent.to_string_lossy()] }));
-    let launch = fx.codex(&home, "").unwrap();
+    // A set's codexSkills copy in; its Claude `agents` (no codexAgents) stay out of the Codex home.
+    // The sets come first in the payload, then the listing, then the marker.
+    fx.sidecar("alpha", serde_json::json!({ "codexSkills": [tidy], "agents": [agent.to_string_lossy()] }));
+    fx.config_with(serde_json::json!([{ "key": "codex-rendered-bare", "sets": [{ "set": "alpha" }] }]), serde_json::json!({}));
+    let launch = fx.codex(&home, "codex-rendered-bare").unwrap();
+    let combo = launch.codex_home.clone();
+    let skills = combo.join("skills");
     assert_eq!(std::fs::read_to_string(skills.join("tidy").join("SKILL.md")).unwrap(), "---\nname: tidy\ndescription: Keep it tidy.\n---\nDo the tidy thing.\n");
-    assert!(home.join("layer").join("codex-copies.json").is_file());
+    assert!(combo.join(".vidar-copies.json").is_file());
+    assert!(!home.join("layer").join("codex-copies.json").exists(), "the pre-W2 ledger was written");
     assert_eq!(std::fs::read_to_string(&claude_ledger).unwrap(), "{\"skills\":{},\"agents\":{}}", "the Claude ledger was touched");
-    assert!(!home.join("codex-home").join("agents").exists(), "bareAgents reached the Codex home");
+    assert!(!combo.join("agents").exists(), "a Claude agent reached the Codex home");
     let (path, text) = codex_payload(&home);
-    assert!(text.contains("\nSkills Vidar copied in (call by $name):\n- $vidar-control: "), "{text}");
-    assert!(text.find("- $vidar-control: ").unwrap() < text.find("- $tidy: Keep it tidy.\n").unwrap(), "{text}");
-    assert!(!text.contains("$mine"), "a user's own skill was listed: {text}");
+    // Only the vault's skill runes are listed: no built-in vidar-control without its rune (L2c).
+    assert!(text.contains("\nSkills Vidar copied in (call by $name):\n- $tidy: Keep it tidy.\n"), "{text}");
+    assert!(!text.contains("$vidar-control"), "{text}");
+    assert!(!skills.join("vidar-control").exists(), "the built-in skill was copied without its rune");
+    let (s, l, k) = (text.find("Alpha set text.").unwrap(), text.find("- $tidy: Keep it tidy.").unwrap(), text.find("VIDAR-PAYLOAD-").unwrap());
+    assert!(s < l && l < k, "{text}");
     let (marker, expected) = payload_marker(&text).unwrap();
     assert_eq!(marker, expected);
     assert_eq!(launch.developer_instructions.as_deref(), Some(text.as_str()));
-    assert!(launch.manifest.payload.sets.is_empty());
     drop(launch);
     std::fs::remove_file(&path).unwrap();
 
-    // Sets and skills: the sets first, then the listing, then the marker.
-    fx.config_with(serde_json::json!([{ "key": "codex-rendered-bare", "sets": [{ "set": "alpha" }] }]), serde_json::json!({ "bareSkills": [tidy] }));
-    let launch = fx.codex(&home, "codex-rendered-bare").unwrap();
-    let (path, text) = codex_payload(&home);
-    let (s, l, k) = (text.find("Alpha set text.").unwrap(), text.find("- $tidy: Keep it tidy.").unwrap(), text.find("VIDAR-PAYLOAD-").unwrap());
-    assert!(s < l && l < k, "{text}");
-    drop(launch);
-    std::fs::remove_file(&path).unwrap();
-
-    // bareSkills gone: Vidar's copy leaves, the user's folder stays, only the built-in skill is listed.
-    fx.config_with(serde_json::json!([]), serde_json::json!({}));
+    // A skill folder the vault did not select refuses the spawn (L2c) and is left in place; once it
+    // is gone the plain spawn carries no skill and builds no payload.
+    fx.config_with(serde_json::json!([]), serde_json::json!({ "bareSkills": [] }));
+    let e = fx.codex(&home, "").err().unwrap();
+    assert_eq!(e, "Codex skills \"mine\" is outside the loaded Rune Vault; Bare spawn refused");
+    let legacy_skills = home.join("codex-home").join("skills");
+    assert!(legacy_skills.join("mine").join("SKILL.md").is_file(), "a user's own skill was removed");
+    std::fs::remove_dir_all(legacy_skills.join("mine")).unwrap();
     let launch = fx.codex(&home, "").unwrap();
-    assert!(!skills.join("tidy").exists(), "Vidar's Codex copy survived its removal");
-    assert!(skills.join("mine").join("SKILL.md").is_file(), "a user's own skill was removed");
+    assert!(!legacy_skills.join("tidy").exists(), "bareSkills reached the Codex home");
     assert_eq!(launch.args.len(), 2, "{:?}", launch.args);
-    let (_, text) = codex_payload(&home);
-    assert!(text.contains("- $vidar-control: ") && !text.contains("$tidy"), "{text}");
+    assert!(launch.developer_instructions.is_none());
+    assert!(layer_files(&home).iter().all(|p| p.extension().is_none_or(|e| e != "md")), "{:?}", layer_files(&home));
+    drop(launch);
+
+    // The set unticks the skill: a changed runeset is a new vault on its own home, without the copy (L2a).
+    fx.sidecar("alpha", serde_json::json!({ "codexSkills": [] }));
+    fx.config_with(serde_json::json!([{ "key": "codex-rendered-bare", "sets": [{ "set": "alpha" }] }]), serde_json::json!({}));
+    let l = fx.codex(&home, "codex-rendered-bare").unwrap();
+    let fresh = l.codex_home.clone();
+    assert_ne!(fresh, combo, "a changed runeset is a new vault home");
+    assert!(!fresh.join("skills").join("tidy").exists(), "Vidar's Codex copy survived its removal");
+    drop(l);
 }
 
 #[test]
@@ -2289,10 +2601,16 @@ fn the_codex_sets_template_carries_the_payload_control_lines() {
     let dir = crate::paths::root().join("profiles").join("bare");
     let read = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap().replace('\r', "");
     let (plain, sets) = (read("codex.payload.md"), read("codex.payload-sets.md"));
+    // The control lines moved into the stock identity rune (L2c); the template holds only `{{sets}}`
+    // under its source comment, and never says "row".
     let control: Vec<&str> = plain.lines().skip(3).take(2).collect();
-    let lines: Vec<&str> = sets.lines().collect();
-    assert_eq!(&lines[3..5], control.as_slice());
-    assert_eq!(sets.matches("{{sets}}").count(), 1);
+    let identity = read("stock-runes/rules/bare-identity-codex.md");
+    let body: Vec<&str> = identity.lines().skip_while(|l| *l != "---").skip(1).skip_while(|l| *l != "---").skip(1).collect();
+    assert_eq!(&body[3..5], control.as_slice(), "{identity}");
+    assert!(body.iter().any(|l| l.contains("Rune Vault")) && !identity.contains("row"), "{identity}");
+    let lines: Vec<&str> = sets.lines().filter(|l| !l.starts_with("<!--")).collect();
+    assert_eq!(lines, ["{{sets}}"], "{sets}");
+    assert!(!sets.contains("row"), "{sets}");
     let p = load_codex_profile(&crate::paths::root(), "bare").unwrap();
     assert_eq!(p.sets_payload.as_deref(), Some("profiles/bare/codex.payload-sets.md"));
 }
@@ -2334,18 +2652,24 @@ fn read_accepted_skips_bad_entries_and_a_missing_file() {
 fn the_raw_codex_line_runs_the_tui_with_raw_args_and_no_app_server() {
     let fx = RowFx::new("codex-tui");
     let home = fx.home("cx");
-    let mut launch = fx.tui(&home, "", None).unwrap();
-    assert_eq!(launch.program, PathBuf::from(r"X:\bin\node.exe"));
+    let plain = fx.tui(&home, "", None).unwrap();
+    assert_eq!(plain.program, PathBuf::from(r"X:\bin\node.exe"));
     assert_eq!(
-        launch.args[..3],
+        plain.args[..3],
         [r"X:\npm\node_modules\@openai\codex\bin\codex.js".to_string(), "--no-daemon".into(), "--no-alt-screen".into()]
     );
-    assert!(!launch.args.iter().any(|a| a == "app-server"), "{:?}", launch.args);
-    // No sets: the built-in vidar-control skill still adds `--profile` and a built payload.
+    assert!(!plain.args.iter().any(|a| a == "app-server"), "{:?}", plain.args);
+    // Nothing to carry and no built-in skill (L2c): no `--profile`, no built payload.
+    assert_eq!(plain.args.len(), 3, "{:?}", plain.args);
+    assert_eq!(plain.codex_home, home.join("codex-home"));
+    drop(plain);
+    // A vault's runes add `--profile` and a built payload.
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.agents(serde_json::json!([{ "key": "codex-bare", "sets": [{ "set": "alpha" }] }]));
+    let mut launch = fx.tui(&home, "codex-bare", None).unwrap();
     let (payload, text) = codex_payload(&home);
-    assert!(text.contains("- $vidar-control: "), "{text}");
+    assert!(text.contains("Alpha set text."), "{text}");
     let name = assert_raw_profile(&launch, &home, &text);
-    assert_eq!(launch.codex_home, home.join("codex-home"));
     let m = launch.write_manifest("raw-cx", ["Path"]).unwrap();
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
     assert_eq!(v["payload"]["path"], payload.to_string_lossy().as_ref());
@@ -2360,7 +2684,9 @@ fn assert_raw_profile(launch: &CodexLaunch, home: &Path, text: &str) -> String {
     let name = launch.args[4].clone();
     assert_eq!(name, format!("vidar-{}", crate::rules::build::hash12(text.as_bytes())));
     assert!(!launch.args.iter().any(|a| a == "-c" || a.starts_with("developer_instructions")), "{:?}", launch.args);
-    let file = home.join("codex-home").join(format!("{name}.config.toml"));
+    // A row with sets runs in its combination home (`codex-homes\<hash12>`), else the legacy one.
+    assert!(launch.codex_home.starts_with(home), "{}", launch.codex_home.display());
+    let file = launch.codex_home.join(format!("{name}.config.toml"));
     let doc = home::parse_toml_lite(&std::fs::read_to_string(&file).unwrap()).unwrap();
     assert_eq!(doc, vec![("developer_instructions".to_string(), home::Toml::Str(text.to_string()))]);
     name
@@ -2373,7 +2699,6 @@ fn a_raw_codex_line_gets_a_profile_with_sets_or_a_skills_listing_and_records_the
     let tidy = fx.skill("tidy", "Keep it tidy.");
     let home = fx.home("cx");
     drop(fx.tui(&home, "", None).unwrap());
-    std::fs::remove_file(codex_payload(&home).0).unwrap();
     let static_config = codex_config_bytes(&home);
 
     // Sets on the Raw row's own key.
@@ -2383,6 +2708,8 @@ fn a_raw_codex_line_gets_a_profile_with_sets_or_a_skills_listing_and_records_the
     assert!(text.contains("Alpha set text."), "{text}");
     assert_eq!(&launch.args[1..3], &["--no-daemon".to_string(), "--no-alt-screen".into()]);
     let name = assert_raw_profile(&launch, &home, &text);
+    let sets_home = launch.codex_home.clone();
+    assert_eq!(sets_home.parent().unwrap(), home.join("codex-homes"), "the Raw sets row stayed on the legacy home");
     assert_eq!(codex_config_bytes(&home), static_config, "config.toml differs from a no-sets spawn");
     let m = launch.write_manifest("raw-cx-sets", ["Path"]).unwrap();
     let raw = std::fs::read_to_string(&m).unwrap();
@@ -2393,16 +2720,38 @@ fn a_raw_codex_line_gets_a_profile_with_sets_or_a_skills_listing_and_records_the
     drop(launch);
     std::fs::remove_file(&path).unwrap();
 
-    // A skills listing alone, no sets, gets its own profile; the sets row's file stays as it was.
-    fx.config_with(serde_json::json!([]), serde_json::json!({ "bareSkills": [tidy] }));
-    let launch = fx.tui(&home, "", None).unwrap();
+    // Another set's skills listing gets its own profile; the first row's file stays as it was.
+    fx.rune("sets", "beta", "Beta set text.\n");
+    fx.sidecar("beta", serde_json::json!({ "codexSkills": [tidy] }));
+    fx.config_with(serde_json::json!([{ "key": "codex-bare", "sets": [{ "set": "beta" }] }]), serde_json::json!({}));
+    let launch = fx.tui(&home, "codex-bare", None).unwrap();
     let (_, listing) = codex_payload(&home);
     assert!(listing.contains("- $tidy: Keep it tidy."), "{listing}");
     assert_ne!(assert_raw_profile(&launch, &home, &listing), name);
-    let sets_file = home.join("codex-home").join(format!("{name}.config.toml"));
+    let sets_file = sets_home.join(format!("{name}.config.toml"));
     let doc = home::parse_toml_lite(&std::fs::read_to_string(sets_file).unwrap()).unwrap();
     assert_eq!(doc, vec![("developer_instructions".to_string(), home::Toml::Str(text))]);
     drop(launch);
+}
+
+/// The runes probe's one-shot line: the profile's `execArgs` (`exec` and its flags) where the TUI has
+/// `rawArgs`, then the same `--profile` file carrying the sets.
+#[test]
+fn an_exec_codex_line_runs_exec_args_with_the_sets_profile() {
+    let fx = RowFx::new("codex-exec");
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    let home = fx.home("cx");
+    fx.agents(serde_json::json!([{ "key": "codex-bare", "sets": [{ "set": "alpha" }] }]));
+    let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
+    let launch = prepare_codex_for(Surface::Exec, "bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &fx.opts("codex-bare"), None).unwrap();
+    let (_, text) = codex_payload(&home);
+    assert!(text.contains("Alpha set text."), "{text}");
+    let exec: Vec<String> = ["--no-daemon", "exec", "--skip-git-repo-check", "--color", "never"].map(String::from).to_vec();
+    assert_eq!(&launch.args[1..6], &exec[..], "{:?}", launch.args);
+    assert_eq!(launch.args[6], "--profile");
+    assert_eq!(launch.args[7], format!("vidar-{}", crate::rules::build::hash12(text.as_bytes())));
+    assert_eq!(launch.args.len(), 8, "{:?}", launch.args);
+    assert!(launch.developer_instructions.is_none());
 }
 
 /// A launch folder `<temp>\proj` whose `.codex\config.toml` holds `config` (None = no file).
@@ -2419,8 +2768,11 @@ fn project_with_codex_config(fx: &RowFx, config: Option<&str>) -> String {
 fn a_raw_codex_tab_warns_when_the_folders_config_sets_developer_instructions() {
     let fx = RowFx::new("codex-tui-override");
     let home = fx.home("cx");
+    // The warning rides a built `--profile`, so the spawn carries a vault rune.
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.agents(serde_json::json!([{ "key": "codex-bare", "sets": [{ "set": "alpha" }] }]));
     let cwd = project_with_codex_config(&fx, Some("model = \"x\"\ndeveloper_instructions = \"mine\"\n"));
-    let launch = fx.tui(&home, "", Some(&cwd)).unwrap();
+    let launch = fx.tui(&home, "codex-bare", Some(&cwd)).unwrap();
     let w = launch.warning.clone().unwrap_or_default();
     assert!(w.contains(codex_hosted::PROJECT_OVERRIDE_WARNING), "{w}");
     assert_eq!(codex_hosted::PROJECT_OVERRIDE_WARNING, "This Folder's Codex Config Replaces Your Runes: .codex\\config.toml Sets developer_instructions");
@@ -2431,9 +2783,11 @@ fn a_raw_codex_tab_warns_when_the_folders_config_sets_developer_instructions() {
 fn a_raw_codex_tab_stays_silent_without_a_top_level_override_or_on_a_parse_failure() {
     let fx = RowFx::new("codex-tui-override-silent");
     let home = fx.home("cx");
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.agents(serde_json::json!([{ "key": "codex-bare", "sets": [{ "set": "alpha" }] }]));
     let silent = |fx: &RowFx, cfg: Option<&str>| {
         let cwd = project_with_codex_config(fx, cfg);
-        let launch = fx.tui(&home, "", Some(&cwd)).unwrap();
+        let launch = fx.tui(&home, "codex-bare", Some(&cwd)).unwrap();
         let w = launch.warning.clone().unwrap_or_default();
         assert!(!w.contains("Replaces Your Runes"), "{cfg:?}: {w}");
     };
@@ -2454,7 +2808,7 @@ fn a_rendered_codex_prepare_never_warns_about_the_folders_config() {
     let home = fx.home("cx");
     let cwd = project_with_codex_config(&fx, Some("developer_instructions = \"mine\"\n"));
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &guard(), &probes, &fx.opts(""), Some(&cwd)).unwrap();
+    let launch = prepare_codex_in("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &fx.opts(""), Some(&cwd)).unwrap();
     assert!(!launch.warning.clone().unwrap_or_default().contains("Replaces Your Runes"));
     // The helper alone sees the key; mod.rs gates it on the Raw profile file (every Raw row has one:
     // the built-in vidar-control skill always builds a payload).
@@ -2529,45 +2883,9 @@ fn a_tui_prepare_on_a_profile_without_raw_args_refuses_before_the_home() {
     std::fs::write(dst.join("codex.json"), serde_json::to_string(&v).unwrap()).unwrap();
     let home = t.0.join("agent-home");
     let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let e = prepare_codex_for(Surface::Tui, "bare", &t.0, &home, inherited(), &guard(), &probes, &LaunchOpts::default(), None).err().unwrap();
+    let e = prepare_codex_for(Surface::Tui, "bare", &t.0, &home, inherited(), &Ambient::default(), &guard(), &probes, &no_vault(), None).err().unwrap();
     assert!(e.contains("has no rawArgs"), "{e}");
     assert!(!home.exists(), "the home was touched");
-}
-
-#[test]
-fn codex_env_for_profile_is_read_only_and_needs_the_home_and_its_login() {
-    let t = TempDir::new("codex-flow-env");
-    let root = crate::paths::root();
-    let home = t.0.join("agent-home");
-    let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
-    let e = codex_env_for_profile_with("bare", &root, &home, inherited(), &probes).err().unwrap();
-    assert_eq!(e, "Open a Bare tab once to create its home");
-    assert!(!home.exists(), "a missing home was created");
-    assert!(codex_env_for_profile_with("lean", &root, &home, inherited(), &probes).is_err());
-
-    let codex_home = home.join("codex-home");
-    std::fs::create_dir_all(&codex_home).unwrap();
-    let e = codex_env_for_profile_with("bare", &root, &home, inherited(), &probes).err().unwrap();
-    assert_eq!(e, "Sign in from a Bare tab");
-    // A stand-in login file in the temp home (presence is all that is read).
-    std::fs::write(codex_home.join("auth.json"), "{}").unwrap();
-    let mut env_in = inherited();
-    env_in[0].1 = r"C:\Windows\system32;C:\Users\testuser\AppData\Local\Microsoft\WindowsApps;C:\Tools".into();
-    let got = codex_env_for_profile_with("bare", &root, &home, env_in, &probes).unwrap();
-    assert_eq!(got.codex_home, codex_home);
-    assert_eq!(got.node, PathBuf::from(r"X:\bin\node.exe"));
-    assert_eq!(got.js, PathBuf::from(r"X:\npm\node_modules\@openai\codex\bin\codex.js"));
-    assert_eq!(got.env.get("CODEX_HOME").map(|v| v.to_string_lossy().into_owned()), Some(codex_home.to_string_lossy().into_owned()));
-    let path = got.env.get("Path").unwrap().to_string_lossy().into_owned();
-    assert!(!path.contains("WindowsApps"), "{path}");
-    for gone in ["ANTHROPIC_API_KEY", "VIDAR_CTL_TOKEN"] {
-        assert!(!got.env.contains(gone), "{gone}");
-    }
-    // Nothing besides what the test made: no config.toml, manifests, lock or user-home.
-    let mut made: Vec<String> = std::fs::read_dir(&home).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
-    made.sort();
-    assert_eq!(made, vec!["codex-home".to_string()]);
-    assert_eq!(std::fs::read_dir(&codex_home).unwrap().count(), 1);
 }
 
 // ---- Hosted Codex Bare (run 2026-10-19-codex-primary, F2a) ----
@@ -2579,7 +2897,7 @@ impl RowFx {
             asked.borrow_mut().push(name.to_string());
             fake_find(env, name)
         };
-        codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), home, inherited(), &guard(), &find, &self.opts(key), &cwd.to_string_lossy())
+        codex_hosted::prepare_codex_hosted_with("bare", &crate::paths::root(), home, inherited(), &Ambient::default(), &guard(), &find, &self.opts(key), &cwd.to_string_lossy())
     }
 }
 
@@ -2593,21 +2911,20 @@ fn prepare_codex_hosted_writes_config_and_payload_and_resolves_no_binary() {
     let asked = std::cell::RefCell::new(Vec::new());
     codex_hosted::TEST_TRUST.with(|t| t.borrow_mut().push(work.to_string_lossy().into_owned()));
 
-    // No sets: config.toml as in-process writes it, a payload file holding the built-in skill, no binary lookup.
+    // No vault: config.toml as in-process writes it, no payload file (no built-in skill, L2c), no
+    // vidar_drive table without its rune, no binary lookup.
     let home = fx.home("plain");
     let plain = fx.codex_hosted(&home, "", &work, &asked).unwrap();
-    let plain_file = plain.payload_file.clone().expect("the built-in skill makes a payload");
-    assert!(codex_payload(&home).1.contains("- $vidar-control: "));
-    assert_eq!(plain_file, codex_payload(&home).0);
+    assert!(plain.payload_file.is_none());
     let hosted_config = codex_config_bytes(&home);
     let text = String::from_utf8(hosted_config.clone()).unwrap();
     let key = home::trusted_project_key(&work.to_string_lossy()).unwrap();
     assert!(text.contains(&home::trusted_project_table(&key)), "{text}");
-    assert!(text.contains(r#"env_vars = ["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_CTL_SECRET"]"#), "{text}");
+    assert!(!text.contains("[mcp_servers."), "{text}");
     assert_eq!(*asked.borrow(), vec!["pwsh.exe".to_string(), "pwsh.exe".into()], "only pwsh is probed: no node, no codex.js");
     drop(plain);
     // The in-process prepare on the same folder writes the same config.toml.
-    let in_process = prepare_codex_for(Surface::AppServer, "bare", &crate::paths::root(), &home, inherited(), &guard(), &CodexProbes { find: &fake_find, codex: &codex_probes_ok }, &fx.opts(""), Some(&work.to_string_lossy())).unwrap();
+    let in_process = prepare_codex_for(Surface::AppServer, "bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &CodexProbes { find: &fake_find, codex: &codex_probes_ok }, &fx.opts(""), Some(&work.to_string_lossy())).unwrap();
     assert_eq!(codex_config_bytes(&home), hosted_config, "hosted and in-process config.toml differ");
     drop(in_process);
 
@@ -2620,7 +2937,9 @@ fn prepare_codex_hosted_writes_config_and_payload_and_resolves_no_binary() {
     let (marker, expected) = payload_marker(&text).unwrap();
     assert_eq!(marker, expected);
     assert!(codex_payload::admit_and_read(&path.to_string_lossy(), &home).is_ok());
-    assert!(home.join("codex-home").join("config.toml").is_file());
+    // No adoption on this fresh home: the Rendered combination runs on its own home.
+    let combo = launch.codex_home.clone().expect("a combination home");
+    assert!(combo.join("config.toml").is_file());
 
     // What the host ran fills the record: program falcon, its executable and version.
     let pin = pinned("codex");
@@ -2635,6 +2954,49 @@ fn prepare_codex_hosted_writes_config_and_payload_and_resolves_no_binary() {
     assert_eq!(v["payload"]["path"], path.to_string_lossy().as_ref());
     assert_eq!(v["args"], serde_json::json!([]));
     assert!(!std::fs::read_to_string(&m).unwrap().contains("Alpha set text."), "the payload text reached the manifest");
+}
+
+/// W9: a hosted spawn on a set combination runs that combination's home, handed to Falcon by path
+/// (`codex_home`, admitted by the host's rule), with the launch's MCP servers as config.toml tables
+/// and the record's `items.mcp` naming them; the profile's own home gets none of them.
+#[test]
+fn a_hosted_codex_spawn_on_a_set_combination_carries_its_home_and_mcp_tables() {
+    let fx = RowFx::new("codex-hosted-combo");
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.rune("sets", "beta", "Beta set text.\n");
+    fx.sidecar("beta", serde_json::json!({ "modules": { "notion": {} } }));
+    let v = serde_json::json!({
+        "rulesLibrary": fx.lib.to_string_lossy(),
+        "agents": [
+            { "key": "codex-rendered-bare", "sets": [{ "set": "alpha" }] },
+            { "key": "codex-kit", "sets": [{ "set": "beta" }] }
+        ]
+    });
+    std::fs::write(&fx.config, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+    let work = fx.t.0.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    codex_hosted::TEST_TRUST.with(|t| t.borrow_mut().push(work.to_string_lossy().into_owned()));
+    let home = fx.home("combo");
+    let mut launch = fx.codex_hosted(&home, "codex-kit", &work, &std::cell::RefCell::new(Vec::new())).unwrap();
+    let combo = launch.codex_home.clone().expect("a set combination runs on its own home");
+    assert_eq!(combo.parent().unwrap(), home.join(codex_payload::CODEX_HOMES_DIR));
+    assert!(codex_payload::admit_codex_home(&combo.to_string_lossy(), &home).is_ok());
+    let text = std::fs::read_to_string(combo.join("config.toml")).unwrap();
+    assert!(text.contains("[mcp_servers.notion]"), "{text}");
+    // No warning that the hosted tab dropped its servers.
+    assert!(launch.bare_warnings().iter().all(|w| !w.contains("MCP")), "{:?}", launch.bare_warnings());
+    launch.record_host_with(r"C:\npm\codex.exe", Some(&pinned("codex")), Some(r"C:\pwsh\pwsh.exe"), &AcceptedMap::new());
+    let m = launch.write_manifest("t-combo", "s-1", ["Path"]).unwrap();
+    let rec: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&m).unwrap()).unwrap();
+    assert_eq!(rec["items"]["mcp"], serde_json::json!(["notion"]));
+    assert_eq!(rec["homes"]["codexHome"], combo.to_string_lossy().as_ref());
+    drop(launch);
+    // Homes are keyed by vault since L2a: the adopted Rendered row's pick is its own vault home too.
+    fx.adopt_rendered(&home);
+    let seeded = fx.codex_hosted(&home, "codex-rendered-bare", &work, &std::cell::RefCell::new(Vec::new())).unwrap();
+    let own = seeded.codex_home.clone().expect("a vault runs on its own home");
+    assert_eq!(own.parent().unwrap(), home.join(codex_payload::CODEX_HOMES_DIR));
+    assert_ne!(own, combo, "another vault, another home");
 }
 
 #[test]
@@ -2661,7 +3023,7 @@ fn a_hosted_codex_prepare_refuses_an_unknown_profile_and_admits_an_over_12000_pa
     let work = fx.t.0.join("work");
     std::fs::create_dir_all(&work).unwrap();
     let home = fx.home("r");
-    let e = codex_hosted::prepare_codex_hosted_with("lean", &crate::paths::root(), &home, inherited(), &guard(), &fake_find, &fx.opts(""), &work.to_string_lossy()).err().unwrap();
+    let e = codex_hosted::prepare_codex_hosted_with("lean", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &fake_find, &fx.opts(""), &work.to_string_lossy()).err().unwrap();
     assert!(e.contains("Unknown launch profile"), "{e}");
     assert!(!home.exists(), "the home was touched for an unknown profile");
     let launch = fx.codex_hosted(&home, "codex-rendered-bare", &work, &std::cell::RefCell::new(Vec::new())).unwrap();
@@ -2692,6 +3054,7 @@ fn snake_event(e: &str) -> String {
 fn mock_list(stay_untrusted: bool, key_file: Option<PathBuf>, seen: Seen) {
     codex_hooks::LIST_MOCK.with(|m| {
         *m.borrow_mut() = Some(Box::new(move |ctx: &codex_hooks::ListCtx, call: u32| {
+            assert!(!ctx.node.as_os_str().is_empty(), "hook trust needs node even for raw commands");
             seen.borrow_mut().push((call, ctx.js.clone(), ctx.cwd.to_path_buf()));
             let path = ctx.codex_home.join("hooks.json");
             let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).map_err(|e| e.to_string())?).unwrap();
@@ -2725,21 +3088,34 @@ impl RowFx {
         std::fs::write(&f, "process.exit(0);\n").unwrap();
         f.to_string_lossy().into_owned()
     }
-    /// vidar.json with a PreToolUse entry (fail-closed, guard-install, open guard-driver) and a Stop entry.
+    /// Set `guarded`'s sidecar with a PreToolUse entry (fail-closed, guard-install, open guard-driver)
+    /// and a Stop entry, picked by the Rendered (`codex-rendered-bare`) and Raw (`codex-bare`) rows.
     fn codex_guards(&self) {
         let [fc, install, driver, stop] = ["fail-closed.mjs", "guard-install.mjs", "guard-driver.mjs", "stop-guard.mjs"].map(|n| self.guard_file(n));
         let guards = serde_json::json!([
             { "event": "PreToolUse", "matcher": "Bash|apply_patch", "run": [fc, install], "open": [driver] },
             { "event": "Stop", "run": [stop] }
         ]);
-        self.config_with(serde_json::json!([]), serde_json::json!({ "bareCodexGuards": guards }));
+        self.rune("sets", "guarded", "Guarded set text.\n");
+        self.sidecar("guarded", serde_json::json!({ "codexGuards": guards }));
+        let row = |key: &str| serde_json::json!({ "key": key, "sets": [{ "set": "guarded" }] });
+        self.config_with(serde_json::json!([row(RENDERED), row(RAW)]), serde_json::json!({}));
+    }
+    /// The Codex home a launch of `key` on `home` runs in (`codex_home_for_row_with`, read-only).
+    /// The vault home the latest Codex spawn under `home` wrote (L2a: homes are keyed per vault, not per row).
+    fn codex_home_of(&self, home: &Path, _key: &str) -> PathBuf {
+        let dirs = std::fs::read_dir(home.join(codex_payload::CODEX_HOMES_DIR)).unwrap().filter_map(Result::ok).map(|e| e.path());
+        let written = |p: &PathBuf| std::fs::metadata(p.join("config.toml")).and_then(|m| m.modified()).ok();
+        dirs.filter(|p| p.is_dir()).max_by_key(written).expect("a vault home")
     }
 }
 
+const RENDERED: &str = "codex-rendered-bare";
+const RAW: &str = "codex-bare";
+
 /// hooks.json holds the two groups with their exact lines, the copies sit in `layer\hooks\`, and
 /// config.toml carries one trust table per handler.
-fn assert_trusted_hooks(home: &Path) {
-    let ch = home.join("codex-home");
+fn assert_trusted_hooks(home: &Path, ch: &Path) {
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(ch.join("hooks.json")).unwrap()).unwrap();
     let dir = home.join("layer").join("hooks");
     let q = |f: &str| format!("'{}'", dir.join(f).display());
@@ -2779,29 +3155,33 @@ fn every_codex_prepare_path_writes_and_trusts_the_guard_hooks() {
 
     // In-process Rendered (app-server), no launch folder: the home itself is listed.
     let home = fx.home("app");
-    let mut launch = fx.codex(&home, "").unwrap();
-    assert_trusted_hooks(&home);
+    let mut launch = fx.codex(&home, RENDERED).unwrap();
+    let ch = launch.codex_home.clone();
+    assert_trusted_hooks(&home, &ch);
     let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(launch.write_manifest("t-app", ["Path"]).unwrap()).unwrap()).unwrap();
     assert_eq!(v["guards"], serde_json::json!(COPIED));
     assert!(v.get("warnings").is_none(), "{v}");
-    assert_eq!(*seen.borrow(), vec![(0, js.clone(), home.join("codex-home")), (1, js.clone(), home.join("codex-home"))]);
-    // The carried guard files ride into the built payload.
-    assert!(codex_payload(&home).1.contains("- $vidar-control: "));
+    assert_eq!(*seen.borrow(), vec![(0, js.clone(), ch.clone()), (1, js.clone(), ch)]);
+    // No built-in skill rides along without its rune (L2c).
+    for f in layer_files(&home).iter().filter(|p| p.extension().is_some_and(|e| e == "md")) {
+        assert!(!std::fs::read_to_string(f).unwrap().contains("$vidar-control"), "{}", f.display());
+    }
     drop(launch);
 
     // Raw TUI in a launch folder.
     seen.borrow_mut().clear();
     let home = fx.home("tui");
-    drop(fx.tui(&home, "", Some(&work.to_string_lossy())).unwrap());
-    assert_trusted_hooks(&home);
+    let launch = fx.tui(&home, RAW, Some(&work.to_string_lossy())).unwrap();
+    assert_trusted_hooks(&home, &launch.codex_home);
+    drop(launch);
     assert_eq!(*seen.borrow(), vec![(0, js.clone(), work.clone()), (1, js, work.clone())]);
 
     // Falcon-hosted: node is probed for the hook lines.
     seen.borrow_mut().clear();
     let home = fx.home("hosted");
     let asked = std::cell::RefCell::new(Vec::new());
-    let mut hosted = fx.codex_hosted(&home, "", &work, &asked).unwrap();
-    assert_trusted_hooks(&home);
+    let mut hosted = fx.codex_hosted(&home, RENDERED, &work, &asked).unwrap();
+    assert_trusted_hooks(&home, &hosted.codex_home.clone().unwrap_or_else(|| home.join("codex-home")));
     assert!(asked.borrow().iter().any(|n| n == "node.exe"), "{:?}", asked.borrow());
     assert_eq!(seen.borrow().len(), 2);
     assert!(seen.borrow().iter().all(|(_, _, cwd)| *cwd == work));
@@ -2820,32 +3200,32 @@ fn a_codex_guard_hook_codex_does_not_trust_refuses_the_spawn() {
     let seen: Seen = Default::default();
     mock_list(true, None, seen.clone());
     let home = fx.home("u");
-    let e = fx.codex(&home, "").err().unwrap();
+    let e = fx.codex(&home, RENDERED).err().unwrap();
     assert!(e.starts_with("Codex does not trust Vidar's guard hooks after the trust write (") && e.ends_with(" is untrusted); Bare spawn refused"), "{e}");
     assert_eq!(seen.borrow().len(), 2);
     assert_eq!(manifest_count(&home), 0);
     let asked = std::cell::RefCell::new(Vec::new());
-    let e = fx.codex_hosted(&fx.home("uh"), "", &work, &asked).err().unwrap();
+    let e = fx.codex_hosted(&fx.home("uh"), RENDERED, &work, &asked).err().unwrap();
     assert!(e.starts_with("Codex does not trust Vidar's guard hooks after the trust write ("), "{e}");
 
     // A hook missing from the list: refused before any trust write.
     codex_hooks::LIST_MOCK.with(|m| *m.borrow_mut() = Some(Box::new(|_: &codex_hooks::ListCtx, _| Ok(Vec::new()))));
     let home = fx.home("m");
-    let e = fx.codex(&home, "").err().unwrap();
+    let e = fx.codex(&home, RENDERED).err().unwrap();
     assert!(e.starts_with("Codex lists 0 of Vidar's 2 guard hooks in ") && e.ends_with("hooks.json; Bare spawn refused"), "{e}");
-    assert!(!std::fs::read_to_string(home.join("codex-home").join("config.toml")).unwrap().contains("hooks.state"));
+    assert!(!std::fs::read_to_string(fx.codex_home_of(&home, RENDERED).join("config.toml")).unwrap().contains("hooks.state"));
 
     // The list itself failing.
     codex_hooks::LIST_MOCK.with(|m| *m.borrow_mut() = Some(Box::new(|_: &codex_hooks::ListCtx, _| Err("boom".to_string()))));
-    let e = fx.tui(&fx.home("f"), "", None).err().unwrap();
+    let e = fx.tui(&fx.home("f"), RAW, None).err().unwrap();
     assert_eq!(e, "Codex hooks/list failed (boom); guard hooks unverified, Bare spawn refused");
 
     // A key naming another hooks.json (a repo's) is never written as trust.
     mock_list(false, Some(work.join(".codex").join("hooks.json")), Default::default());
     let home = fx.home("r");
-    let e = fx.codex(&home, "").err().unwrap();
+    let e = fx.codex(&home, RENDERED).err().unwrap();
     assert!(e.contains("does not name") && e.contains("hooks.json"), "{e}");
-    assert!(!std::fs::read_to_string(home.join("codex-home").join("config.toml")).unwrap().contains("hooks.state"));
+    assert!(!std::fs::read_to_string(fx.codex_home_of(&home, RENDERED).join("config.toml")).unwrap().contains("hooks.state"));
 }
 
 #[test]
@@ -2863,6 +3243,184 @@ fn no_bare_codex_guards_is_quiet_and_removes_a_stale_hooks_json() {
     assert_eq!(v["guards"], serde_json::json!([]));
     assert!(v["warnings"].as_array().is_none_or(Vec::is_empty), "{}", v["warnings"]);
     assert!(!std::fs::read_to_string(home.join("codex-home").join("config.toml")).unwrap().contains("hooks.state"));
+}
+
+// ---- Codex per-kind matrix, Layer A (fold W2 L2b): tick in set S, present; untick, gone ----
+
+impl RowFx {
+    /// Set `s` (one rune) with sidecar `v`, picked by the Rendered row; one in-process spawn, its home.
+    fn tick(&self, home: &Path, v: serde_json::Value) -> CodexLaunch {
+        self.rune("sets", "s", "S set text.\n");
+        self.sidecar("s", v);
+        self.config_with(serde_json::json!([{ "key": RENDERED, "sets": [{ "set": "s" }] }]), serde_json::json!({}));
+        self.codex(home, RENDERED).unwrap()
+    }
+}
+
+#[test]
+fn codex_matrix_a_set_skill_is_in_the_combination_home_until_unticked() {
+    let fx = RowFx::new("cx-matrix-skill");
+    let tidy = fx.skill("tidy", "Keep it tidy.");
+    let home = fx.home("m");
+    let launch = fx.tick(&home, serde_json::json!({ "codexSkills": [tidy] }));
+    let ch = launch.codex_home.clone();
+    assert!(ch.join("skills").join("tidy").join("SKILL.md").is_file());
+    drop(launch);
+    // Unticked is a changed runeset: a new Custom vault on its own home, without the skill (L2a).
+    let launch = fx.tick(&home, serde_json::json!({ "codexSkills": [] }));
+    assert_ne!(launch.codex_home, ch, "a changed pick is a new vault home");
+    assert!(!launch.codex_home.join("skills").join("tidy").exists());
+}
+
+#[test]
+fn codex_matrix_a_set_agent_is_a_role_file_until_unticked() {
+    let fx = RowFx::new("cx-matrix-agent");
+    let src = fx.t.0.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let role = src.join("reviewer.toml");
+    std::fs::write(&role, "name = \"reviewer\"\ndeveloper_instructions = \"Review it.\"\n").unwrap();
+    let home = fx.home("m");
+    let launch = fx.tick(&home, serde_json::json!({ "codexAgents": [role.to_string_lossy()] }));
+    let ch = launch.codex_home.clone();
+    assert!(ch.join("agents").join("reviewer.toml").is_file());
+    drop(launch);
+    let launch = fx.tick(&home, serde_json::json!({ "codexAgents": [] }));
+    assert_ne!(launch.codex_home, ch, "a changed pick is a new vault home");
+    assert!(!launch.codex_home.join("agents").join("reviewer.toml").exists());
+}
+
+#[test]
+fn codex_matrix_a_set_guard_is_a_trusted_hook_until_unticked() {
+    let fx = RowFx::new("cx-matrix-guard");
+    let stop = fx.guard_file("stop-guard.mjs");
+    mock_list(false, None, Default::default());
+    let home = fx.home("m");
+    let launch = fx.tick(&home, serde_json::json!({ "codexGuards": [{ "event": "Stop", "run": [stop] }] }));
+    let ch = launch.codex_home.clone();
+    let hooks = std::fs::read_to_string(ch.join("hooks.json")).unwrap();
+    assert!(hooks.contains("stop-guard.mjs"), "{hooks}");
+    assert!(std::fs::read_to_string(ch.join("config.toml")).unwrap().contains("hooks.state"));
+    drop(launch);
+    let launch = fx.tick(&home, serde_json::json!({ "codexGuards": [] }));
+    let ch = launch.codex_home.clone();
+    assert!(!ch.join("hooks.json").exists(), "an unticked guard's hooks.json survived");
+    assert!(!std::fs::read_to_string(ch.join("config.toml")).unwrap().contains("hooks.state"));
+}
+
+#[test]
+fn codex_matrix_raw_command_is_trusted_and_written_without_script_copy() {
+    let fx = RowFx::new("cx-matrix-raw-hook");
+    let command = "pwsh -NoProfile -Command '$token = \"sk-secret-1\"; exit 7'";
+    mock_list(false, None, Default::default());
+    let home = fx.home("m");
+    let launch = fx.tick(&home, serde_json::json!({ "codexGuards": [{ "event": "Stop", "command": command }] }));
+    let hooks: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(launch.codex_home.join("hooks.json")).unwrap()).unwrap();
+    assert_eq!(hooks["hooks"]["Stop"][0]["hooks"][0]["command"], command);
+    assert_eq!(hooks["hooks"]["Stop"][0]["hooks"][0]["commandWindows"], command);
+    assert!(!home.join("layer").join("hooks").exists());
+}
+
+#[test]
+fn codex_matrix_a_module_server_is_a_config_table_never_the_line_until_unticked() {
+    let fx = RowFx::new("cx-matrix-mcp");
+    let home = fx.home("m");
+    // D-b: no server key, url or token on the line, in-process or hosted; the vault home's config.toml
+    // carries the table on both surfaces.
+    let on_line = |args: &[String]| args.iter().any(|a| a.contains("mcp_servers") || a.contains("mcp.notion.com"));
+    let launch = fx.tick(&home, serde_json::json!({ "modules": { "notion": {} } }));
+    assert!(!on_line(&launch.args), "{:?}", launch.args);
+    assert!(std::fs::read_to_string(launch.codex_home.join("config.toml")).unwrap().contains("[mcp_servers.notion]"));
+    drop(launch);
+    // Hosted: the same server as a config.toml table in the launch's home.
+    let work = fx.t.0.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let hosted = fx.codex_hosted(&home, RENDERED, &work, &std::cell::RefCell::new(Vec::new())).unwrap();
+    let ch = hosted.codex_home.clone().unwrap_or_else(|| home.join("codex-home"));
+    assert!(std::fs::read_to_string(ch.join("config.toml")).unwrap().contains("[mcp_servers.notion]"));
+    drop(hosted);
+    let launch = fx.tick(&home, serde_json::json!({ "modules": {} }));
+    assert!(!on_line(&launch.args), "{:?}", launch.args);
+    assert!(!std::fs::read_to_string(launch.codex_home.join("config.toml")).unwrap().contains("mcp_servers.notion"));
+    drop(launch);
+    let hosted = fx.codex_hosted(&home, RENDERED, &work, &std::cell::RefCell::new(Vec::new())).unwrap();
+    let ch = hosted.codex_home.clone().unwrap_or_else(|| home.join("codex-home"));
+    assert!(!std::fs::read_to_string(ch.join("config.toml")).unwrap().contains("mcp_servers.notion"));
+    drop(hosted);
+}
+
+#[test]
+fn codex_matrix_what_codex_cannot_carry_is_a_launch_warning() {
+    let fx = RowFx::new("cx-matrix-unsupported");
+    let home = fx.home("m");
+    let launch = fx.tick(&home, serde_json::json!({ "permissions": { "mode": "plan" } }));
+    let w = launch.warning.clone().unwrap_or_default();
+    assert!(w.contains("Not Carried by Codex: Codex has no permission mode"), "{w}");
+    drop(launch);
+    let launch = fx.tick(&home, serde_json::json!({}));
+    assert!(!launch.warning.unwrap_or_default().contains("Not Carried by Codex"));
+}
+
+/// A legacy module tick beside a set does not bring a skill into the Codex home.
+#[test]
+fn codex_legacy_module_sidecar_does_not_reach_the_home() {
+    let fx = RowFx::new("cx-matrix-bundle");
+    let root = fx.t.0.join("root");
+    std::fs::create_dir_all(root.join("contracts")).unwrap();
+    let skill = root.join("mods").join("kit-skill");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: kit-skill\ndescription: From the module.\n---\nBody.\n").unwrap();
+    let catalog = serde_json::json!({ "version": 1, "bundles": { "kitmod": { "mcp": [], "skills": ["mods/kit-skill"], "agents": [], "guards": [] } } });
+    std::fs::write(root.join("contracts").join("module-bundles.json"), catalog.to_string()).unwrap();
+    fx.rune("sets", "s", "S set text.\n");
+    fx.config_with(serde_json::json!([{ "key": RENDERED, "sets": [{ "set": "s" }] }]), serde_json::json!({}));
+    let home = fx.home("m");
+    std::fs::create_dir_all(&home).unwrap();
+    let ch = home.join("codex-homes").join("kit");
+    let sets = fixture_row_sets(&fx.config, RENDERED).unwrap().sets;
+    let sync = |modules: serde_json::Value| {
+        fx.sidecar("s", serde_json::json!({ "modules": modules }));
+        let env = set_loadout::ResolveEnv { root: &root, config: &fx.config, home: &home, user_home: None };
+        let (l, w) = set_loadout::resolve(&env, Agent::Codex, &sets);
+        assert!(w.is_empty(), "{w:?}");
+        let plan = copies::plan_for(Agent::Codex, &l.skills, &l.agents, Some(&home));
+        let lock = home::lock(&home, home::LOCK_WAIT).unwrap();
+        copies::sync_codex(&lock, &home, &ch, plan, true).0
+    };
+    let listed = sync(serde_json::json!({ "kitmod": {} }));
+    assert!(listed.is_empty());
+    assert!(!ch.join("skills").join("kit-skill").exists());
+    assert!(sync(serde_json::json!({})).is_empty());
+    assert!(!ch.join("skills").join("kit-skill").exists());
+}
+
+/// Gap 11: a resumed thread relaunches with its manifest's sets as the launch pick, so
+/// it runs on the home it was recorded in even after the row's own pick moved on.
+#[test]
+fn a_resumed_codex_thread_runs_on_the_home_its_manifest_recorded() {
+    let fx = RowFx::new("cx-resume-home");
+    fx.rune("sets", "alpha", "Alpha set text.\n");
+    fx.rune("sets", "beta", "Beta set text.\n");
+    let row = |set: &str| serde_json::json!([{ "key": RENDERED, "sets": [{ "set": set }] }]);
+    fx.config_with(row("alpha"), serde_json::json!({}));
+    let home = fx.home("r");
+    let mut first = fx.codex(&home, RENDERED).unwrap();
+    let recorded = first.codex_home.clone();
+    let m: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(first.write_manifest("t-first", ["Path"]).unwrap()).unwrap()).unwrap();
+    assert_eq!(m["homes"]["codexHome"], recorded.to_string_lossy().as_ref());
+    drop(first);
+
+    // The row now picks another set: a fresh launch moves to that combination's home.
+    fx.config_with(row("beta"), serde_json::json!({}));
+    let moved = fx.codex(&home, RENDERED).unwrap();
+    assert_ne!(moved.codex_home, recorded);
+    drop(moved);
+
+    // Resume: the manifest's sets ride as the pick.
+    let pick: Vec<LaunchSetRef> = m["payload"]["sets"].as_array().unwrap().iter().map(|s| LaunchSetRef { library: None, set: s.as_str().unwrap().to_string() }).collect();
+    let probes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
+    let opts = LaunchOpts { custom_sets: Some(&pick), vault: None, ..fx.opts(RENDERED) };
+    let resumed = prepare_codex_with("bare", &crate::paths::root(), &home, inherited(), &Ambient::default(), &guard(), &probes, &opts).unwrap();
+    assert_eq!(resumed.codex_home, recorded, "the resumed thread left its recorded home");
 }
 
 #[test]
@@ -2932,7 +3490,8 @@ fn probe_pin_runs_one_real_raw_bare_turn() {
     std::fs::create_dir_all(&cwd).unwrap();
     std::fs::write(cwd.join("CLAUDE.md"), "Canary: this file must not load in a Bare session.\n").unwrap();
 
-    let opts = LaunchOpts { row_key: None, config: None, claude_json: None };
+    // The pin probe spawns on the stock Claude vault (L2a), never a row's sets.
+    let opts = LaunchOpts { vault: Some("stock-claude"), ..Default::default() };
     let mut launch = prepare("bare", &opts).expect("prepare");
     // The Raw tab adds these on top of the built env (pty.rs); the probe adds the same names.
     let mut env: Vec<(OsString, OsString)> = launch.env.iter().map(|(k, v)| (k.to_os_string(), v.to_os_string())).collect();
@@ -2978,7 +3537,7 @@ fn probe_pin_runs_one_real_raw_bare_turn() {
     assert!(status.success(), "claude -p exited {status}");
 }
 
-// ---- Claude plugin per rune set (run 2026-10-20-rune-sets, W2) ----
+// ---- Claude set items and module MCP (run 2026-10-20-rune-sets, W2; homes since fold W2 L2a) ----
 
 impl RowFx {
     /// A rule every set slots (so the payload builds), and `sets` rows' sidecars plus the key's config.
@@ -3003,64 +3562,211 @@ impl RowFx {
     }
 }
 
-fn built_plugins(fx: &RowFx, home: &Path, sets: &[&str]) -> set_plugin::SetPlugins {
-    let row = layer::RowSets { sets: sets.iter().map(|s| layer::SetRef { library: None, set: s.to_string() }).collect(), rules_library: Some(fx.lib.to_string_lossy().into_owned()) };
-    std::fs::create_dir_all(home).unwrap();
-    let lock = home::lock(home, home::LOCK_WAIT).unwrap();
-    set_plugin::build(&lock, &fx.t.0, home, Some(&row), None)
+#[test]
+fn claude_module_mcp_is_strict_content_addressed_and_hosted_under_layer() {
+    let fx = RowFx::new("mcp-module");
+    fx.plugin_row(&["alpha"], &[("alpha", serde_json::json!({"modules":{"unreal":{}}}))], serde_json::json!([]));
+    let home = fx.home("mcp");
+    let first = fx.raw(&home, "k").unwrap();
+    let line = first.args.last().unwrap().clone();
+    assert!(line.contains("--mcp-config") && line.contains("--strict-mcp-config"), "{line}");
+    let files = mcp_files(&home);
+    assert_eq!(files.len(), 1);
+    let file = &files[0];
+    assert_eq!(file.parent(), Some(home.join("layer").as_path()));
+    let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(file).unwrap()).unwrap();
+    assert_eq!(doc["mcpServers"]["proxy"]["type"], "http");
+    // No `vidar-app` plugin rune in this vault: no drive server (L2b).
+    assert!(doc["mcpServers"].get("plugin_vidar_drive").is_none());
+    drop(first);
+    let second = fx.raw(&home, "k").unwrap();
+    assert_eq!(second.args.last().unwrap(), &line);
+    drop(second);
+    let hosted = fx.hosted(&home, "k").unwrap();
+    assert_eq!(hosted.mcp_file.as_ref(), Some(file));
 }
 
 #[test]
-fn a_set_plugin_holds_name_skills_agents_and_a_guard_wired_through_the_plugin_root() {
-    let fx = RowFx::new("plugin-layout");
-    let skill = fx.plugin_skill("tidy", "---\nname: tidy\n---\nTidy.\n");
-    let agent = fx.script("agents", "helper.md", "---\nname: helper\n---\nHelp.\n");
-    let guard = fx.script("hooks", "guard-x.mjs", "// guard x\n");
-    fx.plugin_row(&["alpha"], &[("alpha", serde_json::json!({ "skills": [skill], "agents": [agent], "guards": [{ "event": "PreToolUse", "matcher": "Bash", "run": [guard] }] }))], serde_json::json!([]));
-    let home = fx.home("layout");
-    let b = built_plugins(&fx, &home, &["alpha"]);
-    assert!(b.warnings.is_empty(), "{:?}", b.warnings);
-    assert_eq!(b.plugins.len(), 1);
-    let dir = &b.plugins[0].dir;
-    assert!(dir.starts_with(home.join("layer").join("plugins")));
-    let n = dir.file_name().unwrap().to_string_lossy().into_owned();
-    assert!(n.starts_with("alpha-") && n.len() == "alpha-".len() + 12, "{n}");
-    let pj: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dir.join(".claude-plugin").join("plugin.json")).unwrap()).unwrap();
-    assert_eq!(pj["name"], "alpha");
+fn claude_module_mcp_off_removes_server_and_no_modules_is_still_strict() {
+    let fx = RowFx::new("mcp-off");
+    fx.plugin_row(&["alpha"], &[("alpha", serde_json::json!({"modules":{"unreal":{"off":["mcp:proxy"]}}}))], serde_json::json!([]));
+    let home = fx.home("off");
+    let line = fx.raw(&home, "k").unwrap();
+    assert!(line.args.last().unwrap().contains("--strict-mcp-config"));
+    let file = mcp_files(&home).into_iter().next().unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(file).unwrap()).unwrap();
+    assert!(doc["mcpServers"].get("proxy").is_none());
+    assert!(doc["mcpServers"].get("plugin_vidar_drive").is_none(), "no vidar-app plugin rune, no drive server");
+    let plain = RowFx::new("mcp-plain");
+    plain.plugin_row(&["alpha"], &[("alpha", serde_json::json!({"skills":[]}))], serde_json::json!([]));
+    let plain_home = plain.home("plain");
+    let launch = plain.raw(&plain_home, "k").unwrap();
+    let plain_line = launch.args.last().unwrap();
+    assert!(plain_line.contains("--mcp-config") && plain_line.contains("--strict-mcp-config"), "{plain_line}");
+    let plain_file = mcp_files(&plain_home).into_iter().next().unwrap();
+    let plain_doc: serde_json::Value = serde_json::from_slice(&std::fs::read(plain_file).unwrap()).unwrap();
+    let names: Vec<_> = plain_doc["mcpServers"].as_object().unwrap().keys().cloned().collect();
+    assert!(names.is_empty(), "still strict, with no server: {names:?}");
+}
+
+#[test]
+fn claude_generated_settings_keep_ask_rules_and_gate_mcp() {
+    let fx = RowFx::new("mcp-settings");
+    fx.plugin_row(&["alpha"], &[], serde_json::json!([]));
+    let home = fx.home("settings");
+    let launch = fx.raw(&home, "k").unwrap();
+    let settings: serde_json::Value = serde_json::from_slice(&std::fs::read(&launch.manifest.homes.settings).unwrap()).unwrap();
+    let template: serde_json::Value = serde_json::from_slice(&std::fs::read(crate::paths::root().join("profiles/bare/claude.settings.template.json")).unwrap()).unwrap();
+    // The template carries no permission rules; the ask list is the vault's `mcp-write-asks` rune
+    // (L2b), which this vault does not hold.
+    assert_eq!(template["permissions"], serde_json::json!({}));
+    assert!(settings["permissions"].get("ask").is_none_or(|a| a.as_array().is_some_and(Vec::is_empty)), "{}", settings["permissions"]);
+    assert!(settings["permissions"].get("allow").is_none_or(|a| a.as_array().is_some_and(Vec::is_empty)), "{}", settings["permissions"]);
+    // The mcp-gate hook is the vault's `mcp-gate` rune (L2f); this vault does not hold it.
+    assert!(!template.to_string().contains("mcp-gate.mjs"));
+    assert!(!settings.to_string().contains("mcp-gate.mjs"), "{}", settings["hooks"]);
+}
+
+#[test]
+fn claude_stdio_mcp_uses_set_environment_and_warns_for_missing_names() {
+    let fx = RowFx::new("mcp-stdio");
+    fx.plugin_row(&["alpha"], &[("alpha", serde_json::json!({"modules":{"changes":{}}}))], serde_json::json!([]));
+    let home = fx.home("stdio");
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let inherited = inherited().into_iter().chain([(OsString::from("P4PORT"), OsString::from("perforce:1666"))]);
+    let launch = prepare_with("bare", &crate::paths::root(), &home, inherited, &Ambient::default(), &guard(), &probes, &fx.opts("k")).unwrap();
+    let file = mcp_files(&home).into_iter().next().unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(file).unwrap()).unwrap();
+    assert_eq!(doc["mcpServers"]["p4"]["env"]["P4PORT"], "perforce:1666");
+    assert!(doc["mcpServers"]["p4"]["env"].get("P4USER").is_none());
+    assert!(launch.manifest.warnings.iter().any(|w| w.contains("P4USER") && w.contains("unset")));
+}
+
+// ---- Claude set-combination homes (fold W2 L2a) ----
+
+/// The combination home a Claude launch ran on, from its manifest.
+fn claude_dir_of(m: &manifest::Manifest) -> PathBuf {
+    PathBuf::from(&m.homes.claude_config)
+}
+
+#[test]
+fn claude_matrix_a_ticked_skill_agent_guard_and_module_reach_the_combination_home_until_unticked() {
+    let fx = RowFx::new("cl-matrix");
+    let skill = fx.plugin_skill("tidy", "---\nname: tidy\ndescription: Tidy.\n---\nTidy.\n");
+    let agent = fx.script("agents", "helper.md", "---\nname: helper\ndescription: Help.\n---\nHelp.\n");
+    let stop = fx.guard_file("stop-guard.mjs");
+    let full = serde_json::json!({ "skills": [skill], "agents": [agent], "guards": [{ "event": "Stop", "run": [stop] }], "modules": { "unreal": {} } });
+    fx.plugin_row(&["alpha"], &[("alpha", full)], serde_json::json!([]));
+    let home = fx.home("m");
+    let l = fx.raw(&home, "k").unwrap();
+    let dir = claude_dir_of(&l.manifest);
+    assert_eq!(dir.parent(), Some(home.join("claude-homes").as_path()), "{}", dir.display());
     assert!(dir.join("skills").join("tidy").join("SKILL.md").is_file());
     assert!(dir.join("skills").join("tidy").join("refs").join("note.md").is_file());
     assert!(dir.join("agents").join("helper.md").is_file());
-    assert_eq!(std::fs::read_to_string(dir.join("scripts").join("guard-x.mjs")).unwrap(), "// guard x\n");
-    let h: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dir.join("hooks").join("hooks.json")).unwrap()).unwrap();
-    let group = &h["hooks"]["PreToolUse"][0];
-    assert_eq!(group["matcher"], "Bash");
-    assert_eq!(group["hooks"][0]["type"], "command");
-    assert_eq!(group["hooks"][0]["command"], "node \"${CLAUDE_PLUGIN_ROOT}/scripts/guard-x.mjs\"");
-    assert_eq!(b.guard_files, vec!["guard-x.mjs".to_string()]);
+    assert!(dir.join("hooks").join("stop-guard.mjs").is_file());
+    assert_eq!(l.manifest.guards, vec!["stop-guard.mjs".to_string()]);
+    let settings: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("settings.json")).unwrap()).unwrap();
+    assert!(settings["hooks"]["Stop"].to_string().contains("stop-guard.mjs"), "{}", settings["hooks"]);
+    let line = l.args.last().unwrap().clone();
+    assert!(line.contains("--mcp-config") && line.contains("--strict-mcp-config"), "{line}");
+    assert!(!line.contains("layer\\plugins"), "no set plugin rides the line: {line}");
+    let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(mcp_files(&home).into_iter().next().unwrap()).unwrap()).unwrap();
+    assert!(doc["mcpServers"].get("proxy").is_some(), "{doc}");
+    assert_eq!(l.env.get("CLAUDE_CONFIG_DIR"), Some(dir.as_os_str()));
+    drop(l);
+    // Untick everything: a changed runeset is a new Custom vault on its own home, empty of it (L2a).
+    fx.sidecar("alpha", serde_json::json!({}));
+    let l = fx.raw(&home, "k").unwrap();
+    assert_ne!(claude_dir_of(&l.manifest), dir, "a changed pick is a new vault home");
+    let dir = claude_dir_of(&l.manifest);
+    assert!(!dir.join("skills").join("tidy").exists());
+    assert!(!dir.join("agents").join("helper.md").exists());
+    assert!(!dir.join("hooks").join("stop-guard.mjs").exists());
+    let settings = std::fs::read_to_string(dir.join("settings.json")).unwrap();
+    assert!(!settings.contains("stop-guard.mjs"), "{settings}");
+    let line = l.args.last().unwrap();
+    let file = mcp_files(&home).into_iter().find(|f| line.contains(&*f.to_string_lossy())).unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(file).unwrap()).unwrap();
+    assert!(doc["mcpServers"].get("proxy").is_none(), "{doc}");
+    assert!(line.contains("--strict-mcp-config"), "still strict: {line}");
 }
 
 #[test]
-fn identical_set_inputs_name_the_same_plugin_and_are_not_rewritten() {
-    let fx = RowFx::new("plugin-hash");
-    let skill = fx.plugin_skill("tidy", "v1\n");
+fn claude_rows_with_different_picks_get_two_homes_and_the_same_picks_share_one() {
+    let fx = RowFx::new("cl-two");
+    for s in ["alpha", "beta"] {
+        fx.rune("sets", s, "Set text.\n");
+    }
+    let rows = serde_json::json!([
+        { "key": "a1", "sets": [{ "set": "alpha" }] },
+        { "key": "a2", "sets": [{ "set": "alpha" }] },
+        { "key": "b", "sets": [{ "set": "beta" }] },
+    ]);
+    fx.config_with(rows, serde_json::json!({}));
+    let home = fx.home("two");
+    let dir = |key: &str| claude_dir_of(&fx.raw(&home, key).unwrap().manifest);
+    let (a1, a2, b) = (dir("a1"), dir("a2"), dir("b"));
+    assert_eq!(a1, a2, "the same picks share one home");
+    assert_ne!(a1, b, "different picks get two homes");
+    assert!(a1.starts_with(home.join("claude-homes")) && b.starts_with(home.join("claude-homes")));
+    // Each home holds its own login link and seeded `.claude.json`, never another's copy.
+    assert!(a1.is_dir() && b.is_dir());
+}
+
+#[test]
+fn claude_a_sets_permission_and_output_style_land_in_its_settings() {
+    let fx = RowFx::new("cl-perm");
+    let v = serde_json::json!({ "permissions": { "allow": ["Bash(git status:*)"], "ask": ["Write"], "mode": "plan" }, "outputStyle": "terse" });
+    fx.plugin_row(&["alpha"], &[("alpha", v)], serde_json::json!([]));
+    let home = fx.home("perm");
+    let l = fx.raw(&home, "k").unwrap();
+    let dir = claude_dir_of(&l.manifest);
+    assert_eq!(PathBuf::from(&l.manifest.homes.settings), dir.join("settings.json"));
+    let s: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("settings.json")).unwrap()).unwrap();
+    assert!(s["permissions"]["allow"].as_array().unwrap().iter().any(|a| a == "Bash(git status:*)"), "{}", s["permissions"]);
+    assert!(!s["permissions"]["allow"].as_array().unwrap().iter().any(|a| a == "mcp__plugin_vidar_drive"), "the drive allow is the drive-allow rune's, not the template's");
+    assert!(s["permissions"]["ask"].as_array().unwrap().iter().any(|a| a == "Write"));
+    assert_eq!(s["permissions"]["defaultMode"], "plan");
+    // `outputStyle` has no rune kind (L1a), so a vault carries none.
+    assert!(s.get("outputStyle").is_none());
+    let line = l.args.last().unwrap();
+    assert!(line.contains("'--setting-sources' 'user'") && !line.contains("'--settings'"), "{line}");
+}
+
+#[test]
+fn claude_hosted_and_raw_name_the_same_dir_and_the_manifest_records_it() {
+    let fx = RowFx::new("cl-hosted");
+    let skill = fx.plugin_skill("tidy", "---\nname: tidy\ndescription: Tidy.\n---\nTidy.\n");
     fx.plugin_row(&["alpha"], &[("alpha", serde_json::json!({ "skills": [skill] }))], serde_json::json!([]));
-    let home = fx.home("hash");
-    let first = built_plugins(&fx, &home, &["alpha"]);
-    assert!(first.plugins[0].created);
-    let marker = first.plugins[0].dir.join("kept.txt");
-    std::fs::write(&marker, "x").unwrap();
-    let again = built_plugins(&fx, &home, &["alpha"]);
-    assert_eq!(again.plugins[0].dir, first.plugins[0].dir);
-    assert!(!again.plugins[0].created && marker.is_file(), "same inputs: the folder is left as it is");
-    std::fs::write(Path::new(&skill).join("SKILL.md"), "v2\n").unwrap();
-    let changed = built_plugins(&fx, &home, &["alpha"]);
-    assert_ne!(changed.plugins[0].dir, first.plugins[0].dir);
-    assert!(first.plugins[0].dir.is_dir(), "the old folder is never pruned");
-    assert!(std::fs::read_dir(home.join("layer").join("plugins")).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().starts_with(".stage")));
+    let home = fx.home("h");
+    let raw = fx.raw(&home, "k").unwrap();
+    let raw_dir = claude_dir_of(&raw.manifest);
+    let raw_hash = raw.manifest.loadout_hash.clone();
+    assert!(raw_hash.as_deref().is_some_and(|h| !h.is_empty()));
+    drop(raw);
+    let hosted = fx.hosted(&home, "k").unwrap();
+    assert_eq!(hosted.claude_config_dir.as_ref(), Some(&raw_dir));
+    assert_eq!(claude_dir_of(&hosted.manifest), raw_dir);
+    assert_eq!(hosted.manifest.loadout_hash, raw_hash);
+    assert!(hosted.manifest.plugins.is_empty() && hosted.plugin_names.is_empty(), "no plugin rune in the vault");
+    assert!(raw_dir.join("skills").join("tidy").join("SKILL.md").is_file());
 }
 
 #[test]
-fn the_raw_launch_passes_one_plugin_dir_per_non_empty_set_and_set_guards_are_carried() {
+fn claude_a_row_without_sets_runs_on_the_profiles_own_dir() {
+    let fx = RowFx::new("cl-none");
+    fx.config_with(serde_json::json!([{ "key": "k" }]), serde_json::json!({}));
+    let home = fx.home("none");
+    let l = fx.raw(&home, "k").unwrap();
+    assert_eq!(claude_dir_of(&l.manifest), home.join("claude-config"));
+    drop(l);
+    let h = fx.hosted(&home, "k").unwrap();
+    assert_eq!(h.claude_config_dir, Some(home.join("claude-config")));
+}
+
+#[test]
+fn the_raw_launch_carries_every_sets_items_in_one_home_and_set_guards_keep_their_claims() {
     let fx = RowFx::new("plugin-raw");
     let skill = fx.plugin_skill("tidy", "T\n");
     let agent = fx.script("agents", "helper.md", "H\n");
@@ -3080,16 +3786,19 @@ fn the_raw_launch_passes_one_plugin_dir_per_non_empty_set_and_set_guards_are_car
     let home = fx.home("raw");
     let l = fx.raw(&home, "k").unwrap();
     let line = l.args.last().unwrap();
-    assert_eq!(line.matches("--plugin-dir").count(), 3, "vidar-app plus alpha and beta, not the empty gamma: {line}");
-    assert!(line.contains("layer\\plugins\\alpha-") && line.contains("layer\\plugins\\beta-") && !line.contains("gamma-"), "{line}");
+    assert_eq!(line.matches("--plugin-dir").count(), 0, "no plugin rune in the vault: {line}");
     assert!(line.contains("relative") && line.contains("Vidar Bare"), "a bad path warns on the spawn line: {line}");
+    let dir = claude_dir_of(&l.manifest);
+    assert!(dir.join("skills").join("tidy").join("SKILL.md").is_file());
+    assert!(dir.join("agents").join("helper.md").is_file());
+    assert!(dir.join("hooks").join("guard-x.mjs").is_file());
     let text = String::from_utf8(std::fs::read(&l.manifest.payload.path).unwrap()).unwrap();
     assert!(text.contains("Hook claim text."), "a set guard carries the enforced-by claim: {text}");
-    assert!(l.manifest.plugins.iter().any(|p| p.starts_with("beta-")), "{:?}", l.manifest.plugins);
+    assert!(l.manifest.plugins.is_empty());
 }
 
 #[test]
-fn the_hosted_launch_carries_one_plugin_dir_per_non_empty_set_and_set_guards_are_carried() {
+fn the_hosted_launch_carries_every_sets_items_in_one_home_and_set_guards_keep_their_claims() {
     let fx = RowFx::new("plugin-hosted");
     let skill = fx.plugin_skill("tidy", "T\n");
     let agent = fx.script("agents", "helper.md", "H\n");
@@ -3107,14 +3816,14 @@ fn the_hosted_launch_carries_one_plugin_dir_per_non_empty_set_and_set_guards_are
     std::fs::write(fx.lib.join("sets").join("beta.md"), "---\nname: beta\nkind: set\nscope: [global]\n---\n<?rune plain-x?>\n\n<?rune hook-x?>\n").unwrap();
     let home = fx.home("hosted");
     let l = fx.hosted(&home, "k").unwrap();
-    let plugins = home.join("layer").join("plugins");
-    let names: Vec<String> = l.set_plugin_dirs.iter().map(|d| d.file_name().unwrap().to_string_lossy().into_owned()).collect();
-    assert_eq!(names.len(), 2, "alpha and beta, not the empty gamma: {names:?}");
-    assert!(names[0].starts_with("alpha-") && names[1].starts_with("beta-"), "ref order: {names:?}");
-    assert!(l.set_plugin_dirs.iter().all(|d| d.parent() == Some(plugins.as_path()) && d.join(".claude-plugin").join("plugin.json").is_file()));
+    let dir = l.claude_config_dir.clone().unwrap();
+    assert!(dir.starts_with(home.join("claude-homes")), "{}", dir.display());
+    assert!(dir.join("skills").join("tidy").join("SKILL.md").is_file());
+    assert!(dir.join("agents").join("helper.md").is_file());
+    assert!(dir.join("hooks").join("guard-x.mjs").is_file());
+    assert!(!home.join("layer").join("plugins").exists(), "no set plugin is built");
     assert!(l.bare_warnings().iter().any(|w| w.contains("relative")), "a bad path warns on the hosted tab: {:?}", l.bare_warnings());
     let text = String::from_utf8(std::fs::read(l.payload_file.as_ref().unwrap()).unwrap()).unwrap();
     assert!(text.contains("Hook claim text."), "a set guard carries the enforced-by claim: {text}");
-    assert_eq!(l.manifest.plugins[..2], ["vidar-app".to_string(), "gate".to_string()], "the rendered plugins first: {:?}", l.manifest.plugins);
-    assert!(l.manifest.plugins[2..] == names[..], "{:?}", l.manifest.plugins);
+    assert!(l.manifest.plugins.is_empty() && l.plugin_names.is_empty(), "no plugin rune in the vault: {:?}", l.manifest.plugins);
 }

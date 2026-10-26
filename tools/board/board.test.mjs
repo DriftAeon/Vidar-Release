@@ -62,7 +62,8 @@ test("where lists an open park under its run card and in Parked; closed and near
       ["- parked A1: x", "- parked A2: y", "- unparked A2: z", "- parkedish: w", "- parked the migration until Monday", ""].join("\n"));
     const r = spawnSync(process.execPath, [join(HERE, "where.mjs"), "--root", dir], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
-    const [head, tail] = r.stdout.split("## Handoff");
+    assert.doesNotMatch(r.stdout, /## Handoff/);
+    const [head, tail] = r.stdout.split("## Git");
     const [boardsPart, parkedPart] = head.split("## Parked");
     assert.match(boardsPart, /C1 · Park Card[\s\S]*parked A1: x/);
     assert.match(parkedPart, /parked A1: x/);
@@ -77,7 +78,35 @@ test("where lists an open park under its run card and in Parked; closed and near
   }
 });
 
-test("where keeps an open exit row visible when every card is done", { skip: noGit }, () => {
+test("where closes a park by an unpark with a paren or at end of line, and skips filed runs in Parked and Close-out gaps", () => {
+  const dir = mkdtempSync(join(tmpdir(), "where-test-"));
+  try {
+    const live = "2026-10-20-live";
+    const filed = "2026-10-20-filed";
+    const runsDir = join(dir, ...rel("runs").split("/"));
+    for (const d of ["tools/lib", "contracts"]) mkdirSync(join(dir, d), { recursive: true });
+    writeFileSync(join(dir, "contracts", "paths.json"), "");
+    const archive = join(dirname(runsDir), "archive");
+    mkdirSync(archive, { recursive: true });
+    writeFileSync(join(archive, "INDEX.md"), `## Runs\n\n- ../runs/${filed}/ — filed run; closed\n`);
+    const park = ["- parked P1: a", "- parked P2: b", "- parked P3: c", "- parked P4: d", "- unparked P1 (note): done", "- unparked P2", "- unparked P3: ok", ""].join("\n");
+    mkdirSync(join(runsDir, live), { recursive: true });
+    writeFileSync(join(runsDir, live, "NOTES.md"), park);
+    mkdirSync(join(runsDir, filed), { recursive: true });
+    writeFileSync(join(runsDir, filed, "NOTES.md"), "- parked F1: filed\nrun closed\n");
+    const r = spawnSync(process.execPath, [join(HERE, "where.mjs"), "--root", dir], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    const [, parkedPart, gapsPart] = r.stdout.split(/^## (?:Parked|Close-out gaps)$/m);
+    assert.match(parkedPart, /parked P4: d/);
+    assert.doesNotMatch(parkedPart, /P1|P2|P3/);
+    assert.doesNotMatch(parkedPart, /F1|filed/);
+    assert.doesNotMatch(gapsPart.split("## Git")[0], /filed/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("where keeps an open exit row visible when every card is done",{ skip: noGit }, () => {
   const dir = mkdtempSync(join(tmpdir(), "where-test-"));
   const commit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
   try {
@@ -96,6 +125,17 @@ test("where keeps an open exit row visible when every card is done", { skip: noG
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("where has no Handoff section and its Git section lists the newest commits", { skip: noGit }, () => {
+  const r = spawnSync(process.execPath, [join(HERE, "where.mjs"), "--root", ROOT], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.doesNotMatch(r.stdout, /^## Handoff$/m);
+  const git = r.stdout.split(/^## Git$/m)[1].split(/^## Runs$/m)[0];
+  const [, list] = git.split("recent commits:\n");
+  assert.ok(list, "Git section has a recent commits list");
+  const commits = list.split("\n").filter((l) => /^ {2}[0-9a-f]{7,} /.test(l));
+  assert.ok(commits.length >= 1 && commits.length <= 5, `commits listed: ${commits.length}`);
 });
 
 test("where exits 1 with a where: message on stderr when the Display write throws", () => {

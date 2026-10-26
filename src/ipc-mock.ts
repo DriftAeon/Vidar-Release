@@ -4,6 +4,13 @@
    No @tauri-apps imports here: ipc.ts stays the only file allowed them. */
 
 import { rel } from "./paths";
+import type { BareRuneGuardRefusal } from "./ipc";
+
+/** Browser fixture for the structured part of a Bare spawn guard refusal. */
+export const MOCK_RUNE_GUARD_REFUSAL: BareRuneGuardRefusal = {
+  reason: "Bare rune skill: holds the account name",
+  id: "falcon-changed-zero-check", library: "kit", set: "workflow",
+};
 
 const mockPath = (id: string) => `C:\\Main\\Apps\\Vidar\\${rel(id).replace(/\//g, "\\")}\\`;
 
@@ -182,39 +189,15 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
         memoryDir: null,
         guardsKey: false,
       };
-    case "bare_actives":
-      return {
-        rowKey: typeof args?.rowKey === "string" ? args.rowKey : "claude-bare",
-        libraries: [
-          { library: "claude-user", source: "~\\.claude\\CLAUDE.md", scope: "global", sourceGone: false, bricks: [
-            { id: "keep-answers-short-1", section: ["Style"], studs: 3, on: true, path: "runtime\\runes\\claude-user\\rules\\keep-answers-short-1.md",
-              kind: "rule", activate: "always", description: "Style", body: "Keep answers short." },
-            { id: "run-tests-first-2", section: ["Work"], studs: 3, on: false, path: "runtime\\runes\\claude-user\\rules\\run-tests-first-2.md",
-              kind: "rule", activate: "always", description: "Work", body: "Run the tests first." },
-          ] },
-          { library: "vidar-recall", source: null, scope: "global", sourceGone: false, bricks: [
-            { id: "recall-first-1", section: ["Recall"], studs: 3, on: true, path: "runtime\\runes\\vidar-recall\\rules\\recall-first-1.md",
-              kind: "fact", activate: "recall", description: "Recall", body: "Search the notes first." },
-          ] },
-        ],
-        skills: [],
-        agents: [],
-        codexSkills: [],
-        codexMcp: [],
-        guards: [{ event: "PreToolUse", matcher: "Bash", run: ["~\\.claude\\hooks\\guard-cwd.mjs"] }],
-        guardsKey: true,
-      };
-    case "bare_set_layer_write":
-      return null;
-    case "bare_layer_set":
-      return { written: ["guards", "skills", "agents", "codexSkills", "codexMcp"].filter((k) => Array.isArray((args as Record<string, unknown> | undefined)?.[k])) };
+    case "bare_sets_list":
+      return [{ set: "app-core" }, { library: "kit", set: "base" }, { library: "kit", set: "workflow" }];
+    case "bare_items_import":
+      return { runes: [], dropped: [] };
     case "rules_generate":
-      return { library: "gen-claude-bare-0a1b2c3d", runes: 2, on: 2, encodedChars: null, costUsd: null,
+      return { library: "gen-0a1b2c3d", set: "generated-20261017", runes: 2, on: 2, encodedChars: null, costUsd: null,
         inputTokens: 12000, outputTokens: 3000, durationMs: 130000, warnings: [] };
     case "rules_generate_cancel":
       return null;
-    case "rules_generate_toggle":
-      return { library: typeof args?.library === "string" ? args.library : "gen-claude-bare-0a1b2c3d", written: 1, rows: [String(args?.rowKey ?? "claude-bare")] };
     case "bare_launch":
       return { createdUtc: "2026-10-17T09:00:00Z", agent: "claude", sets: ["claude-user"], skills: [], guards: ["guard-cwd.mjs"], warnings: [] };
     // voice_*, ocr_*, read_drop_*, adopt_session: callers tolerate

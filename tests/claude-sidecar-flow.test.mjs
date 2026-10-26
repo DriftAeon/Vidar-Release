@@ -118,6 +118,26 @@ test("flowOptions is {} with neither arg, and omits an empty server list", () =>
   assert.deepEqual(seen, ["flow stage: --mcp-servers is not JSON"]);
 });
 
+test("a Flow stage's --mcp-file joins the user's servers in one strict set; it needs a Flow payload", () => {
+  const root = fixture();
+  try {
+    const home = join(root, "agent-home");
+    mkdirSync(join(home, "layer"), { recursive: true });
+    const file = join(home, "layer", "mcp-0123456789ab.json");
+    const drive = { command: "node", args: ["drive.mjs"], env: {} };
+    writeFileSync(file, JSON.stringify({ mcpServers: { plugin_vidar_drive: drive } }));
+    const never = (m) => assert.fail(m);
+    const argv = ["--mcp-file", file, "--home", home];
+    const o = flowOptions({ payload: "bare", servers: JSON.stringify(SERVERS), root }, never, argv);
+    assert.deepEqual(o.mcpServers, { ...SERVERS, plugin_vidar_drive: drive });
+    assert.equal(o.strictMcpConfig, true);
+    assert.equal(o.systemPrompt.append, readFileSync(join(root, "profiles", "bare", "payload.md"), "utf8"));
+    const seen = [];
+    assert.deepEqual(flowOptions({ servers: JSON.stringify(SERVERS) }, (m) => seen.push(m), argv), {});
+    assert.deepEqual(seen, ["flow stage: an MCP file needs a launch profile or a Flow payload"]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("flowMcpServers keeps type and url only and refuses the rest", () => {
   assert.deepEqual(flowMcpServers(JSON.stringify({ a: { type: "http", url: "https://x", extra: 1 } })), { a: { type: "http", url: "https://x" } });
   assert.throws(() => flowMcpServers("[]"), /JSON object/);

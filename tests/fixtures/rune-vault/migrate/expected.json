@@ -1,0 +1,24 @@
+{
+  "vaults": {
+    "claude-raw": { "name": "Claude Raw", "template": "stock-claude", "runesets": ["toolkit/toolkit", "toolkit/toolkit-claude"] },
+    "claude-rendered": { "name": "Claude Rendered", "template": "stock-claude", "runesets": ["toolkit/toolkit", "toolkit/toolkit-claude", "gen-a1b2c3d4/generated-20261025"] },
+    "codex-raw": { "name": "Codex Raw", "template": "stock-codex", "runesets": ["toolkit/toolkit", "toolkit/toolkit-codex"] },
+    "codex-rendered": { "name": "Codex Rendered", "template": "stock-codex", "runesets": ["toolkit/toolkit", "toolkit/toolkit-codex"] }
+  },
+  "items": [
+    { "n": 0, "folder": "skills", "has": "alpha-review", "agent": "claude" },
+    { "n": 1, "folder": "skills", "has": "beta-notes", "agent": "claude" },
+    { "n": 2, "folder": "skills", "has": "gamma", "agent": "claude" },
+    { "n": 3, "folder": "skills", "has": "delta-review", "agent": "codex" },
+    { "n": 4, "folder": "agents", "has": "scout.md", "agent": "claude" },
+    { "n": 5, "folder": "agents", "has": "Builder-O.md", "agent": "claude" },
+    { "n": 6, "folder": "hooks", "has": "matcher: \"Bash|PowerShell|Write", "agent": "claude" },
+    { "n": 7, "folder": "hooks", "has": "matcher: \"Bash\"", "agent": "claude" },
+    { "n": 8, "folder": "hooks", "has": "matcher: \"Agent|Task\"", "agent": "claude" },
+    { "n": 9, "folder": "hooks", "has": "matcher: \"Bash|apply_patch\"", "agent": "codex" },
+    { "n": 10, "folder": "mcp", "has": "server: \"proxy\"", "agent": "" },
+    { "n": 11, "folder": "mcp", "has": "server: \"atlassian\"", "agent": "" },
+    { "n": 12, "folder": "mcp", "has": "server: \"notion\"", "agent": "" },
+    { "n": 13, "folder": "mcp", "has": "server: \"slack\"", "agent": "claude" }
+  ]
+}

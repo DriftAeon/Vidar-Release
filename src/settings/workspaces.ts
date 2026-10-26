@@ -21,9 +21,9 @@ function editor(setError: (msg: string) => void): HTMLElement {
   const root = document.createElement("div");
   root.className = "ws-list";
 
-  const save = async (next: Location[]) => {
+  const save = async (edit: (fresh: Location[]) => Location[]) => {
     try {
-      await saveWorkspaces(next);
+      await saveWorkspaces(edit);
       setError("");
     } catch (e) {
       setError(`Not Saved: ${String(e)}`);
@@ -32,7 +32,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
   };
 
   const render = () => redraw(root, () => {
-    workspaces.forEach((w, i) => {
+    workspaces.forEach((w) => {
       const row = document.createElement("div");
       row.className = "ws-row";
 
@@ -48,7 +48,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
         if (isRedrawing()) return;
         const label = name.value.trim();
         if (!label || label === w.label) return revert();
-        void save(workspaces.map((x, j) => (j === i ? { ...x, label } : x)));
+        void save((fresh) => fresh.map((x) => (x.cwd === w.cwd ? { ...x, label } : x)));
       });
       name.addEventListener(REVERT_EVENT, revert);
       name.addEventListener("keydown", (e) => {
@@ -61,7 +61,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
       browse.title = "Choose A Different Folder";
       browse.addEventListener("click", () => {
         void pickFolder(w.cwd).then((cwd) => {
-          if (cwd && cwd !== w.cwd) void save(workspaces.map((x, j) => (j === i ? { ...x, cwd } : x)));
+          if (cwd && cwd !== w.cwd) void save((fresh) => fresh.map((x) => (x.cwd === w.cwd ? { ...x, cwd } : x)));
         }, (e) => setError(String(e)));
       });
 
@@ -71,15 +71,16 @@ function editor(setError: (msg: string) => void): HTMLElement {
       path.title = w.cwd;
 
       const remove = button("Remove", "ws-remove");
-      remove.addEventListener("click", () => void save(workspaces.filter((_, j) => j !== i)));
-
+      remove.addEventListener("click", () => {
+        void save((fresh) => fresh.filter((x) => x.cwd !== w.cwd));
+      });
       row.append(name, path, browse, remove);
       root.appendChild(row);
     });
     const add = button("Add Workspace", "ws-add");
     add.addEventListener("click", () => {
       void pickFolder().then((cwd) => {
-        if (cwd) void save([...workspaces, { label: folderName(cwd), cwd }]);
+        if (cwd) void save((fresh) => [...fresh, { label: folderName(cwd), cwd }]);
       }, (e) => setError(String(e)));
     });
     root.appendChild(add);

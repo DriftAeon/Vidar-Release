@@ -49,7 +49,8 @@ function arrow(): SVGSVGElement {
   svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute("aria-hidden", "true");
   const p = document.createElementNS(SVG_NS, "path");
-  p.setAttribute("d", "M5 12h14M13 6l6 6-6 6");
+  // points left, leading the label: the Rendered chat usually sits left of Relay
+  p.setAttribute("d", "M19 12H5M11 6l-6 6 6 6");
   svg.appendChild(p);
   return svg;
 }
@@ -101,7 +102,7 @@ export function createAskState(p: AskStateParts): AskState {
     go.type = "button";
     go.className = "relay-ask-go";
     label = document.createElement("span");
-    go.append(label, arrow());
+    go.append(arrow(), label);
     go.addEventListener("click", (e) => { e.stopPropagation(); void act(); });
     scrim.append(go);
     return scrim;

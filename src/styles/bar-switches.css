@@ -13,18 +13,18 @@
 }
 /* the one switch look: track, hit input, knob and focus ring for the hosts (close lock, auto-speak,
    auto-send, swap menu row); :is() keeps each at its old (1,x,x) specificity */
-:is(#close-lock, #auto-speak, #auto-send, #swap-menu) .switch {
+:is(#close-lock, #auto-speak, #auto-send, #swap-menu, .cx-backend) .switch {
   position: relative; width: 26px; height: 14px; border-radius: 7px; /* the bar switch's track size, shared by the swap menu row */
   background: var(--bg); border: 1px solid var(--border);
   transition: background 0.12s ease-out, border-color 0.12s ease-out;
 }
-:is(#close-lock, #auto-speak, #auto-send) .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-:is(#close-lock, #auto-speak, #auto-send, #swap-menu) .knob {
+:is(#close-lock, #auto-speak, #auto-send, .cx-backend) .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+:is(#close-lock, #auto-speak, #auto-send, #swap-menu, .cx-backend) .knob {
   position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; /* the bar switch's knob size, shared by the swap menu row */
   background: var(--fg-dim); transition: left 0.12s ease-out, background 0.12s ease-out;
   pointer-events: none;
 }
-:is(#close-lock, #auto-speak, #auto-send) .switch:has(input:focus-visible) { outline: 1px solid var(--accent); outline-offset: 1px; }
+:is(#close-lock, #auto-speak, #auto-send, .cx-backend) .switch:has(input:focus-visible) { outline: 1px solid var(--accent); outline-offset: 1px; }
 
 /* speak group: the Speak button and the auto-speak switch, gated
    together by the capability registry (capabilities/registry.ts), which toggles an inline

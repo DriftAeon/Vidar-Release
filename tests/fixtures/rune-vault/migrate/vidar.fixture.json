@@ -1,0 +1,47 @@
+{
+  "theme": "night",
+  "rulesLibrary": "runes",
+  "bareCodexMcp": [],
+  "bareGuards": [],
+  "bareSkills": [],
+  "bareAgents": [],
+  "bareCodexSkills": [],
+  "agents": [
+    {
+      "key": "claude-bare",
+      "id": "claude",
+      "sets": [{ "library": "toolkit", "set": "toolkit" }]
+    },
+    {
+      "key": "codex-bare",
+      "id": "codex",
+      "model": "gpt-model-a",
+      "effort": "medium",
+      "sets": [{ "library": "toolkit", "set": "toolkit" }]
+    },
+    {
+      "key": "codex-rendered-bare",
+      "id": "codex",
+      "sets": [{ "library": "toolkit", "set": "toolkit" }]
+    },
+    {
+      "key": "claude-rendered-bare",
+      "id": "claude",
+      "model": "model-b",
+      "effort": "medium",
+      "cwd": "C:\\Work",
+      "sets": [
+        { "library": "toolkit", "set": "toolkit" },
+        { "library": "gen-claude-rendered-bare-a1b2c3d4", "set": "row-claude-rendered-bare" }
+      ]
+    },
+    {
+      "key": "claude-plain",
+      "id": "claude",
+      "profile": "default"
+    }
+  ],
+  "locations": [
+    { "label": "Work", "path": "C:\\Work" }
+  ]
+}

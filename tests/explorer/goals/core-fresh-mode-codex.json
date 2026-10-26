@@ -1,0 +1,16 @@
+{
+  "id": "core-fresh-mode-codex",
+  "title": "Switch Permission Mode on a Fresh Codex Tab",
+  "style": "impatient",
+  "scope": "vidar",
+  "surfaces": ["rendered-tab"],
+  "tags": ["mode", "fresh"],
+  "realModel": false,
+  "core": true,
+  "steps": [
+    { "intent": "open a fresh Codex chat tab" },
+    { "intent": "before typing anything, switch to a different mode, clicking quickly" },
+    { "intent": "send one short message like 'say hi'" },
+    { "intent": "check the chat still shows the mode I picked" }
+  ]
+}

@@ -21,3 +21,6 @@ button:focus-visible, textarea:focus-visible {
   outline-offset: 1px;
 }
 
+
+/* flat grey for dark mode: iconImg adds .icn-grey to the icons in GREY_ICONS (src/icon-img.ts) */
+.icn-grey { filter: grayscale(1); }

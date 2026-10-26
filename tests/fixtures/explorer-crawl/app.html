@@ -1,0 +1,30 @@
+<!doctype html>
+<html><body>
+<div role="tablist" aria-label="Tabs">
+  <button role="tab" id="t-home" aria-selected="true">Home</button>
+  <button role="tab" id="t-settings" aria-selected="false">Settings</button>
+</div>
+<button id="file" aria-expanded="false" aria-label="File Menu">File Menu</button>
+<div id="menu" role="menu" aria-label="File" hidden>
+  <button role="menuitem" id="m-recent">Open Recent</button>
+  <button role="menuitem" id="m-delete">Delete All</button>
+  <button role="menuitem" id="m-prefs">Preferences</button>
+</div>
+<button id="send">Send</button>
+<button id="quit">Quit</button>
+<button id="boom" aria-expanded="false">More Options</button>
+<div id="panel" hidden><button id="cramped" class="squeezed">Cramped Link</button></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  window.__log = []; window.__clicks = [];
+  const origError = console.error; console.error = (...a) => window.__log.push(a.join(" "));
+  document.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) window.__clicks.push(b.id); });
+  $("file").onclick = () => { $("menu").hidden = false; $("file").setAttribute("aria-expanded", "true"); };
+  const closeMenu = () => { $("menu").hidden = true; $("file").setAttribute("aria-expanded", "false"); };
+  $("m-recent").onclick = closeMenu;
+  $("m-prefs").onclick = closeMenu;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+  $("t-settings").onclick = () => { $("panel").hidden = false; };
+  $("boom").onclick = () => { console.error("boom: widget failed"); $("cramped").setAttribute("aria-disabled", "true"); };
+</script>
+</body></html>

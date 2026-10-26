@@ -96,6 +96,27 @@ test("a Bare tab reads only its own home's rollouts", () => {
   assert.equal(own.get("t1"), B);
 });
 
+test("Raw tabs of one profile read their own recorded homes, keyed by tab", async () => {
+  const sessions = new Map([
+    ["row-a", { ...raw("codex"), cwd: "C:\\p", profile: "bare", rowKey: "raw-a" }],
+    ["row-b", { ...raw("codex"), cwd: "C:\\p", profile: "bare", rowKey: "raw-b" }],
+  ]);
+  lookup.bindLookup({ sessions, getActiveId: () => null });
+  lookup.noteRawCodexSpawn("row-a", 1000);
+  lookup.noteRawCodexSpawn("row-b", 1000);
+  const calls = [];
+  await lookup.refreshRawCodexThreads(async (cwd, profile, tab) => {
+    calls.push({ cwd, profile, tab });
+    return tab === "row-a" ? rows([A, 4000]) : rows([B, 4000]);
+  });
+  assert.deepEqual(calls, [
+    { cwd: "C:\\p", profile: "bare", tab: "row-a" },
+    { cwd: "C:\\p", profile: "bare", tab: "row-b" },
+  ]);
+  assert.equal(lookup.codexThreadHolder(A), "row-a");
+  assert.equal(lookup.codexThreadHolder(B), "row-b");
+});
+
 test("refresh: a Bare tab's rollouts are fetched with its profile; a held thread is never resumed twice", async () => {
   const sessions = new Map([
     ["raw-plain", { ...raw("codex"), cwd: "C:\\p" }],

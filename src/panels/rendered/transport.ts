@@ -2,11 +2,12 @@
 // agent.rs or the Falcon host), behind one interface, plus the spawn parameters they take.
 
 import { invoke } from "../../ipc";
+import type { SetRef } from "../../ipc";
 import type { Effort, PermissionMode } from "../../agents/protocol";
 import { AGENT_PROFILE } from "./agent-profile";
 import type { RulesLaunch } from "../../rules/inject";
 import type { AgentId } from "../../agents/id";
-import { codexThreadHolder, refreshRawCodexThreads } from "../sessions/lookup";
+import { codexThreadHolder, recordedVault, refreshRawCodexThreads } from "../sessions/lookup";
 
 export type RenderedAgent = AgentId;
 
@@ -21,6 +22,9 @@ interface AgentSpawnParams {
   profile?: string | null;
   /** The launching row's key, sent only with a profile (Rust refuses a rowKey without one). */
   rowKey?: string | null;
+  sets?: SetRef[];
+  /** The Rune Vault a profiled spawn loads; when set Rust spawns on it and `sets` never rides. */
+  vault?: string | null;
   agent: RenderedAgent;
   cwd: string;
   model?: string | null;
@@ -100,7 +104,19 @@ async function reportBare(params: AgentSpawnParams, warnings: string[]): Promise
   if (warnings.length || trust) params.onBareWarnings(warnings, trust);
 }
 
-async function spawnInProcess(params: AgentSpawnParams, profile: string | null, rowKey?: string): Promise<AgentSpawned> {
+/** The vault a profiled respawn loads (D-g): the one its session record names (Retry, /clear,
+ *  Resume, a re-adopt), else the tab's launch vault. Neither leaves `sets` as the only source, and
+ *  with no sets either Rust refuses the spawn: a Bare session never starts outside a vault. */
+async function spawnVault(params: AgentSpawnParams, launchVault?: string, falconSession?: string): Promise<string | null> {
+  return (await recordedVault(params.tabId, falconSession ?? null, params.resume ?? null)) ?? launchVault ?? null;
+}
+
+/** The set or vault fields of a profiled spawn: a vault wins and drops the sets transition. */
+function vaultOrSets(vault: string | null, sets?: SetRef[]): { vault: string } | { sets: SetRef[] } | Record<string, never> {
+  return vault ? { vault } : sets !== undefined ? { sets } : {};
+}
+
+async function spawnInProcess(params: AgentSpawnParams, profile: string | null, rowKey?: string, sets?: SetRef[], vault?: string): Promise<AgentSpawned> {
   if (!AGENT_PROFILE[params.agent].inProcess) {
     throw new Error("claude rendered tabs are hosted by falcon, not spawned in-process");
   }
@@ -108,7 +124,8 @@ async function spawnInProcess(params: AgentSpawnParams, profile: string | null, 
   // A launch profile (bare) sends no rules file and names its row's agent; Rust admits only
   // "codex" and builds the binary, env, home and config.toml itself (bare/, agent.rs).
   if (profile) {
-    const reply = await invoke("spawn_codex_appserver", { id: params.tabId, cwd: params.cwd, rulesFile: null, tabName: params.tabName ?? null, profile, ...(rowKey ? { rowKey } : {}), agent: params.agent });
+    const v = await spawnVault(params, vault);
+    const reply = await invoke("spawn_codex_appserver", { id: params.tabId, cwd: params.cwd, rulesFile: null, tabName: params.tabName ?? null, profile, ...(rowKey ? { rowKey } : {}), ...vaultOrSets(v, sets), agent: params.agent });
     await reportBare(params, reply.bareWarnings ?? []);
     return { gen: reply.gen, developerInstructions: reply.developerInstructions };
   }
@@ -162,6 +179,7 @@ export const falconAgentTransport: AgentTransport = {
       ...(params.gateway && !codex ? { gateway: params.gateway } : {}),
       ...(params.profile ? { profile: params.profile } : {}),
       ...(params.profile && params.rowKey ? { rowKey: params.rowKey } : {}),
+      ...(params.profile ? vaultOrSets(params.vault ?? null, params.sets) : params.sets !== undefined ? { sets: params.sets } : {}),
     });
     if (typeof reply === "number") return { gen: reply, developerInstructions: null };
     await reportBare(params, reply.bare_warnings ?? []);
@@ -186,8 +204,8 @@ export const falconAgentTransport: AgentTransport = {
 
 /** The in-process backend for a profiled (bare) Codex tab: every spawn (first start, /clear,
  *  Resume, Retry) carries the tab's profile, so it never respawns as a default tab. */
-export function createProfileTransport(profile: string, rowKey?: string): AgentTransport {
-  return { ...tauriAgentTransport, profile, spawn: (params) => spawnInProcess(params, profile, rowKey) };
+export function createProfileTransport(profile: string, rowKey?: string, sets?: SetRef[], vault?: string): AgentTransport {
+  return { ...tauriAgentTransport, profile, spawn: (params) => spawnInProcess(params, profile, rowKey, sets, vault) };
 }
 
 export function createGatewayTransport(gateway: string): AgentTransport {
@@ -203,14 +221,18 @@ export function createRefusedTransport(): AgentTransport {
 /** The Falcon backend for a profiled (Rendered Bare) Claude tab: every spawn (first start, /clear,
  *  Resume, Retry) carries the profile and the row's key, so it never respawns as a default tab
  *  or without its row. */
-export function createFalconProfileTransport(profile: string, rowKey?: string): AgentTransport {
-  return { ...falconAgentTransport, profile, spawn: (params) => falconAgentTransport.spawn({ ...params, profile, ...(rowKey ? { rowKey } : {}) }) };
+export function createFalconProfileTransport(profile: string, rowKey?: string, sets?: SetRef[], vault?: string): AgentTransport {
+  return {
+    ...falconAgentTransport,
+    profile,
+    spawn: async (params) => falconAgentTransport.spawn({ ...params, profile, ...(rowKey ? { rowKey } : {}), ...(sets !== undefined ? { sets } : {}), vault: await spawnVault(params, vault) }),
+  };
 }
 
 /** Adopt exactly once; /clear subsequently starts a new hosted session, under the same gateway,
  *  launch profile and row key the adopter read from the session summary it already holds. `refuseRespawn`
  *  (an art the module registry does not know) adopts but never starts a new process. */
-export function createFalconAdoptTransport(session: string, gateway?: string, profile?: string, refuseRespawn = false, rowKey?: string): AgentTransport {
+export function createFalconAdoptTransport(session: string, gateway?: string, profile?: string, refuseRespawn = false, rowKey?: string, sets?: SetRef[], vault?: string): AgentTransport {
   let adopted = false;
   return {
     ...falconAgentTransport,
@@ -219,7 +241,11 @@ export function createFalconAdoptTransport(session: string, gateway?: string, pr
     ...(refuseRespawn ? { respawnRefused: true } : {}),
     async spawn(params) {
       if (adopted && refuseRespawn) throw new Error("Unknown gateway");
-      if (adopted) return falconAgentTransport.spawn({ ...params, ...(gateway ? { gateway } : {}), ...(profile ? { profile } : {}), ...(profile && rowKey ? { rowKey } : {}) });
+      if (adopted) {
+        // /clear or Retry after an adopt: the adopted session's record names the vault (D-g).
+        const v = profile ? await spawnVault(params, vault, session) : null;
+        return falconAgentTransport.spawn({ ...params, ...(gateway ? { gateway } : {}), ...(profile ? { profile } : {}), ...(profile && rowKey ? { rowKey } : {}), ...(sets !== undefined ? { sets } : {}), ...(v ? { vault: v } : {}) });
+      }
       const gen = await invoke("falcon_adopt", { id: params.tabId, session });
       adopted = true;
       return { gen, developerInstructions: null };

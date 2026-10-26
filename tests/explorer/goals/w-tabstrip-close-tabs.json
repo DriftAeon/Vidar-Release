@@ -1,0 +1,17 @@
+{
+  "id": "w-tabstrip-close-tabs",
+  "title": "Close Tabs From the Tab Strip",
+  "style": "mouse",
+  "scope": "vidar",
+  "surfaces": ["tab-strip"],
+  "tags": ["tabs"],
+  "realModel": false,
+  "core": false,
+  "source": ["b8eab52b"],
+  "steps": [
+    { "intent": "open three plain terminal tabs" },
+    { "intent": "hover each tab and look at where its close X appears" },
+    { "intent": "close the middle tab with its X" },
+    { "intent": "check the remaining tabs sit evenly with no leftover gap" }
+  ]
+}

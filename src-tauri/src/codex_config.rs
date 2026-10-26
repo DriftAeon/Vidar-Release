@@ -17,13 +17,22 @@ pub(crate) enum Home {
     Default(Option<PathBuf>),
 }
 
-pub(crate) fn home_for(app: &AppHandle, tab: Option<&str>, profile: Option<&str>) -> Home {
+/// The Codex home a tab reads: its Rune Vault session record, then its live session's; with
+/// neither, a Bare profile reads its own legacy home.
+pub(crate) fn home_for_row(app: &AppHandle, tab: Option<&str>, profile: Option<&str>, _row: Option<&str>) -> Home {
     resolve(
-        tab.and_then(|id| app.state::<crate::agent::AgentManager>().codex_home(id)),
+        tab.and_then(|id| recorded_home(&crate::paths::root(), id))
+            .or_else(|| tab.and_then(|id| app.state::<crate::agent::AgentManager>().codex_home(id))),
         profile,
         crate::bare::codex_home_for_profile,
         crate::rules::codex::codex_home(),
     )
+}
+
+fn recorded_home(root: &Path, tab: &str) -> Option<PathBuf> {
+    crate::bare::vault::session::find(root, tab, None, None).ok().flatten()
+        .filter(|r| r.agent == "codex")
+        .map(|r| PathBuf::from(r.home))
 }
 
 /// Live session first; else a set Bare profile resolves its own home (Err means not
@@ -34,11 +43,28 @@ pub(crate) fn resolve(
     lookup: impl Fn(&str) -> Result<PathBuf, String>,
     default_home: Option<PathBuf>,
 ) -> Home {
+    resolve_row(live, profile, None, lookup, |_, _| Err(String::new()), default_home)
+}
+
+/// D1: The row branch has no session or vault id; production reaches this only through `resolve`
+/// (no row), and only tests pass a row.
+/// `resolve` with a row: a named row's picked home replaces the profile's legacy one. A row that
+/// cannot be picked (unreadable vidar.json) falls back to the legacy home, never the user's.
+pub(crate) fn resolve_row(
+    live: Option<PathBuf>,
+    profile: Option<&str>,
+    row: Option<&str>,
+    lookup: impl Fn(&str) -> Result<PathBuf, String>,
+    pick_row: impl Fn(&str, &str) -> Result<PathBuf, String>,
+    default_home: Option<PathBuf>,
+) -> Home {
     if let Some(path) = live {
         return Home::Live(path);
     }
     if let Some(id) = profile {
-        return match lookup(id) {
+        let row = row.map(str::trim).filter(|r| !r.is_empty());
+        let picked = row.and_then(|r| pick_row(id, r).ok());
+        return match picked.map(Ok).unwrap_or_else(|| lookup(id)) {
             Ok(path) => Home::Profile(path),
             Err(_) => Home::NotRunning,
         };
@@ -421,6 +447,40 @@ env_http_headers = { Authorization = "env-header-secret-value" }
             resolve(None, None, lookup_err, None),
             Home::Default(None)
         ));
+    }
+
+    #[test]
+    fn a_named_row_reads_its_picked_home_else_the_legacy_one() {
+        let pick_ok = |_: &str, r: &str| Ok(PathBuf::from(format!("set-home-{r}")));
+        let pick_err = |_: &str, _: &str| Err::<PathBuf, String>("bad config".into());
+        let r = |live, row, pick: &dyn Fn(&str, &str) -> Result<PathBuf, String>| resolve_row(live, Some("p"), row, lookup_ok, pick, None);
+        assert!(matches!(r(None, Some("codex-raw"), &pick_ok), Home::Profile(p) if p == PathBuf::from("set-home-codex-raw")));
+        // A live session still wins; no row, a blank row or an unpickable row stay on the legacy home.
+        assert!(matches!(r(Some(PathBuf::from("live")), Some("codex-raw"), &pick_ok), Home::Live(_)));
+        for row in [None, Some("  ")] {
+            assert!(matches!(r(None, row, &pick_ok), Home::Profile(p) if p == PathBuf::from("profile-home")));
+        }
+        assert!(matches!(r(None, Some("codex-raw"), &pick_err), Home::Profile(p) if p == PathBuf::from("profile-home")));
+        // A profile that does not resolve is not running, whatever the row.
+        assert!(matches!(resolve_row(None, Some("p"), Some("x"), lookup_err, pick_err, None), Home::NotRunning));
+    }
+
+    #[test]
+    fn a_codex_session_record_selects_its_home_without_consulting_a_row() {
+        let root = std::env::temp_dir().join(format!("vidar-codex-vault-home-{}-{}", std::process::id(), crate::fsx::now_ms()));
+        let home = root.join("chosen-home");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(crate::paths::config_path_in(&root), r#"{"agents":[{"key":"codex-bare","sets":[{"library":"lib","set":"alpha"}]}]}"#).unwrap();
+        let vault = crate::bare::vault::store::Store::open(&root).create("Chosen", None, &[], &[]).unwrap();
+        let record = crate::bare::vault::session::record(
+            "codex", "raw", "tab-vault",
+            crate::bare::vault::session::VaultPin { id: vault.id.clone(), hash: vault.hash.clone() },
+            &home.to_string_lossy(), "loadout",
+        );
+        crate::bare::vault::session::write(&root, &record).unwrap();
+        assert_eq!(super::recorded_home(&root, "tab-vault"), Some(home));
+        assert!(vault.runesets.is_empty() && vault.runes.is_empty(), "the row's alpha did not enter the session vault");
+        let _ = std::fs::remove_dir_all(root);
     }
 
     /// Flow's per-spawn carry: a URL-only server passes; headers, a bearer token, env or a

@@ -29,6 +29,15 @@ test('Vidar commands in ipc-hosts.ts equal src-tauri/src/main.rs generate_handle
   assert.deepEqual(mapNames(['vidar', 'both']), handlerNames('src-tauri/src/main.rs'));
 });
 
+test('the retired row-override commands are gone on both sides', () => {
+  const vidar = handlerNames('src-tauri/src/main.rs');
+  for (const cmd of ['rules_generate_toggle', 'bare_layer_set', 'bare_set_extend',
+    'bare_actives', 'rune_set_toggle', 'bare_set_layer_write']) {
+    assert.equal(cmd in COMMAND_HOSTS, false, `${cmd} still in ipc-hosts.ts`);
+    assert.equal(vidar.includes(cmd), false, `${cmd} still registered`);
+  }
+});
+
 test('Falcon-shell commands in ipc-hosts.ts equal src-falcon/src/main.rs generate_handler!', () => {
   assert.deepEqual(mapNames(['falcon', 'both']), handlerNames('src-falcon/src/main.rs'));
 });

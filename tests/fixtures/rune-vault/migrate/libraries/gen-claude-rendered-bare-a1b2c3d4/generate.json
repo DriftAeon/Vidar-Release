@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "library": "gen-claude-rendered-bare-a1b2c3d4",
+  "rowKey": "claude-rendered-bare",
+  "agent": "claude",
+  "model": "model-c",
+  "effort": "medium",
+  "skillSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "date": "2026-10-25",
+  "inputs": [
+    { "path": "~\\.claude\\CLAUDE.md", "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "lines": 20 }
+  ],
+  "runes": [
+    { "id": "short-replies", "kind": "rule" },
+    { "id": "verdict-first", "kind": "rule" },
+    { "id": "ahead-expected", "kind": "fact" }
+  ]
+}

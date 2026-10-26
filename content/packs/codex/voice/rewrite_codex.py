@@ -34,6 +34,21 @@ def log(msg: str) -> None:
     print(f"[rewrite-codex] {msg}", file=sys.stderr, flush=True)
 
 
+# CODEX_*: inherited from a running Codex session, they would leak into the child (CODEX_HOME
+# stays: it picks the login). VIDAR_*/FALCON_*: a hosted tab's control identity
+# (VIDAR_CTL_SECRET, FALCON_SESSION) reaches speak.ps1's env; rewriting needs none of it, and
+# the child reads text it did not write.
+CHILD_ENV_DROP = ("CODEX_", "VIDAR_", "FALCON_")
+CHILD_ENV_KEEP = ("CODEX_HOME",)
+
+
+def child_env() -> dict[str, str]:
+    return {
+        k: v for k, v in os.environ.items()
+        if k.upper() in CHILD_ENV_KEEP or not k.upper().startswith(CHILD_ENV_DROP)
+    }
+
+
 def build_cmd(codex: str, model: str, effort: str, out_file: str) -> list[str]:
     """The `codex exec` argv; the prompt is read from stdin (`-`)."""
     return [
@@ -51,8 +66,7 @@ def _chat(system: str, user: str, model: str, effort: str) -> str:
         raise RuntimeError(
             "codex not found on PATH: install the Codex CLI, or pick another rewrite adapter"
         )
-    # Inherited CODEX_* vars from a running Codex session would leak into the child; keep only CODEX_HOME.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CODEX_") or k == "CODEX_HOME"}
+    env = child_env()
     prompt = f"{system}\n\n---\n\n{user}"
     with tempfile.TemporaryDirectory(prefix="vidar-rewrite-codex-") as tmp:
         out_file = str(Path(tmp) / "last.txt")

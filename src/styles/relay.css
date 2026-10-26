@@ -18,7 +18,7 @@
 /* Ask card (user pick, 2026-10-22): the head is a solid amber bar and the card's 1px frame is the same amber,
    one rounded shape. Ink is --bg-panel (Onyx #17171c, 7.94:1 on --approval-amber; every theme's panel is darker still). */
 .relay-card.relay-ask-card { padding: 0; gap: 0; overflow: hidden; border-color: var(--approval-amber); }
-.relay-ask-card .relay-card-ask { padding: var(--space-12); }
+.relay-ask-card .relay-card-ask { padding: var(--space-8) var(--space-12) var(--space-12); }
 .relay-ask-card > .relay-card-head { height: var(--row-28); padding: 0 var(--space-12); background: var(--approval-amber); color: var(--bg-panel); }
 .relay-ask-card .relay-card-head .mark { color: var(--bg-panel); font-weight: var(--weight-bold); }
 /* Ask overlay (user pick, 2026-10-22): while the asker's Rendered tab is on screen the body sits under a scrim with one amber
@@ -168,9 +168,38 @@
    fill overhangs, the dot lines up), and the comment drops the in-pill card's side margin (2026-10-05) */
 .relay-ask-form .q-options { margin-inline: calc(-1 * var(--space-8)); }
 .relay-ask-form .relay-ask-comment { margin: 0; width: 100%; box-sizing: border-box; }
+/* the form's gap spaces its rows; the Ask card's .q margin doubled it above the question (2026-10-24) */
+.relay-ask-form .q { margin: 0; }
+.relay-ask-form .q-options { margin-bottom: 0; }
+/* the last free-text field (Note, else Other) and the buttons on one line; the field takes the slack.
+   Other pulls out by its row padding like the option rows, its box grows to the buttons' 28px */
+.relay-ask-tail { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.relay-ask-tail > :is(.q-other-row, .relay-ask-comment) { flex: 1 1 auto; min-width: 0; width: auto; }
+.relay-ask-tail > .q-other-row { margin-left: calc(-1 * var(--space-8)); padding-top: 0; padding-bottom: 0; }
+.relay-ask-tail > .q-other-row .q-other { height: var(--row-28); }
+.relay-ask-tail > .relay-ask-actions { flex: 0 0 auto; flex-wrap: nowrap; }
 .relay-ask-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-8); }
 .relay-ask-actions .relay-approve:focus-visible { outline: var(--border-w) solid var(--ok-green); outline-offset: var(--space-2); }.relay-ask-copy { background: none; border-color: var(--border); color: var(--fg); font-weight: var(--weight-regular); }
 .relay-ask-copy:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--border-strong); }
 .relay-ask-copy:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
 .relay-ask-copy:active:not(:disabled) { background: var(--bg-selected); }
 .relay-ask-state { font-size: var(--font-11); white-space: nowrap; }
+
+/* approval card fields (user pick, 2026-10-24, mock relay-approval-card-r2 Chips Only): a bold label over its value at
+   full card width, no lines; piped text splits into steps, Windows paths become chips */
+.relay-card-fields { display: flex; flex-direction: column; gap: var(--space-12); }
+.relay-card-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.relay-card-label { min-height: var(--line-16); color: var(--fg); font-size: var(--font-12); line-height: var(--line-16); font-weight: var(--weight-bold); }
+.relay-card-value { color: var(--fg); font-size: var(--font-12); line-height: var(--line-16); min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; max-height: 40vh; overflow-y: auto; }
+.relay-card-value.mono { font-family: var(--font-mono); }
+.relay-card-flag { color: var(--approval-amber); margin-left: var(--space-4); font-family: var(--font-ui); }
+.relay-card-steps { display: flex; flex-direction: column; gap: var(--space-4); }
+.relay-card-step { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
+.relay-card-chip {
+  display: inline-flex; align-items: center; max-width: 100%; min-width: 0; padding: var(--space-2) var(--space-6); /* legacy space-6: the picked mock's chip inset, no new-ui step between 4 and 8 */
+  background: var(--bg); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
+  font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-16); white-space: nowrap; overflow: hidden;
+}
+.relay-card-chip-dir { color: var(--fg-dim); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.relay-card-chip-file { color: var(--fg); flex: 0 0 auto; }
+.relay-card-rows .relay-ask-tail > .relay-ask-actions { margin-left: auto; }

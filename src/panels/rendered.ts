@@ -13,7 +13,7 @@
 // document builder; nothing is innerHTML. Unknown events are shown, never
 // dropped.
 
-import { EFFORT_LEVELS, type AgentAdapter, type Effort, type PermissionMode, type Usage } from "../agents/protocol";
+import type { AgentAdapter, PermissionMode, Usage } from "../agents/protocol";
 import { titleCase } from "../format";
 import { cardsSnapshot, DRIVE_CLASS } from "./rendered-drive";
 import { bundleChip, BUNDLE_CHIP_TIP } from "./bundle-version";
@@ -26,9 +26,13 @@ import { restoredCard } from "./rendered/restored-block";
 import { createLatestPill } from "./rendered/latest-pill";
 import { userBlockFor } from "./rendered/user-block";
 import { createFollow, createSendStick } from "./rendered/follow";
+import { wireTranscriptFocus } from "./rendered/transcript-focus";
 import type { RenderedState, ToolRecord } from "./rendered/state";
 import { createCards } from "./rendered/cards";
-import { createEvents, seededModels } from "./rendered/events";
+import { createEvents } from "./rendered/events";
+import { initialState } from "./rendered/initial-state";
+import { createLocalCommand } from "./rendered/local-command";
+import { bindStickScroll } from "./rendered/stick-scroll";
 import { createComposer } from "./rendered/composer";
 import { createPalette } from "./rendered/palette";
 import { createCacheCell } from "./rendered/cache-cell";
@@ -91,6 +95,8 @@ export interface RenderedBody {
   shutdown(): Promise<void>;
   /** Drop this view while a durable host continues to own the child. */
   detach(): Promise<void>;
+  /** A fresh session in this tab through the /clear route (a Rune Vault edit, D-d); sends meanwhile wait for it. */
+  respawnFresh(): Promise<void>;
   /** The host connection reported lost (`hostPayload` disconnected) and no re-hydration since. */
   disconnected(): boolean;
   /** Best-effort close for a view that cannot reach its host: ask Falcon to close the session,
@@ -124,54 +130,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   // requests) must not survive a Resume/Retry re-spawn. A durable (Falcon) transport gets the
   // agent's hosted adapter: the host owns the app-server handshake for Codex.
   const newAdapter = (): AgentAdapter => AGENT_PROFILE[opts.agent].newAdapter(!!transport.durable);
-  const S: RenderedState = {
-    hydrating: false,
-    disconnected: false,
-    pillVersion: undefined,
-    pillModel: opts.model ?? undefined,
-    pillCwd: opts.cwd,
-    pillInstalled: null,
-    cacheStamp: 0,
-    cacheTtlMs: 3_600_000,
-    cacheTimer: undefined,
-    characterModel: opts.model ?? null,
-    characterModelLive: false,
-    lastCharacterStatus: "",
-    characterTurnOpen: false,
-    characterActive: false,
-    mode: opts.permissionMode,
-    switchPending: false,
-    switchTimer: undefined,
-    modelHinted: false,
-    loggedOut: false,
-    modeBtn: null,
-    stMenu: null,
-    models: seededModels(opts.agent),
-    modelPending: null,
-    modelWant: null,
-    pickedModel: null,
-    modelTimer: undefined,
-    modelBtn: null,
-    waitingTimer: undefined,
-    gen: 0,
-    isAlive: false,
-    disposed: false,
-    sessionId: opts.resume ?? null,
-    inTurn: false,
-    turnEndWaiters: [],
-    interruptSent: false,
-    costTotal: 0,
-    commands: [],
-    adapter: newAdapter(),
-    pendingApproval: null,
-    curGroup: null,
-    interimCandidates: [],
-    turnGroups: [],
-    stick: true,
-    replaying: false,
-    spawning: null,
-    paletteSel: null,
-  };
+  const S: RenderedState = initialState(opts, newAdapter());
   const root = el("div", "rendered");
   const transcript = el("div", "rendered-transcript");
   transcript.tabIndex = -1;
@@ -254,35 +213,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
     if (S.hydrating) return;
     setCharacterActive(S.characterTurnOpen && !S.pendingApproval && S.isAlive);
   }
-  /** Slash commands the TUI answers locally and never sends to the model. In a
-   *  rendered body they used to reach the SDK as prose.
-   *  One table for both entry points — the right panel's Model select goes
-   *  through body.write(), a typed command through submit() — so the two
-   *  cannot drift. Returns true when the text was consumed. */
-  function localCommand(text: string): boolean {
-    // a body cannot resume itself — Rust refuses a resume of a live session —
-    // so this hands the past-session list to the launcher; a pick is a new tab
-    // and this body keeps running, queued messages and all.
-    if (text === "/resume" && AGENT_PROFILE[opts.agent].resumeCommand) {
-      if (opts.resumeNotice) noticeBlock(opts.resumeNotice, "info"); else opts.onResume();
-      return true;
-    }
-    if (!AGENT_PROFILE[opts.agent].localCommands) return false;
-    // raw /model is a picker whose pick changes the model; pickModelMenu is
-    // the same thing over the agent's own model list, ending in set_model.
-    if (text === "/model") { pickModelMenu(); return true; }
-    const m = /^\/model\s+(\S+)$/.exec(text);
-    if (m) { setModel(m[1]); return true; }
-    // every /effort is ours: the SDK's own /effort writes the user's global settings.json
-    if (/^\/effort\b/.test(text)) {
-      const arg = text.slice(7).trim().toLowerCase();
-      if (!arg) bar.pickEffortMenu();
-      else if ((EFFORT_LEVELS as readonly string[]).includes(arg)) bar.setEffort(arg as Effort);
-      else noticeBlock(`Effort Takes ${EFFORT_LEVELS.map(titleCase).join(", ")}`, "info");
-      return true;
-    }
-    return false;
-  }
+  const localCommand = createLocalCommand({ opts, noticeBlock, pickModelMenu, setModel, bar });
 
   /** encode* returns null when the adapter already sent the line itself */
   const sendEncoded = (line: string | null): Promise<boolean> => (line === null ? Promise.resolve(true) : send(line));
@@ -297,28 +228,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
    *  turn_done. Clicking a pending block takes the text back into the composer. */
   const queued: { text: string; host: HTMLElement }[] = [];
 
-  /* -- scrolling: stick to the bottom unless the user scrolled up --
-     Within STICK_MARGIN_PX of the bottom re-sticks; further away un-sticks only when the scroll
-     was not follow's own glide (user input cancels the glide first, see follow.ts). */
-  const STICK_MARGIN_PX = 60;
-  let lastTop = 0;
-  let lastScrollH = 0;
-  transcript.addEventListener("scroll", () => {
-    const up = transcript.scrollTop < lastTop; // an upward move inside the margin stays un-stuck
-    // a clamp, not the user: content shrank (a pill or group folding shut) or the viewport grew
-    // (Agents bar Clear, composer shrinking), and the browser pulled scrollTop up to the new
-    // maximum. A user scroll-up never lands exactly on the bottom, so the stick stays.
-    const shrank = transcript.scrollHeight < lastScrollH;
-    const atMax = transcript.scrollTop + transcript.clientHeight >= transcript.scrollHeight - 1;
-    lastTop = transcript.scrollTop;
-    lastScrollH = transcript.scrollHeight;
-    if (up && S.stick && (shrank || atMax)) { follow.toBottom(); latest.update(); return; }
-    if (!latest.settling()) {
-      if (!up && transcript.scrollTop + transcript.clientHeight >= transcript.scrollHeight - STICK_MARGIN_PX) S.stick = true;
-      else if (up && !follow.programmatic()) S.stick = false; // a downward move never leaves the bottom
-    }
-    latest.update();
-  });
+  bindStickScroll(transcript, S, follow, latest);
   function append(node: HTMLElement, parent: HTMLElement = transcript) {
     parent.appendChild(node);
     if (S.replaying) return;
@@ -360,7 +270,8 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
     transcript, tools, awaiting, append, groupFor, groupCount, groupRefresh, groupError, markInterim, agent: opts.agent,
     attachCard: (toolUseId, card) => { attachCard(toolUseId, card); askMirror.sync(); }, // a card that beat its child pill
   });
-  const bang = createBang(S, { enabled: AGENT_PROFILE[opts.agent].localCommands, hostOk: hostHas(opts.host, "bangMode"), sealGroup, toolStart, toolDone, noticeBlock });
+  const bang = createBang(S, { enabled: AGENT_PROFILE[opts.agent].localCommands, hostOk: hostHas(opts.host, "bangMode"), sealGroup, toolStart, toolDone, noticeBlock,
+    openPill: (id) => { const d = tools.get(id)?.details; if (d) { d.open = true; } } });
 
   /* -- blocks -- */
 
@@ -463,23 +374,15 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
 
   /* -- backend: built last; composer, events and the status bar reach it through thunks -- */
 
-  const { send, spawn, stopAgent, onExit } = createLifecycle(S, {
+  const { send, spawn, stopAgent, onExit, respawnFresh } = createLifecycle(S, {
     opts, transport, root, sl, queued, tools, newAdapter, handle: (ev) => { hydrateStats.record(); handle(ev); }, hostPayload, markUndelivered,
     cancelApprovals, denyPending, alreadyAnswered, stalePill, sealGroup, settleThoughts, clearWaiting, settleSwitch,
     resetCache, stopCacheTimer, drawCache, redrawStatus, resetTranscript, setInTurn, refreshState,
     append, noticeBlock, sendEncoded, stats: hydrateStats, openHydratedCards, checkLogin: login.check,
   });
 
-  // A click on the transcript's empty ground focuses the composer, as a click
-  // in the composer does — the pane's focusin marks the
-  // tab focused either way. Controls keep their own click; a drag that
-  // selected text is left alone so copying still works.
-  transcript.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    if (t.closest("button, a, summary, details, input, textarea, select, pre")) return;
-    if (!window.getSelection()?.isCollapsed) return;
-    textarea.focus();
-  });
+  // a transcript click hands focus back to the composer without the border flashing
+  wireTranscriptFocus(transcript, textarea);
 
   /* -- public -- */
 
@@ -533,6 +436,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
       if (S.disposed) return;
       await stopAgent(true);
     },
+    respawnFresh: () => respawnFresh(),
     disconnected: () => S.disconnected,
     async abandon() {
       const g = S.gen;

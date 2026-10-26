@@ -133,17 +133,18 @@ pub async fn flow_run_node(       // async: PATH probe, `reg query` and spawn mu
     let need = bare::need_for(&backend, &model).ok_or_else(|| format!("backend not yet wired: {backend}"))?;
     // Every node runs on the Bare home; the first missing home or login fails the run's
     // later nodes of that kind with the same message, before anything is built or spawned.
-    let spec = bare::check_once(&state.bare_checks, &run_id, need, || match backend.as_str() {
-        "sdk" => claude::spec(need),
-        "codex" => codex::spec(),
-        _ => Err(format!("backend not yet wired: {backend}")),
-    })?;
-    // Codex nodes only: the token the Bare config's `vidar_drive` server forwards.
-    let ctl_token = bare::ctl_token_of(&spec);
+    // Resolved first: a Codex node's home trusts it (W2-L2d).
     let cwd = if cwd.trim().is_empty() { repo_root().display().to_string() } else { cwd };
     if !Path::new(&cwd).is_dir() {
         return Err(format!("cwd is not a directory: {cwd}"));
     }
+    let spec = bare::check_once(&state.bare_checks, &run_id, need, || match backend.as_str() {
+        "sdk" => claude::spec(need),
+        "codex" => codex::spec(&cwd),
+        _ => Err(format!("backend not yet wired: {backend}")),
+    })?;
+    // Codex nodes only: the token the Bare config's `vidar_drive` server forwards.
+    let ctl_token = bare::ctl_token_of(&spec);
     let sessions = Arc::clone(&state.sessions);
     let token = state.next_token.fetch_add(1, Ordering::SeqCst);
     let key = format!("{run_id}:{node_id}");

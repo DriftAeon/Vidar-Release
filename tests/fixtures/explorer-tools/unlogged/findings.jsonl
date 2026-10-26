@@ -1,0 +1,2 @@
+{"t":"2026-10-24T00:00:00Z","goal":"g1","step":1,"intent":"Start","did":"Started","observed":"Open","expected":"Open","kind":"pass"}
+{"t":"2026-10-24T00:00:08Z","goal":"g1","step":2,"intent":"Finish","did":"Finished","observed":"Open","expected":"Open","kind":"pass"}

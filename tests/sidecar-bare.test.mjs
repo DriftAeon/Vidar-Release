@@ -1,5 +1,6 @@
 // The Rendered Bare sidecar mapping (tools/claude-sidecar-bare.mjs, plan P5): a `--profile bare`
-// sidecar takes its SDK options from profiles/bare/claude.json alone, never from vidar.json, and
+// sidecar takes its SDK options from profiles/bare/claude.json and the vault's runes (plugins by
+// `--set-plugin`, the drive allow from its settings.json), never from vidar.json, and
 // writes only inside its own agent home (statusline mirror, first system/init record).
 //
 // Offline: the sidecar runs as a child against a stub SDK that records the options it was given,
@@ -40,7 +41,7 @@ export function query({ options }) {
 }
 `;
 
-/** A temp Vidar root: the shipped bare profile and payload, the two rendered plugins, a vidar.json
+/** A temp Vidar root: the shipped bare profile and payload, the two stock plugin runes, a vidar.json
  *  naming a third plugin and the mirror opt-out, a stub SDK, and an agent home. */
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "vidar-sidecar-bare-"));
@@ -52,7 +53,7 @@ function fixture() {
   for (const f of SIDECAR_FILES) copyFileSync(join(REPO, "tools", f), join(root, "tools", f));
   mkdirSync(join(root, "profiles", "bare"), { recursive: true });
   for (const f of ["claude.json", "payload.md"]) copyFileSync(join(REPO, "profiles", "bare", f), join(root, "profiles", "bare", f));
-  for (const p of ["vidar-app", "gate", "other"]) mkdirSync(join(root, "plugins", p), { recursive: true });
+  for (const p of ["vidar-app", "gate", "other"]) setPluginIn(join(root, "plugins"), p);
   writeFileSync(join(root, "vidar.json"), JSON.stringify({ pluginDirs: ["plugins/other"], statuslineMirror: false }));
   const home = join(root, "agent-home");
   mkdirSync(join(home, "claude-config"), { recursive: true });
@@ -77,23 +78,126 @@ function run({ root, home }, extra = [], { falcon = true } = {}) {
   });
 }
 
-test("the bare mapping takes the profile's plugins and payload and ignores vidar.json", () => {
+/** The vault's plugin runes as Falcon passes them: `--set-plugin <root>\plugins\<name>`. */
+const runePlugins = (f, names = ["vidar-app", "gate"]) => names.map((n) => join(f.root, "plugins", n));
+
+test("the bare mapping takes plugins only from the vault's plugin runes and ignores vidar.json", () => {
   const f = fixture();
   try {
-    const o = bareOptions({ profile: "bare", root: f.root, home: f.home });
+    const none = bareOptions({ profile: "bare", root: f.root, home: f.home, env: {} });
+    assert.deepEqual(none.plugins, [], "a plugin reached a session whose vault holds none");
+    assert.deepEqual(none.allowedTools, [], "the drive allow reached a session without the drive-allow rune");
+    const o = bareOptions({ profile: "bare", root: f.root, home: f.home, env: {}, setPlugins: runePlugins(f) });
     assert.deepEqual(o.settingSources, ["user"]);
     assert.deepEqual(o.plugins, [
-      { type: "local", path: join(f.root, "plugins", "vidar-app") },
-      { type: "local", path: join(f.root, "plugins", "gate") },
+      { type: "local", path: realpathSync.native(join(f.root, "plugins", "vidar-app")) },
+      { type: "local", path: realpathSync.native(join(f.root, "plugins", "gate")) },
     ]);
-    assert.deepEqual(o.allowedTools, ["mcp__plugin_vidar_drive"]);
+    assert.deepEqual(o.allowedTools, []);
+    assert.equal(o.strictMcpConfig, undefined);
+    assert.equal(o.mcpServers, undefined);
     assert.equal(o.systemPrompt.append, readFileSync(join(f.root, "profiles", "bare", "payload.md"), "utf8"));
     assert.equal(o.extraArgs["append-system-prompt-file"], undefined);
     assert.equal(o.configDir, `${f.home}\\claude-config`);
     assert.throws(() => bareOptions({ profile: "lean", root: f.root, home: f.home }), /unknown launch profile/);
     assert.throws(() => bareOptions({ profile: "bare", root: "relative", home: f.home }), /absolute/);
     rmSync(join(f.root, "plugins", "gate"), { recursive: true });
-    assert.throws(() => bareOptions({ profile: "bare", root: f.root, home: f.home }), /plugin gate not found/);
+    assert.throws(() => bareOptions({ profile: "bare", root: f.root, home: f.home, setPlugins: runePlugins(f) }), /plugin rune gate not found/);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("the drive allow comes only from the launch settings' allow list (the drive-allow rune)", () => {
+  const f = fixture();
+  try {
+    const settings = join(f.home, "claude-config", "settings.json");
+    const at = () => bareOptions({ profile: "bare", root: f.root, home: f.home, env: {} }).allowedTools;
+    writeFileSync(settings, JSON.stringify({ permissions: { ask: ["mcp__plugin_vidar_drive"] } }));
+    assert.deepEqual(at(), []);
+    writeFileSync(settings, JSON.stringify({ permissions: { allow: ["mcp__plugin_vidar_drive", "Bash(rm:*)"] } }));
+    assert.deepEqual(at(), ["mcp__plugin_vidar_drive"], "only BARE_ALLOWED_TOOLS entries are carried");
+    writeFileSync(settings, "{ not json");
+    assert.deepEqual(at(), []);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("a vault plugin rune is refused when its name, folder or manifest is wrong, or the profile lists plugins", () => {
+  const f = fixture();
+  try {
+    const opts = (setPlugins) => ({ profile: "bare", root: f.root, home: f.home, env: {}, setPlugins });
+    setPluginIn(join(f.root, "plugins"), "Bad_Name");
+    assert.throws(() => bareOptions(opts([join(f.root, "plugins", "Bad_Name")])), /not plain/);
+    mkdirSync(join(f.root, "plugins", "bare-dir"));
+    assert.throws(() => bareOptions(opts([join(f.root, "plugins", "bare-dir")])), /no regular \.claude-plugin/);
+    const target = setPluginIn(f.home, "elsewhere");
+    symlinkSync(target, join(f.root, "plugins", "linked"), "junction");
+    assert.throws(() => bareOptions(opts([join(f.root, "plugins", "linked")])), /not a plain folder/);
+    const profile = join(f.root, "profiles", "bare", "claude.json");
+    const doc = JSON.parse(readFileSync(profile, "utf8"));
+    doc.rendered.plugins = ["vidar-app"];
+    writeFileSync(profile, JSON.stringify(doc));
+    assert.throws(() => bareOptions(opts([])), /lists rendered plugins/);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("configDir is the CLAUDE_CONFIG_DIR Falcon set when it sits under the home, else the overlay's", () => {
+  const f = fixture();
+  try {
+    const combo = join(f.home, "claude-homes", "0123456789ab");
+    const at = (env) => bareOptions({ profile: "bare", root: f.root, home: f.home, env }).configDir;
+    assert.equal(at({ CLAUDE_CONFIG_DIR: combo }), combo);
+    assert.equal(at({ CLAUDE_CONFIG_DIR: join(f.root, "elsewhere") }), `${f.home}\\claude-config`);
+    assert.equal(at({ CLAUDE_CONFIG_DIR: "relative\\dir" }), `${f.home}\\claude-config`);
+    assert.equal(at({ CLAUDE_CONFIG_DIR: f.home }), `${f.home}\\claude-config`);
+    assert.equal(at({}), `${f.home}\\claude-config`);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("--mcp-file enables strict MCP with its servers, including the drive server", async () => {
+  const f = fixture();
+  try {
+    const file = join(f.home, "layer", "mcp-0123456789ab.json");
+    mkdirSync(join(f.home, "layer"));
+    const servers = {
+      plugin_vidar_drive: { command: "node", args: ["drive.mjs"] },
+      proxy: { type: "http", url: "http://127.0.0.1:8399/mcp" },
+    };
+    writeFileSync(file, JSON.stringify({ mcpServers: servers }));
+    const { code, stderr } = await run(f, ["--mcp-file", file]);
+    assert.equal(code, 0, stderr);
+    const seen = JSON.parse(readFileSync(join(f.root, "options.json"), "utf8"));
+    assert.equal(seen.strictMcpConfig, true);
+    assert.deepEqual(seen.mcpServers, servers);
+    const plain = await run(f);
+    assert.equal(plain.code, 0, plain.stderr);
+    const unchanged = JSON.parse(readFileSync(join(f.root, "options.json"), "utf8"));
+    assert.equal(unchanged.strictMcpConfig, undefined);
+    assert.equal(unchanged.mcpServers, undefined);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("--mcp-file refuses other plugin servers and paths outside the home layer", async () => {
+  const f = fixture();
+  try {
+    const layer = join(f.home, "layer");
+    mkdirSync(layer);
+    const file = join(layer, "mcp-0123456789ab.json");
+    writeFileSync(file, JSON.stringify({ mcpServers: { plugin_other: { command: "node" } } }));
+    let result = await run(f, ["--mcp-file", file]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stdout, /bad MCP server name/);
+    const outside = join(f.home, "mcp-0123456789ab.json");
+    writeFileSync(outside, JSON.stringify({ mcpServers: {} }));
+    result = await run(f, ["--mcp-file", outside]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stdout, /outside the home layer/);
+    result = await run(f, ["--mcp-file", "relative.json"]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stdout, /absolute path/);
+    const badName = join(layer, "mcp-0123456789AB.json");
+    writeFileSync(badName, JSON.stringify({ mcpServers: {} }));
+    result = await run(f, ["--mcp-file", badName]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stdout, /mcp-<hash12>\.json/);
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
@@ -129,7 +233,7 @@ function setPluginIn(parent, name) {
   return dir;
 }
 
-test("--set-plugin folders in home\\layer\\plugins follow the profile's plugins; bad ones are dropped, not refused", async () => {
+test("--set-plugin folders in home\\layer\\plugins follow the vault's plugin runes; bad ones are dropped, not refused", async () => {
   const f = fixture();
   try {
     const plugins = join(f.home, "layer", "plugins");
@@ -140,10 +244,10 @@ test("--set-plugin folders in home\\layer\\plugins follow the profile's plugins;
     const empty = join(plugins, "empty-aaaaaaaaaaaa");
     mkdirSync(empty);
     const warned = [];
-    const o = bareOptions({ profile: "bare", root: f.root, home: f.home, setPlugins: [a, outside, badName, empty, b], warn: (m) => warned.push(m) });
+    const o = bareOptions({ profile: "bare", root: f.root, home: f.home, setPlugins: [...runePlugins(f), a, outside, badName, empty, b], warn: (m) => warned.push(m) });
     assert.deepEqual(o.plugins, [
-      { type: "local", path: join(f.root, "plugins", "vidar-app") },
-      { type: "local", path: join(f.root, "plugins", "gate") },
+      { type: "local", path: realpathSync.native(join(f.root, "plugins", "vidar-app")) },
+      { type: "local", path: realpathSync.native(join(f.root, "plugins", "gate")) },
       { type: "local", path: realpathSync.native(a) },
       { type: "local", path: realpathSync.native(b) },
     ]);
@@ -152,7 +256,7 @@ test("--set-plugin folders in home\\layer\\plugins follow the profile's plugins;
     assert.match(warned.join("\n"), /core dropped: not named/);
     assert.match(warned.join("\n"), /empty-aaaaaaaaaaaa dropped/);
     // From argv: every --set-plugin in order, reaching the SDK's plugins option.
-    const { code, stderr } = await run(f, ["--set-plugin", a, "--set-plugin", outside, "--set-plugin", b]);
+    const { code, stderr } = await run(f, [...runePlugins(f).flatMap((p) => ["--set-plugin", p]), "--set-plugin", a, "--set-plugin", outside, "--set-plugin", b]);
     assert.equal(code, 0, `sidecar exited ${code}\n${stderr}`);
     const seen = JSON.parse(readFileSync(join(f.root, "options.json"), "utf8"));
     assert.deepEqual(seen.plugins.slice(2).map((p) => p.path), [realpathSync.native(a), realpathSync.native(b)]);
@@ -213,12 +317,13 @@ test("a --payload whose hash does not match its name throws", () => {
 test("a bare sidecar runs on the profile's options and writes only inside its home", async () => {
   const f = fixture();
   try {
-    const { code, stderr, stdout } = await run(f);
+    writeFileSync(join(f.home, "claude-config", "settings.json"), JSON.stringify({ permissions: { allow: ["mcp__plugin_vidar_drive"] } }));
+    const { code, stderr, stdout } = await run(f, runePlugins(f).flatMap((p) => ["--set-plugin", p]));
     assert.equal(code, 0, `sidecar exited ${code}\n${stderr}`);
     assert.match(stdout, /"type":"assistant"/);
     const o = JSON.parse(readFileSync(join(f.root, "options.json"), "utf8"));
     assert.deepEqual(o.settingSources, ["user"]);
-    assert.deepEqual(o.plugins.map((p) => p.path), [join(f.root, "plugins", "vidar-app"), join(f.root, "plugins", "gate")]);
+    assert.deepEqual(o.plugins.map((p) => p.path), runePlugins(f).map((p) => realpathSync.native(p)));
     assert.ok(!JSON.stringify(o.plugins).includes("other"), "a vidar.json pluginDirs entry reached a bare tab");
     assert.deepEqual(o.allowedTools, ["mcp__plugin_vidar_drive"]);
     assert.equal(o.systemPrompt.append, readFileSync(join(f.root, "profiles", "bare", "payload.md"), "utf8"));

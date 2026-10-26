@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "astra-code-no-skill",
+  "name": "Astra Code No Skill",
+  "createdUtc": "2026-10-25T12:30:00Z",
+  "from": { "vault": "astra-code", "hash": "3c2420f6a1a7" },
+  "runesets": [
+    {
+      "file": "sets/kit--kit.md",
+      "source": { "library": "kit", "set": "kit" },
+      "copiedUtc": "2026-10-25T12:00:00Z",
+      "sourceHash": "b606b285a4d0fc08529b971cef5c2447528b8f92ccb61ce8f3f3278ba5b4a1da"
+    }
+  ],
+  "runes": [
+    { "library": "stock", "id": "bare-identity" },
+    { "library": "stock", "id": "gate-recall" },
+    { "library": "stock", "id": "gate-agent" },
+    { "library": "stock", "id": "gate-hook-run" },
+    { "library": "stock", "id": "gate-hook-command" },
+    { "library": "stock", "id": "vidar-drive" },
+    { "library": "stock", "id": "gate-permission" },
+    { "library": "stock", "id": "vidar-app" }
+  ],
+  "lockedUtc": "2026-10-25T12:31:00Z",
+  "lockedBy": "first-message",
+  "hash": "34be56ea0c94",
+  "pins": {
+    "kit/kit-verdict-first": "e7d9bbda046e",
+    "kit/kit-plain-words": "8bb279e9d280",
+    "kit/kit-recall-tip": "eae3395242c6",
+    "stock/gate-fact": "1fd454a62c98",
+    "stock/bare-identity": "5c4bd15797c6",
+    "stock/gate-recall": "a09a885a50ea",
+    "stock/gate-agent": "3528593505e2",
+    "stock/gate-hook-run": "6bb0e258da98",
+    "stock/gate-hook-command": "6d1082db81f8",
+    "stock/vidar-drive": "a250ca2e7947",
+    "stock/gate-permission": "312daa4ff498",
+    "stock/vidar-app": "ebc3dff2a810"
+  }
+}

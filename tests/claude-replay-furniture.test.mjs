@@ -43,7 +43,7 @@ test("replayed harness furniture is a quiet notice, never a user echo", () => {
     "handback enforcer": line("[handback-send-enforce] Your report has not been delivered. Call SubagentHandback({message: <your full report>}) now, then stop."),
     "idle notice": line("[Cross-session idle notice] \"vidar-f2\", which you asked to be notified about, is idle now. This is an automated notice from that session's harness."),
     "image path": line(blocks("[Image: source: C:\\Users\\friend\\Documents\\x.png]")),
-    "skill body": line("Base directory for this skill: C:\\Users\\friend\\.claude\\skills\\catapult\n\n# catapult\n\nbody"),
+    "skill body": line("Base directory for this skill: C:\\Users\\friend\\.claude\\skills\\vidar-control\n\n# vidar-control\n\nbody"),
     "skill format flag": line(blocks("<skill-format>true</skill-format>")),
     "workflow reference": line("# Workflow authoring reference\n\nA workflow structures work across many agents."),
     "stop hook feedback": line("Stop hook feedback:\nBefore stopping: Context gate: this session is at 210190 tokens."),

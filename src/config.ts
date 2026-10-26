@@ -60,6 +60,8 @@ export interface AgentType {
 export interface Location {
   label: string;
   cwd: string;
+  /** Add-on rune sets: no launch reads them since a session loads its Rune Vault only. */
+  sets?: { library?: string; set: string }[];
 }
 
 export interface VidarConfig {

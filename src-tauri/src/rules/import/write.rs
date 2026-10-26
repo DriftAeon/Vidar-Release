@@ -1,6 +1,6 @@
 //! src-tauri\src\rules\import\write.rs — turn a `Split` into an import library on disk
-//! (docs/projects/bare/onboarding-plan.md D1, D2, D8): `rules\<id>.md` per brick, `sets\row-<rowKey>.md` per
-//! row with bricks, `import.json` (source, sha256, date, brick order with each body's hash). Every file goes
+//! (docs/projects/bare/onboarding-plan.md D1, D2, D8): `rules\<id>.md` per brick, one set `sets\<name>.md`
+//! named after the library and holding every brick some row takes (sets are keyed by set, not row), `import.json` (source, sha256, date, brick order with each body's hash). Every file goes
 //! through `fsx::atomic_write`; nothing is deleted and nothing outside the library folder is written.
 
 use std::path::{Path, PathBuf};
@@ -25,10 +25,21 @@ pub(crate) fn quote(s: &str) -> String {
 
 /// One brick's rune file: `state: active` when kept, `draft` when dropped.
 pub fn rune_text(b: &Brick, meta: &Meta, kept: bool) -> String {
+    rune_text_with(b, meta, kept, None, false)
+}
+
+fn rune_text_with(b: &Brick, meta: &Meta, kept: bool, paths: Option<&[String]>, memory: bool) -> String {
     let scope = if b.not_bare { format!("{}, \"!bare\"", meta.name) } else { meta.name.to_string() };
     let mut h = format!("---\nname: {}\nkind: rule\nscope: [{scope}]\n", b.id);
     h.push_str(if kept { "state: active\n" } else { "state: draft\n" });
-    h.push_str("activate: always\n");
+    let activate = if paths.is_some() { "paths" } else if memory { "recall" } else { "always" };
+    h.push_str(&format!("activate: {activate}\n"));
+    if let Some(paths) = paths {
+        h.push_str("paths:\n");
+        for path in paths {
+            h.push_str(&format!("  - {}\n", quote(path)));
+        }
+    }
     if let Some(head) = b.section.last() {
         h.push_str(&format!("description: {}\n", quote(head)));
     }
@@ -123,28 +134,20 @@ pub fn set_body(split: &Split, ids: &[String]) -> String {
     out.join("\n") + "\n"
 }
 
-/// The source path an `origin: "<date> <source>:<line>"` header names (date up to the first space and the
-/// trailing `:<digits>` dropped).
-pub fn origin_source(text: &str) -> Option<String> {
-    let line = text.lines().find_map(|l| l.strip_prefix("origin:"))?.trim();
-    let inner = line.strip_prefix('"')?.strip_suffix('"')?.replace("\\\\", "\\").replace("\\\"", "\"");
-    let (_, rest) = inner.split_once(' ')?;
-    let (src, digits) = rest.rsplit_once(':')?;
-    (!digits.is_empty() && digits.bytes().all(|c| c.is_ascii_digit())).then(|| src.to_string())
+/// `sets\<name>.md`, the library's one set.
+pub fn set_text(split: &Split, meta: &Meta, ids: &[String]) -> String {
+    format!("---\nname: {}\nkind: set\nscope: [{}]\n---\n{}", meta.name, meta.name, set_body(split, ids))
 }
 
-/// True when some rule file already in `dir` names `source` as its origin (a first apply that stopped
-/// part way left files without `import.json`).
-pub fn library_names_source(dir: &Path, source: &str) -> bool {
-    let Ok(rd) = std::fs::read_dir(dir.join("rules")) else { return false };
-    rd.flatten().any(|e| {
-        std::fs::read_to_string(e.path()).ok().and_then(|t| origin_source(&t)).is_some_and(|s| s.eq_ignore_ascii_case(source))
-    })
-}
-
-/// `sets\row-<rowKey>.md`.
-pub fn set_text(split: &Split, meta: &Meta, row_key: &str, ids: &[String]) -> String {
-    format!("---\nname: row-{row_key}\nkind: set\nscope: [{}]\n---\n{}", meta.name, set_body(split, ids))
+/// The ids any row in `rows` takes, each once, in first-seen order.
+pub fn set_ids(rows: &[(String, Vec<String>)]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for id in rows.iter().flat_map(|(_, ids)| ids) {
+        if !out.contains(id) {
+            out.push(id.clone());
+        }
+    }
+    out
 }
 
 pub fn import_json(split: &Split, meta: &Meta) -> String {
@@ -165,9 +168,10 @@ pub fn import_json(split: &Split, meta: &Meta) -> String {
 }
 
 /// Write the library into `dir` (the `runtime\runes\<name>` folder). `kept` ids are active, the rest draft;
-/// `rows` is (rowKey, brick ids) and a row with no ids gets no set. Every id is checked and every target
-/// compared before the first write: an existing file with other content is refused unless `overwrite`, and
-/// one with the same content is left alone. Returns the files written.
+/// `rows` is (rowKey, brick ids); the library's set holds every id some row takes, and none is written when no
+/// row takes any. Every id is checked and every target compared before the first write: an existing file with
+/// other content is refused unless `overwrite`, and one with the same content is left alone. Returns the files
+/// written.
 pub fn write_library(
     dir: &Path,
     split: &Split,
@@ -176,7 +180,13 @@ pub fn write_library(
     rows: &[(String, Vec<String>)],
     overwrite: bool,
 ) -> Result<Vec<PathBuf>, String> {
+    if split.paths.as_ref().is_some_and(Vec::is_empty) {
+        return Err("source paths: requires at least one glob".into());
+    }
     check_id(meta.name).map_err(|e| format!("library name: {e}"))?;
+    if meta.name == "stock" {
+        return Err("library name `stock` is reserved".into());
+    }
     if CONTEXTS.contains(&meta.name) {
         return Err(format!("library name: `{}` is a scope context name", meta.name));
     }
@@ -184,10 +194,6 @@ pub fn write_library(
         check_id(&b.id).map_err(|e| format!("brick: {e}"))?;
     }
     for (key, ids) in rows {
-        // Only a row that writes a set needs a valid file name; an empty plate just clears its ref.
-        if !ids.is_empty() {
-            check_id(&format!("row-{key}")).map_err(|e| format!("row key: {e}"))?;
-        }
         if let Some(id) = ids.iter().find(|id| !split.bricks.iter().any(|b| &b.id == *id)) {
             return Err(format!("row {key}: `{id}` is not a brick of this import"));
         }
@@ -195,10 +201,11 @@ pub fn write_library(
     let (rules, sets) = (dir.join("rules"), dir.join("sets"));
     let mut plan: Vec<(PathBuf, String)> = Vec::new();
     for b in &split.bricks {
-        plan.push((rules.join(format!("{}.md", b.id)), rune_text(b, meta, kept.contains(&b.id))));
+        plan.push((rules.join(format!("{}.md", b.id)), rune_text_with(b, meta, kept.contains(&b.id), split.paths.as_deref(), split.memory)));
     }
-    for (key, ids) in rows.iter().filter(|(_, ids)| !ids.is_empty()) {
-        plan.push((sets.join(format!("row-{key}.md")), set_text(split, meta, key, ids)));
+    let ids = set_ids(rows);
+    if !ids.is_empty() {
+        plan.push((sets.join(format!("{}.md", meta.name)), set_text(split, meta, &ids)));
     }
     plan.push((dir.join("import.json"), import_json(split, meta)));
     let mut todo = Vec::new();
@@ -218,4 +225,20 @@ pub fn write_library(
         written.push(path);
     }
     Ok(written)
+}
+
+#[cfg(test)]
+mod reserved_name_tests {
+    use super::*;
+
+    #[test]
+    fn stock_is_reserved_before_any_import_write() {
+        let split = super::super::split::split("# Hello\nA rule.\n", &[], "");
+        let tick = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("vidar-refuse-stock-{}-{tick}", std::process::id()));
+        let meta = Meta { name: "stock", source: "test", date: "2026-10-25" };
+        let error = write_library(&dir, &split, &meta, &[], &[], false).unwrap_err();
+        assert!(error.contains("stock") && error.contains("reserved"), "{error}");
+        assert!(!dir.exists());
+    }
 }

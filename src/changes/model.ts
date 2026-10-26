@@ -156,3 +156,24 @@ export function truncatePath(path: string, max: number): { name: string; dir: st
   }
   return { name, dir: "…" + dir.slice(dir.length - (room - 1)) };
 }
+
+/** A Perforce opened-file action as the row's status slot draws it: add/branch/move/add → A,
+ *  edit/integrate → M, delete/move/delete → D, anything else its first letter upper-cased. `title`
+ *  is the action word in Title Case ("move/delete" → "Move/Delete"). */
+export function p4ActionLetter(action: string): { letter: string; kind: StatusKind; title: string } {
+  const title = action.replace(/(^|[/\-_ ])([a-z])/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
+  switch (action) {
+    case "add": case "branch": case "move/add": return { letter: "A", kind: "added", title };
+    case "edit": case "integrate": return { letter: "M", kind: "modified", title };
+    case "delete": case "move/delete": return { letter: "D", kind: "deleted", title };
+    default: return { letter: action.charAt(0).toUpperCase(), kind: "untracked", title };
+  }
+}
+
+/** A pending changelist's group head: "Default", else "#<change> <first line of description>"; the
+ *  full description is the head's title. */
+export function p4ChangeLabel(change: string, description: string): { label: string; title: string } {
+  if (change === "default") return { label: "Default", title: "Default" };
+  const first = description.trim().split(/\r?\n/)[0] ?? "";
+  return { label: first ? `#${change} ${first}` : `#${change}`, title: description.trim() || `#${change}` };
+}

@@ -1,6 +1,8 @@
 //! Flow nodes on the Bare home (run 2026-10-19-codex-primary, U2): every Codex node gets the
-//! Bare Codex env (`CODEX_HOME` = the Bare home), every Claude node the Bare Claude env
-//! (`CLAUDE_CONFIG_DIR` = the Bare config dir). Both envs are built from the allowlist
+//! Bare Codex env on Flow's own baseline home (`CODEX_HOME` = `<home>\flow-codex`, prepared per
+//! node: login link, `vidar_drive`, trust; no rune set's loadout; W2-L2d), every Claude node the Bare Claude env
+//! on Flow's own config dir (`CLAUDE_CONFIG_DIR` = `<home>\flow-claude`, prepared per node the same way, with
+//! only the `vidar_drive` server; W2-L2a). Both envs are built from the allowlist
 //! (`bare/env.rs`), so no inherited `ANTHROPIC_*` or `CODEX_*` rides along.
 //!
 //! The home and login are checked once per run and kind: the first verdict for a run is kept,
@@ -25,7 +27,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
-use crate::bare::{CodexEnv, Env};
+use crate::bare::{ClaudeFlowEnv, CodexEnv, Env};
 use crate::codex_config::Dropped;
 
 use super::child::{lock, RunnerSpec};
@@ -89,22 +91,25 @@ pub(super) fn check_once<T>(
 // Claude
 // ---------------------------------------------------------------------------
 
-/// The Bare Claude env for a node, after the home and (for a Claude model) login check.
-pub(super) fn claude_env(need: Need) -> Result<Env, String> {
-    verify_claude(crate::bare::login_env(PROFILE, std::env::vars_os())?, need)
+/// The Bare Claude env for a node on Flow's own config dir (`<home>\flow-claude`, prepared per
+/// node: login link, baseline settings, drive-only MCP file; W2-L2a), after the home and (for a
+/// Claude model) login check.
+pub(super) fn claude_env(need: Need) -> Result<ClaudeFlowEnv, String> {
+    verify_claude(crate::bare::claude_env_for_flow(PROFILE, std::env::vars_os())?, need)
 }
 
 #[cfg(test)]
-fn claude_env_with(root: &Path, home_dir: &Path, inherited: impl IntoIterator<Item = (OsString, OsString)>, need: Need) -> Result<Env, String> {
-    verify_claude(crate::bare::login_env_with(PROFILE, root, home_dir, inherited)?, need)
+fn claude_env_with(root: &Path, home_dir: &Path, inherited: impl IntoIterator<Item = (OsString, OsString)>, need: Need) -> Result<ClaudeFlowEnv, String> {
+    let guard = crate::bare::home::Guard { user_profile: None, username: None };
+    verify_claude(crate::bare::claude_env_for_flow_with(PROFILE, root, home_dir, inherited, &guard)?, need)
 }
 
-fn verify_claude(env: Env, need: Need) -> Result<Env, String> {
-    let dir = env.get("CLAUDE_CONFIG_DIR").map(PathBuf::from).filter(|d| d.is_dir()).ok_or(NO_HOME)?;
+fn verify_claude(ce: ClaudeFlowEnv, need: Need) -> Result<ClaudeFlowEnv, String> {
+    let dir = ce.env.get("CLAUDE_CONFIG_DIR").map(PathBuf::from).filter(|d| d.is_dir()).ok_or(NO_HOME)?;
     if need == Need::Claude && !dir.join(CLAUDE_LOGIN).is_file() {
         return Err(NO_LOGIN.to_string());
     }
-    Ok(env)
+    Ok(ce)
 }
 
 /// The sidecar's env on the Bare home: exactly the Bare env, then the plan's `set` entries
@@ -136,10 +141,11 @@ pub(super) struct BareCodex {
     pub(super) warnings: Vec<String>,
 }
 
-/// Production: the Bare Codex env (Err with u1's strings when the home or login is missing),
-/// plus the user's URL-only servers from the default Codex home.
-pub(super) fn codex_spec(ctl_token: &str) -> Result<RunnerSpec, String> {
-    let ce = crate::bare::codex_env_for_profile(PROFILE, std::env::vars_os())?;
+/// Production: the Bare Codex env on Flow's own baseline home, `flow-codex` (prepared per node,
+/// W2-L2d; Err with u1's strings when the Bare home or login is missing), plus the user's URL-only
+/// servers from the default Codex home. `cwd` gets the trust table when the user's config trusts it.
+pub(super) fn codex_spec(ctl_token: &str, cwd: &str) -> Result<RunnerSpec, String> {
+    let ce = crate::bare::codex_env_for_profile(PROFILE, std::env::vars_os(), cwd)?;
     let user_config = crate::rules::codex::codex_home()
         .map(|h| h.join("config.toml"))
         .filter(|p| p.is_file())
@@ -153,7 +159,8 @@ fn codex_spec_from(ce: CodexEnv, user_config: Option<&str>, ctl_token: &str) -> 
         .flatten()
         .map(|c| c.mcp_servers.into_iter().map(|m| m.name).collect())
         .unwrap_or_default();
-    let carry = carry_args(user_config, &bare_names);
+    let mut carry = carry_args(user_config, &bare_names);
+    carry.warnings.extend(ce.warnings);
     let mut env = ce.env;
     // The Bare config's `vidar_drive` server forwards it (`env_vars`).
     env.set("VIDAR_CTL_TOKEN", ctl_token);
@@ -308,8 +315,11 @@ mod tests {
         let claude = claude_env_with(&root(), &home, inherited(), Need::Claude).unwrap_err();
         assert_eq!(claude, NO_HOME);
         let probes = CodexProbes { find: &no_find, codex: &no_codex };
-        let codex = crate::bare::codex_env_for_profile_with(PROFILE, &root(), &home, inherited(), &probes).err().unwrap();
+        let ambient = crate::bare::Ambient::default();
+        let guard = crate::bare::home::Guard { user_profile: None, username: None };
+        let codex = crate::bare::codex_env_for_profile_with(PROFILE, &root(), &home, inherited(), &ambient, &guard, &probes, None).err().unwrap();
         assert_eq!(codex, NO_HOME);
+        assert_eq!(std::fs::read_dir(&home).unwrap().count(), 0, "a missing Bare home is never prepared by Flow");
 
         // The first verdict sticks for the run: a later node's build is never called.
         let checks: Checks = Arc::default();
@@ -330,16 +340,29 @@ mod tests {
 
     #[test]
     fn claude_env_is_the_bare_dir_with_no_inherited_anthropic() {
-        let home = scratch("claude");
+        // Flow's Claude dir is prepared like a tab's home, so the home is created private (D2a).
+        let home = scratch("claude").join("home");
+        crate::bare::home::prepare_dirs(&home, &[]).unwrap();
         let probe = crate::bare::login_env_with(PROFILE, &root(), &home, inherited()).unwrap();
-        let dir = PathBuf::from(probe.get("CLAUDE_CONFIG_DIR").expect("Bare sets CLAUDE_CONFIG_DIR"));
-        assert!(dir.starts_with(&home), "{}", dir.display());
-        std::fs::create_dir_all(&dir).unwrap();
+        let legacy = PathBuf::from(probe.get("CLAUDE_CONFIG_DIR").expect("Bare sets CLAUDE_CONFIG_DIR"));
+        assert!(legacy.starts_with(&home), "{}", legacy.display());
+        std::fs::create_dir_all(&legacy).unwrap();
         // Home but no login: a Claude model is refused, a gateway model is not.
         assert_eq!(claude_env_with(&root(), &home, inherited(), Need::Claude).unwrap_err(), NO_LOGIN);
-        assert!(claude_env_with(&root(), &home, inherited(), Need::Gateway).is_ok());
+        let gateway = claude_env_with(&root(), &home, inherited(), Need::Gateway).unwrap();
+        // Flow's own config dir, not the legacy one (W2-L2a).
+        let dir = home.join("flow-claude");
+        assert_eq!(gateway.config_dir, dir);
+        // Only vidar_drive: no module servers, no skills, agents or guard hooks.
+        let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(&gateway.mcp_file).unwrap()).unwrap();
+        let servers: Vec<&String> = doc["mcpServers"].as_object().unwrap().keys().collect();
+        assert_eq!(servers, ["plugin_vidar_drive"], "{doc}");
+        assert!(["skills", "agents", "hooks"].iter().all(|d| !dir.join(d).exists()));
+        let settings = std::fs::read_to_string(dir.join("settings.json")).unwrap();
+        assert!(!settings.contains("\"outputStyle\""), "{settings}");
+        // A temp home sits outside `…\Vidar\homes`, so no login is linked: put one in place.
         std::fs::write(dir.join(CLAUDE_LOGIN), "").unwrap();
-        let env = claude_env_with(&root(), &home, inherited(), Need::Claude).unwrap();
+        let env = claude_env_with(&root(), &home, inherited(), Need::Claude).unwrap().env;
 
         // The plan the Claude runner builds from Vidar's env, applied over the Bare env.
         let names: HashMap<String, String> = inherited().into_iter().map(|(k, _)| (k.to_string_lossy().into_owned(), String::new())).collect();
@@ -354,7 +377,7 @@ mod tests {
         assert!(!got.keys().any(|k| k.starts_with("ANTHROPIC_")), "{got:?}");
         assert!(!got.keys().any(|k| k.starts_with("CODEX_")), "{got:?}");
         assert_eq!(got.get("CONTEXT_GATE").cloned().flatten().as_deref(), Some("0"));
-        let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(home.parent().unwrap());
     }
 
     const USER: &str = r#"
@@ -424,7 +447,7 @@ url = "https://shadow.example/mcp"
     fn codex_spec_carries_the_token_and_the_home() {
         let home = scratch("codex");
         std::fs::write(home.join("config.toml"), "[mcp_servers.vidar_drive]\ncommand = \"node\"\n").unwrap();
-        let ce = CodexEnv { env: Env::default(), node: PathBuf::from("node.exe"), js: PathBuf::from("codex.js"), codex_home: home.clone() };
+        let ce = CodexEnv { env: Env::default(), node: PathBuf::from("node.exe"), js: PathBuf::from("codex.js"), codex_home: home.clone(), warnings: vec!["login note".into()] };
         let RunnerSpec::Codex { home: got_home, bare: Some(b), .. } = codex_spec_from(ce, Some(USER), "tok123") else {
             panic!("a Bare Codex spec")
         };
@@ -433,6 +456,7 @@ url = "https://shadow.example/mcp"
         assert_eq!(b.ctl_token, "tok123");
         assert!(!b.carried.contains(&"vidar_drive".to_string()), "the Bare server wins");
         assert_eq!(b.carried, ["quoted", "wiki"]);
+        assert_eq!(b.warnings.last().map(String::as_str), Some("login note"), "the home's login warnings ride along");
         let _ = std::fs::remove_dir_all(&home);
     }
 }

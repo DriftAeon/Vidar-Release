@@ -42,7 +42,6 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | grp-projects.svg | noto-emoji/svg/emoji_u1f4fd.svg | Noto Emoji, Apache-2.0 |
 | grp-reference.svg | noto-emoji/svg/emoji_u2139.svg | Noto Emoji, Apache-2.0 |
 | grp-shelf.png | fatcow/32x32/bookshelf.png | FatCow Farm-Fresh Icons 3.9.2 (gammasoft/fatcow e6ee233), CC BY 3.0 US: credit FatCow, http://www.fatcow.com/free-icons; PNG, loaded as `.png` by `iconImg` |
-| catapult.svg | noto-emoji/svg/emoji_u1f680.svg | Noto Emoji, Apache-2.0 |
 | comments.svg | flat-color-icons/svg/comments.svg | flat-color-icons (icons8), MIT; recoloured: fill #8AB15C changed to #2764E7, the blue of link.svg |
 | document-edit.svg | fluent-color/svg/ic_fluent_document_edit_24_color.svg | Fluent UI Emoji/Color icons, MIT; also Rendered chain Write |
 | set-characters.svg | fluent-color/svg/ic_fluent_bot_24_color.svg | Fluent Color, MIT |
@@ -82,7 +81,7 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | globe.svg | flat-color-icons/svg/globe.svg | flat-color-icons (icons8), MIT |
 | swap.svg | noto-emoji/svg/emoji_u1f6e0.svg | Noto Emoji, Apache-2.0; Swap button, bottom bar |
 | toolbox.svg | noto-emoji/svg/emoji_u1f9f0.svg | Noto Emoji, Apache-2.0 |
-| question.svg | noto-emoji/svg/emoji_u2754.svg | Noto Emoji, Apache-2.0 |
+| question.svg | own/question_dark.svg | Vidar original art, own work; recoloured: all fills flattened to #0F0F13 (the --bg ink of the count chips) so the question chip reads dark on amber |
 | runelib.png | own/carved_rune_stone.png | Vidar original art, own work (Carved rune stone, 2026-10-12) |
 | lab.svg | noto-emoji/svg/emoji_u1f9ea.svg | Noto Emoji, Apache-2.0 |
 | floppy.svg | noto-emoji/svg/emoji_u1f4be.svg | Noto Emoji, Apache-2.0 |
@@ -119,5 +118,7 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | books.svg | noto-emoji/svg/emoji_u1f4da.svg | Noto Emoji, Apache-2.0 |
 | notion-database.svg | fluent-color/svg/ic_fluent_book_database_24_color.svg | Fluent Color, MIT; Notion default database icon |
 | notion-page.svg | fluent-color/svg/ic_fluent_document_24_color.svg | Fluent Color, MIT; Notion default page icon |
+| person.svg | fluent-color/svg/ic_fluent_person_24_color.svg | Fluent Color, MIT |
+| people-community.svg | fluent-color/svg/ic_fluent_people_community_24_color.svg | Fluent Color, MIT |
 
 Loaded by `src/icon-img.ts` (`iconImg(name)`).

@@ -72,11 +72,11 @@ struct ServerRequest {
     params: Value,
 }
 
-/// Production's runner spec: every Codex node runs on the Bare home (run
-/// 2026-10-19-codex-primary, U2), never the user's default `~\.codex`, with a fresh control
-/// token for the Bare config's `vidar_drive` server.
-pub(super) fn spec() -> Result<RunnerSpec, String> {
-    super::bare::codex_spec(&super::bare::mint_ctl_token()?)
+/// Production's runner spec: every Codex node runs on Flow's own Bare home, `flow-codex` (run
+/// 2026-10-19-codex-primary U2; W2-L2d), never the user's default `~\.codex` nor a rune set's
+/// home, with a fresh control token for its config's `vidar_drive` server.
+pub(super) fn spec(cwd: &str) -> Result<RunnerSpec, String> {
+    super::bare::codex_spec(&super::bare::mint_ctl_token()?, cwd)
 }
 
 /// Spawns `node <js> app-server` under a Job Object. On the Bare home (`bare`: its `node` and

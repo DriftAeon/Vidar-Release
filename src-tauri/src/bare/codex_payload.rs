@@ -1,5 +1,6 @@
-//! A Codex Bare row's built payload on its way to Codex: the one admission rule for a client-named
-//! `<home>\layer\payload-<hash12>.md`, plus the TOML basic-string encoder and the 12,000-character
+//! A Codex Bare vault's built payload on its way to Codex: the one admission rule for a client-named
+//! `<home>\layer\payload-<hash12>.md` and for a client-named combination home
+//! `<home>\codex-homes\<hash12>` (a hosted spawn's `CODEX_HOME`), plus the TOML basic-string encoder and the 12,000-character
 //! inline limit that only the Classic library rule (`rules::codex::choose`) still applies.
 //! Bare Codex has no cap: Rendered sends the text as `developerInstructions` on `thread/start`
 //! and the Raw TUI line uses a `--profile` file (`bare::home::write_codex_profile`).
@@ -90,6 +91,50 @@ pub fn admit_payload_file(raw: &str, home: &Path) -> Result<PathBuf, String> {
         return Err(OUTSIDE.into());
     }
     Ok(file)
+}
+
+/// The folder under the Bare home that holds one Codex home per loaded vault
+/// (`bare/agent_homes.rs`).
+pub const CODEX_HOMES_DIR: &str = "codex-homes";
+
+/// Admit a client-named Codex home for a hosted spawn (`SpawnParams.codex_home`): no leading `-`,
+/// absolute, no `..`, exactly `<home>\codex-homes\<12 lowercase hex>` as sent and again on the
+/// canonical folder, which must hold a `config.toml` (Vidar prepared it; Codex would otherwise create
+/// the home itself). Neither `codex-homes` nor the combination folder may be redirected: each
+/// canonical form must be its canonical parent's own child, so a junction pointing elsewhere (another
+/// combination's folder included) is refused. Returns the canonical path (it may carry a `\\?\`
+/// prefix; callers that hand it to a child strip it).
+pub fn admit_codex_home(raw: &str, home: &Path) -> Result<PathBuf, String> {
+    const OUTSIDE: &str = "Codex home is not a combination folder under the bare home's codex-homes directory";
+    if raw.starts_with('-') {
+        return Err("Codex home starts with '-'".into());
+    }
+    let path = Path::new(raw);
+    if !path.is_absolute() {
+        return Err("Codex home is not an absolute path".into());
+    }
+    if path.components().any(|c| c == Component::ParentDir) {
+        return Err("Codex home path contains '..'".into());
+    }
+    let combo = |p: &Path| -> Option<String> {
+        let name = p.file_name()?.to_str()?;
+        let parent = p.parent()?.file_name()?.to_str()?;
+        (is_hash12(name) && parent.eq_ignore_ascii_case(CODEX_HOMES_DIR)).then(|| name.to_string())
+    };
+    let name = combo(path).ok_or_else(|| format!("Codex home is not {CODEX_HOMES_DIR}\\<hash12>"))?;
+    let home_c = std::fs::canonicalize(home).map_err(|e| format!("bare home unavailable: {e}"))?;
+    let homes_c = std::fs::canonicalize(home.join(CODEX_HOMES_DIR)).map_err(|e| format!("bare home's {CODEX_HOMES_DIR} directory unavailable: {e}"))?;
+    if !same_path(&homes_c, &home_c.join(CODEX_HOMES_DIR)) {
+        return Err(format!("{OUTSIDE} (the {CODEX_HOMES_DIR} directory is redirected)"));
+    }
+    let dir = std::fs::canonicalize(path).map_err(|e| format!("Codex home unavailable: {e}"))?;
+    if !same_path(&dir, &homes_c.join(&name)) || combo(&dir).is_none() || !dir.is_dir() {
+        return Err(OUTSIDE.into());
+    }
+    if !dir.join("config.toml").is_file() {
+        return Err(format!("Codex home {raw} is not prepared (no config.toml)"));
+    }
+    Ok(dir)
 }
 
 /// The payload's marker line and the hash it must carry: SHA-256 (first 12 hex) of the lines
@@ -210,6 +255,63 @@ mod tests {
         let via = home.join("layer").join(name);
         let e = admit_payload_file(&via.to_string_lossy(), &home).unwrap_err();
         assert!(e.contains("outside the bare home's layer directory"), "{e}");
+    }
+
+    /// A prepared combination home `<home>\codex-homes\<hash>` (with its config.toml).
+    fn combo_home(home: &Path, hash: &str) -> PathBuf {
+        let dir = home.join(CODEX_HOMES_DIR).join(hash);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.toml"), "x = 1\n").unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_prepared_combination_home_under_the_bare_home_is_admitted() {
+        let d = Dir::new();
+        let dir = combo_home(&d.0, "0123456789ab");
+        let got = admit_codex_home(&dir.to_string_lossy(), &d.0).unwrap();
+        assert!(same_path(&got, &std::fs::canonicalize(&dir).unwrap()));
+    }
+
+    #[test]
+    fn a_codex_home_outside_the_bare_home_or_off_the_name_rule_is_refused() {
+        let d = Dir::new();
+        let home = d.0.join("home");
+        let inside = combo_home(&home, "0123456789ab");
+        // A prepared combination folder in another tree: right shape, wrong home.
+        let other = combo_home(&d.0.join("other"), "0123456789ab");
+        assert!(admit_codex_home(&other.to_string_lossy(), &home).is_err());
+        // The legacy home, a folder beside codex-homes, a bad name, '..', relative, a leading '-'.
+        std::fs::create_dir_all(home.join("codex-home")).unwrap();
+        std::fs::write(home.join("codex-home").join("config.toml"), "").unwrap();
+        for raw in [
+            home.join("codex-home").to_string_lossy().into_owned(),
+            home.join("0123456789ab").to_string_lossy().into_owned(),
+            home.join(CODEX_HOMES_DIR).join("0123456789AB").to_string_lossy().into_owned(),
+            home.join(CODEX_HOMES_DIR).join("..").join(CODEX_HOMES_DIR).join("0123456789ab").to_string_lossy().into_owned(),
+            r"codex-homes\0123456789ab".into(),
+            "-0123456789ab".into(),
+        ] {
+            assert!(admit_codex_home(&raw, &home).is_err(), "{raw}");
+        }
+        // Not prepared: no config.toml.
+        std::fs::remove_file(inside.join("config.toml")).unwrap();
+        assert!(admit_codex_home(&inside.to_string_lossy(), &home).unwrap_err().contains("not prepared"));
+    }
+
+    #[test]
+    fn a_codex_home_through_a_junction_is_refused() {
+        let d = Dir::new();
+        let home = d.0.join("home");
+        let target = combo_home(&home, "aaaaaaaaaaaa");
+        let via = home.join(CODEX_HOMES_DIR).join("bbbbbbbbbbbb");
+        let made = std::process::Command::new("cmd").args(["/c", "mklink", "/J"]).arg(&via).arg(&target).output();
+        if !made.as_ref().is_ok_and(|o| o.status.success()) || !via.exists() {
+            eprintln!("SKIP a_codex_home_through_a_junction_is_refused: could not create a junction");
+            return;
+        }
+        let e = admit_codex_home(&via.to_string_lossy(), &home).unwrap_err();
+        assert!(e.contains("not a combination folder"), "{e}");
     }
 
     #[test]

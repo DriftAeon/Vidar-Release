@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom({ stubs: {
-  "launcher/keyboard": `export let kbNav = false; export function colKeydown() {}
+  "launcher/keyboard": `export let kbNav = false; export function colKeydown() {} export function kbPointerMove() {}
     globalThis.__setKbNav = (v) => { kbNav = v; };`,
 } });
 const { col, hoverOpen, hideColsFrom, placeColumn, setColumnRoot, HOVER_SWITCH_MS } = await import("../src/launcher/columns.ts");

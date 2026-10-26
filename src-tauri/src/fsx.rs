@@ -87,7 +87,7 @@ fn is_rename_contention(e: &std::io::Error) -> bool {
 
 /// Renames `tmp` over `path`; on Windows, contention errors are retried with a short bounded
 /// backoff (about 1.5 s worst case). Every other error returns at once.
-fn rename_retrying(tmp: &Path, path: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_retrying(tmp: &Path, path: &Path) -> std::io::Result<()> {
     #[cfg(windows)]
     {
         const RENAME_ATTEMPTS: u32 = 40;

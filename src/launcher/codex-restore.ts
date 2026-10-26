@@ -4,6 +4,7 @@
 // resumed (verified in W1), so a tab that never ran a prompt saves `threadId: null` and comes
 // back as a fresh thread. No runtime imports, so it is testable under plain node.
 import type { CodexTabRecord } from "../prefs-core";
+import type { SetRef } from "../ipc";
 
 const MODES: readonly string[] = ["default", "acceptEdits", "plan"];
 
@@ -24,6 +25,9 @@ export interface CodexTabView {
   /** Bare launch profile and row key of a profiled tab. */
   profile?: string;
   rowKey?: string;
+  sets?: SetRef[];
+  /** The Rune Vault a profiled tab loaded: a restore resumes the thread on it (R4). */
+  vault?: string;
 }
 
 /** Every Codex Rendered tab in `order` (the strip's DOM order); other tabs are skipped. */
@@ -48,6 +52,7 @@ export function snapshotCodexTabs(
       active: id === activeId,
       ...(t.profile ? { profile: t.profile } : {}),
       ...(t.profile && t.rowKey ? { rowKey: t.rowKey } : {}),
+      ...(t.profile && t.vault ? { vault: t.vault } : t.sets !== undefined ? { sets: t.sets } : {}),
     });
   }
   return out;

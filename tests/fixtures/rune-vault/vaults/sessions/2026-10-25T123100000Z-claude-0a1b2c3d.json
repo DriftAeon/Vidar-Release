@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "createdUtc": "2026-10-25T12:31:00Z",
+  "agent": "claude",
+  "body": "rendered",
+  "tab": "s1-ab",
+  "falconSession": "s1234abcd-00000001",
+  "threadId": null,
+  "vault": { "id": "astra-code-no-skill", "hash": "34be56ea0c94" },
+  "home": "C:\\Users\\testuser\\AppData\\Local\\Vidar\\homes\\0123456789ab\\bare-claude",
+  "loadoutHash": "d7d7d7d7d7d7"
+}

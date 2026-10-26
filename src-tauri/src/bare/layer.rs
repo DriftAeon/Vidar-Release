@@ -1,6 +1,5 @@
-//! src-tauri\src\bare\layer.rs — a Claude Bare row's rune sets, built into the payload at spawn
-//! (Bare slice 1, W1). The row is found by its `rowKey` in vidar.json (the last keyed entry
-//! with a `sets` field wins, read-only, per spawn); a `{ set }` ref resolves through `rulesLibrary`,
+//! src-tauri\src\bare\layer.rs — rune set refs built into a payload (Bare slice 1, W1). No launcher
+//! row is read here (D1, run 2026-10-25-rune-vault): callers pass the refs; a `{ set }` ref resolves through `rulesLibrary`,
 //! a `{ library, set }` ref through the import library `runtime\runes\<library>\` (onboarding D8).
 //! Refs build in ref order through `build::build_in`; a repeated ref is built once, and a slot
 //! whose rune id and body an earlier library already rendered is dropped from a later library's
@@ -17,7 +16,6 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use serde_json::Value;
 
 use super::home::{self, HomeLock};
 use crate::rules::{build, context::RenderCtx, library::Library, rune::{self, Rune, State}};
@@ -38,35 +36,9 @@ pub struct RowSets {
     pub rules_library: Option<String>,
 }
 
-/// The row's sets from vidar.json at `config`, parsed read-only (never `config::load`, which can
-/// write a migration back). The key is trimmed; a blank one is no key and reads nothing. The
-/// last entry with that key that has a `sets` field supplies them, so a later label-only entry
-/// for the row keeps its sets, as the frontend overlay merges fields (`src/config-agents.ts`).
-/// An unknown key or no entry with `sets` gives none; a missing file gives none (no row can
-/// carry sets); an unreadable or malformed one refuses.
-pub fn row_sets(config: &Path, row_key: &str) -> Result<RowSets, String> {
-    let row_key = row_key.trim();
-    if row_key.is_empty() {
-        return Ok(RowSets::default());
-    }
-    let text = match crate::fsx::read_text(config) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(RowSets::default()),
-        Err(e) => return Err(format!("vidar.json {} is unreadable ({e}); Bare spawn refused", config.display())),
-    };
-    let root: Value = serde_json::from_str(crate::fsx::strip_bom(&text))
-        .map_err(|e| format!("vidar.json {} is unreadable ({e}); Bare spawn refused", config.display()))?;
-    let row = root
-        .get("agents")
-        .and_then(Value::as_array)
-        .and_then(|a| a.iter().rev().find(|r| r.get("key").and_then(Value::as_str) == Some(row_key) && r.get("sets").is_some()));
-    let Some(sets) = row.and_then(|r| r.get("sets")).filter(|s| !s.is_null()) else {
-        return Ok(RowSets::default());
-    };
-    let sets: Vec<SetRef> = serde_json::from_value(sets.clone())
-        .map_err(|e| format!("Row {row_key:?} in vidar.json: `sets` is not a list of {{ library?, set }} ({e}); Bare spawn refused"))?;
-    let rules_library = root.get("rulesLibrary").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
-    Ok(RowSets { sets, rules_library })
+/// The library name a `rulesLibrary` folder goes by in a vault or a set ref: the folder's own name.
+pub(crate) fn library_name(rel: &str) -> String {
+    Path::new(rel).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| rel.to_string())
 }
 
 /// A built row payload, written under the home's `layer\`.
@@ -83,6 +55,9 @@ pub struct BuiltPayload {
 /// `HomeLock` (it is not reentrant, so this never locks). Nothing is written unless every check
 /// passes; a file already holding the same bytes is left as it is. `carried` is the guard file names
 /// the home carries: a rune claiming an `enforced-by` file outside it is dropped with a warning.
+/// Since run 2026-10-25-rune-vault (L2a) no spawn builds from a row: the vault's text renders in
+/// `set_loadout::resolve_vault` and goes through `build_text_payload`. Kept for the set-render tests.
+#[cfg(test)]
 pub fn build_payload(_lock: &HomeLock, root: &Path, home_dir: &Path, template: &str, row: &RowSets, guard: &home::Guard, carried: &[String]) -> Result<BuiltPayload, String> {
     let ctx = RenderCtx::bare(carried.iter().cloned().collect());
     let (filled, ids, warnings) = row_text(template, row, &ctx, &|r| library_dir(root, row, r))?;
@@ -164,6 +139,10 @@ pub(crate) fn library_dir(root: &Path, row: &RowSets, r: &SetRef) -> Result<Path
         let rel = row.rules_library.as_deref().ok_or("Rune sets need rulesLibrary in vidar.json; Bare spawn refused")?;
         return Ok(root.join(rel));
     };
+    // `stock` is reserved for the shipped stock library, as `tools/runes/lint.mjs` maps it.
+    if name == "stock" {
+        return Ok(crate::paths::rune_stock_dir_in(root));
+    }
     if rune::check_id(name).is_err() {
         return Err(format!(
             "Rune set {:?} names library {name:?}, which is not a library name (lowercase letters, digits and single hyphens); Bare spawn refused",
@@ -186,6 +165,31 @@ pub(crate) fn library_dir(root: &Path, row: &RowSets, r: &SetRef) -> Result<Path
         ));
     }
     Ok(dir)
+}
+
+/// A library by name, as a vault names it (run 2026-10-25-rune-vault, L2a; the vault store's resolver):
+/// `stock` is the shipped stock library; any other name is `runtime\runes\<name>\` when that folder
+/// exists (kit, `gen-*`; canonical and inside the import folder, as `library_dir`), else the library
+/// vidar.json's `rulesLibrary` names by its folder name (`library_name`).
+pub(crate) fn library_dir_named(root: &Path, name: &str) -> Result<PathBuf, String> {
+    rune::check_id(name).map_err(|e| format!("library {name:?}: {e}"))?;
+    if name == "stock" {
+        return Ok(crate::paths::rune_stock_dir_in(root));
+    }
+    let base = crate::paths::rune_imports_dir_in(root);
+    if base.join(name).exists() {
+        let dir = base.join(name).canonicalize().map_err(|_| format!("library {name:?} has no folder"))?;
+        if !dir.is_dir() || !base.canonicalize().is_ok_and(|b| dir.starts_with(b)) {
+            return Err(format!("library {name:?} resolves outside the imports folder"));
+        }
+        return Ok(dir);
+    }
+    let config = crate::paths::config_path_in(root);
+    let mut ignored = Vec::new();
+    match super::set_loadout::rules_library(&config, &mut ignored) {
+        Some(rel) if library_name(&rel) == name => Ok(root.join(rel)),
+        _ => Err(format!("library {name:?} has no folder")),
+    }
 }
 
 /// A ref's library as messages name it.
@@ -222,16 +226,25 @@ fn build_sets(row: &RowSets, ctx: &RenderCtx, resolve: &Resolve) -> Result<(Stri
             }
         };
         let lib = &libs[i].1;
-        if let Ok(Some(e)) = lib.entry(&r.set) {
-            if e.kind != "set" {
-                return Err(format!("Rune {:?} is a {}, not a set; Bare spawn refused", r.set, e.kind));
+        if let Ok(Some(entry)) = lib.entry(&r.set) {
+            if entry.kind != "set" {
+                return Err(format!("Rune {:?} is a {}, not a set; Bare spawn refused", r.set, entry.kind));
             }
         }
         let set = load_set(lib, &r.set);
         let mut sub = ctx.clone();
+        // Libraries the set's `<?rune lib/id?>` slots name, resolved as a ref naming them would be.
+        for m in set.as_ref().map(|(_, slots)| slots.as_slice()).unwrap_or_default() {
+            if let Some((Some(other), _)) = split_slot(m) {
+                if !sub.libraries.contains_key(other) {
+                    let dir = resolve(&SetRef { library: Some(other.to_string()), set: r.set.clone() })?;
+                    sub.libraries.insert(other.to_string(), dir);
+                }
+            }
+        }
         for m in set.as_ref().map(|(_, slots)| slots.as_slice()).unwrap_or_default() {
             // Same id and same body is one rule held twice; the same id with another body is another rule.
-            let body = lib.entry(m).ok().flatten().and_then(|e| lib.load(&e).ok()).map(|r| r.body);
+            let body = member(lib, &sub, m).map(|r| r.body);
             if let Some((_, by, _)) = placed.iter().find(|(id, by, b)| id == m && *by != name && *b == body) {
                 if sub.skip.insert(m.clone()) {
                     warnings.push(format!(
@@ -254,7 +267,7 @@ fn build_sets(row: &RowSets, ctx: &RenderCtx, resolve: &Resolve) -> Result<(Stri
             Err(f) => errors.extend(f.errors),
         }
         for m in set.map(|(s, slots)| rendered(lib, &s, &slots, &sub)).unwrap_or_default() {
-            let body = lib.entry(&m).ok().flatten().and_then(|e| lib.load(&e).ok()).map(|r| r.body);
+            let body = member(lib, &sub, &m).map(|r| r.body);
             if !placed.iter().any(|(id, _, b)| *id == m && *b == body) {
                 placed.push((m, name, body));
             }
@@ -267,8 +280,9 @@ fn build_sets(row: &RowSets, ctx: &RenderCtx, resolve: &Resolve) -> Result<(Stri
     Ok((text, ids, warnings))
 }
 
-/// The rune id a set line slots, by the README slot grammar (`set.rs` `slot`).
-fn slot_id(line: &str) -> Option<&str> {
+/// The slot token a set line holds, by the README slot grammar (`set.rs` `slot`): the whole token, so
+/// a cross-library slot reads `lib/id` and never equals a bare id. `slot_ref` splits it.
+pub(crate) fn slot_id(line: &str) -> Option<&str> {
     let digits = line.bytes().take_while(u8::is_ascii_digit).count();
     let rest = ["- ", "* "]
         .iter()
@@ -279,6 +293,28 @@ fn slot_id(line: &str) -> Option<&str> {
     (!id.is_empty() && !id.contains(|c: char| c.is_whitespace() || "?<>".contains(c))).then_some(id)
 }
 
+/// A slot token as (library, id): `lib/id` names library `lib`, a bare id is the set's own library
+/// (`None`). `None` for any other shape (an empty part, a second `/`). Names are not checked here:
+/// the resolver refuses a library or id outside the rune id grammar (twin of `render.mjs` `slotRef`).
+pub(crate) fn split_slot(token: &str) -> Option<(Option<&str>, &str)> {
+    match token.split_once('/') {
+        None => Some((None, token)),
+        Some((lib, id)) if !lib.is_empty() && !id.is_empty() && !id.contains('/') => Some((Some(lib), id)),
+        Some(_) => None,
+    }
+}
+
+/// The slot on a set line as (library, id), per `split_slot`.
+pub(crate) fn slot_ref(line: &str) -> Option<(Option<&str>, &str)> {
+    split_slot(slot_id(line)?)
+}
+
+/// The slot on a set line with a bare id resolved to the set's own library `own`: (library, id).
+pub(crate) fn slot_in<'a>(line: &'a str, own: &'a str) -> Option<(&'a str, &'a str)> {
+    let (lib, id) = slot_ref(line)?;
+    Some((lib.unwrap_or(own), id))
+}
+
 /// Set `id` with its slotted member ids in body order; `None` when it is tombstoned or does not
 /// load (its build then reports why).
 fn load_set(lib: &Library, id: &str) -> Option<(Rune, Vec<String>)> {
@@ -286,8 +322,27 @@ fn load_set(lib: &Library, id: &str) -> Option<(Rune, Vec<String>)> {
         return None;
     }
     let set = lib.load(&lib.entry(id).ok()??).ok()?;
-    let slots = set.body.lines().filter_map(slot_id).map(str::to_string).collect();
+    // Slot tokens as written: `id` for this library, `lib/id` for another (`member` reads either).
+    let slots = set.body.lines().filter_map(slot_ref).map(|(l, m)| l.map_or(m.to_string(), |l| format!("{l}/{m}"))).collect();
     Some((set, slots))
+}
+
+/// The rune a slot token names: a bare id in `lib`, `lib/id` in `ctx.libraries`; `None` when it is
+/// tombstoned, absent or does not load.
+fn member(lib: &Library, ctx: &RenderCtx, token: &str) -> Option<Rune> {
+    let (other, id) = split_slot(token)?;
+    let opened;
+    let home = match other {
+        None => lib,
+        Some(name) => {
+            opened = Library::open(ctx.libraries.get(name)?).ok()?;
+            &opened
+        }
+    };
+    if home.tombstone(id).is_some() {
+        return None;
+    }
+    home.entry(id).ok().flatten().and_then(|e| home.load(&e).ok())
 }
 
 /// The slots of `set` that `build::build_in` renders under `ctx`: the set Active and kept, each
@@ -297,11 +352,51 @@ fn rendered(lib: &Library, set: &Rune, slots: &[String], ctx: &RenderCtx) -> Vec
         return Vec::new();
     }
     let renders = |m: &String| {
-        if ctx.skip.contains(m) || lib.tombstone(m).is_some() {
+        if ctx.skip.contains(m) || ctx.off.contains(m) {
             return false;
         }
-        let Some(r) = lib.entry(m).ok().flatten().and_then(|e| lib.load(&e).ok()) else { return false };
-        !matches!(r.kind.as_str(), "procedure" | "set") && r.state == State::Active && r.meets(&set.scope) && ctx.keeps(&r)
+        let Some(r) = member(lib, ctx, m) else { return false };
+        // Item runes reach a session through the Bare mappers (`rune_items`), never as payload text.
+        !matches!(r.kind.as_str(), "procedure" | "set") && !rune::is_item_kind(&r.kind) && r.state == State::Active && r.meets(&set.scope) && ctx.keeps(&r)
     };
     slots.iter().filter(|m| renders(m)).cloned().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Prints where each named library resolves under `VIDAR_LIBRARY_PROOF_ROOT` (a real install;
+    /// read-only). Run by hand: `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn print_real_library_paths() {
+        let Some(root) = std::env::var_os("VIDAR_LIBRARY_PROOF_ROOT") else { return };
+        let root = PathBuf::from(root);
+        let mut names = vec!["stock".to_string()];
+        let mut ignored = Vec::new();
+        if let Some(rel) = super::super::set_loadout::rules_library(&crate::paths::config_path_in(&root), &mut ignored) {
+            names.push(library_name(&rel));
+        }
+        for e in std::fs::read_dir(crate::paths::rune_imports_dir_in(&root)).into_iter().flatten().flatten() {
+            if e.path().is_dir() {
+                names.push(e.file_name().to_string_lossy().into_owned());
+            }
+        }
+        for n in names {
+            println!("library {n:?} -> {:?}", library_dir_named(&root, &n));
+        }
+    }
+
+    #[test]
+    fn a_prefixed_slot_names_its_library_and_a_bare_slot_the_sets_own() {
+        assert_eq!(slot_id("- <?rune stock/gate-fact?>"), Some("stock/gate-fact"));
+        assert_eq!(slot_ref("- <?rune stock/gate-fact?>"), Some((Some("stock"), "gate-fact")));
+        assert_eq!(slot_ref("2. <?rune plain?>"), Some((None, "plain")));
+        assert_eq!(slot_in("<?rune plain?>", "kit"), Some(("kit", "plain")));
+        assert_eq!(slot_in("* <?rune stock/gate-fact?>", "kit"), Some(("stock", "gate-fact")));
+        for bad in ["- <?rune /x?>", "- <?rune lib/?>", "- <?rune a/b/c?>", "- <?rune a b?>", "text"] {
+            assert_eq!(slot_ref(bad), None, "{bad}");
+        }
+    }
 }

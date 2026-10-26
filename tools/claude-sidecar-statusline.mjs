@@ -15,14 +15,14 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
-// Mirrors ~\.claude\statusline\<session_id>.json (the file context-gate.mjs reads) from inside
+// Mirrors ~\.claude\statusline\<session_id>.json (the file the retired context gate read) from inside
 // a Rendered/headless body, where the terminal statusline script never runs.
 // session_id comes from system/init; context_window_size is the last max modelUsage[*].contextWindow
 // seen on a result message so far, carried forward (omitted until the first result lands, matching
-// the gate's own default). Fires on every top-level assistant message (parent_tool_use_id == null);
+// the old gate's default). Fires on every top-level assistant message (parent_tool_use_id == null);
 // streamed content-block assistant messages carry the same top-level id and a non-final usage, so
 // this just keeps overwriting the same file with the latest number — cheap, and the last write
-// before Stop is what the gate reads. Best effort, atomic (tmp+rename), never throws.
+// before Stop is what a reader sees. Best effort, atomic (tmp+rename), never throws.
 //
 // Opt-in: nothing is written under ~\.claude unless vidar.json carries
 // `"statuslineMirror": true`. vidar.json is found by walking up from this file to the Vidar root
@@ -108,7 +108,7 @@ function writeStatusline(sessionId, usage, contextWindowSize) {
       try { unlinkSync(tmp); } catch { /* best effort */ }
       throw e;
     }
-  } catch { /* best effort: a missed statusline write just leaves the gate with no source */ }
+  } catch { /* best effort: a missed statusline write just leaves the mirror stale */ }
 }
 
 function observeStatusline(msg) {

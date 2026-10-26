@@ -1,0 +1,17 @@
+{
+  "id": "w-settings-new-tab-order",
+  "title": "Set the New Tab Agent Order",
+  "style": "keyboard-first",
+  "scope": "vidar",
+  "surfaces": ["settings", "launcher"],
+  "tags": ["settings", "launcher"],
+  "realModel": false,
+  "core": false,
+  "source": ["62d46c9a"],
+  "steps": [
+    { "intent": "open Settings and look for where the new tab agent order is set" },
+    { "intent": "move a different agent to the top of the order" },
+    { "intent": "open the launcher to start a new tab" },
+    { "intent": "check the agents appear in the order I set" }
+  ]
+}

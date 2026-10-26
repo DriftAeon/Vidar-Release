@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "astra-code",
+  "name": "Astra Code",
+  "createdUtc": "2026-10-25T12:00:00Z",
+  "from": { "template": "stock-codex" },
+  "runesets": [
+    {
+      "file": "sets/kit--kit.md",
+      "source": { "library": "kit", "set": "kit" },
+      "copiedUtc": "2026-10-25T12:00:00Z",
+      "sourceHash": "b606b285a4d0fc08529b971cef5c2447528b8f92ccb61ce8f3f3278ba5b4a1da"
+    }
+  ],
+  "runes": [
+    { "library": "stock", "id": "bare-identity" },
+    { "library": "stock", "id": "gate-recall" },
+    { "library": "stock", "id": "gate-skill" },
+    { "library": "stock", "id": "gate-agent" },
+    { "library": "stock", "id": "gate-hook-run" },
+    { "library": "stock", "id": "gate-hook-command" },
+    { "library": "stock", "id": "vidar-drive" },
+    { "library": "stock", "id": "gate-permission" },
+    { "library": "stock", "id": "vidar-app" }
+  ],
+  "lockedUtc": null,
+  "lockedBy": null,
+  "hash": "3c2420f6a1a7",
+  "pins": {}
+}

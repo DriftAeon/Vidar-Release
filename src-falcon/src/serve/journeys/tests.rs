@@ -207,6 +207,10 @@ impl Conn {
 
 /// Spawn a hosted Codex session on the fake; `(session, generation)`.
 fn spawn(host: &Arc<Host>, conn: &Conn, fake: &Fake, resume: Option<&str>) -> (String, u64) {
+    spawn_with_sets(host, conn, fake, resume, None)
+}
+
+fn spawn_with_sets(host: &Arc<Host>, conn: &Conn, fake: &Fake, resume: Option<&str>, sets: Option<Vec<crate::protocol::SetRef>>) -> (String, u64) {
     let payload = conn.ok(
         host,
         Op::Spawn(SpawnParams {
@@ -221,15 +225,44 @@ fn spawn(host: &Arc<Host>, conn: &Conn, fake: &Fake, resume: Option<&str>) -> (S
             tab_name: None,
             gateway: None,
             profile: None,
-            payload_file: None,
-            row_key: None,
-            set_plugin_dirs: Vec::new(),
+            payload_file: None, mcp_file: None,
+            row_key: None, sets,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
         }),
     );
     (
         payload["session"]["session"].as_str().unwrap().into(),
         payload["session"]["generation"].as_u64().unwrap(),
     )
+}
+
+#[test]
+fn spawn_and_list_preserve_absent_empty_and_two_sets_for_readopt() {
+    use crate::protocol::SetRef;
+    for (tag, sets) in [
+        ("journey-sets-absent", None),
+        ("journey-sets-empty", Some(vec![])),
+        ("journey-sets-two", Some(vec![
+            SetRef { library: None, set: "base".into() },
+            SetRef { library: Some("team".into()), set: "review".into() },
+        ])),
+    ] {
+        let journals = Scratch::new(tag);
+        let host = codex_host(&journals.0, Duration::ZERO);
+        let fake = Fake::new(tag, startup());
+        let owner = Conn::new(1);
+        let (sid, _) = spawn_with_sets(&host, &owner, &fake, None, sets.clone());
+        let expected = sets.as_ref().map(|s| serde_json::to_value(s).unwrap());
+        let summary = host.registry.get(&sid).unwrap().summary();
+        assert_eq!(summary.sets, sets);
+        let adopter = Conn::new(2);
+        let listed = adopter.ok(&host, Op::List);
+        let carried = listed["sessions"].as_array().unwrap().iter()
+            .find(|s| s["session"] == sid).unwrap();
+        assert_eq!(carried.get("sets"), expected.as_ref());
+        let lease = owner.control(&host, &sid);
+        terminate(&host, &owner, &sid, &lease);
+    }
 }
 
 /// What an adopting client rebuilds: attach, page every record, fold them.

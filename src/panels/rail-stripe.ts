@@ -15,13 +15,13 @@ import { getFocusedSession, type FocusedSession } from "./sessions";
 interface Drawer { close: () => void; btn: HTMLButtonElement; surface: HTMLElement; remove: () => void }
 
 // The same reader the rack uses for this focus (rack.ts rebuild): a Codex tab's own config,
-// else Claude's, with the tab's launch profile selecting its home.
+// else Claude's, with the tab's Bare row selecting its Codex home.
 function readFocused(s: FocusedSession | null): { key: string; read: () => Promise<McpRack> } {
   const f = mcpFocus(s);
-  const { tab, project, profile } = f;
+  const { tab, project, profile, row } = f;
   return { key: mcpFocusKey(f), read: f.agent === "codex"
-    ? () => invoke("read_codex_mcp_servers", { tab, profile })
-    : () => invoke("read_mcp_servers", { project, profile }) };
+    ? () => invoke("read_codex_mcp_servers", { tab, profile, row })
+    : () => invoke("read_mcp_servers", { project, profile, tab, row }) };
 }
 
 export function initRailStripe(host: HTMLElement, signal: AbortSignal): void {

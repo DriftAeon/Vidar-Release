@@ -1,0 +1,17 @@
+{
+  "id": "w-settings-reorder-mcp",
+  "title": "Reorder MCP Server Rows in Settings",
+  "style": "misclick",
+  "scope": "vidar",
+  "surfaces": ["settings"],
+  "tags": ["settings", "drag"],
+  "realModel": false,
+  "core": false,
+  "source": ["099c3d69"],
+  "steps": [
+    { "intent": "open Settings and find the MCP Servers list" },
+    { "intent": "drag a row, release it over the wrong spot, then drag it again to the right spot" },
+    { "intent": "move the mouse around after releasing" },
+    { "intent": "check the row stays put and nothing keeps dragging" }
+  ]
+}

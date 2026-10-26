@@ -1,0 +1,63 @@
+/* Rune-set pick (run 2026-10-24-runesets-full-stack W4, mock variants A2 and the Workspaces piece).
+   Launcher: the Runes icon on a Bare body row opens .sp-inline under it; Settings > Workspaces: the same
+   .sp-row ticks in a .ch-det list. Ticked rows read at full strength, unticked rows dim. */
+.sp-row {
+  display: flex; align-items: center; gap: var(--space-8); box-sizing: border-box;
+  padding: var(--space-4) var(--space-12) var(--space-4) var(--space-8);
+  background: none; border: none; border-radius: var(--radius-4); color: var(--fg); text-align: left;
+  font: var(--weight-regular) var(--font-12)/var(--line-16) var(--font-mono); white-space: nowrap; cursor: pointer;
+}
+.sp-row .icn { width: var(--font-12); height: var(--font-12); flex: none; }
+.sp-row.off { opacity: var(--opacity-dim); }
+.sp-row:hover:not(:disabled) { background: var(--bg); color: var(--accent); opacity: 1; }
+.sp-row:focus-visible { outline: 2px solid var(--accent); outline-offset: calc(-1 * var(--space-2)); opacity: 1; }
+.sp-row:active:not(:disabled) { background: var(--bg-selected); }
+.sp-row:disabled { opacity: var(--opacity-dim); cursor: default; }
+
+/* launcher: the shared menu-row base (menus.css) outranks .sp-row, so the tray re-states its row metrics */
+.launcher-col button.sp-row {
+  padding: var(--space-4) var(--space-12) var(--space-4) var(--space-8);
+  border-radius: var(--radius-4); font: var(--weight-regular) var(--font-12)/var(--line-16) var(--font-mono);
+}
+.launcher-col button.sp-row.off { opacity: var(--opacity-dim); }
+.launcher-col button.sp-row:is(:hover, :focus) { opacity: 1; }
+.launcher-col button.sp-row:focus-visible { outline: 2px solid var(--accent); outline-offset: calc(-1 * var(--space-2)); }
+.launcher-col button.sp-row:active { background: var(--bg-selected); }
+.launcher-col button.sp-row.addon {
+  margin-top: var(--space-2); border-top: 1px solid var(--border); border-top-left-radius: 0; border-top-right-radius: 0;
+}
+.sp-row.addon { margin-top: var(--space-2); }
+
+/* the Runes icon at the right edge of a Bare body row */
+.launcher-col button.sp-host { display: flex; align-items: center; gap: var(--space-8); }
+.sp-ico {
+  display: flex; align-items: center; margin-left: auto; padding-left: var(--space-12);
+  border-radius: var(--radius-4); opacity: var(--opacity-dim); cursor: pointer;
+}
+.sp-ico .icn { width: var(--font-12); height: var(--font-12); }
+.sp-ico:hover, .sp-ico[aria-expanded="true"] { opacity: 1; }
+.sp-ico:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-2); opacity: 1; }
+.sp-ico:active { opacity: var(--opacity-dim); }
+
+/* the tray under the open row, indented to the label */
+.sp-inline {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-4) var(--space-16); margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+.sp-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.sp-act { display: flex; padding: var(--space-4) var(--space-4) var(--space-2); margin-top: var(--space-2); border-top: 1px solid var(--border); }
+.sp-act .ws-btn { flex: 1; justify-content: center; }
+/* Launch is a Sheen .ws-btn; the launcher's row base would flatten it, so its face is re-stated here */
+.launcher-col .sp-act button.ws-btn {
+  background: var(--face); box-shadow: var(--depth); border: 1px solid var(--edge); border-radius: var(--radius-4);
+  color: var(--fg); padding: 0 var(--space-12); text-align: center;
+  font: var(--weight-strong) var(--font-12)/var(--line-16) var(--font-ui);
+}
+.launcher-col .sp-act button.ws-btn:active:not(:disabled) { padding-top: var(--space-2); }
+.launcher-col .sp-act button.ws-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-2); }
+
+/* Settings > Workspaces: the add-on icon button, count in mono beside the icon */
+.ws-btn.ws-ico { gap: var(--space-4); padding: 0 var(--space-8); }
+.ws-btn.ws-ico .icn { width: var(--font-12); height: var(--font-12); }
+.ws-ico .ws-n { font-family: var(--font-mono); font-size: var(--font-12); font-variant-numeric: tabular-nums; }

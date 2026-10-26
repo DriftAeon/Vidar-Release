@@ -32,6 +32,17 @@
 .cx-head:hover .cx-rename:disabled { opacity: 0.5; cursor: default; }
 .cx-rename-wrap { flex: 1; min-width: 0; align-items: center; }
 .cx-split { display: inline-flex; gap: 0; }
+/* Git / Perforce switch, last in the head: the close lock's track, knob and focus ring (bar-switches.css), both
+   states neutral; the knob sits left for Git and at the lock's on position for Perforce, and the side not picked dims */
+.cx-backend { display: flex; align-items: center; flex: none; gap: var(--space-8); margin-left: var(--space-8); cursor: pointer; user-select: none; }
+.cx-backend { color: var(--fg-dim); }
+.cx-backend:hover { color: var(--accent); } /* as the bar switches */
+.cx-backend:has(input:disabled), .cx-backend input:disabled { cursor: default; } /* locked during a git action */
+.cx-backend:has(input:disabled) { opacity: var(--opacity-dim); color: var(--fg-dim); }
+.cx-backend .icn { width: var(--space-16); height: var(--space-16); }
+.cx-backend:not(.p4) .cx-bk-p4, .cx-backend.p4 .cx-bk-git { opacity: var(--opacity-dim); }
+#changes-view .cx-backend.p4 .knob { left: calc(var(--space-12) + var(--border-w)); } /* the lock's 13px */
+.cx-sec-cl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; } /* a changelist head carries a runtime description */
 .changes-pane .cx-split .cx-split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .changes-pane .cx-split .cx-split-more { margin-left: calc(-1 * var(--border-w)); border-top-left-radius: 0; border-bottom-left-radius: 0; width: var(--space-16); min-width: var(--space-16); }
 .changes-pane .cx-split button { position: relative; }

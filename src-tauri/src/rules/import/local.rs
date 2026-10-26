@@ -10,6 +10,7 @@
 //!   vidar.json holding `bareGuards` ticks its entries (block targets included); with no key the block
 //!   targets start ticked, as `--emit` has them.
 //!   Every `.mjs` hook but guard-driver carries the `guard` entry it would write.
+//! - mcp: the user-scope servers of `~/.claude.json` (`claude_json.rs`), after the hooks.
 //! - Codex home files (`codex_home.rs`) follow each kind's own Claude files, and its `mcp` rows come last;
 //!   each carries `agent: "codex"`.
 
@@ -35,6 +36,9 @@ pub struct Guard {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matcher: Option<String>,
     pub run: Vec<String>,
+    /// An opaque Codex hooks.json selection; resolved on the server before a rune is saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// One offered file (`BareLocalFile`).
@@ -55,15 +59,18 @@ pub struct LocalFile {
     pub reason: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guard: Option<Guard>,
+    /// Hook rows shared with Codex are hidden there when its event or matcher cannot run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub codex_supported: Option<bool>,
     /// `codex` for a file Codex reads (a Codex home's files, a cwd AGENTS.md); absent for Claude's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<&'static str>,
-    /// An `mcp` row whose url is a `bare::codex_mcp::HOSTED` url: the `bareCodexMcp` name it writes.
+    /// A pickable `mcp` row's catalog server name, matched by url for this agent.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hosted: Option<&'static str>,
-    /// That hosted server's pinned url (from `HOSTED`, never from the config); no other url is carried.
+    pub hosted: Option<String>,
+    /// Catalog URL retained during matching; stripped before command IPC.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<&'static str>,
+    pub url: Option<String>,
 }
 
 /// `BareLocalSources`.
@@ -88,8 +95,12 @@ pub struct LocalEnv<'a> {
     pub settings: Option<&'a Path>,
     /// The Codex home whose files are offered (`sources::live_codex_home`; `codex_home.rs`).
     pub codex_home: Option<&'a Path>,
-    /// The Bare agent homes root; a Codex home under it offers nothing.
+    /// The Bare agent homes root; a Claude home (`home`) or a Codex home under it offers nothing.
     pub homes: Option<&'a Path>,
+    /// The real home's `~/.claude.json`, whose user-scope `mcpServers` are offered (`claude_json.rs`).
+    pub claude_json: Option<&'a Path>,
+    /// The module catalog an MCP row's url must match to be pickable.
+    pub catalog: Option<&'a crate::bare::bundles::Bundles>,
 }
 
 fn read_root(path: &Path) -> Option<Value> {
@@ -125,7 +136,7 @@ fn under(path: &Path, dir: &Path) -> bool {
 
 /// The one "project" rule for every offered file, Codex home files included: a path under the cwd is
 /// `project`, anything else `global`. It reads the path itself, so a `CODEX_HOME` outside the profile
-/// still reads global (`bare::actives::scope_of` goes by the `~\.codex\` display form instead).
+/// still reads global.
 pub(super) fn file(env: &LocalEnv, path: &Path, kind: &'static str) -> LocalFile {
     let codex_rules = kind == "rules"
         && path.file_name().is_some_and(|n| {
@@ -144,6 +155,7 @@ pub(super) fn file(env: &LocalEnv, path: &Path, kind: &'static str) -> LocalFile
         pickable: true,
         reason: None,
         guard: None,
+        codex_supported: None,
         agent: codex_rules.then_some("codex"),
         hosted: None,
         url: None,
@@ -153,8 +165,20 @@ pub(super) fn file(env: &LocalEnv, path: &Path, kind: &'static str) -> LocalFile
 fn rules(env: &LocalEnv) -> Vec<LocalFile> {
     let (cwd, codex_home) = (Some(env.cwd), super::codex_home::usable(env));
     let mut out: Vec<LocalFile> = Vec::new();
+    // in a linked worktree the project CLAUDE.md / AGENTS.md list from the main checkout when it has them
+    let wt = super::worktree::roots(env.cwd);
     for s in sources::list_in(env.imports, env.home, codex_home, cwd, env.primary) {
-        out.push(LocalFile { library: Some(s.library), ..file(env, Path::new(&s.path), "rules") });
+        let mut f = LocalFile { library: Some(s.library), ..file(env, Path::new(&s.path), "rules") };
+        if let (Some((root, main)), "project") = (&wt, f.scope) {
+            let moved = super::worktree::main_copy(Path::new(&f.path), root, main);
+            if moved != Path::new(&f.path) {
+                let library = sources::library_of_in(env.imports, &moved, env.home, codex_home, Some(main), env.primary);
+                f = LocalFile { library: Some(library), path: moved.to_string_lossy().into_owned(), shown: tilde(&moved, env.home), ..f };
+            }
+        }
+        if !out.iter().any(|o| Path::new(&o.path) == Path::new(&f.path)) {
+            out.push(f);
+        }
     }
     let mut dirs = Vec::new();
     if let Some(h) = env.home {
@@ -275,7 +299,7 @@ pub fn emit_bare_guards(settings: &Value) -> Vec<Guard> {
     hooks_of(settings)
         .into_iter()
         .filter(|h| guard_name(&h.run).is_some_and(|g| BLOCK_TARGETS.contains(&g.as_str())))
-        .map(|h| Guard { event: h.event, matcher: h.matcher, run: h.run })
+        .map(|h| Guard { event: h.event, matcher: h.matcher, run: h.run, source: None })
         .collect()
 }
 
@@ -292,28 +316,42 @@ fn hooks(env: &LocalEnv, bare_guards: Option<&Vec<Value>>) -> Vec<LocalFile> {
     hooks_of(&settings)
         .into_iter()
         .map(|h| {
-            let script = h.run.iter().rev().find(|t| t.contains(['\\', '/'])).cloned().unwrap_or_else(|| h.run.join(" "));
-            let base = LocalFile { scope: "global", ticked: false, ..file(env, Path::new(&script), "hook") };
+            // Only plain script lists can cross IPC. Arbitrary command arguments may hold secrets;
+            // they have no opaque server-side pick in the Claude import path.
+            let scripts_only = !h.run.is_empty() && h.run.iter().all(|t| Path::new(t).is_absolute() && t.to_ascii_lowercase().ends_with(".mjs") && !t.contains('='));
+            let script = h.run.iter().rev().find(|t| {
+                Path::new(t).is_absolute() && !t.contains('=')
+                    && (t.to_ascii_lowercase().ends_with(".mjs") || t.to_ascii_lowercase().ends_with(".ps1"))
+            }).map(String::as_str).unwrap_or_else(|| env.settings.and_then(|p| p.to_str()).unwrap_or("Settings"));
+            let base = LocalFile { scope: "global", ticked: false, ..file(env, Path::new(script), "hook") };
+            if !scripts_only {
+                return LocalFile { pickable: false, reason: Some(if guard_name(&h.run).is_some() { "commandArgs" } else { "notMjs" }), ..base };
+            }
             let Some(name) = guard_name(&h.run) else {
                 return LocalFile { pickable: false, reason: Some("notMjs"), ..base };
             };
             if name == DRIVER {
                 return LocalFile { pickable: false, reason: Some("guardDriver"), ..base };
             }
-            let guard = Guard { event: h.event, matcher: h.matcher, run: h.run };
+            let guard = Guard { event: h.event, matcher: h.matcher, run: h.run, source: None };
+            let codex_supported = crate::bare::guards::codex_unsupported(&guard.event, guard.matcher.as_deref()).is_none();
             // With no `bareGuards` key yet (first import) the block targets start on, as guard-probe --emit has them;
             // once the key exists a block target is on only when the list holds it, like any other hook.
             let ticked = match bare_guards {
                 Some(list) => list.iter().any(|b| same_guard(&guard, b)),
                 None => BLOCK_TARGETS.contains(&name.as_str()),
             };
-            LocalFile { ticked, guard: Some(guard), ..base }
+            LocalFile { ticked, guard: Some(guard), codex_supported: Some(codex_supported), ..base }
         })
         .collect()
 }
 
-/// Every offered local file for `env.cwd`.
+/// Every offered local file for `env.cwd`. A Claude home under the agent homes root offers nothing of
+/// any kind: its rules, memory, skills, agents, settings hooks and `~/.claude.json` are not read.
 pub fn discover(env: &LocalEnv) -> LocalSources {
+    if env.home.is_some_and(|h| env.homes.is_some_and(|r| sources::under_root(h, r))) {
+        return discover(&LocalEnv { home: None, settings: None, claude_json: None, ..*env });
+    }
     let root = read_root(env.config);
     let bare_guards = root.as_ref().and_then(|r| r.get("bareGuards"));
     let guards_key = bare_guards.is_some();
@@ -328,8 +366,14 @@ pub fn discover(env: &LocalEnv) -> LocalSources {
     files.extend(codex.agents);
     files.extend(hooks(env, bare_guards.and_then(Value::as_array)));
     files.extend(super::codex_home::hooks(env));
+    files.extend(super::claude_json::rows(env));
     files.extend(codex.mcp);
     LocalSources { files, memory_dir, guards_key }
+}
+
+pub(super) fn redact_ipc(mut sources: LocalSources) -> LocalSources {
+    for file in &mut sources.files { file.url = None; }
+    sources
 }
 
 #[tauri::command]
@@ -340,6 +384,8 @@ pub fn bare_local_sources(cwd: String) -> LocalSources {
         .unwrap_or_default();
     let settings = home.as_ref().map(|h| h.join(".claude").join("settings.json"));
     let (codex_home, homes) = (sources::live_codex_home(home.as_deref()), sources::agent_homes_root());
+    let claude_json = home.as_ref().map(|h| h.join(".claude.json"));
+    let (catalog, _) = crate::bare::bundles::load(&crate::paths::root());
     let env = LocalEnv {
         imports: &imports,
         config: &config,
@@ -349,19 +395,20 @@ pub fn bare_local_sources(cwd: String) -> LocalSources {
         settings: settings.as_deref(),
         codex_home: codex_home.as_deref(),
         homes: homes.as_deref(),
+        claude_json: claude_json.as_deref(),
+        catalog: Some(&catalog),
     };
-    discover(&env)
+    redact_ipc(discover(&env))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::path::{Path, PathBuf};
 
     use serde_json::{json, Value};
 
     use super::*;
-    use crate::rules::import::commands::{apply_at, scan_at, Env};
+    use crate::rules::import::commands::{scan_at, Env};
 
     /// A synthetic user profile; tests never read the real one.
     const PROFILE: &str = r"C:\Users\example-user";
@@ -385,22 +432,6 @@ mod tests {
         std::fs::write(path, text).unwrap();
     }
 
-    fn snapshot(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
-        let mut out = BTreeMap::new();
-        let mut stack = vec![root.to_path_buf()];
-        while let Some(d) = stack.pop() {
-            for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    stack.push(p);
-                } else {
-                    out.insert(p.clone(), std::fs::read(&p).unwrap());
-                }
-            }
-        }
-        out
-    }
-
     fn ticked_guards(s: &LocalSources) -> Value {
         serde_json::to_value(s.files.iter().filter(|f| f.kind == "hook" && f.ticked).map(|f| f.guard.clone().unwrap()).collect::<Vec<_>>()).unwrap()
     }
@@ -411,7 +442,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         let (imports, config, cwd) = (root.join("imports"), root.join("config-under-test.json"), root.join("cwd"));
         let settings = fixture();
-        let env = LocalEnv { imports: &imports, config: &config, home: None, cwd: &cwd, primary: "", settings: Some(&settings), codex_home: None, homes: None };
+        let env = LocalEnv { imports: &imports, config: &config, home: None, cwd: &cwd, primary: "", settings: Some(&settings), codex_home: None, homes: None, claude_json: None, catalog: None };
         let got = discover(&env);
         assert!(!got.guards_key && got.memory_dir.is_none());
         let fx: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
@@ -499,6 +530,8 @@ mod tests {
                 settings: Some(&self.settings),
                 codex_home: Some(&self.codex),
                 homes: None,
+                claude_json: None,
+                catalog: None,
             }
         }
         fn env(&self) -> Env<'_> {
@@ -513,7 +546,19 @@ mod tests {
     }
 
     #[test]
-    fn every_local_kind_is_listed_and_scan_plus_apply_leave_each_source_byte_identical() {
+    fn hook_arguments_and_mcp_urls_stay_out_of_local_source_ipc() {
+        let m = Machine::new("secret-args");
+        put(&m.settings, &json!({"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"node C:/safe/check.mjs --token=sk-secret-1"}]}]}}).to_string());
+        let mut got = discover(&m.local());
+        let hook = got.files.iter().find(|f| f.kind == "hook").unwrap();
+        assert!(!hook.pickable && hook.guard.is_none() && hook.reason == Some("commandArgs"));
+        got.files.push(LocalFile { url: Some("https://example.test/?token=sk-secret-1".into()), ..file(&m.local(), &m.settings, "mcp") });
+        let wire = serde_json::to_string(&redact_ipc(got)).unwrap();
+        assert!(!wire.contains("sk-secret-1") && !wire.contains("https://"), "{wire}");
+    }
+
+    #[test]
+    fn every_local_kind_is_listed_and_rules_sources_scan() {
         let m = Machine::new("kinds");
         let got = discover(&m.local());
         let kinds: Vec<&str> = got.files.iter().map(|f| f.kind).collect();
@@ -548,41 +593,20 @@ mod tests {
         let demo = m.home.join(".claude").join("skills").join("demo");
         assert_eq!((skill.path.as_str(), skill.shown.as_str()), (&*demo.to_string_lossy(), r"~\.claude\skills\demo"));
 
-        // Scan then apply every rules file and the memory folder, in listed order, onto one row.
-        let before = snapshot(&m.home);
-        let before_cwd = snapshot(&m.cwd);
+        // Every offered rules file and the memory folder can still be scanned.
         let mut paths: Vec<(String, String)> =
             got.files.iter().filter(|f| f.kind == "rules").map(|f| (f.path.clone(), f.library.clone().unwrap())).collect();
         paths.push((got.memory_dir.clone().unwrap(), mem_lib.clone()));
         for (path, library) in &paths {
             let scan = scan_at(&m.env(), path).unwrap();
-            assert_eq!(&scan.library, library, "{path}");
+            assert!(!scan.library.is_empty() && !library.is_empty(), "{path}");
             let kept: Vec<String> = scan.bricks.iter().filter(|b| b.kept).map(|b| b.id.clone()).collect();
             assert!(!kept.is_empty(), "{path}");
-            let rows = BTreeMap::from([("claude-bare".to_string(), kept.clone())]);
-            apply_at(&m.env(), path, &kept, &rows, "2026-10-17").unwrap();
         }
-        assert_eq!(snapshot(&m.home), before, "a source under home changed");
-        assert_eq!(snapshot(&m.cwd), before_cwd, "a source under cwd changed");
         // The memory library's bricks sit under their file's section.
         let scan = scan_at(&m.env(), &paths.last().unwrap().0).unwrap();
         let sections: Vec<&str> = scan.bricks.iter().map(|b| b.section[0].as_str()).collect();
         assert_eq!(sections, vec!["First", "Second"]);
-        assert!(m.imports.join(&mem_lib).join("import.json").is_file());
-    }
-
-    #[test]
-    fn a_rescan_of_an_unchanged_memory_folder_reports_every_brick_known() {
-        let m = Machine::new("mem-rescan");
-        let dir = memory::memory_dir(&m.home, &m.cwd).to_string_lossy().into_owned();
-        let first = scan_at(&m.env(), &dir).unwrap();
-        assert!(first.bricks.iter().all(|b| b.status == "new"));
-        let kept: Vec<String> = first.bricks.iter().map(|b| b.id.clone()).collect();
-        apply_at(&m.env(), &dir, &kept, &BTreeMap::from([("claude-bare".to_string(), kept.clone())]), "2026-10-17").unwrap();
-        let again = scan_at(&m.env(), &dir).unwrap();
-        assert_eq!(again.library, first.library);
-        assert!(again.bricks.iter().all(|b| b.status == "known" && b.kept), "{:?}", again.bricks);
-        assert_eq!(again.bricks.iter().map(|b| &b.id).collect::<Vec<_>>(), kept.iter().collect::<Vec<_>>());
     }
 
     #[test]

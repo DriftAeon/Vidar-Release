@@ -73,6 +73,8 @@ function snapshot() {
       rulesFile: s.rules?.file ?? null,
       ...(s.profile ? { profile: s.profile } : {}),
       ...(s.profile && s.rowKey ? { rowKey: s.rowKey } : {}),
+      ...(s.profile && s.sets !== undefined ? { sets: s.sets } : {}),
+      ...(s.profile && s.vault ? { vault: s.vault } : {}),
     });
   }
   return snapshotCodexTabs(orderedIds(), views, getActiveId());

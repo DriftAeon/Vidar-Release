@@ -17,7 +17,7 @@ import { dropOutput } from "./output";
 import { registerFileLinks } from "./file-links";
 import { ptySpawnPayload } from "./pty-spawn";
 import { createPtyResize } from "./pty-resize";
-import { noteRawCodexSpawn } from "./lookup";
+import { noteRawCodexSpawn, recordedVault } from "./lookup";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
 const clipboardWarnings = new WeakSet<TerminalSession>();
@@ -211,6 +211,8 @@ export async function attachTerminalBody(s: TerminalSession, launch: { shell?: s
     rules: s.rules,
     profile: s.profile,
     rowKey: s.rowKey,
+    sets: s.sets,
+    ...(s.vault ? { vault: s.vault } : {}),
     agent: s.button.dataset.art ?? s.agent, // roster id: a gateway tab reads its module id, not its "claude" kind
   });
   const notes = [...(s.rules?.warnings ?? []), ...(spawn.warning ? [spawn.warning] : [])];
@@ -220,6 +222,12 @@ export async function attachTerminalBody(s: TerminalSession, launch: { shell?: s
   const queued = { term, buf: [] as string[] };
   spawnQueue.set(s, queued);
   try {
+    // A profiled tab with no launch vault (adopt, a switch to Raw) respawns on the vault its
+    // session record names; with none, Rust refuses the spawn rather than pick one.
+    if (s.profile && !s.vault) {
+      const v = await recordedVault(id);
+      if (v) spawn.payload.vault = v;
+    }
     await invoke("spawn_pty", spawn.payload);
     // Detach deletes the entry, and a newer attachment owns its own: only this one's counts.
     const mine = spawnQueue.get(s) === queued;

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "stock-codex",
+  "name": "Stock Codex",
+  "runesets": [],
+  "runes": [
+    { "library": "stock", "id": "bare-identity-codex" },
+    { "library": "stock", "id": "vidar-drive" },
+    { "library": "stock", "id": "vidar-control" },
+    { "library": "stock", "id": "drive-allow" }
+  ]
+}

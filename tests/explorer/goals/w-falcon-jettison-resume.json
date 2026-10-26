@@ -1,0 +1,18 @@
+{
+  "id": "w-falcon-jettison-resume",
+  "title": "Jettison a Session and Pick It Back Up",
+  "style": "keyboard-first",
+  "scope": "vidar",
+  "surfaces": ["falcon", "launcher", "rendered-tab"],
+  "tags": ["resume", "falcon"],
+  "realModel": false,
+  "core": false,
+  "source": ["758ac016", "08bb54d6"],
+  "steps": [
+    { "intent": "open a Claude chat tab" },
+    { "intent": "jettison it so it detaches" },
+    { "intent": "find it waiting in the launcher's Falcon row and read its status" },
+    { "intent": "resume it using the keyboard" },
+    { "intent": "check the status line is accurate and the tab is back" }
+  ]
+}

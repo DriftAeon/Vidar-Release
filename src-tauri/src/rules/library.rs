@@ -1,7 +1,8 @@
 //! src-tauri\src\rules\library.rs — the rune library on disk: `rules/ facts/ procedures/ sets/` folders of
 //! `<id>.md`, `tombstones.md` (retired ids) and the one trust boundary: an id is a grammar-checked name, and
 //! the file it names must resolve inside the library root. Parsing a rune is `rune.rs`; the
-//! dangling-reference rules are `check.rs`.
+//! dangling-reference rules are `check.rs`. The item folders `skills/ agents/ hooks/ mcp/ permissions/
+//! plugins/` hold item runes (`rune::KINDS`); Kit source files beside them are skipped (`walk`).
 
 use std::path::{Path, PathBuf};
 
@@ -34,14 +35,35 @@ pub struct Library {
     index: Vec<Hit>,
 }
 
+/// Whether an item-folder `.md` is a rune: its header (the lines between the opening and closing `---`)
+/// declares `kind:`. Kit libraries keep source files in the same folders (`agents/<name>.md` agent
+/// definitions, `skills/<name>/SKILL.md`), which carry no `kind:` and are not runes.
+fn declares_kind(path: &Path) -> bool {
+    let Ok(text) = crate::fsx::read_text(path) else { return true };
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(&text);
+    let mut lines = text.lines();
+    if lines.next().map(str::trim_end) != Some("---") {
+        return false;
+    }
+    lines.take_while(|l| l.trim_end() != "---").any(|l| l.starts_with("kind:"))
+}
+
 /// Collect `.md` files below `dir`, recursing into real sub-folders (symlinked folders are not followed).
+/// In an item folder (`rune::is_item_kind`), a folder holding `SKILL.md` is a skill source and is not
+/// entered, and a `.md` whose header declares no `kind:` is a source file, not a rune.
 fn walk(dir: &Path, folder: &'static str, kind: &'static str, out: &mut Vec<Hit>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let item = rune::is_item_kind(kind);
     for e in rd.flatten() {
         let path = e.path();
         if e.file_type().is_ok_and(|t| t.is_dir()) {
-            walk(&path, folder, kind, out);
+            if !(item && path.join("SKILL.md").is_file()) {
+                walk(&path, folder, kind, out);
+            }
         } else if path.extension().is_some_and(|x| x == "md") {
+            if item && !declares_kind(&path) {
+                continue;
+            }
             let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
             out.push(Hit { id, folder, kind, path });
         }
@@ -96,7 +118,7 @@ impl Library {
     pub fn load(&self, entry: &Entry) -> Result<Rune, String> {
         let text = crate::fsx::read_text(&entry.path)
             .map_err(|e| format!("`{}` content is not readable: {e}", entry.id))?;
-        let parsed = rune::parse(&text).map_err(|e| format!("`{}`: {e}", entry.id))?;
+        let parsed = rune::parse(&text).map_err(|e| format!("`{}` ({}): {e}", entry.id, self.rel(&entry.path)))?;
         if parsed.id != entry.id {
             return Err(format!("`{}` header name is `{}`, which does not match the file name", entry.id, parsed.id));
         }
@@ -187,4 +209,49 @@ fn parse_tombstones(text: &str) -> Vec<(String, String)> {
         out.push((id, note));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Library;
+    use std::path::{Path, PathBuf};
+
+    fn repo() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+    }
+
+    #[test]
+    fn the_stock_fixture_library_loads_every_item_kind_without_errors() {
+        let lib = Library::open(&repo().join("tests/fixtures/rune-vault/stock-runes")).unwrap();
+        let (runes, errors) = lib.all_runes();
+        assert!(errors.is_empty(), "{errors:?}");
+        let mut kinds: Vec<&str> = runes.iter().map(|(r, _)| r.kind.as_str()).collect();
+        kinds.sort();
+        kinds.dedup();
+        assert_eq!(kinds, ["agent", "fact", "hook", "mcp", "permission", "plugin", "procedure", "rule", "skill"]);
+        let e = lib.entry("gate-permission").unwrap().unwrap();
+        assert_eq!((e.kind, e.folder), ("permission", "permissions"));
+    }
+
+    #[test]
+    fn kit_source_files_in_item_folders_are_not_runes_and_a_bad_item_names_its_file() {
+        let dir = std::env::temp_dir().join(format!("vidar-lib-items-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let put = |rel: &str, text: &str| {
+            let p = dir.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, text).unwrap();
+        };
+        put("agents/reviewer.md", "---\nname: reviewer\ndescription: Reviews\n---\nReview it.\n");
+        put("skills/tidy/SKILL.md", "---\nname: tidy\n---\nTidy.\n");
+        put("skills/tidy/notes.md", "Notes.\n");
+        put("skills/tidy-rune.md", "---\nname: tidy-rune\nkind: skill\nscope: [global]\nsource: ~/skills/tidy\n---\n");
+        put("permissions/loose.md", "---\nname: loose\nkind: permission\nscope: [global]\nallow: Bash\n---\n");
+        let lib = Library::open(&dir).unwrap();
+        let (runes, errors) = lib.all_runes();
+        assert_eq!(runes.iter().map(|(r, _)| r.id.as_str()).collect::<Vec<_>>(), ["tidy-rune"]);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].contains("permissions/loose.md") && errors[0].contains("block list"), "{}", errors[0]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

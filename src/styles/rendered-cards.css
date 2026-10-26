@@ -55,6 +55,8 @@
   flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   color: var(--fg-dim); font-size: var(--font-12);
 }
+/* a status line in the stretched actions row (login "Waiting For Browser") centres like its spinner and buttons */
+.blk-approval .approval-actions > .approval-why { align-self: center; }
 .blk-approval .approval-result { display: inline-flex; align-items: center; flex: none; }
 .blk-approval .approval-head .approval-result > .icn { color: inherit; stroke-width: 3; }
 .blk-approval .approval-result.ok { color: var(--ok-green); }

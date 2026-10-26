@@ -5,21 +5,24 @@
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lintStep } from './lint-plan.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const tier = process.argv[2];
-if (tier !== 'fast' && tier !== 'full') {
+const isMain = Boolean(process.argv[1]) && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const tier = isMain ? process.argv[2] : 'fast';
+if (isMain && tier !== 'fast' && tier !== 'full') {
   console.error('usage: node tools/gate/gate.mjs fast|full');
   process.exit(2);
 }
 
 const S = {
-  lints: ['lints', 'node tools/ui/lint-ui.mjs && node tools/ui/lint-copy.mjs'],
   // --no: never download; without node_modules npx would fetch the deprecated npm `tsc` package (2.0.4).
   tsc: ['tsc', 'npx --no -- tsc --noEmit'],
   test: ['npm test', 'npm test'],
   // The drift test reads main.rs's generate_handler! list, so a Rust-only commit needs it too (9c2698f7 missed it).
   ipcDrift: ['ipc drift test', 'node --test --experimental-strip-types tests/ipc-commands.test.mjs'],
+  // 09633468 staged only src-tauri files, skipped npm test, and the tree scans went red for every later lane.
+  treeScans: ['tree scans', 'node --test tests/no-machine-paths.test.mjs tests/paths-contract.test.mjs'],
   build: ['npm build', 'npm run build'],
   checkTauri: ['cargo check tauri', 'cargo check --manifest-path src-tauri/Cargo.toml'],
   checkFalcon: ['cargo check falcon', 'cargo check --manifest-path src-falcon/Cargo.toml'],
@@ -41,9 +44,8 @@ function staged() {
   return (r.stdout || '').split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
-function plan() {
+export function plan(f = staged()) {
   if (tier === 'full') return [S.build, S.runes, S.cook, S.docsIndex, S.test, S.testTauri, S.testFalcon, S.checkFalcon];
-  const f = staged();
   const web = (p) => /\.(ts|tsx|js|mjs|cjs|css|html)$/.test(p) && (p.startsWith('src/') || !p.includes('/'));
   const needWeb = f.some(web);
   const needTest = f.some((p) => p.startsWith('tests/') || (p.startsWith('tools/') && p.endsWith('.mjs')));
@@ -51,17 +53,25 @@ function plan() {
   // Falcon imports from src-tauri; unsure which files, so any src-tauri change checks it too.
   const needFalcon = needTauri || f.some((p) => p.startsWith('src-falcon/'));
   const steps = [];
-  if (needWeb) steps.push(S.lints, S.tsc);
+  if (needWeb) {
+    const lints = lintStep(f); // staged files only; null when neither linter covers any
+    if (lints) steps.push(lints);
+    steps.push(S.tsc);
+  }
   if (f.some((p) => /^runes\//.test(p))) steps.push(S.runes);
   if (f.some((p) => /^(runes\/|\.claude\/rules\/)/.test(p) || p === 'CLAUDE.md' || p === 'AGENTS.md')) steps.push(S.cook);
   if (f.some((p) => /^docs.(explore.)?INDEX.md$/.test(p))) steps.push(S.docsIndex);
   if (needTest) steps.push(S.test);
   else if (f.includes('src-tauri/src/main.rs') || f.includes('src/ipc-hosts.ts')) steps.push(S.ipcDrift);
+  if (!needTest && f.some((p) => /^(src-tauri|src-falcon|profiles)\//.test(p))) steps.push(S.treeScans);
   if (needTauri) steps.push(S.checkTauri);
   if (needFalcon) steps.push(S.checkFalcon);
   return steps;
 }
 
+if (isMain) main();
+
+function main() {
 const steps = plan();
 if (!steps.length) process.exit(0);
 
@@ -83,3 +93,4 @@ for (const [name, cmd, hint] of steps) {
   }
 }
 console.log(`gate ${tier}: ok ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+}
