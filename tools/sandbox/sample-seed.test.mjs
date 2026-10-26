@@ -13,6 +13,8 @@ import { rel, resolve } from "../lib/paths.mjs";
 import { MANIFEST, SETS, run, workDir } from "./sample-seed.mjs";
 
 const LAUNCH = join(dirname(fileURLToPath(import.meta.url)), "launch.ps1");
+// launch.ps1 dot-sources tools/release/clean-env.ps1, which the export drops, so the launch tests skip in a shipped tree.
+const launchSkip = existsSync(join(dirname(LAUNCH), "..", "release", "clean-env.ps1")) ? false : "tools/release/clean-env.ps1 is not in this tree (not shipped)";
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
 const pwsh = (args) => spawnSync("pwsh", ["-NoProfile", "-File", ...args], { encoding: "utf8", env });
 const fresh = () => mkdtempSync(join(tmpdir(), "sample-seed-"));
@@ -119,7 +121,7 @@ function withBox(fn) {
   }
 }
 
-test("launch -Seed <sample set> -DryRun prints the seeder step and writes no project", () => {
+test("launch -Seed <sample set> -DryRun prints the seeder step and writes no project", { skip: launchSkip }, () => {
   withBox((from, base) => {
     for (const set of SETS) {
       const r = pwsh([LAUNCH, "-From", from, "-Base", base, "-Seed", set, "-DryRun"]);
@@ -131,7 +133,7 @@ test("launch -Seed <sample set> -DryRun prints the seeder step and writes no pro
   });
 });
 
-test("launch still refuses an unknown -Seed set and lists the sample sets; an unseeded start removes the project", () => {
+test("launch still refuses an unknown -Seed set and lists the sample sets; an unseeded start removes the project", { skip: launchSkip }, () => {
   withBox((from, base) => {
     const r = pwsh([LAUNCH, "-From", from, "-Base", base, "-Seed", "nope", "-DryRun"]);
     assert.equal(r.status, 2, r.stdout + r.stderr);

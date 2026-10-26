@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,8 @@ import { grade, loadSuite, planSessions, runSuite } from "../tools/bare/eval-run
 
 const tool = fileURLToPath(new URL("../tools/bare/eval-runes.mjs", import.meta.url));
 const repoRunes = fileURLToPath(new URL("../runes", import.meta.url));
+// runes/ is export-ignored, so the tests that load the real suites skip in a shipped tree.
+const runesSkip = existsSync(join(repoRunes, "evals")) ? false : "runes/evals is not in this tree (runes not shipped)";
 const readLine = (id, sep = "\\") =>
   JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: ["C:", "h", "skills", "vidar-runes", `${id}.md`].join(sep) } }] } });
 
@@ -140,7 +142,7 @@ test("an unprompted recall miss still runs both check arms for every case", () =
   assert.equal(result.runes["rule-a"].readRate, 0);
 });
 
-test("Falcon off arm runs after all recall turns miss", () => {
+test("Falcon off arm runs after all recall turns miss", { skip: runesSkip }, () => {
   const cases = loadSuite(repoRunes, ["falcon-strips-vidar-tab"]).filter((c) => c.kind === "unprompted");
   const outDir = mkdtempSync(join(tmpdir(), "eval-runes-out-"));
   const log = [];
@@ -153,7 +155,7 @@ test("Falcon off arm runs after all recall turns miss", () => {
   assert.ok(log.includes("falcon-strips-vidar-tab:always:sonnet"));
 });
 
-test("Astra case rejects a generic done marker and timeout answer", () => {
+test("Astra case rejects a generic done marker and timeout answer", { skip: runesSkip }, () => {
   const [c] = loadSuite(repoRunes, ["astra-dispatch-wait"]).filter((c) => c.kind === "unprompted");
   assert.deepEqual(c.runes, ["astra-dispatch-wait"]);
   assert.equal(c.scaffold, undefined);
