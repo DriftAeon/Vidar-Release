@@ -367,11 +367,16 @@ fn bare_codex(
     let parts = |p: &Path| -> Vec<String> {
         p.components().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).collect()
     };
-    let (codex_parts, home_parts) = (parts(&codex_home), parts(&home));
-    if codex_parts.len() <= home_parts.len()
-        || codex_parts[..home_parts.len()] != home_parts[..]
-        || codex_parts.iter().any(|c| c == "..")
-    {
+    // The overlay's own CODEX_HOME is spelled like the raw home; an admitted combination home is
+    // canonical (long form, so it differs when the home is an 8.3 path). Either spelling must sit
+    // strictly under the home in the same spelling; a home that does not exist keeps its raw path.
+    let canonical_home = std::fs::canonicalize(&home).map(|c| plain_path(&c)).unwrap_or_else(|_| home.clone());
+    let codex_parts = parts(&codex_home);
+    let under = |base: &Path| {
+        let b = parts(base);
+        codex_parts.len() > b.len() && codex_parts[..b.len()] == b[..]
+    };
+    if !(under(&home) || under(&canonical_home)) || codex_parts.iter().any(|c| c == "..") {
         return Err(format!("launch profile {profile:?} sets CODEX_HOME outside the bare home; spawn refused"));
     }
     if !codex_home.join("config.toml").is_file() {
