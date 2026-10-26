@@ -3,13 +3,14 @@
 // reported), and a dry run that writes nothing. Every base is a fresh %TEMP% folder.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
 import { MANIFEST, memorySlug, run, slug, tokensFor } from "../tools/sandbox/runes-seed.mjs";
 import { resolve } from "../tools/lib/paths.mjs";
 
-const fresh = () => mkdtempSync(join(tmpdir(), "runes-seed-"));
+// realpath expands 8.3 short TEMP names (RUNNER~1) to the long form the scripts report
+const fresh = () => realpathSync.native(mkdtempSync(join(tmpdir(), "runes-seed-")));
 const one = (path) => ({ version: 1, files: [{ path, text: "x\n" }] });
 const text = (p) => readFileSync(p, "utf8");
 

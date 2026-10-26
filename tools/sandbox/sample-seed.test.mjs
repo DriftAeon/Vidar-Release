@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,8 @@ const LAUNCH = join(dirname(fileURLToPath(import.meta.url)), "launch.ps1");
 const launchSkip = existsSync(join(dirname(LAUNCH), "..", "release", "clean-env.ps1")) ? false : "tools/release/clean-env.ps1 is not in this tree (not shipped)";
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
 const pwsh = (args) => spawnSync("pwsh", ["-NoProfile", "-File", ...args], { encoding: "utf8", env });
-const fresh = () => mkdtempSync(join(tmpdir(), "sample-seed-"));
+// realpath expands 8.3 short TEMP names (RUNNER~1) to the long form the scripts report
+const fresh = () => realpathSync.native(mkdtempSync(join(tmpdir(), "sample-seed-")));
 const config = (base) => resolve("config", { root: join(base, "app") });
 const INSTRUCTION_FILES = ["CLAUDE.md", "AGENTS.md", join(".claude", "skills", "changelog-entry", "SKILL.md")];
 
@@ -110,8 +111,8 @@ test("no state file: no error and none created; no onboarding keys: file stays b
 });
 
 function withBox(fn) {
-  const from = mkdtempSync(join(tmpdir(), "sample-from-"));
-  const base = join(mkdtempSync(join(tmpdir(), "sample-base-")), "box");
+  const from = realpathSync.native(mkdtempSync(join(tmpdir(), "sample-from-")));
+  const base = join(realpathSync.native(mkdtempSync(join(tmpdir(), "sample-base-"))), "box");
   try {
     writeFileSync(join(from, "vidar.exe"), "x");
     fn(from, base);

@@ -4,13 +4,14 @@
 // file back. --check fails while an MCP server is named. Temp bases only.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, parse } from "node:path";
 import { resolve as resolveNode } from "../lib/paths.mjs";
 import { MANIFEST, codexConfig, layout, run } from "./explorer-seed.mjs";
 
-const fresh = () => mkdtempSync(join(tmpdir(), "explorer-seed-"));
+// realpath expands 8.3 short TEMP names (RUNNER~1) to the long form the scripts report
+const fresh = () => realpathSync.native(mkdtempSync(join(tmpdir(), "explorer-seed-")));
 const text = (p) => readFileSync(p, "utf8");
 const put = (p, s) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, s); };
 const seed = () => JSON.parse(text(new URL("../../tests/fixtures/explorer/seed.json", import.meta.url)));
