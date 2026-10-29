@@ -37,6 +37,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::agent_spec::Agent;
 use crate::proc_job::Job;
 
 const LINE_CAP: usize = 8 * 1024 * 1024;
@@ -65,14 +66,15 @@ impl AgentManager {
     /// The `CODEX_HOME` a live bare tab runs on (status.rs reads that tab's rollouts and config
     /// there); `None` for a default tab or an unknown id.
     pub fn codex_home(&self, id: &str) -> Option<PathBuf> {
-        lock(&self.sessions).get(id).and_then(|p| p.codex_home.clone())
+        lock(&self.sessions).get(id).and_then(|p| p.bare.as_ref().map(|(_, home)| home.clone()))
     }
 }
 
 struct AgentProc {
     gen: u64,
-    /// A bare tab's own `CODEX_HOME` (bare/ profile); `None` = the default `~\.codex`.
-    codex_home: Option<PathBuf>,
+    /// A bare tab's agent and its own home (`CODEX_HOME`, bare/ profile); `None` = the default
+    /// `~\.codex` tab.
+    bare: Option<(Agent, PathBuf)>,
     /// A bare tab's `VIDAR_CTL_TOKEN`; the reader drops this token alone, never the tab's others.
     ctl_token: Option<String>,
     child: Mutex<Child>,
@@ -91,6 +93,18 @@ struct AgentProc {
 struct ThreadCapture {
     pending: Vec<serde_json::Value>,
     known: bool,
+}
+
+impl AgentProc {
+    /// Whether this tab keeps a session record: a Bare tab of an agent whose app-server replies name
+    /// the thread (Codex today; Claude has no app-server tab).
+    fn records_thread(&self) -> bool {
+        let Some((agent, _)) = &self.bare else { return false };
+        match agent {
+            Agent::Codex => true,
+            Agent::Claude => false,
+        }
+    }
 }
 
 impl ThreadCapture {
@@ -395,7 +409,7 @@ fn spawn_codex_appserver_blocking(
         cwd,
         env,
         BaseEnv::Exact(launch.env.clone()),
-        Some(launch.codex_home.clone()),
+        Some((Agent::Codex, launch.codex_home.clone())),
         Some(token.clone()),
         banner,
     );
@@ -424,7 +438,7 @@ fn spawn_agent(
     cwd: String,
     env: Vec<(String, String)>,
     base: BaseEnv,
-    codex_home: Option<PathBuf>,
+    bare: Option<(Agent, PathBuf)>,
     ctl_token: Option<String>,
     banner: Option<String>,
 ) -> Result<u64, String> {
@@ -479,7 +493,7 @@ fn spawn_agent(
     let stderr = child.stderr.take();
     let proc = Arc::new(AgentProc {
         gen,
-        codex_home,
+        bare,
         ctl_token,
         child: Mutex::new(child),
         stdin: Mutex::new(stdin),
@@ -507,7 +521,7 @@ fn spawn_agent(
         .spawn(move || {
             // A bare tab's session record takes its thread id from the start/resume reply (R4).
             let mut on_line = |line: &[u8]| {
-                if reader_proc.codex_home.is_none() {
+                if !reader_proc.records_thread() {
                     return;
                 }
                 let Some(thread) = lock(&reader_proc.thread).on_reply(line) else { return };
@@ -607,11 +621,11 @@ pub fn agent_send(
     let proc = get_proc(&state, &id, gen)?;
     // R3: a Bare tab's first turn locks its vault before the line reaches the agent (D-d: a refusal
     // keeps the composer's text). Outside the stdin lock: the store does file I/O.
-    if proc.codex_home.is_some() && starts_turn(&line) {
+    if proc.records_thread() && starts_turn(&line) {
         lock_first_send(&id, None, &format!("{id}\0{gen}"))?;
     }
     // Before the write, so the reply cannot beat the pending id.
-    if proc.codex_home.is_some() {
+    if proc.records_thread() {
         lock(&proc.thread).on_send(&line);
     }
     let mut stdin = lock(&proc.stdin);

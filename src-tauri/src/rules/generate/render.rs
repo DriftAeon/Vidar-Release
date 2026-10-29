@@ -1,4 +1,4 @@
-//! src-tauri\src\rules\generate\render.rs — a checked envelope as a rune library (plan D3): one file per rune
+//! src-tauri\src\rules\generate\render.rs — a checked envelope as a rune library: one file per rune
 //! in its kind's folder (`rules/`, `facts/`), headers written here with `import/write.rs` quoting (the agent never
 //! writes header syntax), `origin` from the first citation; a rune holding the user-profile path or `{{` is
 //! written `state: draft` and left out of the set (Off), the profile-path one also scoped `"!bare"`.

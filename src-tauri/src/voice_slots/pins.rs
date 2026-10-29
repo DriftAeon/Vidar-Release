@@ -1,7 +1,7 @@
 //! src-tauri\src\voice_slots\pins.rs — trust on first use for what an adapter runs:
 //! `bridge\voice-slots\pins.json`, path -> {bytes, sha256}. A manifest that declares a model's or
 //! file's sha256 is checked against that instead. The store only gains entries on first use
-//! (`resolve`); an existing pin is overwritten only by Trust Current (plan §2). Gateway module
+//! (`resolve`); an existing pin is overwritten only by Trust Current. Gateway module
 //! declarations share the store under `module:<id>` keys (`modules::scan`, `verdict_bytes`).
 
 use std::collections::{BTreeMap, HashMap};

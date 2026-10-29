@@ -19,6 +19,7 @@
 #              launcher refuses while a process runs from it). Refused when it resolves inside, or holds,
 #              this repo, its main checkout or -LiveRoot, or lies in the real profile outside %TEMP%.
 #   -LiveRoot  the live install root to protect; default the main checkout (parent of git's common dir).
+#              Without a resolvable checkout, pass -LiveRoot explicitly or launch is refused.
 #   -Port      WebView2 DevTools port of the sandbox window, opt-in (any local process can drive the UI
 #              through it); 0, the default, opens none. The live app keeps its own.
 #   -Seed      plant a canary set before vidar.exe starts. `trial` (bare-mode P2, P3): the sites come from
@@ -252,9 +253,11 @@ if ($LASTEXITCODE -eq 0 -and $top) {
   $common = git -C $PSScriptRoot rev-parse --path-format=absolute --git-common-dir 2>$null
   if ($LASTEXITCODE -eq 0 -and $common) { $protected["main checkout"] = Get-Norm (Split-Path -Parent (Get-Norm $common)) }
 }
+if (-not $LiveRoot -and -not $protected.Contains("main checkout")) {
+  Stop-Refused "cannot resolve the main git checkout from $PSScriptRoot; pass -LiveRoot explicitly to protect the live install."
+}
 if (-not $LiveRoot -and $protected.Contains("main checkout")) { $LiveRoot = $protected["main checkout"] }
 if ($LiveRoot) { $protected["live root"] = Get-Norm $LiveRoot }
-else { "WARNING: no git checkout around $PSScriptRoot and no -LiveRoot; only the real-profile refusal guards -Base." }
 
 # Sandbox base.
 $reuse = $false

@@ -26,9 +26,10 @@ and the section each rune sits in. Never write header syntax (`---`, `name:`) in
   out silently; headings and fence lines may be left uncited.
 - No user-profile paths (`C:\Users\<name>\...`) and no `{{` in a body. Write `~` paths instead. A rune that cannot
   lose them is still returned; Vidar keeps it as a draft, switched off.
-- `kind` is `rule` (an instruction) or `fact` (something true about the setup).
-- Pick `activate: always` for rules that must fire every turn, `recall` for reference read when needed, or `paths`
-  for rules tied to file globs. With `paths`, supply a non-empty `paths` array of globs; omit `paths` otherwise.
+- `kind` is `rule` (an instruction), `fact` (something true about the setup) or `procedure`.
+  A numbered step sequence the agent runs on request is a `procedure`. Its `activate` is `invoke` (default) or `recall`.
+- For a rule or fact, `activate: always` fires every turn, `recall` is reference read when needed, `paths`
+  ties it to file globs. With `paths`, supply a non-empty `paths` array of globs; omit `paths` otherwise.
   Omitted `activate` means `always`.
 - `id`: lowercase letters, digits and single hyphens, 2 to 5 words, unique, naming the rule (`no-force-push`).
 - `description`: one line under 80 characters saying what the rune holds.
@@ -50,7 +51,7 @@ and the section each rune sits in. Never write header syntax (`---`, `name:`) in
 
 `Target agent` is the agent that reads the runes: `claude` (Claude Code) or `codex` (Codex CLI). They load in a
 Vidar Bare tab, where the runes are its only instructions: no CLAUDE.md, AGENTS.md or memory index loads there,
-and skills, subagents, hooks and MCP servers come from the tab's rune set, not from rules.
+and skills, subagents, hooks, MCP servers and the model come from the tab's rune set, not from rules.
 
 - A line that only points at another instruction file is dropped (`points at an unloaded file`); a rule it
   states becomes a rune.

@@ -126,8 +126,7 @@ export interface RulesImportBrick {
 }
 export interface RulesImportScan { library: string; bricks: RulesImportBrick[] }
 export interface RulesImportApplied { library: string; written: number; rows: string[] }
-/** src-tauri/src/rules/generate/commands.rs (run 2026-10-17-rune-generator ipc.md; no row since 2026-10-25-rune-vault
- *  L4a). `items`: ticked local skills, agents and hooks (`BareLocalFile.path`), landed as item runes. */
+/** src-tauri/src/rules/generate/commands.rs (bound to no launcher row). `items`: ticked local skills, agents and hooks (`BareLocalFile.path`), landed as item runes. */
 export interface RulesGenerateArgs {
   runId: string; agent: AgentId; model: string; effort: string;
   mergeEffort?: string;
@@ -138,7 +137,7 @@ export interface RulesGenerated {
   library: string; set: string; runes: number; on: number; encodedChars: number | null;
   costUsd: number | null; inputTokens: number | null; outputTokens: number | null; durationMs: number; warnings: string[];
 }
-/** Bare Runes tab local files (src-tauri/src/rules/import/local.rs; run 2026-10-17-bare-runes-flow fold.md). */
+/** Bare Runes tab local files (src-tauri/src/rules/import/local.rs). */
 export type BareFileKind = "rules" | "memory" | "skill" | "agent" | "hook" | "mcp";
 export interface BareLocalFile {
   path: string; shown: string; kind: BareFileKind; library?: string; section?: string;
@@ -160,7 +159,7 @@ export interface ItemRuneInputs {
 /** bare_kit_create: `created` false = a Kit already existed, nothing written; `dropped` = items left out (bare/kit.rs). */
 export interface BareKitCreated { created: boolean; dropped: { id: string; reason: string }[] }
 /** A library template file (bare_kit_item_create, bare_library_files); `path` is a skill's folder, else the file. */
-export interface BareLibraryFile { kind: "skill" | "agent" | "hook"; agent: "claude" | "codex" | null; name: string; path: string }
+export interface BareLibraryFile { kind: "skill" | "agent" | "hook"; agent: AgentId | null; name: string; path: string }
 export interface BareModuleBundles {
   bundles: Record<string, { mcp: { name: string; hasUrl: boolean; hasCommand: boolean; agents?: string[]; optional?: boolean }[]; skills: string[]; agents: string[]; guards: BareGuard[] }>;
   warnings: string[];
@@ -190,8 +189,10 @@ export interface RulesImportCommands {
   bare_module_bundles: Cmd<undefined, BareModuleBundles>;
   bare_set_fork: Cmd<{ library: string; set: string; name: string }, null>;
   bare_kit_create: Cmd<{ layer: ItemRuneInputs }, BareKitCreated>;
-  bare_kit_item_create: Cmd<{ library: string; agent: "claude" | "codex"; kind: BareLibraryFile["kind"]; name: string }, BareLibraryFile>;
+  bare_kit_item_create: Cmd<{ library: string; agent: AgentId; kind: BareLibraryFile["kind"]; name: string }, BareLibraryFile>;
   bare_library_files: Cmd<{ library: string }, BareLibraryFile[]>;
+  /** Moves a rune (or, without `rune`, a whole import library) into the library backup; `vaults` are the unlocked vaults that dropped it. */
+  bare_library_delete: Cmd<{ library: string; rune?: string }, { vaults: string[] }>;
   bare_launch: Cmd<{ tab: string }, BareLaunch | null>;
 }
 /** Rune Vault (src-tauri/src/bare/vault; wire: tests/fixtures/rune-vault/vaults). */
@@ -235,7 +236,6 @@ interface RuneVaultCommands {
   rune_vault_defaults: Cmd<undefined, Record<string, string>>;
   rune_vault_default_set: Cmd<{ agent: string; vault: string }, void>;
   /** Make Variant moves tab `tab` to vault `id` at its current hash (a new record); null when the tab has no record. */
-  rune_vault_session_move: Cmd<{ tab: string; falconSession?: string | null; id: string }, VaultSession | null>;
 }
 
 /** Raw-body commands (`tauri::ipc::Request`) take the bytes as the whole payload. */
@@ -344,9 +344,9 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   list_recent_sessions: Cmd<{ cwd: string; profile?: string | null }, RecentSession[]>;
   read_session_meta: Cmd<{ cwd: string; sessionId: string; profile?: string | null }, { model: string | null; effort: string | null }>;
   read_codex_model: Cmd<{ cwd: string; tab?: string | null }, string | null>;
-  read_codex_limits: Cmd<{ cwd: string; tab?: string | null; profile?: string | null; row?: string | null },CodexLimits | null>;
+  read_codex_limits: Cmd<{ cwd: string; tab?: string | null; falconSession?: string | null; profile?: string | null; row?: string | null },CodexLimits | null>;
   /** status/codex.rs: a cwd's rollouts in a Raw Codex tab's own home, newest first (codex-thread.ts). */
-  codex_rollout_threads: Cmd<{ cwd: string; profile: string | null; tab?: string | null },{ id: string; mtimeMs: number }[]>;
+  codex_rollout_threads: Cmd<{ cwd: string; profile: string | null; tab?: string | null; falconSession?: string | null },{ id: string; mtimeMs: number }[]>;
   status_snapshot: Cmd<undefined, { tab: string; age_secs: number; mtime_ms: number; payload: Record<string, unknown> }[]>;
   claude_installed_version: Cmd<undefined, string | null>;
   claude_auth_status: Cmd<undefined, boolean | null>;
@@ -404,10 +404,10 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   // logs, loadout
   read_loadout: Cmd<{ cwd: string; settingsPaths: string[]; pluginDir?: string | null; profile?: string | null; tab?: string | null; row?: string | null }, Loadout>;
   file_kb: Cmd<{ path: string }, number | null>;
-  read_codex_loadout: Cmd<{ tab: string | null; profile: string | null; row?: string | null; cwd: string }, CodexLoadout>;
+  read_codex_loadout: Cmd<{ tab: string | null; falconSession?: string | null; profile: string | null; row?: string | null; cwd: string }, CodexLoadout>;
   // mcp, lm studio, ports
   read_mcp_servers: Cmd<{ project: string | null; profile?: string | null; tab?: string | null; row?: string | null }, McpRack>;
-  read_codex_mcp_servers: Cmd<{ tab: string | null; profile: string | null; row?: string | null }, McpRack>;
+  read_codex_mcp_servers: Cmd<{ tab: string | null; falconSession?: string | null; profile: string | null; row?: string | null }, McpRack>;
   list_mcp_tools: Cmd<{ url: string }, McpTool[]>;
   list_mcp_tools_stdio: Cmd<{ name: string; scope: string; project: string | null; profile: string | null; tab: string | null }, McpTool[]>;
   proxy_status: Cmd<{ url: string }, BackendStatus[]>;
@@ -434,9 +434,12 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   // flow
   flow_run_node: Cmd<{
     runId: string; nodeId: string; attempt: number; backend: string; model: string;
-    prompt: string; cwd: string; toolAllowlist: string[]; permissionMode: string;
+    prompt: string; cwd: string; vault: string; vaultHash: string;
   }, number>;
-  flow_permission_modes: Cmd<{ models: string[] }, Record<string, string>>;
+  flow_node_permissions: Cmd<
+    { nodes: Array<{ node: string; model: string; vault?: string; agent: string }> },
+    Array<{ node: string; vault: string; mode: string; allow: string[]; hash: string }>
+  >;
   flow_answer_permission: Cmd<{ runId: string; nodeId: string; permissionId: string; allow: boolean }, void>;
   flow_cancel_node: Cmd<{ runId: string; nodeId: string }, void>;
   flow_cancel_run: Cmd<{ runId: string }, void>;

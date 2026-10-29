@@ -1,4 +1,4 @@
-//! Request builders and argument checks (plan § D5, delta S2). The host is fixed, the version is
+//! Request builders and argument checks. The host is fixed, the version is
 //! one const, ids are checked and normalised before any request exists, and the header block is
 //! built straight into a `Secret`. Status mapping follows § IPC's error table.
 

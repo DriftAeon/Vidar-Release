@@ -5,10 +5,9 @@ TS block renderer tests. No Notion API was called to make them. Ids are zero-fil
 workspace is "Example Workspace", and every url outside a Notion host points at `example.com` or
 `example.invalid`.
 
-Shapes follow the N1 research report (`docs/runs/2026-10-17-notion/reports/N1-notion.md`,
-gitignored), which cites these developers.notion.com pages:
+Shapes follow these developers.notion.com pages:
 
-| Fixture | Endpoint | N1 source |
+| Fixture | Endpoint | Source |
 |---|---|---|
 | `users-me.json` | `GET /v1/users/me` | Q2, /reference/get-self (`bot.owner.type`, `bot.workspace_name`) |
 | `search-sources.json` | `POST /v1/search`, `filter.value: "data_source"` | Q1, /reference/post-search; upgrade guide 2025-09-03 |
@@ -22,7 +21,7 @@ gitignored), which cites these developers.notion.com pages:
 Deliberate oddities, each tested:
 
 - `search-pages.json` carries both database-row parents (`data_source_id`, `database_id`), which the
-  backend drops (plan § D1, marked I), a dashless id and a `javascript:` url, which is rebuilt.
+  backend drops, a dashless id and a `javascript:` url, which is rebuilt.
 - `search-sources.json` carries an off-host url and an invalid id.
 - `query-page-1.json` carries null and empty facet values and a wiki `data_source` result.
 - `blocks-hostile.json` carries markup in text, `javascript:` and `data:` links, an external icon,

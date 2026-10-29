@@ -14,7 +14,7 @@
 # Output: script header, '#' comment lines for roots with no SID, a $targets list of @(root, sid) rows (a List: one row stays a pair), then
 # the purge loop.
 # Order: roots deeper under AppData first, then .claude, .claude.json, AppData, AppData\Local,
-# AppData\Roaming, Documents (the order of docs/runs/2026-10-13-bare-mode/reports/acl.md Q4(b)), then the rest
+# AppData\Roaming, Documents, then the rest
 # in log order. A root with no SID in cap_sid is a '#' comment line, not a target.
 # Refuses (exit 2): no log for the date, no cap_sid, a bad -Date. Reads only; writes nothing.
 param([string]$Date = "2026-10-10")

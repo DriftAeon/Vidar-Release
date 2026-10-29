@@ -1,6 +1,37 @@
 /* Existing Voice Slots confirmation card and Dependencies rows, positioned as a
-   nonmodal offer so checking/updating never prevents using the tab strip. */
+   nonmodal offer so checking/updating never prevents using the tab strip. The card holds
+   the close X (top right, always there) and a scrolling body for the groups. */
 .startup-updates {
   position: fixed; top: calc(var(--space-32) + var(--space-16)); right: var(--space-12); z-index: 140;
-  width: min(420px, 90vw); max-height: 70vh; overflow-y: auto;
+  width: min(420px, 90vw); max-height: 70vh;
 }
+.startup-updates[hidden] { display: none; }
+.startup-updates .su-scroll { overflow-y: auto; min-height: 0; border-radius: inherit; }
+.startup-updates .swap-confirm-head { padding-right: calc(var(--space-12) + var(--row-24)); }
+/* Close X: the settings modal's .sc-close look (icon-only, dim, accent on hover). */
+.su-close {
+  position: absolute; top: var(--space-4); right: var(--space-4); z-index: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--row-24); height: var(--row-24); padding: 0;
+  background: none; border: var(--border-w) solid transparent; border-radius: var(--radius-4);
+  color: var(--fg-dim); cursor: pointer;
+}
+.su-close .icn { width: var(--row-24); height: var(--row-24); flex-shrink: 0; }
+.su-close:hover { color: var(--accent); border-color: var(--border); }
+.su-close:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; color: var(--accent); }
+.su-close:active { background: var(--bg-hover); border-color: var(--border-strong); }
+
+/* Primary action: Update, Update All, Open Release. The Sheen .ws-btn with a flat --accent face; the
+   label is --bg, which reads 5.10:1 or better on the accent in every theme (Onyx 9.46, Cobalt 7.13,
+   Ember 5.10, Olive 6.65). Hover lightens the face, press sinks it, disabled falls back to the .ws-btn floor. */
+.startup-updates .ws-btn.ws-primary {
+  --face: var(--accent); --depth: none; --edge: var(--accent); color: var(--bg);
+}
+.startup-updates .ws-btn.ws-primary:hover:not(:disabled) {
+  --face: color-mix(in srgb, var(--accent), var(--fg-bright) 14%); --depth: none; --edge: var(--accent); color: var(--bg);
+}
+.startup-updates .ws-btn.ws-primary:focus-visible { outline: var(--border-w) solid var(--fg-bright); outline-offset: var(--space-2); color: var(--bg); }
+.startup-updates .ws-btn.ws-primary:active:not(:disabled) {
+  --face: var(--accent); --depth: var(--press-depth); --edge: var(--accent); color: var(--bg);
+}
+.startup-updates .ws-btn.ws-primary:disabled, .startup-updates .ws-btn.ws-primary:disabled:hover { color: var(--fg-dim); }

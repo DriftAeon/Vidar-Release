@@ -3,7 +3,7 @@
 //! folders starting with `_` or `.` are not packs (`_removed` holds retired ones). Order is
 //! authoritative: listed ids first in that order, then any other folder by name.
 //!
-//! Targets (acb3df98 review): a valid pack is addressed by its id; any other row by
+//! Targets: a valid pack is addressed by its id; any other row by
 //! `folder:<folder name>`. Ids are lowercase slugs and never contain `:`, so the two cannot
 //! meet, and a command on an invalid row only ever touches that row's folder.
 

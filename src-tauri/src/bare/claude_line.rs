@@ -10,7 +10,7 @@ use super::{ps_quote, Profile};
 /// compiles in (`src-falcon/src/protocol.rs` `ALLOWED_MODES`).
 const ALLOWED_MODES: &str = include_str!("../../../contracts/permission-modes.json");
 
-/// What a Raw line carries from the session's Rune Vault (run 2026-10-25-rune-vault L2b; model R1):
+/// What a Raw line carries from the session's Rune Vault:
 /// plugin rune folders (absolute, `<root>\plugins\<name>`), the permission allow list and mode.
 /// Empty means the vault holds none: nothing of that kind rides the line.
 #[derive(Default)]

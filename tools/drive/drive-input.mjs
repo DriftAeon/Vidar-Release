@@ -36,12 +36,15 @@ export const NO_PRESS = [
   { id: "quit", name: /^(quit|exit)( vidar)?$/i },
   { id: "restart", name: /^restart\b/i },
   { id: "swap", name: /\bswap\b/i },
-  { id: "swap-class", cls: /\b(swap|restart|quit)\b/i },
+  // Whole class tokens only: \b also hit the shared decision pair (swap-yes / swap-no, decision-pair.css) that the Runes,
+  // Flow and Settings confirms use. The real swap UI (button, RMB menu, confirm with its Yes/No) is refused by container.
+  { id: "swap-class", cls: /(^|\s)(swap|restart|quit)(\s|$)/i },
+  { id: "swap-ui", inSwapUi: true },
   { id: "relay-approve-deny", cls: /\brelay-(approve|deny)\b/ },
   { id: "relay-approve-deny-name", role: /^button$/i, name: /^(approve|deny)$/i, inRelay: true },
 ];
 
-/** @param {{role?:string,name?:string,cls?:string,inCaption?:boolean,inRelay?:boolean}} d @returns {string|null} matcher id */
+/** @param {{role?:string,name?:string,cls?:string,inCaption?:boolean,inRelay?:boolean,inSwapUi?:boolean}} d @returns {string|null} matcher id */
 export function matchNoPress(d) {
   for (const m of NO_PRESS) {
     if (m.role && !m.role.test(d.role ?? "")) continue;
@@ -49,6 +52,7 @@ export function matchNoPress(d) {
     if (m.cls && !m.cls.test(d.cls ?? "")) continue;
     if (m.inCaption && !d.inCaption) continue;
     if (m.inRelay && !d.inRelay) continue;
+    if (m.inSwapUi && !d.inSwapUi) continue;
     return m.id;
   }
   return null;
@@ -122,12 +126,13 @@ const DESCRIBE_JS = `const D = (el) => {
   const name = (el.getAttribute("aria-label") || el.getAttribute("title") || (el.innerText || el.textContent || "").trim().replace(/\\s+/g, " ").slice(0, 80)
     || el.getAttribute("alt") || el.getAttribute("placeholder") || "");
   return { role, name, cls: typeof el.className === "string" ? el.className : "",
-    inCaption: !!el.closest("#caption"), inRelay: !!el.closest('[class*="relay"]') };
+    inCaption: !!el.closest("#caption"), inRelay: !!el.closest('[class*="relay"]'),
+    inSwapUi: !!el.closest("#swap-btn, #swap-menu, #swap-confirm") };
 };`;
 
 const trim = (d) => (d ? { role: d.role, name: d.name } : null);
 
-/** Resolves a ref (lane A's __vidarExplorer.byRef) or CSS selector, scrolls it into view, hit-tests its centre. */
+/** Resolves a ref (`__vidarExplorer.byRef`) or CSS selector, scrolls it into view, hit-tests its centre. */
 export function resolveJs(target) {
   return `(() => { ${DESCRIBE_JS}
   const t = ${JSON.stringify(target)}; const isRef = /^e\\d+$/.test(t); let el = null;

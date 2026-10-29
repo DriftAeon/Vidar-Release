@@ -18,7 +18,7 @@ fn chunk(index: usize, state: ChunkState, runes: Option<usize>) -> Value {
 }
 
 fn file(path: &str, part: Option<(usize, usize)>) -> PlanFile {
-    PlanFile { path: path.into(), part: part.map(|(k, of)| Part { k, of }) }
+    PlanFile::new(path.into(), part.map(|(k, of)| Part { k, of }))
 }
 
 #[test]

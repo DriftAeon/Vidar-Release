@@ -7,7 +7,7 @@ import type { ViewLib } from "./view-types";
 export interface RedactedItem {
   id: string; kind: string; label: string; description: string; agent?: string; requiredByVidar: boolean;
   source?: string; event?: string; matcher?: string; run?: string[]; open?: string[]; allow?: string[]; ask?: string[];
-  mode?: string; envNames?: string[];
+  mode?: string; style?: string; envNames?: string[];
 }
 /** One rune of a `rune_vault_read` reply; `set` null = a one-off rune; an item rune has an empty body (D-k). */
 export interface VaultViewRune {
@@ -16,7 +16,7 @@ export interface VaultViewRune {
   paths?: string[]; item?: RedactedItem; drift: boolean;
 }
 /** The vault, its drift, the rune list in load order, and the runes left out (missing copy, parse failure). */
-export type VaultView = VaultRefs & { runes: VaultViewRune[]; warnings: string[] };
+export type VaultView = VaultRefs & { runes: VaultViewRune[]; warnings: string[]; off?: VaultViewRune[] };
 
 /** The vault calls the View makes (bound to `rune_vault_session`, `rune_vault_read`, `rune_vault_lock`). */
 export interface VaultIo {
@@ -44,7 +44,7 @@ export function itemBody(i: RedactedItem): string {
   const list = (name: string, xs?: string[]): string[] => (xs?.length ? [`${name}: ${xs.join(", ")}`] : []);
   return [i.label, ...(i.event ? [`Event: ${i.event}`] : []), ...(i.matcher ? [`Matcher: ${i.matcher}`] : []),
     ...(i.source ? [`Source: ${i.source}`] : []), ...list("Run", i.run), ...list("Open", i.open), ...list("Allow", i.allow),
-    ...list("Ask", i.ask), ...(i.mode ? [`Mode: ${i.mode}`] : []), ...list("Env", i.envNames)].join("\n\n");
+    ...list("Ask", i.ask), ...(i.mode ? [`Mode: ${i.mode}`] : []), ...(i.style ? [`Style: ${i.style}`] : []), ...list("Env", i.envNames)].join("\n\n");
 }
 
 const studs = (body: string): number => Math.max(3, Math.ceil([...body].length / 25));

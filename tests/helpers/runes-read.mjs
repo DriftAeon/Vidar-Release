@@ -35,11 +35,13 @@ export default function readRunes(root) {
     section: sectionOf(card),
     tip: card.querySelector(":scope > .runes-set-head")?.title ?? "",
     runes: all("details.runes-rn", card).map((r) => {
-      const sw = r.querySelector(".runes-bare-switch");
+      // Modify's checkbox sits beside the card in its .runes-row; read mode's switch chip sits inside it
+      const sw = (r.parentElement?.classList.contains("runes-row") ? r.parentElement.querySelector(":scope > .runes-check") : null)
+        ?? r.querySelector(".runes-bare-switch");
       return {
         id: r.dataset.id ?? "",
         name: text(r.querySelector(".runes-rname")),
-        on: sw ? sw.getAttribute("aria-pressed") === "true" : !r.classList.contains("is-dim"),
+        on: sw ? (sw.getAttribute("aria-checked") ?? sw.getAttribute("aria-pressed")) === "true" : !r.classList.contains("is-dim"),
         locked: sw ? sw.disabled : false,
         tip: sw ? sw.title : "",
       };

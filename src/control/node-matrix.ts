@@ -39,7 +39,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 type Shape = [tag: "path" | "circle" | "rect", attrs: Record<string, string>];
 const p = (d: string): Shape => ["path", { d }];
-// Lucide glyphs (ISC), geometry as in the approved mock.
+// Lucide glyphs (ISC), geometry as designed.
 const SHAPES: Record<MatrixIcon, Shape[]> = {
   flow: [["rect", { x: "3", y: "3", width: "8", height: "8", rx: "2" }], p("M7 11v4a2 2 0 0 0 2 2h4"), ["rect", { x: "13", y: "13", width: "8", height: "8", rx: "2" }]],
   user: [p("M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"), ["circle", { cx: "12", cy: "7", r: "4" }]],

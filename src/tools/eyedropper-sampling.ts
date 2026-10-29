@@ -10,6 +10,7 @@ export function sampleLoop(
   let active = false;
   let generation = 0;
   let busy = false;
+  let frozen = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pick: Point | undefined;
 
@@ -19,25 +20,32 @@ export function sampleLoop(
     const gen = generation;
     const point = pick;
     pick = undefined;
+    let failed = false;
     try {
       const value = await sample(point);
       if (active && gen === generation) receive(value, !!point);
     } catch (error) {
+      failed = true;
       if (active && gen === generation) receive(null, !!point, error);
     } finally {
       busy = false;
-      if (active) timer = setTimeout(run, INTERVAL_MS);
+      // A successful pick freezes the loop: no timer, so no native polling until the next pick.
+      if (point && !failed && gen === generation) frozen = true;
+      if (active && !frozen) timer = setTimeout(run, pick ? 0 : INTERVAL_MS);
+      else if (active && pick) void run();
     }
   }
 
   return {
     start() {
       active = true;
+      frozen = false;
       generation++;
       void run();
     },
     stop() {
       active = false;
+      frozen = false;
       generation++;
       pick = undefined;
       clearTimeout(timer);
@@ -50,6 +58,7 @@ export function sampleLoop(
         void run();
       }
     },
+    get frozen() { return frozen; },
   };
 }
 

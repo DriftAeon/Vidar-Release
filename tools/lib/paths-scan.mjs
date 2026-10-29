@@ -12,7 +12,7 @@ const EXT = /\.(mjs|js|ts|ps1|rs)$/;
 const EXCLUDE = [/^tools\/lib\//, /^src\/paths\.ts$/, /^contracts\//, /^tests\//, /^docs\//,
   /^src-tauri\/src\/paths(\.rs|\/)/, /^src-tauri\/src\/falcon\/layout\.rs$/,
   // Claude Code mods run inside Claude Code's process and cannot import this contract; their
-  // bridge paths are reviewed by hand (docs/explore/2026-10-02-mods-assessment.md).
+  // bridge paths are reviewed by hand.
   /^plugins\//];
 const LITERAL = /(["'`])((?:\\.|(?!\1)[^\\\n])*)\1/g;
 // Module specifiers (`from "x"`, `import("x")`, `import "x"`) are not runtime path literals.

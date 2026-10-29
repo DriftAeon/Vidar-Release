@@ -1,4 +1,4 @@
-# Rune import fixture (Bare onboarding W1, docs/projects/bare/onboarding-plan.md D3, D4)
+# Rune import fixture (Bare onboarding)
 - `source.md`: a rules file to split. It holds a fence right after a list item, a `+ ` list, a short list item and
   a short paragraph that merge into the brick before them, a table followed by a short item that must not merge
   into it, and a line with trailing spaces. The BOM and the CRLF line are added by the tests

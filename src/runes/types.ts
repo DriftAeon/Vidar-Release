@@ -79,5 +79,5 @@ export interface RunesLoadedFile {
 }
 
 export type RunesLoaded =
-  | { source: "transcript" | "vault" | "rollout"; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; skills?: string[]; truncated: boolean }
-  | { source: "none"; reason: string; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; skills?: string[]; truncated: boolean };
+  | { source: "transcript" | "vault" | "rollout"; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; runeTriggers?: Record<string, string>; skills?: string[]; truncated: boolean }
+  | { source: "none"; reason: string; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; runeTriggers?: Record<string, string>; skills?: string[]; truncated: boolean };

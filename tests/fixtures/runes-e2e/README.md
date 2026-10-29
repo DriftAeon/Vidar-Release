@@ -1,28 +1,9 @@
-# Runes e2e seed
+# Rune Vault sandbox seed
 
-`seed.json` is the one config state every runes e2e layer starts from: `tools/sandbox/runes-seed.mjs --to <base>`,
-the Rust snapshot test and the sandbox launcher materialise it the same way. `cases` names the entry behind each
-regression case (run 2026-10-24-runesets-full-stack, plan v2 table 1-11).
+`seed.json` is materialised by `tools/sandbox/runes-seed.mjs` after the card sandbox copies the app. The shipped `stock-claude` and `stock-codex` templates provide the ordinary floor; the seed adds two runesets, the `one-off` and `e2e-pinned` rules, and an E2E skill to exercise the variant path. Make Variant (case 3, and Add to Vault in the Generate leg) writes the variant to disk and leaves the tab on the locked vault it loaded; the cases read the variant from `runtime/vaults` (`from.vault`), and only a new tab on it (case 4) loads the change. No launcher row or workspace carries sets, and the seed writes no `gen-index.json` or `row-*` file.
 
-## Materialising
-- `files[]`: `path` is `<APP>/…`, `<HOME>/…` or `<WORK>/…` with `/` separators; no empty, `.` or `..` segment.
-- Tokens: `<APP>` = `<base>\app`, `<HOME>` = `<base>\profile`, `<WORK>` = `<base>\work\runes-e2e`,
-  `<WORK_SLUG>` = `memory_slug(<WORK>)` (`rules/import/memory.rs`), `<MEMORY_LIB>` = `slug("memory-" + <WORK_SLUG>)`
-  (`rules/import/split.rs`). The Rust side calls those two functions; Node twins them in `runes-seed.mjs`.
-- `text`: tokens replaced verbatim, bytes written as UTF-8, LF, no BOM.
-- `json`: tokens replaced inside every string (keys and values) of the parsed value, then written as 2-space
-  pretty JSON plus `\n` (`JSON.stringify(v, null, 2)` = `serde_json::to_string_pretty`, key order kept).
-- `steps[]` run after the files: `git-worktree` = `git init -b main` in `repo`, `git add` the `add` list, commit
-  (`user.name=e2e`, no signing, `GIT_*` env dropped), `git worktree add -b <branch> <worktree>`.
-- `<APP>/contracts/module-bundles.json` and `<APP>/runes-e2e/` replace the install's own in a sandbox; the
-  launcher's next Start restores the shipped files.
+The default journey runs cases 1–7 and 9–12. Case 9 reloads only the sandbox WebView after case 2 and checks the re-adopted tab's session pin, revision and Locked card. Case 10 edits the seeded `e2e-pinned` library rule after lock, then checks the old body in `revs/<hash>/runes/runes-e2e/e2e-pinned.md`, the unchanged `revs/<hash>/vault.json`, the old DOM text and the drift marker. Cases 11 and 12 run on case 5's Custom tab: case 11 deletes one rune and then the whole throwaway `runes-e2e-del` library (written by `runes-seed.mjs`, not this file) through the GUI, checking the disk backups and that no vault or session pin changed; case 12 reads the rune tray inset and an open card's border colours. `-Gen` also runs case 8. The full default run sends three model messages; `-Gen` adds one Generate call, for four model calls total.
 
-## Snapshot normalisation (every snapshot under `snap/`)
-1. Strip a leading `\\?\` (also JSON-escaped `\\\\?\\`) before any comparison.
-2. Replace the token roots longest first (`<WORK>` before `<APP>`/`<HOME>` when nested), matching both the
-   canonicalised and the as-given temp path, case-insensitive, then `<WORK_SLUG>` and `<MEMORY_LIB>`.
-3. Match each root in both slash forms and JSON-escaped (`\\`); write the token followed by `/` separators.
-4. Drive letters compare case-insensitive; a short (8.3) temp path is canonicalised before replacing.
-5. `date`, `importedOn` and any `YYYY-MM-DD` in an `origin:` header become `<DATE>`; timestamps become `<TS>`.
-6. Ordering: arrays the reader builds from a folder scan sort by path; object keys keep the writer's order.
-7. Snapshots are LF (`.gitattributes`); `UPDATE_RUNES_SNAP=1` rewrites them, never a hand edit.
+`<APP>`, `<HOME>`, and `<WORK>` resolve to the sandbox's app, profile and `work/runes-e2e` directories. The seeder refuses paths outside these roots and never writes an agent home or credential file. The `claude-user` and `codex-user` library rules and the `vidar-recall` set remain available for the explorer seed, but no row selects them.
+
+The `snap/` files are kept for upcoming E2E work and are not read by any test yet.

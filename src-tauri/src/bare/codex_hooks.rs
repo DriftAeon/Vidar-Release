@@ -1,5 +1,4 @@
-//! src-tauri\src\bare\codex_hooks.rs — Vidar's guard hooks for a Codex Bare home (plan
-//! p1-codex-hooks.md § 4 and Revisions, run 2026-10-19-codex-primary P1 W2). One writer for every
+//! src-tauri\src\bare\codex_hooks.rs — Vidar's guard hooks for a Codex Bare home. One writer for every
 //! Codex Bare prepare (in-process Rendered, Raw TUI, Falcon-hosted: all go through
 //! `codex_hosted::prepare_home`).
 //!

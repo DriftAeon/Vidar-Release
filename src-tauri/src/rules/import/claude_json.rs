@@ -1,5 +1,5 @@
 //! src-tauri\src\rules\import\claude_json.rs — the user-scope MCP servers of the real home's `~/.claude.json`
-//! (`paths::home()`), offered by the Bare Runes tab as Claude `mcp` rows (run 2026-10-25-kit-from-config, W1).
+//! (`paths::home()`), offered by the Bare Runes tab as Claude `mcp` rows.
 //! Read-only, and a secrets boundary:
 //! - a typed serde parse of top-level `mcpServers` only (project scope is never read); `type` binds as a
 //!   string and `url` as an optional string; `command` and `headers` are presence checks (`IgnoredAny`);

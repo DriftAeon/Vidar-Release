@@ -1,16 +1,18 @@
-// src\runes\bare\agent-view.ts — the agent Generate flow of the Bare Runes tab (run 2026-10-17-rune-generator, W3):
+// src\runes\bare\agent-view.ts — the agent Generate flow of the Bare Runes tab:
 // the Model and Effort selects, the Generate button and its tooltips, the generating line, the done line and
-// the extras a generated library carries in Actives. Reuses the existing controls and rows; strings are verbatim
-// from docs/runs/2026-10-17-rune-generator/ipc.md. No roster import: the panel hands the model lists in, so
+// the extras a generated library carries in Actives. Reuses the existing controls and rows; strings match the
+// IPC contract. No roster import: the panel hands the model lists in, so
 // `node --test` loads this.
 import { EFFORT_LEVELS } from "../../agents/protocol";
-import { titleCase } from "../../format";
+import { label } from "../../format";
 import { codexEffortLevels, effortSelect, modelSelect } from "../../settings/agent-selects";
 import {
   generating, type BareActiveLibrary, type BareFlow, type BareLocalSources, type GenOutcome, type GenState,
 } from "./flow";
+import { iconImg } from "../../icon-img";
 import {
-  ADD_TO_VAULT_LABEL, elapsedLabel, emptyProgress, progressCards, reduceProgress, stopProgress, type GeneratedRef, type ProgressState,
+  ADD_TO_VAULT_LABEL, elapsedLabel, emptyProgress, groupedProgress, progressCards, reduceProgress, stopProgress,
+  type GeneratedRef, type ProgressCard, type ProgressState,
 } from "./progress";
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
@@ -44,7 +46,7 @@ const END_LABEL: Record<Exclude<GenState, "done" | "readOnly">, string> = {
 /** Pure: the done line's tooltip, "<Model> · <Effort> · <m>m <s>s · <N>K Tokens"; tokens omitted when null. */
 export function doneTitle(model: string, effort: string, r: { durationMs: number; inputTokens: number | null; outputTokens: number | null }): string {
   const secs = Math.round(r.durationMs / 1000);
-  const parts = [model, titleCase(effort), `${Math.floor(secs / 60)}m ${secs % 60}s`];
+  const parts = [model, label(effort), `${Math.floor(secs / 60)}m ${secs % 60}s`];
   if (r.inputTokens !== null && r.outputTokens !== null) parts.push(`${Math.round((r.inputTokens + r.outputTokens) / 1000)}K Tokens`);
   return parts.join(" · ");
 }
@@ -203,10 +205,8 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
     timeEls.clear();
     let tipped = false;
     const n = clock.now();
-    for (const [i, r] of progressCards(progress).entries()) {
-      const merge = i >= progress.chunks.length;
-      if (merge) list.appendChild(el("div", "runes-gen-sep"));
-      const card = el("div", merge ? "runes-gen-card runes-gen-merge" : "runes-gen-card");
+    const drawCard = (r: ProgressCard, cls: string): HTMLElement => {
+      const card = el("div", cls);
       card.dataset.state = r.retrying ? "retrying" : r.state;
       const g = el("span", "runes-gen-glyph");
       g.appendChild(cardGlyph(card.dataset.state));
@@ -218,12 +218,46 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
         card.appendChild(t);
       }
       const st = el("span", "runes-gen-state", r.text);
-      if (r.state === "failed") {
+      if (r.state === "failed" && r.text) {
         st.classList.add("rp-error");
         if (!tipped && error) { st.title = error; tipped = true; }
       }
       card.appendChild(st);
-      list.appendChild(card);
+      return card;
+    };
+    const grouped = groupedProgress(progress);
+    if (grouped) {
+      const stack = el("div", "runes-gen-stack");
+      for (const band of grouped.bands) {
+        const kind = el("div", "runes-gen-kind");
+        const head = el("div", "runes-gen-kind-head");
+        const ico = el("span", "runes-gen-ico");
+        ico.appendChild(iconImg(band.kind === "memory" ? "memory-card" : "rules"));
+        head.append(ico, el("span", "runes-gen-kind-name", band.name));
+        kind.appendChild(head);
+        for (const src of band.sources) {
+          const frame = el("div", "runes-gen-src");
+          const sh = el("div", "runes-gen-src-head");
+          sh.appendChild(el("span", "runes-gen-src-name", src.path));
+          frame.appendChild(sh);
+          const tray = el("div", "runes-gen-src-tray");
+          for (const gc of src.cards) tray.appendChild(drawCard(gc.card, gc.twin ? "runes-gen-card is-twin" : "runes-gen-card"));
+          frame.appendChild(tray);
+          kind.appendChild(frame);
+        }
+        stack.appendChild(kind);
+      }
+      list.appendChild(stack);
+      if (grouped.merge) {
+        list.appendChild(el("div", "runes-gen-sep"));
+        list.appendChild(drawCard(grouped.merge, "runes-gen-card runes-gen-merge"));
+      }
+      return list;
+    }
+    for (const [i, r] of progressCards(progress).entries()) {
+      const merge = i >= progress.chunks.length;
+      if (merge) list.appendChild(el("div", "runes-gen-sep"));
+      list.appendChild(drawCard(r, merge ? "runes-gen-card runes-gen-merge" : "runes-gen-card"));
     }
     return list;
   };

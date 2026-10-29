@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\identity.rs — Bare slice 2 Part B (B-D1..B-D4): the user's git identity
+//! src-tauri\src\bare\identity.rs — the user's git identity
 //! carried into `<home>\user-home\.gitconfig`, which `HOME` already points git at. Keys are
 //! copied from `git config --global --includes`, never included: `[include]` would bring hooks,
 //! aliases and `includeIf`, the layer Bare drops. Identity never refuses a spawn: any failure

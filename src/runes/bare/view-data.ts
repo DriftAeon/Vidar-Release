@@ -12,6 +12,9 @@ export function errorLine(r: ActionResult, what: "import" | "load" = "import"): 
 
 export function hueOf(lib: Pick<BareActiveLibrary, "generated" | "source" | "library">): string {
   if (lib.generated) return "hue-generated";
+  if (/^((set|one|add):)?stock(\/|$)/.test(lib.library)) return "hue-stock";
+  const agentSet = /^set:[^/]*\/.*-(claude|codex)$/.exec(lib.library);
+  if (agentSet) return `hue-agent-${agentSet[1]}`;
   if (lib.source === null) return "hue-set";
   if (lib.library.startsWith("memory-")) return "hue-recall";
   return /agents(\.override)?\.md$/i.test(lib.source) ? "hue-agents" : "hue-claude";

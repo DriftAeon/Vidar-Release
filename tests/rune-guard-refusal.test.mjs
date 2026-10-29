@@ -1,4 +1,4 @@
-// The Bare guard refusal card (C1, run 2026-10-25-rune-vault L3b2): Remove Rune takes the rune out of the tab's
+// The Bare guard refusal card: Remove Rune takes the rune out of the tab's
 // Rune Vault through rune_vault_edit with the lock rules, then retries the spawn; a locked vault asks first.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -14,9 +14,8 @@ const dom = setupDom({ answers: {
   rune_vault_edit: (args) => {
     calls.push(["rune_vault_edit", args]);
     if (state.vault.lockedUtc && args.mode === "unlocked") throw new Error("vault \"v1\" is locked");
-    return { ...structuredClone(state.vault), id: args.mode === "variant" ? "v2" : "v1" };
+    return { ...structuredClone(state.vault), id: args.mode === "variant" ? "v2" : "v1", ...(args.mode === "variant" ? { name: "Custom Variant" } : {}) };
   },
-  rune_vault_session_move: (args) => { calls.push(["rune_vault_session_move", args]); return { vault: { id: args.id, hash: "h2" } }; },
   read_state: {},
 } });
 const { createLifecycle } = await import("../src/panels/rendered/lifecycle.ts");
@@ -75,7 +74,7 @@ test("Failed to Start card names the rune; Remove Rune edits the open vault befo
   assert.deepEqual(f.notices, ["Failed to Start: retry failed"]);
 });
 
-test("a locked vault sends no edit until the pick; Make Variant moves the tab and retries fresh", async () => {
+test("a locked vault sends no edit until the pick; Make Variant saves the variant, leaves the tab on its vault and shows the notice", async () => {
   calls.length = 0; state.vault = vaultOf({ lockedUtc: "2026-10-25T00:00:00Z" });
   const f = failedSpawn();
   await f.spawn();
@@ -88,11 +87,12 @@ test("a locked vault sends no edit until the pick; Make Variant moves the tab an
   assert.deepEqual(buttons(card(f)), ["Make Variant", "Edit Original"]);
   press(card(f), "Make Variant");
   await flush();
-  assert.deepEqual(calls.filter(([n]) => n === "rune_vault_edit" || n === "rune_vault_session_move").map(([n, a]) => [n, a.mode ?? a.id]),
-    [["rune_vault_edit", "variant"], ["rune_vault_session_move", "v2"]]);
-  assert.equal(f.attempts(), 2);
-  assert.equal(f.S.sessionId, null, "the variant's retry starts a fresh session");
-  assert.ok(f.resets() >= 1);
+  assert.deepEqual(calls.filter(([n]) => n === "rune_vault_edit").map(([, a]) => a.mode), ["variant"]);
+  assert.ok(!names().includes("rune_vault_session_move"), "no caller moves the tab's record any more");
+  assert.equal(f.attempts(), 1, "the tab keeps its vault, so there is nothing to retry");
+  assert.equal(f.S.sessionId, "s1");
+  assert.equal(card(f).querySelector(".blk-notice").textContent, "Saved as Custom Variant. New sessions can pick it.");
+  assert.deepEqual(buttons(card(f)), []);
 });
 
 test("Edit Original edits the locked vault in place and retries fresh, as Modify's choice respawns", async () => {
@@ -104,7 +104,6 @@ test("Edit Original edits the locked vault in place and retries fresh, as Modify
   press(card(f), "Edit Original");
   await flush();
   assert.deepEqual(calls.filter(([n]) => n === "rune_vault_edit").map(([, a]) => a.mode), ["invalidate"]);
-  assert.ok(!names().includes("rune_vault_session_move"));
   assert.equal(f.attempts(), 2);
   assert.equal(f.S.sessionId, null, "Edit Original's retry starts a fresh session");
 });

@@ -1,5 +1,4 @@
-//! src-tauri\src\bare\vault\migrate_items.rs — the startup migration's sidecar conversion (run
-//! 2026-10-25-rune-vault, L4c; split from `migrate.rs` for the module-size cap). A sidecar
+//! src-tauri\src\bare\vault\migrate_items.rs — the startup migration's sidecar conversion (split from `migrate.rs` for the module-size cap). A sidecar
 //! (`sets\<set>.layer.json`) plus the retired home-wide `bare*` lists become item rune texts and set
 //! slots; `migrate.rs` places them in the library. Absorbs `fold_migrate.rs`'s conversion.
 //!
@@ -16,6 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value};
 
+use crate::agent_spec::Agent;
 use crate::bare::bundles::{Bundles, SetModules};
 use crate::bare::{layer, set_layer};
 
@@ -71,7 +71,7 @@ fn block(key: &str, items: &[String]) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-pub(super) fn rune_text(id: &str, it: &Item, origin: &str) -> String {
+pub(super) fn rune_text(id: &str, it: &Item, _origin: &str) -> String {
     let mut t = format!("---\nname: {id}\nkind: {}\nscope: [global]\n", it.kind);
     if let Some(a) = it.agent {
         t.push_str(&format!("agent: {a}\n"));
@@ -80,7 +80,7 @@ pub(super) fn rune_text(id: &str, it: &Item, origin: &str) -> String {
         t.push_str(k);
         t.push('\n');
     }
-    t.push_str(&format!("description: \"{} moved from the {origin} sidecar\"\n---\n", it.kind));
+    t.push_str("---\n");
     t
 }
 
@@ -157,18 +157,21 @@ impl Acc<'_> {
             Some((Err(e), _)) => self.fail(e),
         }
     }
-    /// One kind's Claude list then Codex list: shared names untagged once, one-side names tagged.
-    fn pair<T>(&mut self, claude: &[T], codex: &[T], codex_names: &BTreeSet<String>, name: impl Fn(&T) -> String, build: impl Fn(&T) -> Result<Built, String>) {
-        let cl: BTreeSet<String> = claude.iter().map(&name).collect();
+    /// One kind's lists in table order (the sidecar keeps one per agent, the first agent's under the
+    /// plain key): shared names untagged once, one-side names tagged. A third agent fails to compile here.
+    fn pair<T>(&mut self, lists: [&[T]; 2], later_names: &BTreeSet<String>, name: impl Fn(&T) -> String, build: impl Fn(&T) -> Result<Built, String>) {
+        let [first_agent, later_agent] = crate::agent_spec::ALL;
+        let [first, later] = lists;
+        let seen_first: BTreeSet<String> = first.iter().map(&name).collect();
         let mut seen = BTreeSet::new();
-        for c in claude {
-            let tag = if codex_names.contains(&name(c)) { None } else { Some("claude") };
+        for c in first {
+            let tag = (!later_names.contains(&name(c))).then(|| first_agent.as_str());
             let fresh = seen.insert(name(c));
             self.push(fresh.then(|| (build(c), tag)));
         }
-        for c in codex {
-            let fresh = !cl.contains(&name(c)) && seen.insert(name(c));
-            self.push(fresh.then(|| (build(c), Some("codex"))));
+        for c in later {
+            let fresh = !seen_first.contains(&name(c)) && seen.insert(name(c));
+            self.push(fresh.then(|| (build(c), Some(later_agent.as_str()))));
         }
     }
 }
@@ -177,25 +180,32 @@ impl Acc<'_> {
 /// second value says every entry converted (the sidecar may then be deleted).
 pub(super) fn items_of(obj: &Map<String, Value>, retired: &Retired, catalog: &Bundles, label: &str, warnings: &mut Vec<String>) -> (Vec<Item>, bool) {
     let mut acc = Acc { out: Vec::new(), ok: true, label, warnings };
+    // The sidecar's second-agent keys (`codex*`) and its one output style, read through the table.
+    let [_, later_agent] = crate::agent_spec::ALL;
+    let style_agent = crate::agent_spec::ALL.into_iter().find(|a| crate::agent_spec::spec(*a).carries.output_style.is_none());
     let extra = |k: &str| retired.lists.get(k).cloned().unwrap_or_default();
     let with = |base: Vec<String>, k: &str| -> Vec<String> { base.into_iter().chain(extra(k).iter().filter_map(Value::as_str).map(str::to_string)).collect() };
     let names = |v: &[String]| -> BTreeSet<String> { v.iter().map(|p| set_layer::name_of(p)).collect() };
 
     // Skills: Codex reads codexSkills when set, else the Claude list.
     let skills = with(strings(obj.get("skills")), "skills");
-    let has_codex_skills = obj.get("codexSkills").is_some_and(|v| !v.is_null());
+    let own_list = obj.get("codexSkills").is_some_and(|v| !v.is_null());
     let codex_skills = with(strings(obj.get("codexSkills")), "codexSkills");
-    let codex_names = if has_codex_skills { names(&codex_skills) } else { names(&skills).into_iter().chain(names(&codex_skills)).collect() };
-    acc.pair(&skills, &codex_skills, &codex_names, |p| set_layer::name_of(p), |p| path_item("skills", "skill", p));
+    let mine = names(&codex_skills);
+    let later_names: BTreeSet<String> = match own_list {
+        true => mine,
+        false => names(&skills).into_iter().chain(mine).collect(),
+    };
+    acc.pair([&skills, &codex_skills], &later_names, |p| set_layer::name_of(p), |p| path_item("skills", "skill", p));
 
     let agents = with(strings(obj.get("agents")), "agents");
     let codex_agents = with(strings(obj.get("codexAgents")), "codexAgents");
-    acc.pair(&agents, &codex_agents, &names(&codex_agents), |p| set_layer::name_of(p), |p| path_item("agents", "agent", p));
+    acc.pair([&agents, &codex_agents], &names(&codex_agents), |p| set_layer::name_of(p), |p| path_item("agents", "agent", p));
 
     let gs: Vec<Value> = values(obj.get("guards")).into_iter().chain(extra("guards")).collect();
     let cgs: Vec<Value> = values(obj.get("codexGuards")).into_iter().chain(extra("codexGuards")).collect();
     let cg_names: BTreeSet<String> = cgs.iter().map(set_layer::guard_name).collect();
-    acc.pair(&gs, &cgs, &cg_names, set_layer::guard_name, guard_item);
+    acc.pair([&gs, &cgs], &cg_names, set_layer::guard_name, guard_item);
 
     // Module servers in the sidecar's own order (a bundle limited to one agent tags its rune).
     let mut servers: Vec<String> = Vec::new();
@@ -209,9 +219,12 @@ pub(super) fn items_of(obj: &Map<String, Value>, retired: &Retired, catalog: &Bu
                     };
                     let off = strings(tick.get("off"));
                     for s in b.mcp.iter().filter(|s| !off.contains(&format!("mcp:{}", s.name))) {
+                        if let Some(tag) = crate::bare::bundles::unknown_tag(s) {
+                            acc.fail(format!("module {module:?} server {:?} names unknown agent {tag:?} in module-bundles.json; skipped", s.name));
+                            continue;
+                        }
                         let only = match s.agents.as_slice() {
-                            [a] if a == "claude" => Some("claude"),
-                            [a] if a == "codex" => Some("codex"),
+                            [a] => crate::agent_spec::parse(a).map(|a| a.as_str()),
                             _ => None,
                         };
                         servers.push(s.name.clone());
@@ -252,7 +265,7 @@ pub(super) fn items_of(obj: &Map<String, Value>, retired: &Retired, catalog: &Bu
             Some((m, s)) => {
                 let fresh = !servers.contains(&s);
                 servers.push(s.clone());
-                acc.push(fresh.then(|| (mcp_item(&m, &s), Some("codex"))));
+                acc.push(fresh.then(|| (mcp_item(&m, &s), Some(later_agent.as_str()))));
             }
             None => acc.fail(format!("server {name:?} is in no module bundle")),
         }
@@ -282,7 +295,7 @@ pub(super) fn items_of(obj: &Map<String, Value>, retired: &Retired, catalog: &Bu
     }
     if let Some(style) = obj.get("outputStyle").filter(|v| !v.is_null()) {
         match style.as_str().filter(|s| !s.trim().is_empty()) {
-            Some(s) => acc.push(Some((scalar("style", s).map(|line| (slug(s), "styles", "output-style", vec![line])), Some("claude")))),
+            Some(s) => acc.push(Some((scalar("style", s).map(|line| (slug(s), "styles", "output-style", vec![line])), style_agent.map(Agent::as_str)))),
             None => acc.fail("`outputStyle` is not a nonempty string".into()),
         }
     }

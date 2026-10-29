@@ -9,7 +9,7 @@
 :is(.blk-tool, .chain-seg)[data-tool-class="web"] { --chain-tc: var(--class-web); }
 :is(.blk-tool, .chain-seg)[data-tool-class="edit"] { --chain-tc: var(--approval-amber); }
 /* run, think and other: green, run and other red on failure (2026-10-04: grey read as dead;
-   other (MCP, TodoWrite, Skill, Monitor, SendMessage…) green too, user 2026-10-05) */
+   other (MCP, TodoWrite, Skill, Monitor, SendMessage…) green too) */
 :is(.blk-tool, .chain-seg)[data-tool-class="run"],
 :is(.blk-tool, .chain-seg)[data-tool-class="other"],
 :is(.blk-tool, .chain-seg)[data-tool-class="think"] { --chain-tc: var(--ok-green); }

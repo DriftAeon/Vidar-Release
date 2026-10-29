@@ -18,8 +18,9 @@ import { markSlot } from "./marks";
 import { copyButton } from "../file-actions";
 import { copyText } from "../../clipboard";
 
-/** A Codex tab logs in through its own app-server (agents/codex.ts encodeLogin): the pill opens the choice. */
-export const CODEX_LOGIN_TIP = "Codex is not logged in. Click Not Logged In in the status bar to log in with ChatGPT or an API key.";
+// The Codex tip wording lives in agents/login-tips.ts; the name stays importable from here.
+import { CODEX_LOGIN_TIP } from "../../agents/login-tips";
+export { CODEX_LOGIN_TIP };
 
 export const API_KEY_CARD = "blk-login";
 export const LOGIN_TITLE = "Log In To Codex";

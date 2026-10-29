@@ -1,7 +1,7 @@
 // Adapter contract parity: what the panel waits on from an adapter (a setter's ack, a method the
 // in-process Codex view has) must also come from the hosted one. A new adapter, a new AgentAdapter
 // method or a new Codex request that this file does not know about fails here, so the gap is a
-// choice written down with a reason, not a surprise on a live tab (2aacee17: a hosted tab with no
+// choice written down with a reason, not a surprise on a live tab (a hosted tab with no
 // skills catalog, found by a user).
 import test from "node:test";
 import assert from "node:assert/strict";

@@ -1,5 +1,5 @@
 // Jira bench filter bar (jira/filters.ts, jira/model.ts, panels/jira.ts): the Filters payload, the caps, which
-// controls show per scope, option lists failing apart, the search debounce, Clear Filters and stale replies (plan D6).
+// controls show per scope, option lists failing apart, the search debounce, Clear Filters and stale replies.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";

@@ -71,7 +71,7 @@ const FULL = "Full result ".repeat(500);
 const releaseReads = () => pendingReads.splice(0).forEach((r) => r());
 const { initFlowStorage } = await import("../src/flow/file-storage.ts");
 const { S } = await import("../src/flow/state.ts");
-// The selector opens on Run (2026-10-22); the reopened flow shows its finished run once the user picks it.
+// The selector opens on Run; the reopened flow shows its finished run once the user picks it.
 const pickShownRun = () => {
   document.querySelector(".flow-run-pick").click();
   document.querySelectorAll("#flow-pick-menu .display-pick-row")[1].click();

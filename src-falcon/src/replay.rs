@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::journal::{Body, CodexRecord, JournalError, Record, Snapshot};
-use crate::protocol::{EventBody, Outcome};
+use crate::protocol::{Agent, EventBody, Outcome};
 
 /// Everything needed to rebuild a live view without touching the child.
 ///
@@ -289,7 +289,14 @@ fn apply(state: &mut State, record: &Record) {
             // are answers, not retries, so the command is no longer in flight.
             // The answer is kept: it is what a reconnecting client asks for.
             let accepted = state.in_flight.remove(command);
-            if *outcome == Outcome::Applied && state.agent == "codex" {
+            let folds_policy = match Agent::from_wire(&state.agent) {
+                None => false,
+                Some(agent) => match agent {
+                    Agent::Claude => false,
+                    Agent::Codex => true,
+                },
+            };
+            if *outcome == Outcome::Applied && folds_policy {
                 if let Some(accepted) = &accepted {
                     match accepted.kind.as_str() {
                         "set_model" => {

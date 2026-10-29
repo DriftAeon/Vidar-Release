@@ -92,3 +92,15 @@ test("a call sent while another is pending is answered first", async () => {
   input.end();
   await done;
 });
+
+test("isMain matches the module path with and without the verbatim prefix", async () => {
+  const { isMain, normPath } = await import("./server.mjs");
+  const url = import.meta.url.replace("server.test.mjs", "server.mjs");
+  const plain = fileURLToPath(url);
+  assert.equal(isMain(plain, url), true);
+  assert.equal(isMain("\\\\?\\" + plain, url), true);
+  assert.equal(isMain(plain.toUpperCase(), url, "win32"), true);
+  assert.equal(isMain(plain + ".other", url), false);
+  assert.equal(isMain(undefined, url), false);
+  assert.equal(normPath("\\\\?\\UNC\\srv\\share\\x", "win32"), "\\\\srv\\share\\x");
+});

@@ -66,6 +66,12 @@ test("vault rows: the agent's stock vault first and once, saved vaults by name, 
   assert.deepEqual(vaultRows(LISTED, "codex").map((v) => v.id), ["stock-codex", "team-kit"]);
 });
 
+test("vault rows: a stock vault's variant (a non-reserved id) shows for Claude and Codex alike", () => {
+  const variant = { id: "claude-variant", name: "Stock Claude Variant", template: false, hash: "h3", lockedUtc: null };
+  assert.deepEqual(vaultRows([...LISTED, variant], "claude").map((v) => v.id), ["stock-claude", "claude-variant", "team-kit"]);
+  assert.ok(vaultRows([...LISTED, variant], "codex").some((v) => v.id === "claude-variant"));
+});
+
 test("custom sources: a rules-library set names the library by its folder; none set drops it", () => {
   assert.deepEqual(customSources([{ set: "base" }, { library: "kit", set: "workflow" }], "D:\\work\\runes\\tracked"),
     [{ library: "tracked", set: "base" }, { library: "kit", set: "workflow" }]);

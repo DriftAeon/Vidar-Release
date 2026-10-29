@@ -1,4 +1,4 @@
-//! The process-wide send budget (plan § D2, delta S5, S6): one slot every 350 ms (about 2.86
+//! The process-wide send budget: one slot every 350 ms (about 2.86
 //! requests a second, under Notion's 3 a second average), and a hold after a 429 or 529 during
 //! which every call answers `rate` with the seconds left and sends nothing. The clock is
 //! injected so tests run a fresh pacer on a fake clock, never the process static.

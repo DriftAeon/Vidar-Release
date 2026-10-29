@@ -6,6 +6,7 @@
 
 use std::path::Path;
 
+use crate::agent_spec::Agent;
 use crate::rules::import::local::LocalFile;
 use crate::rules::import::sources;
 use crate::rules::import::write::quote;
@@ -126,7 +127,12 @@ pub fn resolve(picks: &[Pick], offered: &[LocalFile], home: Option<&Path>, taken
                     description,
                     source: None,
                     hook: Some(Hook { event: g.event.clone(), matcher, run }),
-                    agent: Some(if f.agent == Some("codex") { "codex" } else { "claude" }),
+                    // An untagged hook is a Claude one (the Claude home's hooks carry no tag).
+                    agent: Some(match f.agent {
+                        None => Agent::Claude,
+                        Some(tag) => super::home::agent_of(tag)?,
+                    }
+                    .as_str()),
                 }
             }
             _ => {

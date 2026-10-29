@@ -26,7 +26,7 @@ export interface ModelOption {
 /** The module whose rows a runner's models show under: hidden while that module is off. */
 const RUNNER_MODULE: Record<FlowBackend, string> = { sdk: "claude", codex: "codex" };
 
-/** Core models, display order matching the approved mock verbatim. */
+/** Core models, in display order. */
 const CORE_ROSTER: readonly ModelOption[] = [
   { id: "claude-sonnet-5", label: "Sonnet 5", wired: true, runner: "sdk" },
   { id: "claude-opus-5-5", label: "Opus 5.5", wired: true, runner: "sdk" },

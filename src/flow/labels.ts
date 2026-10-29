@@ -1,6 +1,7 @@
 // Display formatting only: persisted values and executable identifiers stay intact.
 
 import type { AgentPreset } from "./model";
+import { titleWords } from "../format";
 
 const PRESET_LABELS: Record<AgentPreset, string> = {
   plan: "Plan",
@@ -14,7 +15,7 @@ const PRESET_LABELS: Record<AgentPreset, string> = {
 };
 
 /** Display label for an `AgentPreset` (the palette's preset picker, and the inspector's
- *  read-only `preset` field, §2/§3/§5) — matches the approved mock's exact casing
+ *  read-only `preset` field) — keeps the exact casing
  *  ("Brainstorm-Format", not "Brainstorm-format"). */
 export function presetLabel(preset: AgentPreset): string {
   return PRESET_LABELS[preset] ?? preset;
@@ -22,7 +23,7 @@ export function presetLabel(preset: AgentPreset): string {
 
 export function fieldLabel(key: string): string {
   if (key.toLowerCase() === "cwd") return "Working Directory";
-  return key.replace(/-/g, " ").replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+  return titleWords(key) || key;
 }
 
 export function fieldValue(key: string, value: string): string {

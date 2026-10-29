@@ -1,10 +1,10 @@
 // Skill, agent and hook file rows show a Title Case name from the file (src/runes/bare/row-name.ts).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fileName, isFileRow, nameAndPath, nameLabel } from "../src/runes/bare/row-name.ts";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
+const { fileName, isFileRow, nameAndPath, nameLabel } = await import("../src/runes/bare/row-name.ts");
 const { libraryLabel } = await import("../src/runes/bare/gen-label.ts");
 
 test("fileName: extension dropped, split on - and _, Title Case with small words lowercase after the first", () => {
@@ -21,6 +21,14 @@ test("nameLabel: set and library ids read in Title Case", () => {
   assert.equal(nameLabel("vidar-recall"), "Vidar Recall");
   assert.equal(nameLabel("kit"), "Kit");
   assert.equal(nameLabel(""), "");
+});
+
+test("nameLabel: known acronyms keep their capitals, other words are unchanged", () => {
+  assert.equal(nameLabel("mcp-write-asks"), "MCP Write Asks");
+  assert.equal(nameLabel("mcp-gate"), "MCP Gate");
+  assert.equal(nameLabel("ui"), "UI");
+  assert.equal(nameLabel("kit-mine"), "Kit Mine");
+  assert.equal(nameLabel("stdio-bridge"), "Stdio Bridge");
 });
 
 test("libraryLabel: a plain library id in Title Case, a generated one keeps its hyphen-joined name", () => {

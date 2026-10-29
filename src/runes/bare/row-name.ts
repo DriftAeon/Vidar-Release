@@ -3,9 +3,8 @@
 // show the safe event, matcher and program label only. Rune rows (rules and memory
 // libraries, MCP servers) keep their own names and are not touched.
 import type { BareLocalFile } from "./flow";
+import { titleWords } from "../../format";
 
-// Small words stay lowercase after the first word (copied from tools/ui/lint-copy-note.mjs SMALL; src/ never imports tools/).
-const SMALL = new Set(["a", "an", "the", "and", "or", "nor", "but", "of", "to", "in", "on", "for", "at", "by", "vs", "via", "per", "as", "from", "with"]);
 const EXT = /\.(mjs|cjs|js|ts|md|toml|json|ps1|sh|py)$/i;
 
 /** Pure: whether a row is a path-backed skill, agent or hook file (the rows that show name + path). */
@@ -20,14 +19,8 @@ export function fileName(path: string): string {
   return nameLabel(last.replace(EXT, "")) || last;
 }
 
-/** Pure: an id in Title Case, no path or extension handling. `kit-mine` → Kit Mine, `kit` → Kit.
- *  camelCase splits too: openaiDeveloperDocs → Openai Developer Docs. Empty when the id holds no word. */
-export function nameLabel(id: string): string {
-  const words = id.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[-_\s]+/).filter(Boolean);
-  return words
-    .map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(" ");
-}
+/** An id in Title Case (format.ts titleWords; kept under this name for the Runes callers): `kit-mine` → Kit Mine. */
+export const nameLabel = titleWords;
 
 /** The text a tick row shows: an MCP server id in the same Title Case skills get (`vidar-control` → Vidar Control);
  *  the raw id stays in the row's title. */

@@ -79,8 +79,8 @@ function statusLabel(status: FlowRunNodeStatus): string {
 /** One `.flow-run-badge` per node, created lazily the first time that node gets a paint call and
  *  cached here — `nodes.ts`'s `loadGraph` rebuilds `S.nodeEls` wholesale on graph switch, so
  *  `resetRunView` (below) drops this cache in step with that rebuild rather than leaking stale
- *  elements. Lives in `.flow-node-header` (mock round 2's mark sits beside the title in the header
- *  band, not before the body — nodes.ts's header-band card, brief item 3). */
+ *  elements. Lives in `.flow-node-header` (the mark sits beside the title in the header
+ *  band, not before the body — nodes.ts's header-band card). */
 const badges = new Map<string, HTMLElement>();
 
 function badgeFor(nodeId: string): HTMLElement | null {
@@ -96,9 +96,9 @@ function badgeFor(nodeId: string): HTMLElement | null {
   return badge;
 }
 
-/** Duration/cost for the node-card footer (brief item 3: "run facts — time, tokens — in the
- *  footer when the run has them"). No per-node token count exists anywhere in FlowRunNodeState or
- *  the engine today (grepped, see report) — cost (`costUsd`) stands in for "tokens" here, the only
+/** Duration/cost for the node-card footer (run facts, time and cost, shown in the
+ *  footer when the run has them). No per-node token count exists anywhere in FlowRunNodeState or
+ *  the engine today — cost (`costUsd`) stands in for "tokens" here, the only
  *  per-node number the run actually tracks besides timing. */
 function footerFacts(nodeState?: FlowRunNodeState): string[] {
   const parts: string[] = [];

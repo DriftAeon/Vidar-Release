@@ -4,6 +4,10 @@
 
 import type { AgentType } from "../config";
 import type { FixOpener, FixRequest } from "../panels/rendered/fix-seam";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { isAgentId, type AgentId } from "../agents/id.ts";
+
+const canFix: Record<AgentId, boolean> = { claude: true, codex: false };
 
 /** Control characters out of anything the prompt quotes: a warning or path never injects a line or a `!`. */
 function clean(text: string): string {
@@ -21,7 +25,7 @@ export function fixPrompt(req: FixRequest): string {
 
 /** The first shown row that is Rendered Claude without a role (the `claude-rendered-bare` child). */
 export function findFixRow(roots: readonly AgentType[], variantsOf: (root: AgentType) => readonly AgentType[]): AgentType | null {
-  const fits = (a: AgentType) => a.id === "claude" && a.body === "rendered" && !a.role;
+  const fits = (a: AgentType) => isAgentId(a.id) && canFix[a.id] && a.body === "rendered" && !a.role;
   for (const root of roots) {
     if (fits(root)) return root;
     const hit = variantsOf(root).find(fits);

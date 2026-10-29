@@ -5,7 +5,7 @@
   display: none;
   box-sizing: border-box;
   height: var(--caption-h);
-  /* the icon sits 8 in from the window edge (user, 2026-10-24: was --bar-inset + 4 = 10) */
+  /* the icon sits 8 in from the window edge (was --bar-inset + 4 = 10) */
   padding-left: var(--space-8);
   padding-right: var(--caption-buttons-w); /* the title never runs under DWM's buttons */
   align-items: center;

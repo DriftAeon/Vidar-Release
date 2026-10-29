@@ -20,7 +20,13 @@ pub(crate) fn pointer(rune: &Rune) -> String {
     } else {
         String::new()
     };
-    format!("- {} — {}{paths}. Read {}.md in skill vidar-runes", title(&rune.id), rune.description, rune.id)
+    let desc = rune.description.trim().trim_end_matches('.');
+    if desc.is_empty() {
+        return format!("- {}{paths}. Read {}.md in skill vidar-runes", title(&rune.id), rune.id);
+    }
+    let mut chars = desc.chars();
+    let lead: String = chars.next().map(|c| c.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default();
+    format!("- {lead}{paths}: read {}.md in skill vidar-runes ({})", rune.id, title(&rune.id))
 }
 
 /// Split `- <?rune x?>` into (prefix, id); `None` when the line is not a slot.
@@ -263,6 +269,14 @@ mod tests {
         t
     }
 
+    #[test]
+    fn a_pointer_leads_with_its_trigger_and_falls_back_without_one() {
+        let with = super::super::rune::parse("---\nname: tracker\nkind: fact\nscope: [s]\nactivate: recall\ndescription: you add a new file.\n---\nBody.\n").unwrap();
+        assert_eq!(pointer(&with), "- You add a new file: read tracker.md in skill vidar-runes (Tracker)");
+        let without = super::super::rune::parse("---\nname: tracker\nkind: fact\nscope: [s]\nactivate: recall\n---\nBody.\n").unwrap();
+        assert_eq!(pointer(&without), "- Tracker. Read tracker.md in skill vidar-runes");
+    }
+
     fn render_off(t: &Tmp, bare: bool, off: &[&str]) -> String {
         let l = Library::open(&t.0.join("lib")).unwrap();
         let set = l.load(&l.entry("tracked").unwrap().unwrap()).unwrap();
@@ -281,7 +295,7 @@ mod tests {
             let links: Vec<&str> = full.lines().filter(|l| if bare { l.contains("in skill vidar-runes") } else { l.starts_with("- [") }).collect();
             assert_eq!(links.len(), 3, "{full}");
             let less = render_off(&t, bare, &["beta"]);
-            let want: Vec<&str> = full.lines().filter(|l| !l.starts_with(if bare { "- Beta —" } else { "- [Beta]" })).collect();
+            let want: Vec<&str> = full.lines().filter(|l| !l.starts_with(if bare { "- Beta:" } else { "- [Beta]" })).collect();
             assert_eq!(less.lines().collect::<Vec<_>>(), want, "bare {bare}:\n{full}\n---\n{less}");
         }
     }
@@ -291,7 +305,7 @@ mod tests {
         let t = lib("slot-off");
         let bare = render_off(&t, true, &["one"]);
         assert!(!bare.contains("Rule one.") && !bare.contains("# Rules"), "{bare}");
-        assert!(bare.contains("- Alpha — Alpha. Read alpha.md in skill vidar-runes"), "{bare}");
+        assert!(bare.contains("- Alpha: read alpha.md in skill vidar-runes (Alpha)"), "{bare}");
         let plain = render_off(&t, false, &["one"]);
         assert!(!plain.contains("Rule one.") && plain.contains("# Rules"), "{plain}");
     }
@@ -307,9 +321,9 @@ mod tests {
         let set = l.load(&l.entry("delivery").unwrap().unwrap()).unwrap();
         let ctx = RenderCtx::bare(BTreeSet::new());
         let bare = render_in(&l, &set, &ctx).unwrap().text;
-        assert!(bare.contains("- Path rule — Path rule when working on files matching src/**/*.rs, tests/*.rs. Read path-rule.md in skill vidar-runes"), "{bare}");
-        assert!(bare.contains("- Recall rule — Recall rule. Read recall-rule.md in skill vidar-runes"), "{bare}");
-        assert!(bare.contains("- Alpha — Alpha. Read alpha.md in skill vidar-runes"), "{bare}");
+        assert!(bare.contains("- Path rule when working on files matching src/**/*.rs, tests/*.rs: read path-rule.md in skill vidar-runes (Path rule)"), "{bare}");
+        assert!(bare.contains("- Recall rule: read recall-rule.md in skill vidar-runes (Recall rule)"), "{bare}");
+        assert!(bare.contains("- Alpha: read alpha.md in skill vidar-runes (Alpha)"), "{bare}");
         assert!(!bare.contains("Path body.") && !bare.contains("Recall body."), "{bare}");
         let inline = render_in_with_delivery(&l, &set, &ctx, false).unwrap().text;
         assert!(inline.contains("<!-- rune: path-rule -->\n- Path body.") && inline.contains("<!-- rune: recall-rule -->\n- Recall body."), "{inline}");

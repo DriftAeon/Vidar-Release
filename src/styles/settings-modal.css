@@ -226,7 +226,7 @@
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-2) var(--space-6);
 }
 .deps-note { font-family: var(--font-ui); font-size: var(--font-11); color: var(--fg-dim); }
-/* Grouped by state (user pick, 2026-10-21): Needs You is a stack of confirm-style cards (.vs-confirm box,
+/* Grouped by state: Needs You is a stack of confirm-style cards (.vs-confirm box,
    .swap-confirm-head with a .title-tile, .swap-confirm-body); the detail line sits in the body on the
    panel fill, because state-coloured text on the head's accent sheen reads under 4.5:1 (--alert 2.5:1).
    Ready folds into two columns of one-line items. */

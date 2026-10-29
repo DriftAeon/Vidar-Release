@@ -1,23 +1,23 @@
 {
   "agentLog": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "autoSend": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "autoSpeak": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "bridge": {
     "count": 3,
-    "reason": "call sites move in W2C/W2D; Rust part is lane A W2A"
+    "reason": "call sites still to move to the contract; Rust part likewise"
   },
   "characters": {
     "count": 11,
-    "reason": "call sites move in W2C/W2D; includes asset URLs and a common word"
+    "reason": "call sites still to move to the contract; includes asset URLs and a common word"
   },
   "content": {
     "count": 29,
@@ -25,39 +25,39 @@
   },
   "clips": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "closeLock": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "config": {
     "count": 10,
-    "reason": "vidar.json stays at root; readers move to the contract in W2C/W2D; +3 voice_slots/write.rs temp-root test fixtures"
+    "reason": "vidar.json stays at root; readers still to move to the contract; +3 voice_slots/write.rs temp-root test fixtures"
   },
   "display": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D; partly a common word"
+    "reason": "call sites still to move to the contract; partly a common word"
   },
   "displayArchive": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "docs": {
     "count": 6,
-    "reason": "call sites move in W2C/W2D; partly a common word"
+    "reason": "call sites still to move to the contract; partly a common word"
   },
   "falcon": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D; Rust part is lane A W2A"
+    "reason": "call site still to move to the contract; Rust part likewise"
   },
   "falconBuild": {
     "count": 0,
-    "reason": "falcon-build.ps1, lane A W2A"
+    "reason": "falcon-build.ps1"
   },
   "falconBundles": {
     "count": 1,
-    "reason": "falcon scripts and Rust, lane A W2A"
+    "reason": "falcon scripts and Rust"
   },
   "falconFrontends": {
     "count": 0,
@@ -69,31 +69,31 @@
   },
   "falconPointer": {
     "count": 1,
-    "reason": "falcon scripts and Rust, lane A W2A"
+    "reason": "falcon scripts and Rust"
   },
   "falconRegistry": {
     "count": 4,
-    "reason": "falcon scripts and Rust, lane A W2A"
+    "reason": "falcon scripts and Rust"
   },
   "falconStore": {
     "count": 0,
-    "reason": "falcon scripts and Rust, lane A W2A"
+    "reason": "falcon scripts and Rust"
   },
   "flowStore": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "inbox": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "localVoice": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "localVoicePython": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "open": {
     "count": 1,
@@ -101,27 +101,27 @@
   },
   "openDispatch": {
     "count": 1,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "openStale": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "packs": {
     "count": 10,
-    "reason": "call sites move in W2C/W2D; +4 voice_slots temp-root test fixtures; +1 voice_slots codex-exec manifest test"
+    "reason": "call sites still to move to the contract; +4 voice_slots temp-root test fixtures; +1 voice_slots codex-exec manifest test"
   },
   "review": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D; partly a common word"
+    "reason": "call sites still to move to the contract; partly a common word"
   },
   "reviewDispatch": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "reviewStale": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "runeCreateSkill": {
     "count": 4,
@@ -137,19 +137,19 @@
   },
   "runs": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "sessions": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D; partly a common word"
+    "reason": "call site still to move to the contract; partly a common word"
   },
   "speakJournal": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "speakScript": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "stages": {
     "count": 0,
@@ -161,30 +161,30 @@
   },
   "tools": {
     "count": 13,
-    "reason": "call sites move in W2C/W2D; partly a common word"
+    "reason": "call sites still to move to the contract; partly a common word"
   },
   "uiState": {
     "count": 9,
-    "reason": "call sites move in W2C/W2D; Rust part is lane A W2A; +2 falcon/layout.rs Shape.ui_state (pinned to the contract by its test); +4 settings/state.rs history tests build temp state files (7fb5520)"
+    "reason": "call sites still to move to the contract; Rust part likewise; +2 falcon/layout.rs Shape.ui_state (pinned to the contract by its test); +4 settings/state.rs history tests build temp state files"
   },
   "vendor": {
     "count": 3,
-    "reason": "call sites move in W2C/W2D; partly a common word"
+    "reason": "call sites still to move to the contract; partly a common word"
   },
   "voice": {
     "count": 0,
-    "reason": "call site moves in W2C/W2D"
+    "reason": "call site still to move to the contract"
   },
   "whisper": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   },
   "windowState": {
     "count": 0,
-    "reason": "call sites move in W2C/W2D; Rust part is lane A W2A"
+    "reason": "call sites still to move to the contract; Rust part likewise"
   },
   "workbench": {
     "count": 1,
-    "reason": "call sites move in W2C/W2D"
+    "reason": "call sites still to move to the contract"
   }
 }

@@ -1,5 +1,5 @@
-//! src-tauri\src\bare\layer.rs — rune set refs built into a payload (Bare slice 1, W1). No launcher
-//! row is read here (D1, run 2026-10-25-rune-vault): callers pass the refs; a `{ set }` ref resolves through `rulesLibrary`,
+//! src-tauri\src\bare\layer.rs — rune set refs built into a payload. No launcher
+//! row is read here: callers pass the refs; a `{ set }` ref resolves through `rulesLibrary`,
 //! a `{ library, set }` ref through the import library `runtime\runes\<library>\` (onboarding D8).
 //! Refs build in ref order through `build::build_in`; a repeated ref is built once, and a slot
 //! whose rune id and body an earlier library already rendered is dropped from a later library's
@@ -55,7 +55,7 @@ pub struct BuiltPayload {
 /// `HomeLock` (it is not reentrant, so this never locks). Nothing is written unless every check
 /// passes; a file already holding the same bytes is left as it is. `carried` is the guard file names
 /// the home carries: a rune claiming an `enforced-by` file outside it is dropped with a warning.
-/// Since run 2026-10-25-rune-vault (L2a) no spawn builds from a row: the vault's text renders in
+/// No spawn builds from a row: the vault's text renders in
 /// `set_loadout::resolve_vault` and goes through `build_text_payload`. Kept for the set-render tests.
 #[cfg(test)]
 pub fn build_payload(_lock: &HomeLock, root: &Path, home_dir: &Path, template: &str, row: &RowSets, guard: &home::Guard, carried: &[String]) -> Result<BuiltPayload, String> {
@@ -167,7 +167,7 @@ pub(crate) fn library_dir(root: &Path, row: &RowSets, r: &SetRef) -> Result<Path
     Ok(dir)
 }
 
-/// A library by name, as a vault names it (run 2026-10-25-rune-vault, L2a; the vault store's resolver):
+/// A library by name, as a vault names it (the vault store's resolver):
 /// `stock` is the shipped stock library; any other name is `runtime\runes\<name>\` when that folder
 /// exists (kit, `gen-*`; canonical and inside the import folder, as `library_dir`), else the library
 /// vidar.json's `rulesLibrary` names by its folder name (`library_name`).

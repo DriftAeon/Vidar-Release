@@ -1,5 +1,5 @@
 // Weekly sweep: runs the lint/dep/dead-code/systems lanes (systems: lanes-systems.mjs, sys-* ids) and diffs them against the newest snapshot.
-// Plan: docs/runs/2026-10-09-weekly-sweep/plan.md. Report-only; never wired into gate.mjs.
+// Report-only; never wired into gate.mjs.
 //
 // Usage:
 //   node tools/sweep/scan.mjs [--record] [--report] [--lanes a,b] [--baseline <file>] [--all]

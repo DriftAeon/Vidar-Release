@@ -9,10 +9,10 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node tools/ui/lint-ui.mjs && node tools/ui/lint-copy.mjs && tsc --noEmit && vite build && node -e \"const f='tools/release/icon-gate.mjs';if(fs.existsSync(f)){const r=require('child_process').spawnSync('node',[f],{stdio:'inherit'});process.exit(r.status??1)}\"",
+    "build": "node tools/ui/lint-ui.mjs && node tools/ui/lint-copy.mjs && node tools/ui/lint-case.mjs && tsc --noEmit && vite build && node -e \"const f='tools/release/icon-gate.mjs';if(fs.existsSync(f)){const r=require('child_process').spawnSync('node',[f],{stdio:'inherit'});process.exit(r.status??1)}\"",
     "build:falcon": "npm run build && node tools/falcon/build.mjs",
     "tauri": "tauri",
-    "lint:ui": "node tools/ui/lint-copy.mjs && node tools/ui/lint-ui.mjs",
+    "lint:ui": "node tools/ui/lint-copy.mjs && node tools/ui/lint-ui.mjs && node tools/ui/lint-case.mjs",
     "lint:copy": "node tools/ui/lint-copy.mjs",
     "test": "node --test --test-timeout=120000 \"tests/**/*.test.mjs\" \"tools/**/*.test.mjs\"",
     "prepare": "node -e \"fs.existsSync('tools/gate/hooks-path.mjs')&&import('./tools/gate/hooks-path.mjs')\"",

@@ -155,10 +155,10 @@ fn validate_flow_grid_opacity(v: &Value) -> Result<(), String> {
 /// the webview's call at use time, never refused here: an uninstalled pick falls back.
 fn validate_primary_agent(v: &Value) -> Result<(), String> {
     let s = v.as_str().ok_or("primaryAgent must be a string")?;
-    match s {
-        "codex" | "claude" | "" => Ok(()),
-        other => Err(format!("primaryAgent must be \"codex\", \"claude\" or \"\" (got \"{other}\")")),
+    if s.is_empty() || crate::agent_spec::parse(s).is_some() {
+        return Ok(());
     }
+    Err(format!("primaryAgent must be \"codex\", \"claude\" or \"\" (got \"{s}\")"))
 }
 
 /// Unicode general category Cf (format characters: bidi controls, zero-width, BOM, tags). Std has
@@ -349,6 +349,7 @@ mod tests {
         let err = validate_primary_agent(&Value::from("Claude")).unwrap_err();
         assert!(err.contains("primaryAgent"), "{err}");
         assert!(validate_primary_agent(&Value::from("gemini")).is_err());
+        assert!(validate_primary_agent(&Value::from("grok")).is_err());
         assert!(validate_primary_agent(&Value::from(" ")).is_err());
         assert!(validate_primary_agent(&Value::from(1)).is_err());
     }

@@ -1,5 +1,5 @@
-// Rune Vault acceptance gate, Node half (run 2026-10-25-rune-vault, wave 0). Contract:
-// docs/projects/bare/runeset-model.md § Gate and R3 (a vault locks on the session's first message,
+// Rune Vault acceptance gate, Node half. Contract:
+// the vault gate (a vault locks on the session's first message,
 // never on hydrate or replay). The lock lives in the Rust send commands (`falcon_send` in
 // falcon/session_commands.rs, `agent_send` in agent.rs) so every composer path that delivers a user
 // turn (`sendUser`, `sendPrompt`, `flushQueue`) presses it through one door, and only once: the Rust
@@ -104,7 +104,7 @@ test("the Lock button calls rune_vault_lock with lockedBy button from the Runes 
 });
 
 test("fixture vault.json v1 carries every contract field", () => {
-  // L1a: the store writes exactly these keys (plan v1 Vault object, v2 D-e pins).
+  // The store writes exactly these keys (the vault object, with its pins).
   const keys = ["version", "id", "name", "createdUtc", "from", "runesets", "runes", "lockedUtc", "lockedBy", "hash", "pins"];
   for (const id of ["astra-code", "astra-code-no-skill"]) {
     const v = json("vaults", id, "vault.json");
@@ -120,7 +120,7 @@ test("fixture vault.json v1 carries every contract field", () => {
 });
 
 test("fixture session record carries no launcher row and names its vault by id and hash", () => {
-  // L1b: record shape (plan v1 Session record minus rowKey).
+  // Record shape: the session record minus rowKey.
   const dir = join(FIXTURE, "vaults", "sessions");
   const [file] = readdirSync(dir);
   assert.match(file, /^\d{4}-\d{2}-\d{2}T\d{9}Z-(claude|codex)-[0-9a-f]{8}\.json$/);

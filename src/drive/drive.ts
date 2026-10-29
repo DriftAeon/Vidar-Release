@@ -15,7 +15,7 @@ import {
 } from "../panels/sessions";
 import { hostedFalconSession } from "../panels/sessions/lookup";
 import { CODEX_EFFORT_LEVELS, codexEffort } from "../agents/codex-settings";
-import { codexHostShape } from "../panels/rendered/agent-profile";
+import { codexHostShape } from "../agents/agent-profile";
 import { hostedCodexOn } from "../launcher/readopt";
 import { rulesPlan } from "../rules/inject";
 import { DRIVE_CLASS as C } from "../panels/rendered-drive";
@@ -145,7 +145,7 @@ export async function driveSend(tabId: string, text: string): Promise<boolean> {
 
 // Drives the card's own buttons (.q-opt then .approval-allow, or .approval-deny)
 // rather than reaching the settle() closure: the buttons are the contract the
-// user has, and the disabled-until-answered gate stays tested (plan decision).
+// user has, and the disabled-until-answered gate stays tested.
 async function driveAnswer(
   tabId: string,
   ans: { requestId?: string; option?: string | string[]; decision?: "allow" | "deny"; message?: string },

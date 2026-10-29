@@ -86,10 +86,19 @@ fn exchange(mut send: impl FnMut(&Value) -> Result<(), String>, rx: &Receiver<St
     }
 }
 
+/// The agent id parsed once; only Codex has a model list, any other id is refused.
+fn admit(agent: &str) -> Result<(), String> {
+    let refuse = || format!("The Codex model list is for Codex only (agent {agent:?}); spawn refused");
+    match crate::agent_spec::parse(agent).ok_or_else(refuse)? {
+        crate::agent_spec::Agent::Codex => crate::bare::admit_rendered("bare", Some("codex"), None),
+        crate::agent_spec::Agent::Claude => Err(refuse()),
+    }
+}
+
 /// Spawns, asks, ends. Every return after the spawn goes through the kill below.
 fn fetch() -> Result<Vec<Value>, String> {
-    crate::bare::admit_rendered("bare", Some("codex"), None)?;
-    // The model list asks Codex on the stock vault, never a row's sets (run 2026-10-25-rune-vault, L2a).
+    admit("codex")?;
+    // The model list asks Codex on the stock vault, never a row's sets.
     let opts = crate::bare::LaunchOpts { row_key: None, config: None, claude_json: None, vault: Some("stock-codex"), custom_sets: None };
     // Bare prepares stay serialized in-process (agent.rs, pty.rs); held until the spawn is in.
     let prepare_guard = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
@@ -114,10 +123,13 @@ fn fetch() -> Result<Vec<Value>, String> {
             return Err(format!("codex app-server: {e}"));
         }
     };
-    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-        child.kill();
-        let _ = child.wait();
-        return Err("codex app-server: missing pipes".into());
+    let (mut stdin, stdout) = match child.stdin.take().zip(child.stdout.take()) {
+        Some(pipes) => pipes,
+        None => {
+            child.kill();
+            let _ = child.wait();
+            return Err("codex app-server: missing pipes".into());
+        }
     };
     let (tx, rx) = mpsc::channel();
     let reader = thread::Builder::new().name("codex-models-stdout".into()).spawn(move || {
@@ -159,6 +171,13 @@ pub async fn codex_list_models() -> Result<Vec<Value>, String> {
 mod tests {
     use super::*;
     use std::sync::mpsc::Sender;
+
+    #[test]
+    fn only_codex_is_admitted_for_the_model_list() {
+        assert!(admit("codex").is_ok());
+        assert!(admit("grok").is_err());
+        assert!(admit("claude").is_err());
+    }
 
     /// A fake app-server: `answer` maps each sent frame to the lines it writes back.
     fn run(answer: impl Fn(&Value) -> Vec<Value>, timeout: Duration) -> (Result<Vec<Value>, String>, Vec<Value>) {

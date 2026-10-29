@@ -1,4 +1,4 @@
-// Trust boundary (plan-v2 § 2): launch values come only from the approved snapshot Rust writes. A
+// Trust boundary: launch values come only from the approved snapshot Rust writes. A
 // gateway missing from it, or whose pack changed after it, refuses; snapshot values aiming `claude`
 // at a plain-http endpoint, reading an Anthropic key, naming a bad model or setting an env key outside
 // the contract's gateway.envAllowlist are refused again here, before the fence is built and before `claude`.

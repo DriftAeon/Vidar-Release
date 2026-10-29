@@ -7,7 +7,7 @@
   "tags": ["error", "login"],
   "realModel": false,
   "core": false,
-  "source": ["0be68ff4"],
+  "source": [],
   "steps": [
     { "intent": "open a Bare Codex tab that is not logged in" },
     { "intent": "choose Shared Login and click it again right away" },

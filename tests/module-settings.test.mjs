@@ -280,7 +280,7 @@ test('Pending persists until patch confirms Saved; refused and session-only save
   assert.equal(status(root), 'Session Only');
 });
 
-// ---- inline rename (run 2026-10-17-module-rename W3D; picks B and R1)
+// ---- inline rename
 const { setModuleNames } = await import('../src/modules/names.ts');
 const { REVERT_EVENT } = await import('../src/settings/module-rename.ts');
 assert.ok((await import('node:fs')).readFileSync(new URL('../src/settings/modal.ts', import.meta.url), 'utf8')

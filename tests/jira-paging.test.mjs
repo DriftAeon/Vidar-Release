@@ -1,5 +1,5 @@
 // Jira bench tab paging contract (panels/jira.ts, jira/view.ts): sections, Load 50 More, the query counter,
-// and the on-show refresh (plan D2-D5).
+// and the on-show refresh.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";

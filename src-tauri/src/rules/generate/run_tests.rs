@@ -86,7 +86,7 @@ fn parent() -> Vec<(OsString, OsString)> {
 #[test]
 fn the_env_drops_every_scrubbed_prefix_and_sets_the_home_vars() {
     let home = Path::new(r"C:\H\gen-claude");
-    let env = child_env(parent(), "claude", home);
+    let env = child_env(parent(), Agent::Claude, home);
     let names: Vec<String> = env.iter().map(|(k, _)| k.to_string_lossy().to_ascii_uppercase()).collect();
     for dropped in
         ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "CODEX_SANDBOX", "OPENAI_API_KEY", "VIDAR_TAB", "VIDAR_AGENT_HOME", "FALCON_SESSION"]
@@ -118,7 +118,7 @@ fn the_env_drops_every_scrubbed_prefix_and_sets_the_home_vars() {
 
 #[test]
 fn the_codex_env_sets_codex_home_and_no_claude_vars() {
-    let env = child_env(parent(), "codex", Path::new(r"C:\H\gen-codex"));
+    let env = child_env(parent(), Agent::Codex, Path::new(r"C:\H\gen-codex"));
     assert_eq!(get(&env, "CODEX_HOME").unwrap(), r"C:\H\gen-codex\config");
     assert_eq!(get(&env, "USERPROFILE").unwrap(), r"C:\H\gen-codex\user-home");
     assert!(get(&env, "CLAUDE_CONFIG_DIR").is_none() && get(&env, "DISABLE_AUTOUPDATER").is_none() && get(&env, "ANTHROPIC_API_KEY").is_none());
@@ -282,6 +282,7 @@ fn cmd_spec(args: &[&str], stdin: &str) -> Spec {
         // No inherited Path: `sort` and `ping` are found through the one entry given.
         env: vec![(OsString::from("SystemRoot"), sys.clone().into_os_string()), (OsString::from("Path"), sys.join("System32").into_os_string())],
         cwd: std::env::temp_dir(),
+        agent: Agent::Claude,
         config: None,
         stdin: stdin.to_string(),
     }

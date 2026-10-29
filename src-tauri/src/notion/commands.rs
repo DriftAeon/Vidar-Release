@@ -1,4 +1,4 @@
-//! The Notion tab's eight commands (plan § IPC). Order inside each: credential read (absent →
+//! The Notion tab's eight commands. Order inside each: credential read (absent →
 //! `unset`, no send), argument checks (bad → `endpoint`, no send), pacer turn, send. Each network
 //! command runs on a blocking task under a 20 s `with_deadline`; no command returns the token.
 
@@ -16,7 +16,7 @@ use super::vault;
 use crate::credman::Store;
 use crate::net::{self, Limits, Request, Secret};
 
-/// The whole budget of one command (plan § D5).
+/// The whole budget of one command.
 pub const DEADLINE: Duration = Duration::from_secs(20);
 
 /// The connect generation: each connect takes a new one at its start and Disconnect bumps it, so

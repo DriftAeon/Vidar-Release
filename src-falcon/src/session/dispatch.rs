@@ -152,7 +152,10 @@ impl Session {
         // retracting it frees the queue. One no setting could make fit goes
         // on to the writer's refusal and leaves the queue, as before.
         let held_by_settings = encoded.len() > crate::process::LINE_CAP
-            && matches!(&self.driver, AgentDriver::Codex(codex) if codex.could_fit(&next.content));
+            && match &self.driver {
+                AgentDriver::Claude(_) => false,
+                AgentDriver::Codex(driver) => driver.could_fit(&next.content),
+            };
         if held_by_settings {
             self.driver.dispatched(&next.id, false);
             let bytes = encoded.len();
@@ -290,12 +293,16 @@ impl Session {
         };
         // Claude's steer names no turn, so it always writes.
         let status = match &self.driver {
-            AgentDriver::Codex(driver) if steered => {
-                driver.write_steer(&held.id, write).unwrap_or_else(|| {
-                    crate::process::WriteStatus::NotWritten(TURN_ENDED_FIRST.into())
-                })
+            AgentDriver::Claude(_) => write(),
+            AgentDriver::Codex(driver) => {
+                if steered {
+                    driver.write_steer(&held.id, write).unwrap_or_else(|| {
+                        crate::process::WriteStatus::NotWritten(TURN_ENDED_FIRST.into())
+                    })
+                } else {
+                    write()
+                }
             }
-            _ => write(),
         };
         match status {
             crate::process::WriteStatus::Written => {

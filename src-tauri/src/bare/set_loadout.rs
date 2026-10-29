@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::Value;
 
-use super::guards;
 use super::layer::{self, RowSets, SetRef};
 use super::recall_skill;
 use super::set_layer::{self, Permissions};
+use crate::agent_spec;
 use crate::falcon::Agent;
 use crate::rules::{context::RenderCtx, library::Library, rune::State};
 
@@ -35,7 +35,8 @@ pub(crate) struct RuneRef {
     pub kind: String,
 }
 
-/// An item the agent cannot carry: its kind (`guard`, `permission`, `outputStyle`, `mcp`), the item and why.
+/// An item the agent cannot carry: its kind (`guard`, or a rune kind such as `permission`, `output-style`, `mcp`),
+/// the item (a rune id where there is one) and why. Rendered by `src/runes/not-carried.ts`.
 #[derive(Clone, Debug, Default, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Unsupported {
@@ -60,7 +61,10 @@ pub(crate) struct Loadout {
     /// MCP server names after module expansion, deduped, pick order.
     pub mcp: Vec<String>,
     pub permissions: Permissions,
-    pub output_style: Option<String>,
+    pub output_style: Option<super::rune_items::OutputStyle>,
+    /// The first model rune for this agent; nothing writes it yet (run runes-gaps G2 does).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     pub unsupported: Vec<Unsupported>,
     /// Plugin rune folders, absolute (`<root>\plugins\<name>`); a vault spawn only (L2b passes them).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -85,11 +89,13 @@ pub(crate) struct Loadout {
     pub env: Vec<(String, crate::rules::rune::Secret)>,
 }
 
+/// The one Not Carried warning line, for a launch's `Loadout.unsupported` row.
+pub(super) fn not_carried(agent: Agent, u: &Unsupported) -> String {
+    format!("{} {} Not Carried by {}: {}", u.kind, u.item, agent_label(agent), u.reason)
+}
+
 fn agent_label(agent: Agent) -> &'static str {
-    match agent {
-        Agent::Claude => "Claude",
-        Agent::Codex => "Codex",
-    }
+    agent_spec::spec(agent).label
 }
 
 /// `rulesLibrary` from vidar.json, read-only; a missing file or key is none, an unreadable one a warning.
@@ -161,11 +167,7 @@ pub(super) fn resolve_with_delivery(env: &ResolveEnv, agent: Agent, sets: &[SetR
     }
     let ask = out.permissions.ask.clone();
     out.permissions.allow.retain(|a| !ask.contains(a));
-    if agent == Agent::Codex {
-        codex_unsupported(&mut out);
-    } else {
-        claude_unsupported(&mut out);
-    }
+    drop_unsupported(agent, &mut out);
     out.guards = out.guard_items.iter().map(set_layer::guard_name).collect();
     // The hooks this loadout carries: a rune `enforced-by` another file is left out (Bare context).
     let carried: BTreeSet<String> = out
@@ -196,8 +198,12 @@ pub(super) fn resolve_with_delivery(env: &ResolveEnv, agent: Agent, sets: &[SetR
     (out, warnings)
 }
 
-/// Claude rows keep only hooks whose event and tool matcher Claude Bare can carry.
-fn claude_unsupported(out: &mut Loadout) {
+/// What `agent` cannot carry leaves the lists, each as a Not Carried row from its spec: command
+/// guards it cannot run (a `run`/`open` guard was already checked by `map_item`, which checks every
+/// hook, so the skip is the same for every agent), per-tool permissions, a permission mode and an
+/// output style.
+fn drop_unsupported(agent: Agent, out: &mut Loadout) {
+    let carries = &agent_spec::spec(agent).carries;
     let mut kept = Vec::new();
     for g in std::mem::take(&mut out.guard_items) {
         if g.get("command").is_none() {
@@ -205,34 +211,34 @@ fn claude_unsupported(out: &mut Loadout) {
             continue;
         }
         let event = g.get("event").and_then(Value::as_str).unwrap_or("");
-        match guards::claude_unsupported(event, g.get("matcher").and_then(Value::as_str)) {
+        match (carries.guard)(event, g.get("matcher").and_then(Value::as_str)) {
             Some(reason) => push_unsupported(&mut out.unsupported, "guard", &set_layer::guard_name(&g), reason),
             None => kept.push(g),
         }
     }
     out.guard_items = kept;
-}
-
-/// Codex's rules: guards it cannot run, any per-tool permission, a permission mode and an output style
-/// leave the lists.
-fn codex_unsupported(out: &mut Loadout) {
-    let mut kept = Vec::new();
-    for g in std::mem::take(&mut out.guard_items) {
-        let event = g.get("event").and_then(Value::as_str).unwrap_or("");
-        match guards::codex_unsupported(event, g.get("matcher").and_then(Value::as_str)) {
-            Some(reason) => push_unsupported(&mut out.unsupported, "guard", &set_layer::guard_name(&g), reason),
-            None => kept.push(g),
+    let keep_list = |list: Vec<String>, unsupported: &mut Vec<Unsupported>| -> Vec<String> {
+        let mut kept = Vec::new();
+        for p in list {
+            match (carries.permission)(std::slice::from_ref(&p), None).refused {
+                Some(reason) => push_unsupported(unsupported, "permission", &p, reason),
+                None => kept.push(p),
+            }
         }
-    }
-    out.guard_items = kept;
-    for p in std::mem::take(&mut out.permissions.allow).into_iter().chain(std::mem::take(&mut out.permissions.ask)) {
-        push_unsupported(&mut out.unsupported, "permission", &p, "Codex has no per-tool list".into());
-    }
+        kept
+    };
+    out.permissions.allow = keep_list(std::mem::take(&mut out.permissions.allow), &mut out.unsupported);
+    out.permissions.ask = keep_list(std::mem::take(&mut out.permissions.ask), &mut out.unsupported);
     if let Some(mode) = out.permissions.mode.take() {
-        push_unsupported(&mut out.unsupported, "permission", &mode, "Codex has no permission mode".into());
+        match (carries.permission)(&[], Some(&mode)).refused {
+            Some(reason) => push_unsupported(&mut out.unsupported, "permission", &mode, reason),
+            None => out.permissions.mode = Some(mode),
+        }
     }
-    if let Some(style) = out.output_style.take() {
-        push_unsupported(&mut out.unsupported, "outputStyle", &style, "Codex has no output style".into());
+    if let Some(why) = carries.output_style {
+        if let Some(style) = out.output_style.take() {
+            push_unsupported(&mut out.unsupported, "output-style", &style.id, why.into());
+        }
     }
 }
 
@@ -313,7 +319,7 @@ fn runes_of(lib: &Library, p: &Picked, ctx: &RenderCtx, skill_delivery: bool, ou
     }
 }
 
-// ---- a spawn's Rune Vault (run 2026-10-25-rune-vault, L2a; model R2, R6) ----
+// ---- a spawn's Rune Vault ----
 
 /// What a spawn on one vault carries: the loadout, the warnings, the payload text (`None` when no
 /// text rune renders; the profile's static payload then stands) and the vault's runesets as
@@ -410,13 +416,10 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
     }
     out.permissions = pieces.permissions;
     out.output_style = pieces.output_style;
+    out.model = pieces.model;
     out.plugins = pieces.plugins;
     out.env = pieces.env;
-    if agent == Agent::Codex {
-        codex_unsupported(&mut out);
-    } else {
-        claude_unsupported(&mut out);
-    }
+    drop_unsupported(agent, &mut out);
     out.guards = out.guard_items.iter().map(set_layer::guard_name).collect();
 
     // Text: each runeset's lines with its slots filled, then the one-offs (a rune renders once).
@@ -632,10 +635,38 @@ mod tests {
         let config = crate::paths::config_path_in(&t.0);
         let home = t.0.join("home");
         let env = ResolveEnv { root: &t.0, config: &config, home: &home, user_home: Some(&t.0) };
-        assert_eq!(resolve_vault(&env, Agent::Claude, &store, &v).unwrap().loadout.output_style.as_deref(), Some("compact"));
+        assert_eq!(resolve_vault(&env, Agent::Claude, &store, &v).unwrap().loadout.output_style.map(|s| s.name).as_deref(), Some("compact"));
         let codex = resolve_vault(&env, Agent::Codex, &store, &v).unwrap();
         assert!(codex.loadout.output_style.is_none());
         assert!(codex.loadout.unsupported.iter().any(|u| u.kind == "output-style"));
+    }
+
+    #[test]
+    fn the_post_pass_rows_follow_each_agents_spec() {
+        let seeded = || {
+            let mut l = Loadout::default();
+            l.permissions.allow = vec!["Bash(ls)".into()];
+            l.permissions.ask = vec!["Edit".into()];
+            l.permissions.mode = Some("plan".into());
+            l
+        };
+        let mut claude = seeded();
+        drop_unsupported(Agent::Claude, &mut claude);
+        assert!(claude.unsupported.is_empty());
+        assert_eq!((claude.permissions.allow.len(), claude.permissions.ask.len()), (1, 1));
+        assert_eq!(claude.permissions.mode.as_deref(), Some("plan"));
+        let mut codex = seeded();
+        drop_unsupported(Agent::Codex, &mut codex);
+        let rows: Vec<_> = codex.unsupported.iter().map(|u| (u.kind.as_str(), u.item.as_str(), u.reason.as_str())).collect();
+        assert_eq!(
+            rows,
+            [
+                ("permission", "Bash(ls)", "Codex has no per-tool list"),
+                ("permission", "Edit", "Codex has no per-tool list"),
+                ("permission", "plan", "Codex has no permission mode"),
+            ]
+        );
+        assert!(codex.permissions.allow.is_empty() && codex.permissions.ask.is_empty() && codex.permissions.mode.is_none());
     }
 
     #[test]

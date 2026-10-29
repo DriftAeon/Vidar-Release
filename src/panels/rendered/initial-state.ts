@@ -53,6 +53,7 @@ export function initialState(opts: RenderedOpts, adapter: AgentAdapter): Rendere
     stick: true,
     replaying: false,
     spawning: null,
+    holding: false,
     paletteSel: null,
   };
 }

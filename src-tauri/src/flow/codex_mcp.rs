@@ -1,4 +1,4 @@
-//! Per-node MCP servers for a Codex Flow node (spike: `docs/runs/2026-10-15-framing`, C2).
+//! Per-node MCP servers for a Codex Flow node.
 //!
 //! Selection: the node's permission allowlist entries `mcp__<server>__<tool>`, split as the
 //! Claude runner does (`claude.rs` `mcp_server_of`). Each entry becomes one argv override

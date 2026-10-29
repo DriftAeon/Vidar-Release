@@ -1,4 +1,4 @@
-// Bare onboarding W1 (docs/projects/bare/onboarding-plan.md D3): the import library the Rust writer produces
+// Bare onboarding: the import library the Rust writer produces
 // (golden: tests/fixtures/rune-import/acme-claude-md, checked byte for byte by src-tauri/src/rules/import/mod.rs)
 // passes cook's lint, and its full-keep set (named after the library) cooks back to the normalised source. Cooks into a temp dir only.
 import assert from "node:assert/strict";

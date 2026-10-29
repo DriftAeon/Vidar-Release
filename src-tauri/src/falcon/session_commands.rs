@@ -205,7 +205,7 @@ fn falcon_spawn_blocking(
     // made a stock vault exist); a resume keeps the mode the tab had. No mode rune keeps the tab's.
     #[cfg(not(falcon_shell))]
     let permission_mode = match (agent, vault.as_deref(), resume.as_deref()) {
-        (Agent::Claude, Some(v), None) => vault_mode(v).unwrap_or(permission_mode),
+        (Agent::Claude, Some(v), None) => crate::bare::vault_spawn::vault_mode(&crate::paths::root(), v, agent).unwrap_or(permission_mode),
         _ => permission_mode,
     };
     if let Some(r) = resume.as_deref() {
@@ -214,7 +214,7 @@ fn falcon_spawn_blocking(
         // Falcon's own Registry::reserve only refuses a conversation hosted THERE;
         // a raw tab, a second Vidar or an external claude is only seen from here.
         // Vidar-only: `status` (and the `procs` it walks) is not compiled into the
-        // shell, which broke `falcon-build.ps1` after 9e0b9a6. The shell never spawns
+        // shell, which broke `falcon-build.ps1`. The shell never spawns
         // with a resume id (it adopts), so it refuses one instead of skipping the check.
         // That registry is Claude's own; a Codex thread is reserved by the
         // host alone (`Registry::reserve`).
@@ -282,6 +282,9 @@ fn falcon_spawn_blocking(
     let plugin_names = hosted_launch.as_ref().map(BareLaunch::plugin_names).unwrap_or_default();
     #[cfg(falcon_shell)]
     let plugin_names: Vec<String> = Vec::new();
+    // The vault's model rune beats the row's model.
+    #[cfg(not(falcon_shell))]
+    let model = vault_model_wins(hosted_launch.as_ref().and_then(BareLaunch::model), model);
     let payload = falcon.control(Op::Spawn(SpawnParams {
         agent: Some(agent),
         cwd,
@@ -432,9 +435,10 @@ fn falcon_spawn_blocking(
     drop(pending);
 
     // The event connection is separate and read-only; it needs no lease, and
-    // its reads can block forever without touching the control path.
+    // its reads can block forever without touching the control path. A spawn's
+    // `falcon/thread` is journalled before this attach, so the record takes it replayed.
     if let Err(error) =
-        start_event_reader(app, &falcon, id.clone(), session, view_generation, reader)
+        start_event_reader(app, &falcon, id.clone(), session, view_generation, reader, true)
     {
         let _ = falcon.detach_local(&id, view_generation);
         return Err(error);
@@ -457,16 +461,21 @@ fn spawn_reply(view_generation: u64, bare_warnings: &[String]) -> Value {
 fn spawn_agent(agent: Option<&str>) -> Result<Agent, String> {
     match agent.map(str::trim).filter(|a| !a.is_empty()) {
         None => Ok(Agent::Claude),
-        Some(name) => serde_json::from_value(Value::String(name.to_string()))
-            .map_err(|_| format!("falcon cannot host a {name:?} session")),
+        Some(name) => parse_agent(name).ok_or_else(|| format!("falcon cannot host a {name:?} session")),
     }
 }
 
 /// The agent a listed `SessionSummary` names, when it is one this client
 /// knows; an unknown name is left to the host, as before.
 fn summary_agent(summary: &Value) -> Option<Agent> {
-    let name = summary.get("agent").and_then(Value::as_str)?;
-    serde_json::from_value(Value::String(name.to_string())).ok()
+    parse_agent(summary.get("agent").and_then(Value::as_str)?)
+}
+
+/// The agent name a session record carries for an adopted summary; a summary naming an agent this
+/// client does not know gets no record (it was filed as Claude's before).
+#[cfg(not(falcon_shell))]
+fn record_agent(summary: &Value) -> Option<&'static str> {
+    summary_agent(summary).map(Agent::as_str)
 }
 
 /// What a hosted Codex spawn cannot carry. Rules-file Codex tabs stay in-process (refresh doc
@@ -522,6 +531,12 @@ fn codex_home_echo_check(requested: Option<&str>, ran: &CodexBareSpawn) -> Resul
     }
 }
 
+/// The vault's model rune over the row's model; the row's stands without one.
+#[cfg(not(falcon_shell))]
+fn vault_model_wins(vault: Option<String>, row: Option<String>) -> Option<String> {
+    vault.or(row)
+}
+
 /// A profiled spawn's prepared home: Claude's (Falcon builds the env, the sidecar maps the
 /// profile) or Codex's (config.toml and payload written, the home lock held until dropped).
 #[cfg(not(falcon_shell))]
@@ -563,11 +578,19 @@ impl BareLaunch {
         }
     }
 
-    /// Claude only: the vault's plugin rune names (run 2026-10-25-rune-vault L2b).
+    /// Claude only: the vault's plugin rune names.
     fn plugin_names(&self) -> Vec<String> {
         match self {
             BareLaunch::Claude(l) => l.plugin_names.clone(),
             BareLaunch::Codex(_) => Vec::new(),
+        }
+    }
+
+    /// The vault's model rune, when it carries one.
+    fn model(&self) -> Option<String> {
+        match self {
+            BareLaunch::Claude(l) => l.model.clone(),
+            BareLaunch::Codex(l) => l.model.clone(),
         }
     }
 
@@ -608,26 +631,6 @@ fn vault_shape(vault: Option<&str>, profile: Option<&str>) -> Result<(), String>
 #[cfg(not(falcon_shell))]
 fn launch_opts<'a>(row_key: Option<&'a str>, sets: Option<&'a [LaunchSetRef]>, vault: Option<&'a str>) -> crate::bare::LaunchOpts<'a> {
     crate::bare::LaunchOpts { row_key, custom_sets: if vault.is_some() { None } else { sets }, vault, ..Default::default() }
-}
-
-/// D-c: the `mode` of vault `id`'s first Claude permission rune, if it has one.
-#[cfg(not(falcon_shell))]
-fn vault_mode(id: &str) -> Option<String> {
-    let resolved = crate::bare::vault::store::Store::open(&crate::paths::root()).resolve(id).ok()?;
-    resolved.runes.iter().find_map(|r| rune_mode(&r.body))
-}
-
-/// A permission rune's `mode:` header, unless the rune names another agent.
-#[cfg(not(falcon_shell))]
-fn rune_mode(body: &str) -> Option<String> {
-    use crate::bare::vault::store::header_value;
-    if header_value(body, "kind").as_deref() != Some("permission") {
-        return None;
-    }
-    if header_value(body, "agent").is_some_and(|a| a != "claude") {
-        return None;
-    }
-    header_value(body, "mode").filter(|m| !m.is_empty())
 }
 
 /// The connected host's negotiate-reply capabilities. With no control
@@ -908,8 +911,9 @@ fn falcon_adopt_blocking(
             },
         );
     drop(pending);
+    // A re-adopt: its replayed `falcon/thread` was recorded at spawn (`events::ThreadNote`).
     if let Err(error) =
-        start_event_reader(app, &falcon, id.clone(), session, view_generation, reader)
+        start_event_reader(app, &falcon, id.clone(), session, view_generation, reader, false)
     {
         let _ = falcon.detach_local(&id, view_generation);
         return Err(error);
@@ -932,10 +936,7 @@ fn adopt_record(tab: &str, session: &str, summary: &Value) {
     }
     let Some(echoed) = summary.get("sets").and_then(Value::as_array) else { return };
     let Some(sources) = echoed_sources(echoed, rules_library_name().as_deref()) else { return };
-    let agent = match summary_agent(summary) {
-        Some(Agent::Codex) => "codex",
-        _ => "claude",
-    };
+    let Some(agent) = record_agent(summary) else { return };
     if let Err(e) = records::adopt(&root, agent, tab, session, &sources) {
         eprintln!("[falcon] adopt of {session}: no vault record ({e})");
     }
@@ -1101,6 +1102,15 @@ pub async fn falcon_kill(
 mod tests {
     use super::*;
 
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn the_vault_model_beats_the_rows() {
+        let s = |x: &str| Some(x.to_string());
+        assert_eq!(vault_model_wins(s("opus"), s("haiku")), s("opus"));
+        assert_eq!(vault_model_wins(None, s("haiku")), s("haiku"));
+        assert_eq!(vault_model_wins(None, None), None);
+    }
+
     /// A rules-bearing spawn whose reply summary lacks the echo is a stale
     /// host: refused with the exact refresh line. With the echo, or with no
     /// rules asked for, the spawn stands.
@@ -1198,16 +1208,6 @@ mod tests {
 
     #[cfg(not(falcon_shell))]
     #[test]
-    fn mode_comes_from_a_claude_permission_rune_only() {
-        assert_eq!(rune_mode("---\nname: mode-auto\nkind: permission\nagent: claude\nmode: auto\n---\n").as_deref(), Some("auto"));
-        assert_eq!(rune_mode("---\nkind: permission\nmode: plan\n---\n").as_deref(), Some("plan"));
-        assert_eq!(rune_mode("---\nkind: permission\nagent: codex\nmode: plan\n---\n"), None, "another agent's mode");
-        assert_eq!(rune_mode("---\nkind: permission\nallow:\n  - Read\n---\n"), None, "no mode");
-        assert_eq!(rune_mode("---\nkind: rule\nmode: plan\n---\n"), None, "not a permission rune");
-    }
-
-    #[cfg(not(falcon_shell))]
-    #[test]
     fn adopted_sets_name_their_library() {
         let echoed = vec![serde_json::json!({ "set": "base" }), serde_json::json!({ "library": "kit", "set": "x" }), serde_json::json!({ "set": "team/y" })];
         let got = echoed_sources(&echoed, Some("tracked")).unwrap();
@@ -1253,6 +1253,15 @@ mod tests {
         assert_eq!(summary_agent(&claude), Some(Agent::Claude));
         assert_eq!(summary_agent(&serde_json::json!({ "agent": "other" })), None);
         assert_eq!(summary_agent(&serde_json::json!({ "session": "s1" })), None);
+    }
+
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn an_adopted_unknown_agent_gets_no_record() {
+        let named = |a: &str| serde_json::json!({ "session": "s1", "agent": a });
+        assert_eq!(record_agent(&named("codex")), Some("codex"));
+        assert_eq!(record_agent(&named("claude")), Some("claude"));
+        assert_eq!(record_agent(&named("other")), None);
     }
 
     /// The spawn op a Codex tab sends carries the agent on the wire.

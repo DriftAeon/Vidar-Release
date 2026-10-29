@@ -14,12 +14,6 @@ export function loadedOfTotal(items: readonly Loadable[], extra = 0): string {
   return `${items.filter(isLoaded).length}/${items.length + extra}`;
 }
 
-/** The cost-bar label: `8,691/13,458 Tokens`, no tilde (the numbers are estimates, the tooltip says so). */
-export function tokenLabel(loaded: number, total: number): string {
-  const f = (n: number): string => n.toLocaleString("en-US");
-  return `${f(loaded)}/${f(total)} Tokens`;
-}
-
 const rank = (b: Loadable): number => (b.activate === "recall" ? 2 : b.activate === "paths" ? 1 : 0);
 const label = (b: Named): string => runeName({ id: b.id, path: b.path } as RuneItem);
 

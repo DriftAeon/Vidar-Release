@@ -11,6 +11,7 @@
 import { invoke, type CodexLoadout } from "../ipc";
 import { iconImg } from "../icon-img";
 import { DASH, prettyModel } from "../format";
+import { tabIdentity } from "./sessions/vault-tabs";
 import { launchPresentation } from "./loadout-launch";
 import { onPress } from "./press";
 import { detailRow, text } from "./rack-row";
@@ -103,6 +104,49 @@ function parseLaunch(launchArgs: string[] | undefined): ParsedLaunch {
     baseUrl: baseUrlMatch?.[1] ?? null,
   };
 }
+
+// One reader per agent, keyed by AgentId: a third agent fails tsc here until its reader is written
+// (no fallback to Claude's). `skips` names the tabs of that agent the reader cannot see.
+interface Reader {
+  skips: (s: FocusedSession) => boolean;
+  read: (t: FocusedSession) => Promise<LoadedLoadout>;
+}
+const READERS: Record<AgentId, Reader> = {
+  claude: {
+    // a gateway tab runs `claude --settings <fence> --plugin-dir ...`, which read_loadout cannot see
+    skips: (s) => isGateway(s.art),
+    read: async (t) => {
+      const parsed = parseLaunch(t.launchArgs);
+      // the three defaults: home settings.json is prepended by Rust (it has no
+      // TS-visible home-dir lookup); the project pair sits under cwd
+      const settingsPaths = [
+        `${t.cwd}\\.claude\\settings.json`,
+        `${t.cwd}\\.claude\\settings.local.json`,
+        ...parsed.settingsPaths,
+      ];
+      const data = await invoke("read_loadout", {
+        cwd: t.cwd,
+        settingsPaths,
+        pluginDir: parsed.pluginDir,
+        profile: t.profile ?? null,
+        // a Bare tab reads the combination home its own session runs on
+        tab: t.profile ? t.id : null,
+        row: t.profile ? t.rowKey ?? null : null,
+      });
+      return { kind: "claude", data };
+    },
+  },
+  codex: {
+    skips: () => false,
+    read: async (t) => ({
+      kind: "codex",
+      data: await invoke("read_codex_loadout", { tab: t.id, falconSession: tabIdentity(t.id).falconSession, profile: t.profile ?? null, row: t.rowKey ?? null, cwd: t.cwd }),
+    }),
+  },
+};
+/** The agent whose reader serves this focus, else null (no focus, another agent, module off, a skipped tab). */
+const readerId = (s: FocusedSession | null): AgentId | null =>
+  s && Object.hasOwn(READERS, s.agent) && moduleOn(s.agent) && !READERS[s.agent as AgentId].skips(s) ? (s.agent as AgentId) : null;
 
 export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
   const box = document.createElement("div");
@@ -357,35 +401,8 @@ export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
   const load = async () => {
     // Invalidate any earlier reply even when this focus has no reader.
     const gen = ++loadGen;
-    if (focused?.agent === "codex" && moduleOn("codex")) {
-      const target = focused;
-      const key = loadKey(target)!;
-      lastLoadout = rowsWhileLoading(key, "codex");
-      redraw(lastLoadout, null);
-      try {
-        const loadout = await invoke("read_codex_loadout", {
-          tab: target.id,
-          profile: target.profile ?? null,
-          row: target.rowKey ?? null,
-          cwd: target.cwd,
-        });
-        if (gen !== loadGen || focused?.id !== target.id || focused.agent !== "codex" || !moduleOn("codex") || signal?.aborted) return;
-        const fresh: LoadedLoadout = { kind: "codex", data: loadout };
-        loadoutCache.set(key, fresh);
-        lastError = null;
-        if (sameLoadout(lastLoadout, fresh)) return;
-        lastLoadout = fresh;
-        redraw(lastLoadout, null);
-      } catch (e) {
-        if (gen !== loadGen || focused?.id !== target.id || focused.agent !== "codex" || !moduleOn("codex") || signal?.aborted) return;
-        lastLoadout = null;
-        lastError = String(e);
-        redraw(null, lastError, false);
-      }
-      return;
-    }
-    // a gateway tab runs `claude --settings <fence> --plugin-dir ...`, which read_loadout cannot see
-    if (!focused || focused.agent !== "claude" || isGateway(focused.art) || !moduleOn("claude")) {
+    const id = readerId(focused);
+    if (!focused || !id) {
       lastLoadout = null;
       lastError = null;
       redraw(null, null, false);
@@ -394,39 +411,22 @@ export function initLoadout(root: HTMLElement, signal?: AbortSignal) {
     // Capture the target now: `focused` can move on while this await is in
     // flight. Each call bumps `loadGen`, so a focus change during a load
     // does not get dropped — it queues its own load() — and the older
-    // call's result is discarded here by the generation check instead of
-    // being written over a newer one.
+    // call's result is discarded by `stale` instead of being written over a newer one.
     const target = focused;
+    const stale = () => gen !== loadGen || focused?.id !== target.id || focused.agent !== id || !moduleOn(id) || !!signal?.aborted;
     const key = loadKey(target)!;
-    lastLoadout = rowsWhileLoading(key, "claude");
+    lastLoadout = rowsWhileLoading(key, id);
     redraw(lastLoadout, null);
-    const parsed = parseLaunch(target.launchArgs);
-    // the three defaults: home settings.json is prepended by Rust (it has no
-    // TS-visible home-dir lookup); the project pair sits under cwd
-    const settingsPaths = [
-      `${target.cwd}\\.claude\\settings.json`,
-      `${target.cwd}\\.claude\\settings.local.json`,
-      ...parsed.settingsPaths,
-    ];
     try {
-      const loadout = await invoke("read_loadout", {
-        cwd: target.cwd,
-        settingsPaths,
-        pluginDir: parsed.pluginDir,
-        profile: target.profile ?? null,
-        // a Bare tab reads the combination home its own session runs on
-        tab: target.profile ? target.id : null,
-        row: target.profile ? target.rowKey ?? null : null,
-      });
-      if (gen !== loadGen || focused?.id !== target.id || !moduleOn("claude") || signal?.aborted) return;
-      const fresh: LoadedLoadout = { kind: "claude", data: loadout };
+      const fresh = await READERS[id].read(target);
+      if (stale()) return;
       loadoutCache.set(key, fresh);
       lastError = null;
       if (sameLoadout(lastLoadout, fresh)) return;
       lastLoadout = fresh;
       redraw(lastLoadout, null);
     } catch (e) {
-      if (gen !== loadGen || focused?.id !== target.id || !moduleOn("claude") || signal?.aborted) return;
+      if (stale()) return;
       lastLoadout = null;
       lastError = String(e);
       redraw(null, lastError, false);

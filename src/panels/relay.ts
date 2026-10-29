@@ -1,7 +1,7 @@
 // Relay views: the left-pane view (Relay button) and the workbench tab body.
 // The tab is wiring only: a stack of item cards, fed by the relay store; the parts live in
 // src/relay/. The left pane shows one item large (Open Large) with Back To Session, and stays
-// empty with nothing open large (layout A, user 2026-10-07; c286c382).
+// empty with nothing open large.
 
 import { items as relayItems, subscribe, markSeen, isUnread, type RelayItem } from "../relay/store";
 import { paintRelayRow } from "./sessions/tab-row-paint";

@@ -1,4 +1,4 @@
-//! JQL composition for the Jira tab (plan § D1, § D6): scope parts plus the filter bar's
+//! JQL composition for the Jira tab: scope parts plus the filter bar's
 //! `Filters`, built as text from validated pieces, never parsed. Every quoted string is escaped,
 //! project keys are pattern-checked, and the bar's caps are enforced again here as a backstop.
 
@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use super::api::{self, ApiError, ErrorKind, Scope};
 
-/// Per-list cap and search-text cap (plan § D6); the bar enforces them first.
+/// Per-list cap and search-text cap; the bar enforces them first.
 pub const MAX_LIST: usize = 20;
 pub const MAX_TEXT: usize = 200;
 

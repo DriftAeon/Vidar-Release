@@ -7,6 +7,23 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 setupDom(); // installs the extensionless-import hook rendered/format.ts needs
 const { commandInputText, commandScript, toolSummary } = await import("../src/panels/rendered/format.ts");
 
+test("titleWords: E2E stays an acronym in a library id", () => {
+  assert.equal(titleWords("runes-e2e-del"), "Runes E2E Del");
+  assert.equal(label("e2e"), "E2E");
+});
+
+test("titleWords: one table for acronyms, fixed spellings and plain words", () => {
+  assert.equal(titleWords("mcp"), "MCP");
+  assert.equal(titleWords("mcp-gate"), "MCP Gate");
+  assert.equal(titleWords("gate"), "Gate");
+  assert.equal(titleWords("stdio"), "Stdio");
+  assert.equal(label("stdio"), "stdio");
+  assert.equal(titleWords("npm-cache"), "npm Cache");
+  assert.equal(titleWords("vidarDriveDocs"), "Vidar Drive Docs");
+  assert.equal(titleWords("set-up-with-ui"), "Set Up with UI");
+  assert.equal(titleWords("--"), "");
+});
+
 test("titleWords and label read UE and LLM as acronyms", () => {
   assert.equal(titleWords("rider_ue_health"), "Rider UE Health");
   assert.equal(titleWords("local-llm"), "Local LLM");

@@ -12,6 +12,8 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::agent_spec::Agent;
+
 /// 16 OS-random bytes as lowercase hex: the `VIDAR_CTL_TOKEN` a PTY tab
 /// presents to the control surface (control/policy.rs).
 fn mint_ctl_token() -> Result<String, String> {
@@ -151,40 +153,42 @@ fn spawn_dir(cwd: Option<String>, fallback: impl FnOnce() -> Option<PathBuf>) ->
 /// A profiled PTY spawn's prepared launch: Raw Claude (a pwsh line) or Raw Codex (the TUI under
 /// node). Holds the home lock until dropped, after the spawn.
 enum BareSpawn {
-    Claude(crate::bare::Launch),
-    Codex(crate::bare::CodexLaunch),
+    /// A pwsh line (Raw Claude).
+    Line(crate::bare::Launch),
+    /// The TUI under node (Raw Codex).
+    Tui(crate::bare::CodexLaunch),
 }
 
 impl BareSpawn {
     fn program(&self) -> &Path {
         match self {
-            BareSpawn::Claude(l) => &l.program,
-            BareSpawn::Codex(l) => &l.program,
+            BareSpawn::Line(l) => &l.program,
+            BareSpawn::Tui(l) => &l.program,
         }
     }
     fn args(&self) -> &[String] {
         match self {
-            BareSpawn::Claude(l) => &l.args,
-            BareSpawn::Codex(l) => &l.args,
+            BareSpawn::Line(l) => &l.args,
+            BareSpawn::Tui(l) => &l.args,
         }
     }
     fn env(&self) -> &crate::bare::Env {
         match self {
-            BareSpawn::Claude(l) => &l.env,
-            BareSpawn::Codex(l) => &l.env,
+            BareSpawn::Line(l) => &l.env,
+            BareSpawn::Tui(l) => &l.env,
         }
     }
     fn write_manifest<'a>(&mut self, tab: &str, env_names: impl IntoIterator<Item = &'a str>) -> Result<PathBuf, String> {
         match self {
-            BareSpawn::Claude(l) => l.write_manifest(tab, env_names),
-            BareSpawn::Codex(l) => l.write_manifest(tab, env_names),
+            BareSpawn::Line(l) => l.write_manifest(tab, env_names),
+            BareSpawn::Tui(l) => l.write_manifest(tab, env_names),
         }
     }
-    /// The Codex launch warning as a yellow terminal line; Claude's rides its pwsh line instead.
+    /// The TUI launch warning as a yellow terminal line; a pwsh line's rides the line instead.
     fn banner(&self) -> Option<String> {
         match self {
-            BareSpawn::Claude(_) => None,
-            BareSpawn::Codex(l) => l.warning.as_ref().map(|w| codex_banner(w)),
+            BareSpawn::Line(_) => None,
+            BareSpawn::Tui(l) => l.warning.as_ref().map(|w| codex_banner(w)),
         }
     }
 }
@@ -206,6 +210,17 @@ pub(crate) fn codex_bare_prepare<T>(dir: Option<PathBuf>, prepare: impl FnOnce(&
     crate::bare::refuse_profile_cwd(&cwd, std::env::var("USERPROFILE").ok().as_deref())?;
     let launch = prepare(&cwd)?;
     Ok((dir, launch))
+}
+
+/// A profiled spawn's profile and agent: the agent parses once, and a profiled spawn naming an
+/// agent Vidar does not know (or none) refuses (a spawn with no profile is no Bare spawn, whatever
+/// it names).
+fn bare_target<'a>(profile: Option<&'a str>, agent: Option<&str>) -> Result<Option<(&'a str, Agent)>, String> {
+    let Some(profile) = profile else { return Ok(None) };
+    match agent.and_then(crate::agent_spec::parse) {
+        Some(a) => Ok(Some((profile, a))),
+        None => Err(format!("The {profile:?} profile is for Raw Claude and Raw Codex rows only (agent {agent:?}); spawn refused")),
+    }
 }
 
 /// Serializes Raw and Codex app-server Bare spawns in-process: two prepares on one home would
@@ -277,9 +292,15 @@ fn spawn_pty_blocking(
     if let Some(p) = profile.as_deref() {
         crate::bare::admit(p, agent.as_deref(), shell.as_deref(), args.as_deref())?;
     }
-    let codex_bare = profile.is_some() && agent.as_deref() == Some("codex");
+    let target = bare_target(profile.as_deref(), agent.as_deref())?;
     // A Codex Bare key must name a Codex Bare row (as the Rendered spawn checks it, agent.rs).
-    let row_key = if codex_bare { crate::bare::admit_row_key(row_key, profile.as_deref(), None)? } else { row_key };
+    let row_key = match target {
+        None => row_key,
+        Some((p, agent)) => match agent {
+            Agent::Codex => crate::bare::admit_row_key(row_key, Some(p), None)?,
+            Agent::Claude => row_key,
+        },
+    };
     // The folder first: a Codex Bare prepare writes it into config.toml as the trusted project,
     // so the home-folder refusals run on this same folder before that write.
     let mut dir = spawn_dir(cwd, crate::config::default_cwd);
@@ -290,14 +311,16 @@ fn spawn_pty_blocking(
     // Raw locks at spawn (`bare::vault_spawn::lock_at_spawn`).
     let custom_sets = if vault.is_some() { None } else { sets.as_deref() };
     let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), custom_sets, vault: vault.as_deref(), ..Default::default() };
-    let mut bare = match profile.as_deref() {
+    let mut bare = match target {
         None => None,
-        Some(p) if codex_bare => {
-            let (d, launch) = codex_bare_prepare(dir.take(), |cwd| crate::bare::prepare_codex_tui(p, &opts, cwd))?;
-            dir = Some(d);
-            Some(BareSpawn::Codex(launch))
-        }
-        Some(p) => Some(BareSpawn::Claude(crate::bare::prepare(p, &opts)?)),
+        Some((p, agent)) => Some(match agent {
+            Agent::Codex => {
+                let (d, launch) = codex_bare_prepare(dir.take(), |cwd| crate::bare::prepare_codex_tui(p, &opts, cwd))?;
+                dir = Some(d);
+                BareSpawn::Tui(launch)
+            }
+            Agent::Claude => BareSpawn::Line(crate::bare::prepare(p, &opts)?),
+        }),
     };
 
     let _guard = state.spawn_lock.lock().unwrap_or_else(|e| e.into_inner());
@@ -625,6 +648,15 @@ mod tests {
     use super::*;
     use std::sync::mpsc::Receiver;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn bare_agent_is_parsed_and_an_unknown_one_refused() {
+        assert_eq!(bare_target(Some("bare"), Some("codex")), Ok(Some(("bare", Agent::Codex))));
+        assert_eq!(bare_target(Some("bare"), Some("claude")), Ok(Some(("bare", Agent::Claude))));
+        assert_eq!(bare_target(None, Some("grok")), Ok(None));
+        assert!(bare_target(Some("bare"), Some("grok")).is_err());
+        assert!(bare_target(Some("bare"), None).is_err());
+    }
 
     #[test]
     fn event_payloads_carry_the_frontend_attachment_tag() {

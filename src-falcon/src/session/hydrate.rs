@@ -65,7 +65,7 @@ impl Session {
 /// time).
 ///
 /// Append refuses such records now, but journals written before that cap
-/// existed (847b995) can hold one up to `MAX_RECORD`. Failing hydrate on it
+/// existed can hold one up to `MAX_RECORD`. Failing hydrate on it
 /// failed every retry the same way, so that session could never rehydrate;
 /// the Overflow tells the client a record was lost without stopping the rest.
 fn within_frame(record: Record) -> (Record, usize) {

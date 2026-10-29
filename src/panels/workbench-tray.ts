@@ -318,7 +318,7 @@ function buildBlock(kind: Block["kind"], source: Source, previewBytes: number, c
   // for any image block: a file-less one saves once to bridge\clips on click (b.path then reused).
   // No disabled state, like Open.
   if (isBrowserPath(file?.path) || kind === "png") {
-    actions.prepend(openInBrowserButton({ // far left, ahead of Copy (user, 2026-10-22)
+    actions.prepend(openInBrowserButton({ // far left, ahead of Copy
       path: () => b.path,
       ensure: () => ensureSaved(b),
       note: (m) => { b.note.textContent = m; },

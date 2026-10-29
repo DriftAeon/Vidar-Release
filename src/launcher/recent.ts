@@ -9,13 +9,16 @@ import { agentKind, launcherTypes, shownRoots, shownVariants, spawnFrom, variant
 import { onboardingOpen } from "../onboarding/shell";
 import { newBtn, openLauncher } from "./menu";
 import { openColumn, placeColumn } from "./columns";
-import { openCodexRecent } from "./codex-recent";
+import { drawCapped, openCodexRecent } from "./codex-recent";
 import { cachedList } from "./recent-cache";
 import { showSessionsToast } from "../panels/sessions/zoom";
 import { twoLineRow } from "./menu-rows";
 import { ago } from "./ago";
 import { launcherLead, resumeVariant } from "./body-order";
 import { workspaces } from "./workspaces";
+import { isAgentId, type AgentId } from "../agents/id";
+
+const threadList: Record<AgentId, boolean> = { claude: false, codex: true };
 
 export interface RecentSession {
   sessionId: string;
@@ -36,7 +39,8 @@ const resumeInFlight = new Set<string>(); // session ids mid-click (meta read, t
 // inert with the reason; Rust re-checks at spawn, which is the real guard.
 export async function openRecent(t: AgentType, rendered: AgentType, loc: Location, anchor: HTMLElement, depth = 2) {
   const gen = ++recentGen;
-  if (agentKind(t.id) === "codex") return openCodexRecent(t, rendered, loc, anchor, depth, () => gen !== recentGen);
+  const kind = agentKind(t.id);
+  if (isAgentId(kind) && threadList[kind]) return openCodexRecent(t, rendered, loc, anchor, depth, () => gen !== recentGen);
   const sub = openColumn(depth, anchor);
   const note = (text: string, cls = "launcher-note") => {
     const d = document.createElement("div");
@@ -69,11 +73,11 @@ export async function openRecent(t: AgentType, rendered: AgentType, loc: Locatio
   sub.innerHTML = "";
   const open = new Set(openRenderedSessionIds());
   if (!list.length) note(DASH);
-  for (const s of list) {
+  const draw = (s: RecentSession) => {
     const inVidar = open.has(s.sessionId);
     const why = inVidar ? "open in Vidar" : s.note;
     const b = twoLineRow(sub, s.label, why ?? `${ago(s.ageSecs)} · ${s.sessionId.slice(0, 8)}`, `${s.cwd}\n${s.sessionId}`);
-    if (s.live || inVidar) { b.classList.add("inert"); continue; }
+    if (s.live || inVidar) { b.classList.add("inert"); return; }
     b.addEventListener("click", async () => {
       if (resumeInFlight.has(s.sessionId)) return; // the meta read takes a while: a second click would spawn twice
       resumeInFlight.add(s.sessionId);
@@ -103,8 +107,9 @@ export async function openRecent(t: AgentType, rendered: AgentType, loc: Locatio
         resumeInFlight.delete(s.sessionId);
       }
     });
-  }
-  placeColumn(depth, anchor);
+  };
+  if (!list.length) return placeColumn(depth, anchor);
+  drawCapped(sub, list, draw, () => placeColumn(depth, anchor));
 }
 
 export function initRecent(): void {

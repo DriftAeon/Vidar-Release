@@ -86,7 +86,7 @@ pub struct Hit {
 }
 
 /// Search hits of the asked object type. Pages whose parent is a data source or database are
-/// database rows and are dropped (plan § D1, marked I).
+/// database rows and are dropped.
 pub fn hits(body: &Value, object: &str) -> Vec<Hit> {
     let kind = if object == "data_source" { "source" } else { "page" };
     results(body)
@@ -301,7 +301,7 @@ pub fn page(body: &Value) -> Option<Page> {
 }
 
 /// Block children passed through as sent, keeping only `object: "block"` entries with a valid
-/// id (plan § D7: the TS renderer is the DOM trust boundary).
+/// id (the TS renderer is the DOM trust boundary).
 pub fn blocks(body: &Value) -> Vec<Value> {
     results(body)
         .iter()

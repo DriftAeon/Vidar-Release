@@ -5,7 +5,9 @@ import { instantiateTemplate, adaptModelsToWired } from "../src/flow/store-core.
 import { validateGraph } from "../src/flow/validate.ts";
 import { autoLayout } from "../src/flow/layout.ts";
 import { prepareFlow, checkPrepared, orderedNodes, approveSnapshot } from "../src/flow/control-core.ts";
-import { flowCardRows, flowCardDecision } from "../src/control/flow-card.ts";
+import { flowCardRows, flowCardMatrix, flowCardDecision } from "../src/control/flow-card.ts";
+import { resolveNodeGrants, modesOfGrants } from "../src/flow/permission-mode.ts";
+import { readFileSync } from "node:fs";
 import { flowStatusLine, waitForFlow } from "../src/flow/control-observe.ts";
 
 const cwd = "D:\\Work";
@@ -221,4 +223,53 @@ test("approval commits the exact snapshot before start; failed save retries with
   busy = true;
   await assert.rejects(approveSnapshot(graph, hooks), /flow busy/);
   assert.equal(writes, 2);
+});
+
+test("an agent graph with a node vault parses; an allowlist addon is dropped", () => {
+  const graph = custom();
+  graph.nodes[0].fields.find((f) => f.k === "content").v = "Run this";
+  graph.nodes[1].vault = "reviewer";
+  graph.nodes[1].addons = [
+    { kind: "permission-allowlist", label: "Allowlist", value: "Bash" },
+    { kind: "retries", label: "Retries", value: "2" },
+  ];
+  const prepared = prepareFlow({ action: "start", graph, cwd }, deps());
+  assert.equal(prepared.nodes[1].vault, "reviewer");
+  assert.equal(prepared.nodes[1].addons.some((a) => a.kind === "permission-allowlist"), false);
+  assert.equal(prepared.nodes[1].addons.find((a) => a.kind === "retries").value, "2");
+  const bad = custom();
+  bad.nodes[1].vault = 7;
+  assert.throws(() => prepareFlow({ action: "start", graph: bad, cwd }, deps()), /bad nodes\[1\]\.vault: expected a string/);
+});
+
+test("grants ask with the node's vault and agent; the card names the vault and its allows", async () => {
+  const graph = custom();
+  graph.nodes[0].fields.find((f) => f.k === "content").v = "Run this";
+  graph.nodes[1].vault = "reviewer";
+  const prepared = prepareFlow({ action: "start", graph, cwd }, deps());
+  const agents = orderedNodes(prepared).filter((n) => n.kind === "agent");
+  let asked;
+  const grants = await resolveNodeGrants(prepared, async (nodes) => {
+    asked = nodes;
+    return nodes.map((n) => ({ node: n.node, vault: n.vault ?? "stock-claude", mode: "auto", allow: ["Read", "Glob"], hash: `h-${n.node}` }));
+  }, () => "claude");
+  assert.equal(asked.length, agents.length);
+  assert.ok(asked.every((n) => n.agent === "claude" && typeof n.model === "string"));
+  assert.equal(asked.find((n) => n.node === agents[0].id).vault, "reviewer");
+  assert.equal("vault" in asked.find((n) => n.node !== agents[0].id), false);
+  assert.equal(grants[agents[0].id].hash, `h-${agents[0].id}`);
+  const rows = flowCardRows(prepared, "Caller", orderedNodes, modesOfGrants(grants), grants);
+  assert.equal(rows.find(([k]) => k === "Vault")[1], "reviewer");
+  assert.equal(rows.find(([k]) => k === "Allows")[1], "Read, Glob");
+  assert.equal(rows.find(([k]) => k === "Permission Mode")[1], "Auto");
+  assert.equal(rows.some(([k]) => k === "Allowlist"), false);
+  const fields = flowCardMatrix(prepared, "Caller", orderedNodes, modesOfGrants(grants), grants).fields.map((f) => f.label);
+  assert.ok(fields.includes("Vault") && fields.includes("Allows") && !fields.includes("Allowlist"));
+});
+
+test("flow_run_node carries vault and vaultHash from the grant, and nothing of the old allowlist", () => {
+  const engine = readFileSync(new URL("../src/flow/engine.ts", import.meta.url), "utf8");
+  assert.match(engine, /vault: grant\.vault,\s*vaultHash: grant\.hash/);
+  assert.match(engine, /invoke\("flow_node_permissions", \{ nodes \}\)/);
+  assert.doesNotMatch(engine, /toolAllowlist|permission-allowlist|flow_permission_modes/);
 });

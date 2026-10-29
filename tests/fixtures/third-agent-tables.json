@@ -1,0 +1,11 @@
+{
+  "note": "The only files tsc may fail on once \"grok\" joins AGENT_IDS (the table files). panels/mcp-focus.ts and panels/loadout.ts stand in for the focus reader and the loadout reader, which stay in panels/.",
+  "files": [
+    "src/agents/agent-profile.ts",
+    "src/agents/descriptor.ts",
+    "src/launcher/row-facts.ts",
+    "src/panels/loadout.ts",
+    "src/panels/mcp-focus.ts",
+    "src/panels/rendered/tool-class.ts"
+  ]
+}

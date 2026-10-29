@@ -115,8 +115,7 @@ try {
             $idDir = Join-Path $root $id
             # The requester's request.json names the report Astra must write
             # (astra-dispatch.ps1 -Report). Without it, the legacy findings glob still applies.
-            # A request.json that exists but is unreadable or names no report FAILS CLOSED (review
-            # 471d0b16 blocker: falling through to the glob would let an unrelated findings file
+            # A request.json that exists but is unreadable or names no report FAILS CLOSED (falling through to the glob would let an unrelated findings file
             # complete a request that named another report). The glob is only for requests
             # published without a sidecar at all.
             $req = $null

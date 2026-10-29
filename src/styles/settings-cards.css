@@ -3,7 +3,10 @@
 .sc-row[data-cat="cards"] { justify-content: flex-start; gap: var(--space-16); }
 .sc-row[data-cat="cards"] .sc-text { flex: 0 0 20%; }
 .sc-row[data-cat="cards"] .sc-bind { flex: 1; min-width: 0; }
-.cards-kind { display: grid; grid-template-columns: 24ch auto; justify-content: start; align-items: center; column-gap: var(--space-12); min-width: 0; }
+.cards-kind { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-12); min-width: 0; }
+/* cards sit flush right, all one width: the longest name's (cards.ts sets --cards-name-ch) */
+.cards-kind > .chain-bar { justify-self: end; }
+.cards-kind .chain-seg-name { min-width: calc(var(--cards-name-ch, 0) * 1ch); }
 /* the sample's frame: the same tokens as `.rendered .activity-label.chain-bar` (rendered-chain.css),
    which is scoped to the Rendered tab; the segment itself draws only its class underline */
 .cards-kind > .chain-bar {

@@ -140,7 +140,7 @@ test("focused Codex tab queries its own reader and renders the returned rows", a
   }));
   await Promise.resolve();
   await Promise.resolve();
-  assert.deepEqual(calls, [{ tab: "codex-tab", profile: "bare", row: "codex-rendered-bare", cwd: "." }]);
+  assert.deepEqual(calls, [{ tab: "codex-tab", falconSession: null, profile: "bare", row: "codex-rendered-bare", cwd: "." }]);
   assert.deepEqual(
     [...root.querySelectorAll(".rack-row")].map((row) => row.dataset.key),
     ["Instructions", "Skills", "Agents", "Config", "Hooks", "Permissions"],
@@ -173,4 +173,27 @@ test("a same-tab cwd or profile change reloads; a same-inputs focus does not", a
   await settle();
   controller.abort();
   assert.deepEqual(calls.map((c) => [c.cwd, c.profile]), [["C:\\one", "bare"], ["C:\\two", "bare"], ["C:\\two", "work"]]);
+});
+
+test("a slow reply is dropped when the focus moved on, even to another agent with the same tab id", async () => {
+  let release;
+  const slowClaude = new Promise((resolve) => { release = resolve; });
+  const claudeData = { instructions: [], memoryPath: "", memoryEntries: 0, handoffPath: "", handoffNewest: null, skills: [], agents: [], hooks: [], permissions: [], notes: ["Claude Late Reply"] };
+  ipc.answers.read_loadout = () => slowClaude;
+  ipc.answers.read_codex_loadout = () => ({ ...base, notes: ["Codex Reply"] });
+  const root = document.createElement("div");
+  document.body.replaceChildren(root);
+  const controller = new window.AbortController();
+  initLoadout(root, controller.signal);
+  const focus = (detail) => document.dispatchEvent(new window.CustomEvent("vidar-focus", { detail }));
+  const settle = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+  focus({ id: "same-tab", agent: "claude", cwd: ".", launchArgs: [] });
+  await settle();
+  focus({ id: "same-tab", agent: "codex", cwd: ".", launchArgs: [] });
+  await settle();
+  release(claudeData);
+  await settle();
+  assert.deepEqual([...root.querySelectorAll(".tool-err")].map((n) => n.textContent), ["Codex Reply"]);
+  assert.notEqual(root.querySelector('[data-key="Config"]'), null);
+  controller.abort();
 });

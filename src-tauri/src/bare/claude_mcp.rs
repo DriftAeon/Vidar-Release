@@ -35,6 +35,13 @@ pub(super) struct Prepared {
 }
 
 
+/// `canonicalize` returns the `\\?\` form on Windows; Node's main-module check never matched it
+/// (Claude Code saw "Connection closed"), so the arg carries the plain path.
+fn plain_path(s: &str) -> String {
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") { format!(r"\\{rest}") }
+    else { s.strip_prefix(r"\\?\").unwrap_or(s).to_string() }
+}
+
 fn drive(root: &Path) -> Result<Value, String> {
     let file = root.join("plugins/vidar-app/.mcp.json");
     let body = crate::fsx::read_text(&file).map_err(|e| format!("Bare drive MCP {}: {e}; spawn refused", file.display()))?;
@@ -50,7 +57,7 @@ fn drive(root: &Path) -> Result<Value, String> {
         if let Some(rel) = s.strip_prefix("${CLAUDE_PLUGIN_ROOT}/") {
             let resolved = plugin_root.join(rel).canonicalize()
                 .map_err(|e| format!("Bare drive MCP server {}: {e}; spawn refused", plugin_root.join(rel).display()))?;
-            *arg = Value::String(resolved.to_string_lossy().into_owned());
+            *arg = Value::String(plain_path(&resolved.to_string_lossy()));
         } else if s.contains("${CLAUDE_PLUGIN_ROOT}") {
             return Err("Bare drive MCP has an unsupported plugin-root placeholder; spawn refused".into());
         }
@@ -58,18 +65,9 @@ fn drive(root: &Path) -> Result<Value, String> {
     Ok(entry)
 }
 
-/// `prepare_for` with the drive server always in: Flow's Claude node, which is not a Bare session
-/// and has no vault.
-pub(super) fn prepare(
-    lock: &HomeLock, root: &Path, home: &Path, mcp: &[Mcp],
-    inherited: impl IntoIterator<Item = (OsString, OsString)>,
-) -> Result<Prepared, String> {
-    prepare_for(lock, root, home, mcp, inherited, true)
-}
-
 /// Writes `<home>\layer\mcp-<hash12>.json` (only when its bytes differ) holding `mcp`, plus the
-/// drive server when `drive` says the session's vault holds the `vidar-app` plugin rune (run
-/// 2026-10-25-rune-vault L2b: dropping that rune drops the server). Refuses a server with no
+/// drive server when `drive` says the session's vault holds the `vidar-app` plugin rune
+/// (dropping that rune drops the server). Refuses a server with no
 /// transport or one named `plugin_vidar_drive`.
 pub(super) fn prepare_for(
     _lock: &HomeLock, root: &Path, home: &Path, mcp: &[Mcp],
@@ -105,4 +103,29 @@ pub(super) fn prepare_for(
         crate::fsx::atomic_write(&file, &bytes).map_err(|e| format!("Bare MCP config {}: {e}; spawn refused", file.display()))?;
     }
     Ok(Prepared { file: Some(file), warnings })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_path_strips_verbatim_prefixes() {
+        assert_eq!(plain_path(r"\\?\C:\a\b.mjs"), r"C:\a\b.mjs");
+        assert_eq!(plain_path(r"\\?\UNC\srv\share\b.mjs"), r"\\srv\share\b.mjs");
+        assert_eq!(plain_path(r"C:\a\b.mjs"), r"C:\a\b.mjs");
+    }
+
+    #[test]
+    fn drive_server_arg_has_no_verbatim_prefix() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let entry = drive(root).unwrap();
+        let args = entry["args"].as_array().unwrap();
+        assert!(!args.is_empty());
+        for a in args {
+            let s = a.as_str().unwrap();
+            assert!(!s.contains(r"\\?\"), "verbatim prefix in {s}");
+        }
+        assert!(args[0].as_str().unwrap().ends_with("server.mjs"));
+    }
 }

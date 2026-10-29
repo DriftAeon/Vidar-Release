@@ -9,7 +9,7 @@
 /* no global .hidden exists; every hidden-able panel carries its own rule (cf. #doc-margin.hidden) */
 #voice-map.hidden { display: none; }
 .vm-row { display: flex; align-items: center; gap: var(--space-4); }
-/* Sheen Cap cards (2026-10-18; mock voice-map-mock-737d4a0e): the .ws-btn face
+/* Sheen Cap cards: the .ws-btn face
    (settings-modal.css), resting only, the cards are not interactive. Edge and label carry the state.
    Contrast as picked: red and grey labels sit under 4.5:1 on the face (mock table), shipped as picked. */
 .vm-pill {

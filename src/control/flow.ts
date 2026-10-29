@@ -9,7 +9,8 @@ import { flowStatusLine, waitForFlow } from "../flow/control-observe";
 import { orderedNodes } from "../flow/control-core";
 import { initFlowStorage } from "../flow/file-storage";
 import { initRunsStore } from "../flow/runs-store";
-import { heldRunIds, resolveRunModes } from "../flow/engine";
+import { heldRunIds, resolveRunGrants } from "../flow/engine";
+import { modesOfGrants } from "../flow/permission-mode";
 import { driveSnapshot, requesterTabId } from "./registry";
 import type { Requester } from "./requester";
 
@@ -28,12 +29,13 @@ export function handleFlowCard(card: Card, hooks: {
   void (async () => {
     try {
       const snapshot = await prepareControlFlow(card.details);
-      const modes = await resolveRunModes(snapshot);
+      const grants = await resolveRunGrants(snapshot);
+      const modes = modesOfGrants(grants);
       if (hooks.problem(requester)) { result(false, "err requester gone"); return; }
       if (Date.now() >= expiresAtMs) { result(false, "err expired"); return; }
       const label = hooks.label(requester);
-      const rows = flowCardRows(snapshot, label, orderedNodes, modes);
-      const matrix = flowCardMatrix(snapshot, label, orderedNodes, modes);
+      const rows = flowCardRows(snapshot, label, orderedNodes, modes, grants);
+      const matrix = flowCardMatrix(snapshot, label, orderedNodes, modes, grants);
       // One record; Relay (or Drive) answers it and the registry settles it once, so approve starts the flow once.
       const refused = openApproval({
         id: cardId, origin: "ctl-flow", title: APPROVAL_TITLES["ctl-flow"],
@@ -48,7 +50,7 @@ export function handleFlowCard(card: Card, hooks: {
             }
             const decision = await flowCardDecision(snapshot.id,
               { approved: outcome.verdict === "approve", shown: true, comment: outcome.comment },
-              false, Date.now() >= expiresAtMs, !!hooks.problem(requester), () => approveControlFlow(snapshot, modes));
+              false, Date.now() >= expiresAtMs, !!hooks.problem(requester), () => approveControlFlow(snapshot, grants));
             if (decision) result(decision.ok, decision.line, decision.verdict);
           } catch (error) { result(false, `err ${reason(error)}`); }
         })();

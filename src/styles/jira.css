@@ -69,8 +69,7 @@
 .jx-box.on { border-color: var(--accent); color: var(--accent); background: var(--bg-selected); }
 
 /* grouped sections: a card per type. The head is the shared browser band (browser-list.css .br-band) with a Sheen face
-   (8e55f7bc) and the type icon in its slot; clickable. Colour rule (2026-10-20, replacing the 3px left edge of
-   pick B): the head bar takes the type colour, 25% over the Sheen stops (white label 4.5:1 or better on every stop,
+   and the type icon in its slot; clickable. Colour rule (replacing a 3px left edge): the head bar takes the type colour, 25% over the Sheen stops (white label 4.5:1 or better on every stop,
    hovered included, in all four themes); the card keeps its plain border; status colour on the pills only. */
 .jira-pane .br-band { cursor: pointer; margin-top: 0; }
 .jira-pane .jx-sec > .br-band {

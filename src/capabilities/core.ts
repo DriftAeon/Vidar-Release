@@ -5,8 +5,8 @@
 
    Contract v1 (contracts/capabilities.json): `{ id, label, when: { deps, packs, config, facts },
    dependsOn, host? }`, plus a top-level `facts` list naming every fact id a `when.facts` may use
-   (acquired by capabilities/facts.ts). `region` and `ui` are reserved for plugin UI (plan §2);
-   `when.packs` is filled from wave 2. The registry is UI gating, not a security boundary.
+   (acquired by capabilities/facts.ts). `region` and `ui` are reserved for plugin UI;
+   `when.packs` is filled later. The registry is UI gating, not a security boundary.
 
    Two module shapes, chosen by the declaration: with a `host`, the module exports
    `mount(host, ctx)` and the host is shown/hidden with it; without one it exports `start(ctx)`
@@ -37,7 +37,7 @@ export type CapabilityModule =
 interface CapabilityWhen {
   /** Dependency ids (contracts/dependencies.json) that must be found. */
   deps?: string[];
-  /** Pack ids that must be installed (wave 2). */
+  /** Pack ids that must be installed. */
   packs?: string[];
   /** vidar.json keys that must be set (truthy). */
   config?: string[];

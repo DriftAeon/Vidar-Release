@@ -741,7 +741,7 @@ impl Journal {
         self.append_capped(generation, body, LONE_RECORD_CAP)
     }
 
-    /// [`Journal::append`] under the pre-847b995 cap ([`MAX_RECORD`]), so a
+    /// [`Journal::append`] under the earlier, higher cap ([`MAX_RECORD`]), so a
     /// test can write the oversized records older journals may still hold.
     #[cfg(test)]
     pub(crate) fn append_legacy(&mut self, generation: u64, body: Body) -> Result<u64, JournalError> {

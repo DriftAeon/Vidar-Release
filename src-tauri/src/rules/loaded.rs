@@ -8,7 +8,7 @@
 //! Transcript content is untrusted and never returned: only paths, memory types and Skill names leave.
 //! Cache per (path, len, mtime); a grown file resumes from the last complete line.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -46,12 +46,15 @@ pub struct Loaded {
     /// Rune ids read through a `vidar-runes/<id>.md` skill copy.
     #[serde(rename = "runeReads")]
     pub rune_reads: Vec<String>,
+    /// Rune id -> path of the file whose touch loaded that paths rune.
+    #[serde(rename = "runeTriggers", skip_serializing_if = "BTreeMap::is_empty")]
+    pub rune_triggers: BTreeMap<String, String>,
     pub skills: Vec<String>,
     pub truncated: bool,
 }
 
 pub(crate) fn none(reason: &str) -> Loaded {
-    Loaded { source: "none", reason: Some(reason.into()), files: Vec::new(), reads: Vec::new(), rune_reads: Vec::new(), skills: Vec::new(), truncated: false }
+    Loaded { source: "none", reason: Some(reason.into()), files: Vec::new(), reads: Vec::new(), rune_reads: Vec::new(), rune_triggers: BTreeMap::new(), skills: Vec::new(), truncated: false }
 }
 
 #[derive(Clone)]
@@ -66,6 +69,7 @@ struct Scan {
     seen_reads: HashSet<String>,
     rune_reads: Vec<String>,
     seen_runes: HashSet<String>,
+    rune_triggers: BTreeMap<String, String>,
     skills: Vec<String>,
     seen_skills: HashSet<String>,
     /// File named by the last unambiguous assistant file-tool message.
@@ -113,9 +117,25 @@ pub(crate) fn plain_id(s: &str, extra: &[char]) -> bool {
 fn take(scan: &mut Scan, path: &str, memory_type: &str, when: &'static str) {
     let path = clean(Path::new(path));
     if scan.seen.insert(path.to_lowercase().replace('/', "\\")) {
-        let trigger = if when == "touch" { scan.last_touch.clone() } else { None };
+        // a rune file read by the message that loaded it is not its own trigger
+        let own = |t: &String| clean(Path::new(t)).to_lowercase().replace('\\', "/") == path.to_lowercase().replace('\\', "/");
+        let trigger = if when == "touch" { scan.last_touch.clone().filter(|t| !own(t)) } else { None };
+        if let (Some(t), Some(id)) = (&trigger, touch_rune_id(&path)) {
+            scan.rune_triggers.entry(id).or_insert_with(|| t.clone());
+        }
         scan.files.push(LoadedFile { path, memory_type: memory_type.to_string(), when, trigger, source: None });
     }
+}
+
+/// Rune id of a cooked paths rule: `<...>/.claude/rules/<id>.md` (either slash).
+fn touch_rune_id(path: &str) -> Option<String> {
+    let path = path.replace('\\', "/");
+    if let Some(id) = skill_rune_id(&path) { return Some(id); }
+    let (parent, filename) = path.rsplit_once('/')?;
+    if !parent.to_ascii_lowercase().ends_with("/.claude/rules") { return None; }
+    let id = filename.strip_suffix(".md")?;
+    crate::rules::rune::check_id(id).ok()?;
+    Some(id.to_string())
 }
 
 fn skill_rune_id(path: &str) -> Option<String> {
@@ -250,7 +270,7 @@ pub fn scan_transcript(path: &Path) -> std::io::Result<Loaded> {
 }
 
 fn fresh(len: u64, mtime: Option<SystemTime>, offset: u64) -> Scan {
-    Scan { len, mtime, offset, files: Vec::new(), seen: HashSet::new(), reads: Vec::new(), seen_reads: HashSet::new(), rune_reads: Vec::new(), seen_runes: HashSet::new(), skills: Vec::new(), seen_skills: HashSet::new(), last_touch: None, truncated: false }
+    Scan { len, mtime, offset, files: Vec::new(), seen: HashSet::new(), reads: Vec::new(), seen_reads: HashSet::new(), rune_reads: Vec::new(), seen_runes: HashSet::new(), rune_triggers: BTreeMap::new(), skills: Vec::new(), seen_skills: HashSet::new(), last_touch: None, truncated: false }
 }
 
 /// The load history's sweep (`load_history.rs`): `path` read from `offset` (a line start) with the
@@ -289,7 +309,7 @@ fn run(path: &Path, scan: &mut Scan) -> std::io::Result<()> {
 }
 
 fn done(s: &Scan) -> Loaded {
-    Loaded { source: "transcript", reason: None, files: s.files.clone(), reads: s.reads.clone(), rune_reads: s.rune_reads.clone(), skills: s.skills.clone(), truncated: s.truncated }
+    Loaded { source: "transcript", reason: None, files: s.files.clone(), reads: s.reads.clone(), rune_reads: s.rune_reads.clone(), rune_triggers: s.rune_triggers.clone(), skills: s.skills.clone(), truncated: s.truncated }
 }
 
 /// `<projects>\*\<sid>.jsonl`, the first folder holding it. `sid` is grammar-checked by the caller.
@@ -330,10 +350,10 @@ fn loaded_in(
             return Err(format!("invalid session id `{s}`"));
         }
     }
-    match agent {
-        "claude" => {}
-        "codex" => return Ok(crate::bare::codex_runes_loaded::loaded(root, tab, session_id)),
-        _ => return Ok(none("No Agent in This Tab")),
+    match crate::agent_spec::parse(agent) {
+        Some(crate::agent_spec::Agent::Claude) => {}
+        Some(crate::agent_spec::Agent::Codex) => return Ok(crate::bare::codex_runes_loaded::loaded(root, tab, session_id)),
+        None => return Ok(none("No Agent in This Tab")),
     }
     let payload: Option<Value> = std::fs::read_to_string(sessions.join(format!("{tab}.json")))
         .ok()
@@ -391,6 +411,15 @@ mod tests {
         assert_eq!((codex.source, codex.reason.as_deref(), codex.files.len()), ("none", Some("No Session Yet"), 0));
         let none = loaded_in(&dir, &dir, &[], "no-such-tab-zz", "claude", None).unwrap();
         assert_eq!(none.reason.as_deref(), Some("No Session Yet"));
+    }
+
+    #[test]
+    fn an_agent_the_spec_does_not_parse_loads_nothing() {
+        let dir = std::env::temp_dir();
+        for bad in ["grok", "Claude", ""] {
+            let got = loaded_in(&dir, &dir, &[], "tab-1", bad, None).unwrap();
+            assert_eq!((got.source, got.reason.as_deref(), got.files.len()), ("none", Some("No Agent in This Tab"), 0), "{bad:?}");
+        }
     }
 
     /// A Bare profile's sessions sit in its own dir or a combination home: both are searched.
@@ -535,6 +564,33 @@ mod tests {
     }
 
     #[test]
+    fn runes_loaded_maps_a_paths_rune_to_its_trigger_file() {
+        let tmp = TempDir::new("rune-triggers");
+        let path = tmp.0.join("rt.jsonl");
+        let tool = |file: &str| serde_json::json!({"type":"tool_use", "name":"Read", "input":{"file_path":file}});
+        let assistant = |file: &str| {
+            let mut line = serde_json::json!({"type":"assistant", "message":{}});
+            line["message"][CONTENT_KEY] = Value::Array(vec![tool(file)]);
+            line.to_string()
+        };
+        let text = [
+            assistant("src/x.ts"),
+            nested("C:/repo/.claude/rules/ui-copy.md"),
+            assistant("C:/home/.claude/skills/vidar-runes/self-read.md"),
+            nested("C:/home/.claude/skills/vidar-runes/self-read.md"),
+            assistant("C:/home/.claude/skills/vidar-runes/recalled.md"),
+        ]
+        .join("\n");
+        std::fs::write(&path, format!("{text}\n")).unwrap();
+        let got = scan_transcript(&path).unwrap();
+        assert_eq!(got.rune_triggers.get("ui-copy").map(String::as_str), Some("src/x.ts"));
+        assert!(!got.rune_triggers.contains_key("self-read"));
+        assert!(!got.rune_triggers.contains_key("recalled"));
+        assert_eq!(got.rune_reads, ["self-read", "recalled"]);
+        assert_eq!(serde_json::to_value(&got).unwrap()["runeTriggers"]["ui-copy"], "src/x.ts");
+    }
+
+    #[test]
     fn runes_loaded_dedupes_across_slash_forms() {
         let mut scan = Scan {
             len: 0,
@@ -546,6 +602,7 @@ mod tests {
             seen_reads: HashSet::new(),
             rune_reads: Vec::new(),
             seen_runes: HashSet::new(),
+            rune_triggers: BTreeMap::new(),
             skills: Vec::new(),
             seen_skills: HashSet::new(),
             last_touch: None,

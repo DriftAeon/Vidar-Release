@@ -92,7 +92,7 @@ test("Codex focus reads that tab and profile, then rereads on tab and agent chan
   };
   focus({ id: "codex-one", agent: "codex", profile: "bare-one", rowKey: "codex-rendered-bare", art: "codex", cwd: A });
   await dom.flush();
-  assert.deepEqual(codexReads, [{ tab: "codex-one", profile: "bare-one", row: "codex-rendered-bare" }]);
+  assert.deepEqual(codexReads, [{ tab: "codex-one", falconSession: null, profile: "bare-one", row: "codex-rendered-bare" }]);
   assert.deepEqual(dom.rows().map((row) => row.dataset.server), ["codex-one"]);
   assert.equal(toolReads.length, 0, "a Codex stdio server is not listed until asked");
   await listRow(dom, dom.rows()[0]);
@@ -100,7 +100,7 @@ test("Codex focus reads that tab and profile, then rereads on tab and agent chan
 
   focus({ id: "codex-two", agent: "codex", profile: "bare-one", rowKey: "codex-rendered-bare", art: "codex", cwd: A });
   await dom.flush();
-  assert.deepEqual(codexReads.at(-1), { tab: "codex-two", profile: "bare-one", row: "codex-rendered-bare" });
+  assert.deepEqual(codexReads.at(-1), { tab: "codex-two", falconSession: null, profile: "bare-one", row: "codex-rendered-bare" });
   assert.equal(codexReads.length, 2);
   assert.deepEqual(dom.rows().map((row) => row.dataset.server), ["codex-two"]);
 

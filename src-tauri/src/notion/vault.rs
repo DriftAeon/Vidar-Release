@@ -1,4 +1,4 @@
-//! The Notion token in Windows Credential Manager (plan § D6): target `Vidar/Notion/<root_suffix>`,
+//! The Notion token in Windows Credential Manager: target `Vidar/Notion/<root_suffix>`,
 //! UserName the owner kind (`connection` or `personal`), Comment the workspace name, blob the
 //! token. `credman` holds no validators, so the token is checked here before any write or send.
 
@@ -28,7 +28,7 @@ pub fn validate_token(token: &Secret) -> Result<(), String> {
 }
 
 /// The owner kind `bot.owner.type` names: `user` is a personal access token, anything else an
-/// internal connection (plan § D9; any token is accepted).
+/// internal connection (any token is accepted).
 pub fn kind_from_owner(owner_type: &str) -> &'static str {
     if owner_type == "user" {
         "personal"

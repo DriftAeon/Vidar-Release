@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\manifest.rs — one immutable JSON per bare launch (plan Design 8) in
+//! src-tauri\src\bare\manifest.rs — one immutable JSON per bare launch in
 //! `<home>\manifests\<utc>-<tab>-<pid>.json`, created with create-new and never rewritten.
 //! Env values are redacted: the manifest names what the agent got, never a value.
 
@@ -23,7 +23,7 @@ pub struct Payload {
     pub path: String,
     pub sha256: String,
     pub marker: String,
-    /// The row's rune sets built into this payload, in order (Bare slice 1); none on a plain one.
+    /// The row's rune sets built into this payload, in order; none on a plain one.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub sets: Vec<String>,
     /// The rune build's warnings for those sets (a disabled set skipped, ...); a Raw tab also
@@ -46,14 +46,15 @@ pub struct LaunchItems {
 }
 
 impl LaunchItems {
-    /// The Claude launch's: the plan's skill and agent sources, the guards it carries and the module
+    /// A guard-carrying launch's: the plan's skill and agent sources, the guards it carries and the module
     /// servers in its `--mcp-config` file.
-    pub fn claude(plan: &super::copies::Plan, guards: &[super::guards::BareGuard], mcp: Vec<String>, shadow: Vec<String>) -> LaunchItems {
+    pub fn with_guards(plan: &super::copies::Plan, guards: &[super::guards::BareGuard], mcp: Vec<String>, shadow: Vec<String>) -> LaunchItems {
         let (skills, agents) = plan.item_sources();
         LaunchItems { skills, agents, guards: guards.iter().filter_map(|g| serde_json::to_value(g).ok()).collect(), mcp, shadow }
     }
 
-    pub fn codex(plan: &super::copies::Plan, mcp: Vec<String>, shadow: Vec<String>) -> LaunchItems {
+    /// A launch that carries no guard list: the plan's sources and the module servers.
+    pub fn without_guards(plan: &super::copies::Plan, mcp: Vec<String>, shadow: Vec<String>) -> LaunchItems {
         let (skills, agents) = plan.item_sources();
         LaunchItems { skills, agents, guards: Vec::new(), mcp, shadow }
     }
@@ -257,18 +258,24 @@ fn newest_in(dir: &Path, tab: &str, all: bool, hit: impl Fn(&serde_json::Value) 
     })
 }
 
-/// The `homes.claudeConfig` the newest Claude launch of `tab` recorded, else (a re-adopted tab
+/// A record's agent id parsed once; an unknown id is no Claude launch, never a Claude one.
+fn is_agent(record: Option<&str>, want: crate::agent_spec::Agent) -> bool {
+    record.and_then(crate::agent_spec::parse) == Some(want)
+}
+
+/// The home (`AgentSpec.owner_field`) the newest `agent` launch of `tab` recorded, else (a re-adopted tab
 /// under a new id) of the launch whose Falcon session is `session`; `None` when none did.
-pub fn claude_config_in(dir: &Path, tab: &str, session: Option<&str>) -> Option<PathBuf> {
-    let config = |v: &serde_json::Value| v.pointer("/homes/claudeConfig").and_then(|c| c.as_str()).filter(|c| !c.is_empty()).map(PathBuf::from);
-    let claude = |v: &serde_json::Value| v["agent"].as_str() == Some("claude") && config(v).is_some();
+pub fn recorded_home_in(agent: crate::agent_spec::Agent, dir: &Path, tab: &str, session: Option<&str>) -> Option<PathBuf> {
+    let field = crate::agent_spec::spec(agent).owner_field;
+    let config = |v: &serde_json::Value| v.pointer(field).and_then(|c| c.as_str()).filter(|c| !c.is_empty()).map(PathBuf::from);
+    let mine = |v: &serde_json::Value| is_agent(v["agent"].as_str(), agent) && config(v).is_some();
     if crate::rules::loaded::plain_id(tab, &['_']) {
-        if let Some(v) = newest_in(dir, tab, false, |v| claude(v) && v["tab"].as_str() == Some(tab)) {
+        if let Some(v) = newest_in(dir, tab, false, |v| mine(v) && v["tab"].as_str() == Some(tab)) {
             return config(&v);
         }
     }
     let session = session.filter(|s| !s.is_empty())?;
-    newest_in(dir, tab, true, |v| claude(v) && v["falconSession"].as_str() == Some(session)).and_then(|v| config(&v))
+    newest_in(dir, tab, true, |v| mine(v) && v["falconSession"].as_str() == Some(session)).and_then(|v| config(&v))
 }
 
 #[tauri::command]
@@ -292,10 +299,10 @@ mod tests {
         let mut loadout = super::super::set_loadout::Loadout::default();
         loadout.shadow.push("lib/memo".into());
         let plan = super::super::copies::Plan::default();
-        let claude = LaunchItems::claude(&plan, &[], Vec::new(), loadout.shadow.clone());
-        let codex = LaunchItems::codex(&plan, Vec::new(), loadout.shadow.clone());
+        let guarded = LaunchItems::with_guards(&plan, &[], Vec::new(), loadout.shadow.clone());
+        let plain = LaunchItems::without_guards(&plan, Vec::new(), loadout.shadow.clone());
         let from = LaunchItems::from_loadout(&loadout);
-        for items in [claude, codex, from] {
+        for items in [guarded, plain, from] {
             assert_eq!(serde_json::to_value(items).unwrap()["shadow"], serde_json::json!(["lib/memo"]));
         }
         assert!(serde_json::to_value(loadout).unwrap().get("shadow").is_none());
@@ -416,6 +423,19 @@ mod tests {
     }
 
     #[test]
+    fn an_unknown_agent_record_is_no_claude_launch() {
+        let dir = std::env::temp_dir().join(format!("vidar-bare-manifest-grok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let rec = |agent: &str| serde_json::json!({ "tab": "t-1", "agent": agent, "homes": { "claudeConfig": "C:\\h\\c" } });
+        std::fs::write(dir.join("2026-10-24T100000000Z-t-1-1.json"), rec("grok").to_string()).unwrap();
+        assert_eq!(recorded_home_in(crate::agent_spec::Agent::Claude, &dir, "t-1", None), None);
+        std::fs::write(dir.join("2026-10-24T090000000Z-t-1-0.json"), rec("claude").to_string()).unwrap();
+        assert_eq!(recorded_home_in(crate::agent_spec::Agent::Claude, &dir, "t-1", None), Some(PathBuf::from("C:\\h\\c")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn bare_launch_refuses_bad_tab_ids() {
         let dir = std::env::temp_dir();
         for tab in ["", "../x", "a/b", "a\\b", "t.json", "a b", &"x".repeat(129)] {
@@ -432,10 +452,10 @@ mod tests {
         put("2026-10-24T100000000Z-t-1-1.json", serde_json::json!({ "tab": "t-1", "agent": "claude", "falconSession": "fs-1", "homes": { "claudeConfig": "C:\\h\\old" } }));
         put("2026-10-24T110000000Z-t-1-2.json", serde_json::json!({ "tab": "t-1", "agent": "claude", "falconSession": "fs-1", "homes": { "claudeConfig": "C:\\h\\new" } }));
         put("2026-10-24T120000000Z-t-1-3.json", serde_json::json!({ "tab": "t-1", "agent": "codex", "homes": { "codexHome": "C:\\h\\codex" } }));
-        assert_eq!(claude_config_in(&dir, "t-1", None), Some(PathBuf::from("C:\\h\\new")), "newest Claude launch of the tab");
-        assert_eq!(claude_config_in(&dir, "t-9", Some("fs-1")), Some(PathBuf::from("C:\\h\\new")), "a re-adopted tab by its session");
-        assert_eq!(claude_config_in(&dir, "t-9", None), None);
-        assert_eq!(claude_config_in(&dir, "t-9", Some("fs-0")), None);
+        assert_eq!(recorded_home_in(crate::agent_spec::Agent::Claude, &dir, "t-1", None), Some(PathBuf::from("C:\\h\\new")), "newest Claude launch of the tab");
+        assert_eq!(recorded_home_in(crate::agent_spec::Agent::Claude, &dir, "t-9", Some("fs-1")), Some(PathBuf::from("C:\\h\\new")), "a re-adopted tab by its session");
+        assert_eq!(recorded_home_in(crate::agent_spec::Agent::Claude, &dir, "t-9", None), None);
+        assert_eq!(recorded_home_in(crate::agent_spec::Agent::Claude, &dir, "t-9", Some("fs-0")), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

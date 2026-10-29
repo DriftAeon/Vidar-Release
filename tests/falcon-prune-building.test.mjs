@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { id, makeTree, run, skip } from "./lib/falcon-prune-rig.mjs";
@@ -24,10 +24,14 @@ function storeTree() {
 // A stand-in for a running build: pwsh whose first -File is a falcon-build.ps1 that just waits.
 async function withBuild(dir, file, cwd, fn) {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "falcon-build.ps1"), "Start-Sleep -Seconds 60\n");
+  const ready = join(dir, "ready.flag");
+  writeFileSync(join(dir, "falcon-build.ps1"), `Set-Content -LiteralPath '${ready}' -Value 1\nStart-Sleep -Seconds 60\n`);
   const child = spawn("pwsh", ["-NoProfile", "-File", file], { cwd, stdio: "ignore" });
   try {
-    await new Promise((r) => setTimeout(r, 2500));
+    // Wait for the script to be running (it writes the flag first) instead of a fixed 2.5 s sleep.
+    for (let i = 0; i < 200 && !existsSync(ready); i++) await new Promise((r) => setTimeout(r, 50));
+    assert.ok(existsSync(ready), "the stand-in build never started");
+    await new Promise((r) => setTimeout(r, 300));
     return fn();
   } finally {
     const closed = new Promise((r) => child.once("close", r));

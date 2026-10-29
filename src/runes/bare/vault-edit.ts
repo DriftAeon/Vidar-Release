@@ -1,7 +1,7 @@
-// src\runes\bare\vault-edit.ts — the one write path Modify has into a Rune Vault (run 2026-10-25-rune-vault, L3b2).
+// src\runes\bare\vault-edit.ts — the one write path Modify has into a Rune Vault.
 // Every edit is `rune_vault_edit({id, ops, mode})`. An open vault takes mode `unlocked`. A locked vault is never
-// edited until the user picks: Make Variant (mode `variant`: a new vault id, and this tab moves to it) or Edit
-// Original (mode `invalidate`: earlier sessions on it become invalid). The first message can lock the vault between
+// edited until the user picks: Make Variant (mode `variant`: a new vault id for new sessions only; this tab keeps the
+// vault it loaded) or Edit Original (mode `invalidate`: earlier sessions on it become invalid). The first message can lock the vault between
 // the read and the edit (D-d); the store then refuses the unlocked edit, and the choice is asked instead.
 // The pure part has type-only imports, so `node --test` loads it; `choiceCard` builds the notice action card.
 import type { Vault, VaultOp } from "../../ipc";
@@ -13,21 +13,21 @@ export const EDIT_ORIGINAL_LABEL = "Edit Original";
 export const EDIT_ORIGINAL_NOTE = "Earlier sessions on this vault become invalid.";
 /** Modify's choice card adds this: Edit Original respawns the tab on the edited vault (`settleEdit`). */
 export const EDIT_ORIGINAL_RESTART = "Edit Original restarts this tab on the edited vault.";
-const NO_RECORD = "This tab has no vault session to move.";
+
+/** The one notice a Make Variant leaves on the tab; `name` is the variant's name as Pick Vault lists it. */
+export const variantSavedNotice = (name: string): string => `Saved as ${name}. New sessions can pick it.`;
 
 export type VaultPick = "variant" | "invalidate";
 export type VaultEditMode = "unlocked" | VaultPick;
 
 /** The vault calls an edit makes; bound in the Runes panel to `rune_vault_read`, `rune_vault_edit`,
- *  `rune_vault_session_move` and the tab's Rendered body. */
+ *  and the tab's Rendered body. */
 export interface VaultEditIo {
   /** The vault as it is now (not the revision the session loaded). */
   current(id: string): Promise<Vault>;
   /** The current vault's rune view (`rune_vault_read` without a hash), which Modify draws. */
   currentView(id: string): Promise<VaultView>;
   edit(a: { id: string; ops: VaultOp[]; mode: VaultEditMode }): Promise<Vault>;
-  /** Moves this tab's session record to vault `id`; false when the tab has no record. */
-  moveTab(id: string): Promise<boolean>;
   /** Respawns this tab as a fresh session (the /clear route, D-d); absent when the tab has no Rendered body. */
   respawn?(): Promise<void>;
 }
@@ -60,22 +60,23 @@ export async function editVault(io: VaultEditIo, id: string, ops: VaultOp[], pic
   }
 }
 
-/** What follows a landed edit for this tab. Variant: the tab's record moves to the new id, then a fresh respawn
- *  loads it. Unlocked: nothing has been sent yet (an open vault has no first message), so a fresh respawn loads the
- *  edit. Invalidate (Edit Original, L3d): the vault was rewritten in place, so a fresh respawn loads the new
- *  revision as `unlocked` does; other tabs on the vault keep the revision they loaded. Throws on a failed move. */
+/** What follows a landed edit for this tab. Variant: nothing; the variant is a new vault for new sessions and this
+ *  tab keeps the vault it loaded (no session move, no respawn). Unlocked: nothing has been sent yet (an open vault
+ *  has no first message), so a fresh respawn loads the edit. Invalidate (Edit Original, L3d): the vault was rewritten in place, so a fresh respawn loads the new
+ *  revision as `unlocked` does; other tabs on the vault keep the revision they loaded. */
 export async function settleEdit(io: VaultEditIo, done: { mode: VaultEditMode; vault: Vault }): Promise<void> {
-  if (done.mode === "variant" && !(await io.moveTab(done.vault.id))) throw new Error(NO_RECORD);
+  if (done.mode === "variant") return;
   await io.respawn?.();
 }
 
-/** Edit, then settle: `ask` when the user has to pick first; throws the store's or the move's error. */
-export async function applyVaultEdit(io: VaultEditIo, id: string, ops: VaultOp[], pick?: VaultPick): Promise<"done" | "ask"> {
+/** Edit, then settle: `ask` when the user has to pick first; `saved` (the variant's name) after Make Variant; throws
+ *  the store's error. */
+export async function applyVaultEdit(io: VaultEditIo, id: string, ops: VaultOp[], pick?: VaultPick): Promise<"done" | "ask" | { saved: string }> {
   const r = await editVault(io, id, ops, pick);
   if (r.kind === "ask") return "ask";
   if (r.kind === "failed") throw new Error(r.error);
   await settleEdit(io, r);
-  return "done";
+  return r.mode === "variant" ? { saved: r.vault.name } : "done";
 }
 
 /** Add to Vault on the generate result card: progress.ts `addToVault` makes the unlocked edit on an open vault; a

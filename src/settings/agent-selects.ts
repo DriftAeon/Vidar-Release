@@ -5,7 +5,8 @@
 
 import { EFFORT_LEVELS } from "../agents/protocol";
 import { CODEX_EFFORT_LEVELS } from "../agents/codex-settings";
-import { DASH, titleCase } from "../format";
+import { DASH, label } from "../format";
+import { AGENTS } from "../agents/descriptor";
 import type { PrimaryAgent } from "../agents/primary";
 
 type ModelOption = { value: string; label: string };
@@ -36,7 +37,7 @@ function select(label: string, tip: string, value: string, options: ModelOption[
 
 export function effortSelect(value: string, onPick: (level: string) => void, levels: readonly string[] = EFFORT_LEVELS): HTMLSelectElement {
   return select("Effort", "Blank leaves the effort to the host default.", value,
-    levels.map((l) => ({ value: l, label: titleCase(l) })), onPick, titleCase);
+    levels.map((l) => ({ value: l, label: label(l) })), onPick, label);
 }
 
 export function modelSelect(value: string, models: ModelOption[], onPick: (model: string) => void, tip = CLAUDE_MODEL_TIP): HTMLSelectElement {
@@ -44,7 +45,6 @@ export function modelSelect(value: string, models: ModelOption[], onPick: (model
 }
 
 const ONE_AGENT_TIP = "Only one agent is installed.";
-const PRIMARY_LABELS: Record<PrimaryAgent, string> = { claude: "Claude", codex: "Codex" };
 
 /** The Primary Agent select: one option per active agent, no blank (an unset pick shows the
  *  effective one). One option = shown disabled, with the reason as its tooltip; none = a disabled DASH. */
@@ -52,7 +52,7 @@ export function primarySelect(value: PrimaryAgent | null, ids: readonly PrimaryA
   const sel = document.createElement("select");
   sel.className = "sc-select";
   sel.setAttribute("aria-label", "Primary Agent");
-  const options = ids.map((id) => ({ value: id, label: PRIMARY_LABELS[id] }));
+  const options = ids.map((id) => ({ value: id, label: AGENTS[id].name }));
   for (const o of options.length ? options : [{ value: "", label: DASH }]) {
     const opt = document.createElement("option");
     opt.value = o.value;

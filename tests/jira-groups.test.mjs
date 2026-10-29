@@ -1,4 +1,4 @@
-// Jira grouping, icon lookup, page merge and count label (jira/model.ts): plan D3-D5.
+// Jira grouping, icon lookup, page merge and count label (jira/model.ts).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { groupIssues, groupKey, mergePage, typeIcon } from "../src/jira/model.ts";

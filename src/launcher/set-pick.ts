@@ -1,5 +1,5 @@
-// src\launcher\set-pick.ts — the launcher's per-launch Rune Vault pick (run 2026-10-25-rune-vault, L3a; model R2:
-// a session loads exactly one vault). A Bare body row carries a Runes icon; it expands the pick inline under the
+// src\launcher\set-pick.ts — the launcher's per-launch Rune Vault pick (a session
+// loads exactly one vault). A Bare body row carries a Runes icon; it expands the pick inline under the
 // row (Raw / Rendered / Resume move down). One row is ticked: the agent's stock vault, a saved vault
 // (`rune_vault_list`), or Custom, which lists the library's sets to tick and makes a vault from them at Launch
 // (`rune_vault_create`, an identical pick reuses its vault). The pre-pick is the last vault launched (roster.ts

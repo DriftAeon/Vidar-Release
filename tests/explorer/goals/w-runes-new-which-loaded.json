@@ -1,0 +1,17 @@
+{
+  "id": "w-runes-new-which-loaded",
+  "title": "See Which Runes My New Session Loaded",
+  "style": "new-user",
+  "scope": "vidar",
+  "surfaces": ["launcher", "runes"],
+  "tags": ["runes", "vault"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "open the launcher and start a fresh Claude tab in Bare mode from the row's default vault, without sending a message" },
+    { "intent": "open Runes in that tab and find which Rune Vault the session loaded, by name" },
+    { "intent": "find how many runes it loaded and read a few of their names" },
+    { "intent": "check the Lock button reads Lock, not Locked, since I have sent nothing yet" }
+  ]
+}

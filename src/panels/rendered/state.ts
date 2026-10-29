@@ -115,5 +115,8 @@ export interface RenderedState {
    *  dead generation and drop the route of the agent that is starting, leaving an orphan
    *  holding the tab id and every retry answered with "agent already exists or is closing". */
   spawning: Promise<void> | null;
+  /** A respawn holds sends (lifecycle.ts `holdSends`), from its first step (stopping the old process) until the new
+   *  generation is in: the tab reads Starting… and `write()` refuses meanwhile (E1 runs 3-4, case 2). */
+  holding: boolean;
   paletteSel: string | null;
 }

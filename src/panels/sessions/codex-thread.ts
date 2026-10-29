@@ -5,7 +5,7 @@
 // second writer on one rollout (review-fix B2), so both transports refuse it through lookup.ts
 // codexThreadHolder. Pure, so it is testable under plain node.
 //
-// Why the launch line alone is not enough (run 2026-10-19-codex-primary, a3r): the launcher never
+// Why the launch line alone is not enough: the launcher never
 // writes `codex resume <id>` on a Raw Codex line (its Resume opens a Rendered variant, a Raw Bare
 // row carries no args at all), and a /new or /resume typed inside the TUI moves the tab to another
 // thread while the line keeps the old id. So the id is absent or stale for nearly every Raw tab.

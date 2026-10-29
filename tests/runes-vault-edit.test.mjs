@@ -1,4 +1,4 @@
-// vault-edit.ts (run 2026-10-25-rune-vault L3b2): the one Modify write path into a Rune Vault never edits a locked
+// vault-edit.ts: the one Modify write path into a Rune Vault never edits a locked
 // vault without the user's pick, turns the first-message lock race into the choice, and settles each mode.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ const { vaultGroups, memberOp, addable, vaultModify } = await import("../src/run
 const { vaultModifyState } = await import("../src/runes/bare/vault-modify-state.ts");
 
 const OPS = [{ op: "removeRune", ref: { library: "kit", id: "tidy" } }];
-function fakeIo({ locked = false, lockOnEdit = false, moved = true } = {}) {
+function fakeIo({ locked = false, lockOnEdit = false } = {}) {
   const calls = [];
   const vault = { id: "v1", lockedUtc: locked ? "t" : null, runes: [] };
   return {
@@ -21,9 +21,8 @@ function fakeIo({ locked = false, lockOnEdit = false, moved = true } = {}) {
       calls.push(["edit", a.mode]);
       if (lockOnEdit) vault.lockedUtc = "t"; // the first message locked it between the read and the edit
       if (vault.lockedUtc && a.mode === "unlocked") throw new Error("vault \"v1\" is locked");
-      return { ...vault, id: a.mode === "variant" ? "v2" : "v1" };
+      return { ...vault, id: a.mode === "variant" ? "v2" : "v1", name: a.mode === "variant" ? "Plain Variant" : "Plain" };
     },
-    moveTab: async (id) => { calls.push(["moveTab", id]); return moved; },
     respawn: async () => { calls.push(["respawn"]); },
   };
 }
@@ -49,16 +48,21 @@ test("the lock race: a vault locked between the read and the edit asks instead o
   assert.ok(!io.calls.some(([n]) => n === "respawn"));
 });
 
-test("Make Variant edits with mode variant, moves the tab to the new id, then respawns", async () => {
+test("Make Variant edits with mode variant and stops: no move, no respawn, the variant's name comes back", async () => {
   const io = fakeIo({ locked: true });
-  assert.equal(await applyVaultEdit(io, "v1", OPS, "variant"), "done");
-  assert.deepEqual(io.calls, [["edit", "variant"], ["moveTab", "v2"], ["respawn"]]);
+  assert.deepEqual(await applyVaultEdit(io, "v1", OPS, "variant"), { saved: "Plain Variant" });
+  assert.deepEqual(io.calls, [["edit", "variant"]]);
 });
 
-test("Make Variant with no session record throws and does not respawn", async () => {
-  const io = fakeIo({ locked: true, moved: false });
-  await assert.rejects(applyVaultEdit(io, "v1", OPS, "variant"), /This tab has no vault session to move\./);
-  assert.ok(!io.calls.some(([n]) => n === "respawn"));
+test("Make Variant's pick leaves the notice on the Modify state, and opening Modify again is the view's to clear", async () => {
+  const io = fakeIo({ locked: true });
+  const vm = vaultModifyState(io);
+  await vm.read("v1");
+  await vm.edit(OPS);
+  assert.ok(vm.pending, "a locked vault parks the edit");
+  await vm.pick("variant");
+  assert.equal(vm.notice, "Saved as Plain Variant. New sessions can pick it.");
+  assert.equal(vm.pending, null);
 });
 
 test("Edit Original edits with mode invalidate, then respawns this tab fresh on the new revision", async () => {
@@ -123,7 +127,7 @@ test("Add Rune lists only library runes the vault does not hold, and its switch 
   assert.ok(button, "the Add Rune button shows when the view can add");
   assert.equal(closed.at(-1).className, "rp-actions", "a closed list draws nothing after the actions");
   const open = vaultModify({ ...base, library: [rune("a", null), rune("b", null)], addRune() {} });
-  const switches = [...open.at(-1).querySelectorAll(".runes-bare-switch")];
+  const switches = [...open.at(-1).querySelectorAll(".runes-row > .runes-check")];
   assert.equal(switches.length, 1, "kit/a is already in the vault's runeset");
   switches[0].click();
   assert.deepEqual(sent, [{ op: "addRune", ref: { library: "kit", id: "b" } }]);

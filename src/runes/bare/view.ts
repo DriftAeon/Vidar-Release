@@ -1,5 +1,6 @@
 // Runes View and Modify show the focused session's Rune Vault.
 import { iconImg } from "../../icon-img";
+import { KIND_ICON } from "../kind-icons";
 import { fillCard, type CardCtx } from "../cards";
 import { createBareFlow, agentFiles, codexTicks, defaultTicks, watchGenerating,
   type ActionResult, type BareFlowIo, type BareLocalFile, type BareLocalSources, type BareModuleBundles } from "./flow";
@@ -8,6 +9,7 @@ import { type SessionVault, type VaultIo, type VaultViewRune } from "./cake";
 import { createAgentView, el, btn, type GenCtx } from "./agent-view";
 import { filesView, generatable } from "./view-files";
 import { addKit } from "./kit-add";
+import { without, type DeleteTarget } from "./library-delete";
 import { vaultModify } from "./view-vault";
 import { vaultModifyState } from "./vault-modify-state";
 import { lockButton, paintLock } from "./view-sets";
@@ -18,6 +20,8 @@ import { mcpTickRow } from "./module-ticks";
 import { moduleTicks } from "./module-ticks";
 import { setAttachments } from "./set-attach";
 import type { VaultEditIo } from "./vault-edit";
+import { isAgentId } from "../../agents/id";
+import type { RunesLoaded } from "../types";
 
 export { errorLine, hueOf } from "./view-data";
 export { genLabel } from "./gen-label";
@@ -29,20 +33,28 @@ export interface BareViewCtx {
   vault?: VaultIo; vaultEdit?: VaultEditIo;
   /** Waits before each re-read of an absent session record (tests shorten it). */
   retryMs?: number[];
+  /** False when the tab launched without a vault: an absent record then paints No Vault Session at once. */
+  retry?: boolean;
   warningLine?: (warning: string) => HTMLElement | null;
+  /** The Make Variant notice, handed to the pane head (null clears it); absent, it draws as a note line in the body. */
+  headNote?: (text: string | null) => void;
+  /** Delete Rune / Delete Library; absent, the `bare_library_delete` command. Resolves the vault names that dropped it. */
+  libraryDelete?: (library: string, rune?: string) => Promise<{ vaults: string[] }>;
 }
 export interface BareViewHandle {
   root: HTMLElement; modeButton: HTMLButtonElement; lockButton: HTMLButtonElement;
-  setTrace(parts: HTMLElement[]): void; reload(): void; dispose(): void;
+  setTrace(parts: HTMLElement[]): void; setLoads(loads: RunesLoaded | null): void; reload(): void; dispose(): void;
 }
 const LAYER_KINDS = [
-  ["skill", "Skills", "skill"], ["agent", "Agents", "agent"], ["hook", "Hooks", "hook"], ["mcp", "MCP Servers", "proxy"],
+  ["skill", "Skills", KIND_ICON.skill], ["agent", "Agents", KIND_ICON.agent], ["hook", "Hooks", KIND_ICON.hook],
+  ["mcp", "MCPs", KIND_ICON.mcp],
 ] as const;
 const NOTE_VAULT = "Changes this tab's vault; before the vault locks, the tab restarts as a fresh session.";
 const NO_VAULT = "No Vault Session";
 const RETRY_MS = [250, 500, 1000, 2000, 1250];
 
-export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowIo): BareViewHandle {
+export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowIo, loads?: RunesLoaded | null): BareViewHandle {
+  let loadsNow = loads ?? null;
   const codex = ctx.agent === "codex";
   const root = el("div", "runes-bare");
   host.appendChild(root);
@@ -63,6 +75,7 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
   let bundles: BareModuleBundles | null = null;
   let ticked = new Set<string>();
   let kitNotice: { attached: boolean; skipped: number } | null = null, kitError: string | null = null;
+  let deleting: DeleteTarget | null = null;
   const open = new Map<string, boolean>();
   const gate = doneGate(ctx.onDone);
   const trackOpen = (det: HTMLDetailsElement, key: string, dflt: boolean): void => {
@@ -90,7 +103,7 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
   }
   // A new tab can be read before its launch has written the session record: an absent record is re-read on a bounded
   // backoff and shows nothing meanwhile; NO_VAULT paints only once the backoff has run out.
-  const delays = ctx.retryMs ?? RETRY_MS;
+  const delays = ctx.retry === false ? [] : ctx.retryMs ?? RETRY_MS;
   let attempt = 0, retryTimer: ReturnType<typeof setTimeout> | null = null;
   async function readVault(): Promise<void> {
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
@@ -132,19 +145,33 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
   }
   modeButton.addEventListener("click", () => {
     modify = !modify;
-    if (!modify) vm.reset();
+    vm.notice = null;
+    if (!modify) { vm.reset(); deleting = null; }
     else if (!sources) void act(loadCandidates);
     paint();
   });
   lock.addEventListener("click", () => {
     if (vault && ctx.vault) void vaultWrite(async () => { await ctx.vault!.lock(vault!.session.vault.id, vault!.session.vault.hash); });
   });
+  function runDelete(): void {
+    const t = deleting;
+    if (!t) return;
+    deleting = null;
+    void act(async () => {
+      try {
+        await (ctx.libraryDelete ?? ((library, rune) => invoke("bare_library_delete", { library, ...(rune ? { rune } : {}) })))(t.library, t.id);
+        vm.removed = without(vm.removed, t);
+        if (vm.library) vm.library = without(vm.library, t);
+        await readVault();
+      } catch (e) { error = { ok: false, reason: "failed", error: String(e) }; }
+    });
+  }
   function runAddKit(): void {
     if (!vm.now) return;
     void act(async () => {
       kitError = null;
       try {
-        const r = await addKit(io, ctx.cwd, bundles);
+        const r = await addKit(io, ctx.cwd, bundles, isAgentId(ctx.agent) ? ctx.agent : undefined);
         kitNotice = { attached: !r.created, skipped: r.skipped };
         modify = true; view = "actives";
         await vm.edit(r.ops);
@@ -186,11 +213,16 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
         if (e) { const d = el("div", "rp-error", e.text); d.title = e.title ?? ""; parts.push(d); }
       } else if (loaded && !vault) parts.push(el("div", "runes-bare-note", NO_VAULT));
       if (kitError) { const d = el("div", "rp-error", "Add Kit Failed"); d.title = kitError; parts.push(d); }
+      const notice = vm.notice && !modify ? vm.notice : null;
+      if (ctx.headNote) ctx.headNote(notice);
+      else if (notice) parts.push(el("div", "runes-bare-note", notice));
       const doneLine = agentV.doneLine();
       if (doneLine) parts.push(doneLine);
       if (vault) {
         const displayed = modify ? vm.now : vault.view;
-        for (const warning of displayed?.warnings ?? []) {
+        const shown = displayed?.warnings ?? [];
+        const picker = modify && vm.library ? vm.libraryWarnings.filter((w) => !shown.includes(w)) : [];
+        for (const warning of [...shown, ...picker]) {
           const line = ctx.warningLine ? ctx.warningLine(warning) : el("div", "runes-err", warning);
           if (line) parts.push(line);
         }
@@ -207,14 +239,23 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
         };
         if (displayed) parts.push(...vaultModify({
           view: displayed, removed: modify ? vm.removed : [], pending: modify ? vm.pending : null,
-          busy, readOnly: !modify, card, trackOpen, kitNotice: modify ? kitNotice : null,
+          busy, readOnly: !modify, card, trackOpen, loads: loadsNow, kitNotice: modify ? kitNotice : null,
           attachments: modify ? attach : undefined,
           edit: (ops: VaultOp[]) => void vaultWrite(() => vm.edit(ops, vm.takenOut(ops))),
-          pick: async (p) => { await vm.pick(p); await act(readVault); },
+          pick: async (p) => {
+            await vm.pick(p);
+            // Make Variant leaves this tab on its own vault: Modify closes and the notice shows
+            if (vm.notice) { modify = false; deleting = null; }
+            await act(readVault);
+          },
           ...(modify ? {
+            deleting, askDelete: (t: DeleteTarget) => { deleting = t; paint(); },
+            confirmDelete: runDelete, cancelDelete: () => { deleting = null; paint(); },
             addKit: runAddKit, library: vm.library,
-            addRune: () => void vaultWrite(() => vm.toggleLibrary(async () =>
-              (await invoke("rune_vault_library_runes", { agent: ctx.agent })).runes as VaultViewRune[])),
+            addRune: () => void vaultWrite(() => vm.toggleLibrary(async () => {
+              const r = await invoke("rune_vault_library_runes", { agent: ctx.agent });
+              return { runes: r.runes as VaultViewRune[], warnings: r.warnings };
+            })),
           } : {}),
         }));
       }
@@ -237,6 +278,7 @@ export function mountBareView(host: HTMLElement, ctx: BareViewCtx, io: BareFlowI
   if (startView(ctx.start) === "files") void first.then(openFiles);
   return {
     root, modeButton, lockButton: lock,
+    setLoads(l) { loadsNow = l; },
     setTrace(parts) { trace.replaceChildren(...parts); trace.hidden = !parts.length; paint(); },
     reload() { if (!busy && view === "actives") void act(readVault); },
     dispose() { disposed = true; if (retryTimer) clearTimeout(retryTimer); agentV.dispose(); unwatch(); root.remove(); modeButton.remove(); lock.remove(); },

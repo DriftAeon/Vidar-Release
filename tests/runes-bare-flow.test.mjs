@@ -45,9 +45,13 @@ test("Generate sends ticked rule paths and item-rune inputs without a row key", 
 
 test("Local source preselection and errors remain agent scoped", () => {
   const shared = file("/hook", "hook", { codexSupported: true });
+  const own = file("/codex-hooks.json#Stop:x", "hook", { codexSupported: true, agent: "codex" });
+  assert.deepEqual(agentFiles([shared, own], true), [own]);
+  assert.deepEqual(agentFiles([shared, own], false), [shared]);
   const claude = file("/claude", "skill", { agent: "claude" });
   const codex = file("/codex", "skill", { agent: "codex" });
-  assert.deepEqual(agentFiles([shared, claude, codex], true), [shared, codex]);
+  assert.deepEqual(agentFiles([shared, claude, codex], true), [codex]);
+  assert.deepEqual(agentFiles([shared, claude, codex], false), [shared, claude]);
   assert.deepEqual(defaultTicks([claude]).has("/claude"), true);
   assert.deepEqual(codexTicks([file("/AGENTS.md", "rules")]).has("/AGENTS.md"), true);
   assert.deepEqual(classifyGenError("invalid: bad"), { state: "rejected", error: "bad" });

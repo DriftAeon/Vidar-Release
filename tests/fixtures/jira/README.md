@@ -1,6 +1,6 @@
 # Jira fixtures
 
-Synthetic bodies for the Jira Issues tab (`docs/projects/jira/issues-tab-plan.md`); the shapes are web-read (plan § Sources, Risk 1), not captured from a live site. Hosts are `example.atlassian.net` only.
+Synthetic bodies for the Jira Issues tab; the shapes are web-read, not captured from a live site. Hosts are `example.atlassian.net` only.
 
 - `search-jql.json`: a `POST /rest/api/3/search/jql` 200 reply, `{ issues: [{ key, fields }], nextPageToken, isLast }`, with one issue whose key fails the key pattern. Source: https://community.developer.atlassian.com/t/jira-cloud-rest-api-v3-search-jql-slower-fetching-with-nextpagetoken-no-totalissues-any-workarounds/90176
 - `search-jql-empty.json`: the same reply with no issues; `isLast` alone ends the page. Source: https://community.atlassian.com/forums/Jira-questions/REST-The-new-rest-api-3-search-jql-endpoint-is-a-complete/qaa-p/3132194

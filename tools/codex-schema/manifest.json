@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "codexVersion": "0.164.0",
+  "codexVersion": "0.165.0",
   "experimental": true,
   "clientRequests": [
     {
@@ -596,7 +596,7 @@
     {
       "method": "thread/fork",
       "paramsType": "ThreadForkParams",
-      "paramsSha256": "084d7e59a2850ea86e2f7fded18f671a59a0d43c91138073ce75f2566019bf48"
+      "paramsSha256": "b11750efb2b95fa82171bc97213dcb62448b99411ad567653b3516e3854a25f6"
     },
     {
       "method": "thread/goal/clear",
@@ -636,12 +636,17 @@
     {
       "method": "thread/list",
       "paramsType": "ThreadListParams",
-      "paramsSha256": "fb368f90e5e5ba27982595e50b578179622f9a726780d123e9b3fcaf26cf020d"
+      "paramsSha256": "92be28ff3107be4f3de92cefdc0f9113702c2bed8a6f93971b4442f1f8c560d7"
     },
     {
       "method": "thread/loaded/list",
       "paramsType": "ThreadLoadedListParams",
       "paramsSha256": "cb532d5bce244048c7037f1a5616fb7678bcaa03488ba423145800df9c1f402d"
+    },
+    {
+      "method": "thread/memory/read",
+      "paramsType": "ThreadMemoryReadParams",
+      "paramsSha256": "63c419c935d5405b1eb263bab896ecad5a3498a26ce8ec3364b0bf7001818037"
     },
     {
       "method": "thread/memoryMode/set",
@@ -746,7 +751,7 @@
     {
       "method": "thread/sample",
       "paramsType": "ThreadSampleParams",
-      "paramsSha256": "b651202b4fde0835fd72dab46834c3d0b70fee2700bec22321b3e6d77555be9b"
+      "paramsSha256": "869e6d732b11476d1c76490e7685b77a37f093b8e71994ffa8213166f2fc3565"
     },
     {
       "method": "thread/sample/cancel",
@@ -1876,7 +1881,7 @@
     {
       "method": "error",
       "paramsType": "ErrorNotification",
-      "paramsSha256": "a8c12c87f1e8175683cfc3d11cae0594db2ade530049b597f716fa73a07ad7a9"
+      "paramsSha256": "aad1e0bfafc1351435fd415ad239583baf2ddf27e7d4894553f0b6a2407aeed1"
     },
     {
       "method": "externalAgentConfig/import/completed",
@@ -2196,7 +2201,7 @@
     {
       "method": "thread/started",
       "paramsType": "ThreadStartedNotification",
-      "paramsSha256": "98c9863c8359d7e92ba8c03a1725e5a28ed5b9c3484230049a41770e5fb20e0c"
+      "paramsSha256": "79325876172e410357550eac046f1ec5a3c7c47a239badbee2daae7757c764bf"
     },
     {
       "method": "thread/status/changed",
@@ -2216,7 +2221,7 @@
     {
       "method": "turn/completed",
       "paramsType": "TurnCompletedNotification",
-      "paramsSha256": "eaef91d86fa336c7af637ca94f73c648a73bdf3e44b2b281ccfb919bf51ff82c"
+      "paramsSha256": "4832c6bd7c5e4766dd9bb538997cd2f92a651b495bf1f33c9e421aca33d32553"
     },
     {
       "method": "turn/diff/updated",
@@ -2236,7 +2241,7 @@
     {
       "method": "turn/started",
       "paramsType": "TurnStartedNotification",
-      "paramsSha256": "447e9c57c02621eb4413f466d8db9aeaa07227e7be6a20f503597ce2a67b343b"
+      "paramsSha256": "7d373d118e3ba449db80ea733aab2aa64368183a4ee3e76feeff43c96855071e"
     },
     {
       "method": "warning",

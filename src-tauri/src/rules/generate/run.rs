@@ -1,5 +1,5 @@
 //! src-tauri\src\rules\generate\run.rs — spawning the tab's agent for one generation and reading what it
-//! printed (plan Design "Runner", D1, D5, W0 result). Pure builders (`claude_argv`, `codex_argv`, `child_env`),
+//! printed. Pure builders (`claude_argv`, `codex_argv`, `child_env`),
 //! the capped, stoppable child run (`execute_until`; `execute` is it without a stop) and the classification of its
 //! output (`classify`). Nothing here picks a model, home or file: `commands.rs` does, and tests inject the runner.
 //! - Claude: `claude -p ... --tools "" --setting-sources "" --system-prompt-file <skill copy>`, the input on stdin;
@@ -28,6 +28,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
+
+use crate::agent_spec::Agent;
 use serde_json::Value;
 
 use super::home;
@@ -73,7 +75,7 @@ pub fn codex_argv(model: &str, effort: &str, cwd: &Path) -> Vec<String> {
 
 /// The child's env: `parent` without the dropped prefixes (case-insensitive), then the overlay for the generator
 /// home `home`. Claude adds `CLAUDE_CONFIG_DIR` and `DISABLE_AUTOUPDATER=1`, Codex `CODEX_HOME`.
-pub fn child_env(parent: impl IntoIterator<Item = (OsString, OsString)>, agent: &str, home: &Path) -> Vec<(OsString, OsString)> {
+pub fn child_env(parent: impl IntoIterator<Item = (OsString, OsString)>, agent: Agent, home: &Path) -> Vec<(OsString, OsString)> {
     let mut map: BTreeMap<String, (OsString, OsString)> = BTreeMap::new();
     for (k, v) in parent {
         let key = k.to_string_lossy().to_ascii_uppercase();
@@ -92,11 +94,12 @@ pub fn child_env(parent: impl IntoIterator<Item = (OsString, OsString)>, agent: 
         ("TEMP", path(&user.join("AppData").join("Local").join("Temp"))),
         ("TMP", path(&user.join("AppData").join("Local").join("Temp"))),
     ];
-    if agent == "claude" {
-        overlay.push(("CLAUDE_CONFIG_DIR", path(&config)));
-        overlay.push(("DISABLE_AUTOUPDATER", "1".into()));
-    } else {
-        overlay.push(("CODEX_HOME", path(&config)));
+    match agent {
+        Agent::Claude => {
+            overlay.push(("CLAUDE_CONFIG_DIR", path(&config)));
+            overlay.push(("DISABLE_AUTOUPDATER", "1".into()));
+        }
+        Agent::Codex => overlay.push(("CODEX_HOME", path(&config))),
     }
     for (k, v) in overlay {
         map.insert(k.to_string(), (OsString::from(k), OsString::from(v)));
@@ -111,7 +114,10 @@ pub struct Spec {
     pub args: Vec<String>,
     pub env: Vec<(OsString, OsString)>,
     pub cwd: PathBuf,
-    /// The agent's config dir; with `cwd` it is checked for instruction files right before the spawn (`None`: only `cwd`).
+    /// The agent the call home runs.
+    pub agent: Agent,
+    /// The agent's config dir; with `cwd` it is checked against the agent's allow-list right before the spawn (`None`:
+    /// only `cwd`, for instruction files).
     pub config: Option<PathBuf>,
     pub stdin: String,
 }
@@ -150,10 +156,16 @@ fn env_path_dirs(env: &[(OsString, OsString)]) -> Vec<PathBuf> {
 /// The program and its leading arguments for `agent`: `claude.exe` as the Flow runner finds it, or `node` plus the
 /// `codex.js` the Bare Codex resolver finds beside a `codex` shim (profile `profiles/bare/codex.json`).
 pub fn resolve_exe(agent: &str, root: &Path, env: &[(OsString, OsString)]) -> Result<(PathBuf, Vec<String>), String> {
-    if agent == "claude" {
-        let exe = crate::deps::claude_exe().ok_or("spawn: Claude Code was not found; install it first")?;
-        return Ok((exe, Vec::new()));
+    match super::home::agent_of(agent)? {
+        Agent::Claude => {
+            let exe = crate::deps::claude_exe().ok_or("spawn: Claude Code was not found; install it first")?;
+            Ok((exe, Vec::new()))
+        }
+        Agent::Codex => resolve_codex(root, env),
     }
+}
+
+fn resolve_codex(root: &Path, env: &[(OsString, OsString)]) -> Result<(PathBuf, Vec<String>), String> {
     let path = root.join("profiles").join("bare").join("codex.json");
     let p: CodexProfile = crate::fsx::read_json(&path).map_err(|e| format!("spawn: launch profile {}: {e}", path.display()))?;
     let dirs = env_path_dirs(env);
@@ -186,6 +198,15 @@ fn read_capped(mut r: impl Read, cap: usize, flag: Arc<AtomicBool>) -> Vec<u8> {
     buf
 }
 
+/// The clean-home check, immediately before the spawn. A spec with a config dir gets the strict allow-list
+/// (`home::assert_allowed`) for `spec.agent`; one without gets the instruction-file check over its cwd.
+fn check_home(spec: &Spec) -> Result<(), String> {
+    match &spec.config {
+        Some(config) => super::home::assert_allowed(spec.agent, config, &spec.cwd),
+        None => super::home::assert_dirs_clean(std::iter::once(spec.cwd.as_path())),
+    }
+}
+
 /// `execute_until` with no stop signal.
 pub fn execute(spec: &Spec, job: &Job, timeout: Duration, cap: usize) -> Result<Raw, String> {
     execute_until(spec, job, timeout, cap, || false)
@@ -195,8 +216,7 @@ pub fn execute(spec: &Spec, job: &Job, timeout: Duration, cap: usize) -> Result<
 /// `timeout`, and ended (`Raw::cancelled`) as soon as `stop()` is true. `job.terminate()` from another thread
 /// (Cancel) ends the child like any exit; the caller knows why.
 pub fn execute_until(spec: &Spec, job: &Job, timeout: Duration, cap: usize, stop: impl Fn() -> bool) -> Result<Raw, String> {
-    // The W0 clean-home check, immediately before the spawn.
-    super::home::assert_dirs_clean(spec.config.iter().chain(std::iter::once(&spec.cwd)).map(PathBuf::as_path))?;
+    check_home(spec)?;
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
         .env_clear()
@@ -443,10 +463,9 @@ pub fn classify(agent: &str, raw: &Raw) -> Result<Reply, String> {
     if let Some(stream) = raw.overflow {
         return Err(format!("output: {stream} went over {} MB", OUT_CAP / (1024 * 1024)));
     }
-    if agent == "claude" {
-        claude_reply(raw)
-    } else {
-        codex_reply(raw)
+    match super::home::agent_of(agent)? {
+        Agent::Claude => claude_reply(raw),
+        Agent::Codex => codex_reply(raw),
     }
 }
 

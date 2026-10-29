@@ -7,7 +7,7 @@
   "tags": ["tabs"],
   "realModel": false,
   "core": false,
-  "source": ["b8eab52b"],
+  "source": [],
   "steps": [
     { "intent": "open three plain terminal tabs" },
     { "intent": "hover each tab and look at where its close X appears" },

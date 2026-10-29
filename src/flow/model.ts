@@ -20,19 +20,19 @@ export type ModelId = CoreModelId | (string & {});
  *  bypassPermissions and plan are never members. */
 export type PermissionMode = "default" | "acceptEdits" | "auto";
 
-export type V1AddonKind = "permission-allowlist" | "system-prompt" | "cwd" | "retries";
+export type V1AddonKind = "system-prompt" | "cwd" | "retries";
 type ReservedAddonKind =                                // named, never offered in v1
+  | "permission-allowlist"                                     // retired: permissions come from the node's vault; stripped on load
   | "effort"                                                   // needs a sidecar flag; out of v1
   | "budget" | "loop-until" | "fan-out" | "resume" | "output-schema";
 export type FlowAddonKind = V1AddonKind | ReservedAddonKind;
 /** The inspector's ADD picker builds from this array, never from FlowAddonKind. */
-export const V1_ADDON_KINDS: readonly V1AddonKind[] = ["permission-allowlist", "system-prompt", "cwd", "retries"];
+export const V1_ADDON_KINDS: readonly V1AddonKind[] = ["system-prompt", "cwd", "retries"];
 
 export interface FlowAddon {
   kind: FlowAddonKind;
   label: string;
-  value: string; // required. "permission-allowlist": comma-joined tool names ("Read,Grep");
-                 // "system-prompt": text; "cwd": absolute dir; "retries": "0" | "1" | "2" (§4.2)
+  value: string; // required. "system-prompt": text; "cwd": absolute dir; "retries": "0" | "1" | "2" (§4.2)
 }
 
 /** Recorded on agent nodes as the field {k:"preset", v:<AgentPreset>} (no FlowNode change);
@@ -61,7 +61,8 @@ export interface FlowNode {
   x: number;
   y: number;
   model?: ModelId;              // required for kind:"agent" in v1; enforced by validate.ts
-  backend?: FlowBackend;        // legacy field: ignored, engine.ts derives the backend from `model`
+  vault?: string;               // Rune Vault id the node loads (rune_vault_list); unset = the agent's stock vault
+  backend?: FlowBackend;       // legacy field: ignored, engine.ts derives the backend from `model`
   fields: FlowField[];          // "task" (agent's prompt-with-placeholders text) lives here
   fieldSpecs?: FlowFieldSpec[];
   inputs: string[];             // named ports, e.g. ["in"]; kept as strings (not indices) so

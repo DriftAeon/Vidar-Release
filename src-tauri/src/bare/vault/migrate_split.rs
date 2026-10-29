@@ -1,5 +1,5 @@
 //! src-tauri\src\bare\vault\migrate_split.rs — the per-agent split of a converted sidecar, and the
-//! repair of a vault an earlier run already wrote with a mixed runeset (run 2026-10-25-rune-vault, K1).
+//! repair of a vault an earlier run already wrote with a mixed runeset.
 //!
 //! A sidecar's runes tagged `agent: claude` or `agent: codex` leave the base set for their own sets
 //! (`<set>-claude`, `<set>-codex`); untagged runes stay. A stock vault loads the base (when it holds
@@ -90,24 +90,35 @@ pub(super) fn place_split(plan: &mut Plan, env: &Env, lib_old: &str, set_old: &s
 
 type Libs = BTreeMap<String, Option<Library>>;
 
-fn tag_of(libs: &mut Libs, env: &Env, lib: &str, id: &str) -> Option<&'static str> {
+/// An agent tag as the known agent's id; a tag naming no agent is warned about and left where it is.
+fn known_tag(tag: &str, lib: &str, id: &str, warnings: &mut Vec<String>) -> Option<&'static str> {
+    match crate::agent_spec::parse(tag) {
+        Some(a) => Some(a.as_str()),
+        None => {
+            let w = format!("Rune {id} in library {lib} has unknown agent tag {tag:?}; left where it is");
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+            None
+        }
+    }
+}
+
+fn tag_of(libs: &mut Libs, env: &Env, lib: &str, id: &str, warnings: &mut Vec<String>) -> Option<&'static str> {
     let l = libs
         .entry(lib.to_string())
         .or_insert_with(|| if lib == "stock" { None } else { crate::bare::layer::library_dir_named(env.root, lib).ok().and_then(|d| Library::open(&d).ok()) })
         .as_ref()?;
     let entry = l.entry(id).ok()??;
-    match l.load(&entry).ok()?.agent.as_deref() {
-        Some("claude") => Some("claude"),
-        Some("codex") => Some("codex"),
-        _ => None,
-    }
+    let tag = l.load(&entry).ok()?.agent?;
+    known_tag(&tag, lib, id, warnings)
 }
 
 /// Slot ids of `text` grouped by the agent tag of their rune in `lib`; untagged ids are absent.
-fn tagged(libs: &mut Libs, env: &Env, lib: &str, text: &str) -> BTreeMap<&'static str, Vec<String>> {
+fn tagged(libs: &mut Libs, env: &Env, lib: &str, text: &str, warnings: &mut Vec<String>) -> BTreeMap<&'static str, Vec<String>> {
     let mut out: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
     for id in slot_order(text) {
-        if let Some(a) = tag_of(libs, env, lib, &id) {
+        if let Some(a) = tag_of(libs, env, lib, &id, warnings) {
             out.entry(a).or_default().push(id);
         }
     }
@@ -122,7 +133,7 @@ fn split_library_set(env: &Env, plan: &mut Plan, libs: &mut Libs, lib: &str, set
     let Ok(dir) = crate::bare::layer::library_dir_named(env.root, lib) else { return Ok(()) };
     let Ok(bytes) = std::fs::read(dir.join("sets").join(format!("{set}.md"))) else { return Ok(()) };
     let text = String::from_utf8_lossy(&bytes).into_owned();
-    let groups = tagged(libs, env, lib, &text);
+    let groups = tagged(libs, env, lib, &text, &mut plan.warnings);
     if groups.is_empty() {
         return Ok(());
     }
@@ -157,7 +168,7 @@ pub(super) fn repair(env: &Env, plan: &mut Plan) -> Result<(), String> {
     for id in ids {
         let Ok(v) = store.get(&id) else { continue };
         let Some(VaultFrom::Template { template }) = &v.from else { continue };
-        let Some(agent) = template.strip_prefix("stock-").and_then(|a| ["claude", "codex"].into_iter().find(|x| *x == a)) else { continue };
+        let Some(agent) = template.strip_prefix("stock-").and_then(crate::agent_spec::parse).map(|a| a.as_str()) else { continue };
         let dir = vaults_dir.join(&id);
         let mut runesets: Vec<RunesetCopy> = Vec::new();
         let mut write: Vec<(String, Vec<u8>)> = Vec::new();
@@ -167,7 +178,7 @@ pub(super) fn repair(env: &Env, plan: &mut Plan) -> Result<(), String> {
             let keep = |runesets: &mut Vec<RunesetCopy>| runesets.push(c.clone());
             let Ok(bytes) = std::fs::read(dir.join(&c.file)) else { keep(&mut runesets); continue };
             let text = String::from_utf8_lossy(&bytes).into_owned();
-            let groups = tagged(&mut libs, env, &c.source.library, &text);
+            let groups = tagged(&mut libs, env, &c.source.library, &text, &mut plan.warnings);
             if !groups.keys().any(|a| *a != agent) {
                 keep(&mut runesets);
                 continue;
@@ -240,4 +251,19 @@ pub(super) fn apply_fix(dir: &Path, f: &VaultFix, journal: &mut Vec<Undo>) -> Re
     }
     let json = serde_json::to_string_pretty(&f.vault).map_err(|e| e.to_string())? + "\n";
     rewrite(&dir.join("vault.json"), json.as_bytes(), journal)
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::known_tag;
+
+    #[test]
+    fn known_tags_pass_and_a_grok_tag_is_warned_once_and_left_untagged() {
+        let mut w = Vec::new();
+        assert_eq!((known_tag("claude", "kit", "a", &mut w), known_tag("codex", "kit", "b", &mut w)), (Some("claude"), Some("codex")));
+        assert!(w.is_empty());
+        assert_eq!(known_tag("grok", "kit", "g", &mut w), None);
+        assert_eq!(known_tag("grok", "kit", "g", &mut w), None);
+        assert_eq!(w, ["Rune g in library kit has unknown agent tag \"grok\"; left where it is"]);
+    }
 }

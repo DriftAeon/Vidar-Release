@@ -14,7 +14,7 @@ const payload = [
   "<!-- rune: workbench-display-routing -->",
   "- To show the user something, put one file in display.",
   "",
-  `- Paths Scan — The paths-contract test scans tracked files only. Read ${RULE}.md in skill vidar-runes`,
+  `- The paths-contract test scans tracked files only: read ${RULE}.md in skill vidar-runes (Paths Scan)`,
 ].join("\n");
 
 const readLine = JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: `C:\\h\\skills\\vidar-runes\\${RULE}.md` } }] } });

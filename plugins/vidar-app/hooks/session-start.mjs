@@ -2,7 +2,7 @@
 // FALCON_SESSION set -> context\rendered.md; else VIDAR_TAB set -> context\raw.md; else nothing.
 // Usage: run by Claude Code via hooks.json. Never throws, always exits 0 (a missing file is silence).
 
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,8 +25,21 @@ export function buildOutput(env, root, readFile, contextDir = CONTEXT) {
   }
 }
 
-const real = (p) => { try { return resolve(p).toLowerCase(); } catch { return null; } };
-if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.url))) {
+// Same check as tools\mcp\vidar-drive\server.mjs: `\\?\` prefix stripped, realpath, case-folded on Windows.
+export const normPath = (p, platform = process.platform) => {
+  try {
+    const strip = (s) => s.replace(/^\\\\\?\\UNC\\/i, "\\\\").replace(/^\\\\\?\\/, "");
+    let s = strip(String(p));
+    try { s = strip(realpathSync(s)); } catch { /* keep the stripped path */ }
+    s = resolve(s);
+    return platform === "win32" ? s.toLowerCase() : s;
+  } catch { return null; }
+};
+export const isMain = (argv1, metaUrl, platform = process.platform) => {
+  const a = argv1 ? normPath(argv1, platform) : null;
+  return a !== null && a === normPath(fileURLToPath(metaUrl), platform);
+};
+if (isMain(process.argv[1], import.meta.url)) {
   try {
     const out = buildOutput(process.env, ROOT, (p) => readFileSync(p, "utf8"));
     if (out) process.stdout.write(out);

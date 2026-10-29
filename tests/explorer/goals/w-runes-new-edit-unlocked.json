@@ -1,0 +1,18 @@
+{
+  "id": "w-runes-new-edit-unlocked",
+  "title": "Add, Switch Off and Delete a Rune Before Locking",
+  "style": "new-user",
+  "scope": "vidar",
+  "surfaces": ["runes"],
+  "tags": ["runes", "vault"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "start a Claude Bare tab on a vault, open Runes and check Lock reads Lock, so the vault is still open" },
+    { "intent": "press Modify, press Add Rune and add a rune the vault does not have, then check it shows in the view" },
+    { "intent": "press the State switch on one rune until it reads State: Off, and check the rune stays listed as off" },
+    { "intent": "press Delete Rune on a rune from the store, press Cancel on the notice, then press Delete Rune again and confirm with Delete" },
+    { "intent": "press Done and check the deleted rune is gone from the view and from Add Rune's list, and the rune I switched off still reads State: Off" }
+  ]
+}

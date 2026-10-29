@@ -12,7 +12,7 @@
   color: var(--cas-c);
   font-weight: 700; font-size: var(--font-12); letter-spacing: 0.14em;
   text-transform: uppercase; white-space: nowrap;
-  padding: var(--space-5) var(--space-16); cursor: pointer; /* label bold, no text glow (user, 2026-10-22) */
+  padding: var(--space-5) var(--space-16); cursor: pointer; /* label bold, no text glow */
   box-shadow: 0 0 3px var(--cas-c), inset 0 0 10px rgba(0, 0, 0, 0.65),
     inset 0 0 2px var(--cas-c);
 }
@@ -73,6 +73,11 @@
 /* a two-line row that opens a column (Resume ›): the chevron hangs at the right edge, mid-height */
 .launcher-col button.launcher-session.has-sub { padding-right: 28px; }
 .launcher-col button.launcher-session.has-sub::after { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); margin: 0; padding: 0; }
+/* Resume cap: the Show More chevron row (flips when open); a tall list scrolls in its column */
+.launcher-col { overflow-y: auto; }
+.launcher-col > * { flex-shrink: 0; }
+.launcher-col button.launcher-more { display: flex; justify-content: center; color: var(--fg-dim); }
+.launcher-col button.launcher-more.is-open .icn { transform: rotate(180deg); }
 .launcher-sub-line { font-size: var(--font-10); color: var(--fg-dim); white-space: nowrap; }
 .launcher-col button.inert { cursor: default; opacity: 0.55; }
 .launcher-col button.inert:hover { background: none; color: var(--fg); }

@@ -1,7 +1,9 @@
 // Display-only text formatting shared across panels. Config keys and wire values stay
 // exactly as written; only what the user reads is touched.
 
-// Words that read as acronyms in the UI. Anything not listed falls back to title case,
+// The one display-case home: every visible capitalisation in src/ goes through label, titleWords or a
+// function below (tools/ui/lint-case.mjs refuses a hand-rolled copy elsewhere).
+// Words that read as acronyms or fixed spellings in the UI. Anything not listed falls back to title case,
 // so a new transport or scope still renders sanely without editing this table.
 const ACRONYMS: Record<string, string> = {
   http: "HTTP",
@@ -13,10 +15,50 @@ const ACRONYMS: Record<string, string> = {
   api: "API",
   pty: "PTY",
   cwd: "CWD",
+  ctx: "CTX",
   ue: "UE",
   llm: "LLM",
   gpt: "GPT",
+  ui: "UI",
+  ux: "UX",
+  cli: "CLI",
+  json: "JSON",
+  dom: "DOM",
+  npm: "npm",
+  rg: "rg",
+  exe: "EXE",
+  md: "MD",
+  rs: "RS",
+  ps1: "PS1",
+  ps51: "PS 5.1",
+  utf8: "UTF-8",
+  css: "CSS",
+  git: "Git",
+  vs: "vs",
+  powershell: "PowerShell",
+  readme: "README",
+  textcontent: "textContent",
+  html: "HTML",
+  svg: "SVG",
+  png: "PNG",
+  id: "ID",
+  pr: "PR",
+  ci: "CI",
+  e2e: "E2E",
+  ts: "TS",
+  js: "JS",
+  ai: "AI",
+  ipc: "IPC",
+  sdk: "SDK",
+  gui: "GUI",
+  tts: "TTS",
+  stt: "STT",
+  vad: "VAD",
 };
+// Shown as written for a config value ("stdio"), plain title case inside a name ("Stdio").
+const NAME_PLAIN = new Set(["stdio"]);
+// Small words stay lower case after the first word of a name (lint-copy-note.mjs SMALL; src/ never imports tools/).
+const SMALL = new Set(["a", "an", "the", "and", "or", "nor", "but", "of", "to", "in", "on", "for", "at", "by", "vs", "via", "per", "as", "from", "with"]);
 
 /** "—": every empty state and count 0 ("(none)", "No X" and scope notes are never shown instead). */
 export const DASH = "—";
@@ -33,14 +75,22 @@ export function pretty(v: unknown): string {
   try { return typeof v === "string" ? v : JSON.stringify(v, null, 2) ?? String(v); } catch { return String(v); }
 }
 
-/** "http" → "Http". Plain title case, no acronym awareness. */
-export const titleCase = (v: string): string => (v ? v[0].toUpperCase() + v.slice(1) : v);
+const titleCase = (v: string): string => (v ? v[0].toUpperCase() + v.slice(1) : v);
 
-/** "vidar-drive" → "Vidar Drive", "my_server" → "My Server", "proxy" → "Proxy". Display only. */
-export const titleWords = (v: string): string => v.split(/[-_]+/).filter(Boolean).map(label).join(" ") || v;
-
-/** "http" → "HTTP", "sse" → "SSE", "local" → "Local". Use for any config value shown as a label. */
+/** "http" → "HTTP", "sse" → "SSE", "local" → "Local". Use for one word or one config value shown as a label
+ *  (a state, role, kind, scope, effort level). Acronyms and fixed spellings come from the table. */
 export const label = (v: string): string => ACRONYMS[v.toLowerCase()] ?? titleCase(v);
+
+// One word of a name: as label, except a transport word ("stdio") reads as plain title case.
+const nameWord = (w: string): string => (NAME_PLAIN.has(w.toLowerCase()) ? titleCase(w) : label(w));
+
+/** An id or name as Title Case words: "vidar-drive" → "Vidar Drive", "my_server" → "My Server", "mcp-gate" → "MCP Gate",
+ *  "vidarDriveDocs" → "Vidar Drive Docs". Splits on - _ space and camelCase; small words stay lower case
+ *  after the first. Use for any file, server, set or rune name; empty when the id holds no word. Display only. */
+export const titleWords = (id: string): string =>
+  id.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[-_\s]+/).filter(Boolean)
+    .map((w, i) => (i > 0 && SMALL.has(w.toLowerCase()) ? w.toLowerCase() : nameWord(w)))
+    .join(" ");
 
 /** Codex catalog name to a picker label: "gpt-6-sol" and "gpt 6 sol" → "GPT 6 Sol", "gpt-5.4-codex-mini" →
  *  "GPT 5.4 Codex Mini". Every word Title Case, acronyms upper case, versions kept. Display only. */
@@ -117,7 +167,7 @@ export const prettyModel = (id: string): string => {
   // settings aliases: "opus[1m]" → "Opus 1M"
   const parts = id.replace(/\[1m\]$/i, "-1M").replace(/^claude-/, "").split("-").filter((p) => !/^\d{8}$/.test(p));
   if (!parts.length) return id;
-  const name = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  const name = label(parts[0]);
   const nums = parts.slice(1).filter((p) => /^\d+$/.test(p)).join(".");
   const rest = parts.slice(1).filter((p) => !/^\d+$/.test(p)).join(" ");
   return [name, nums, rest].filter(Boolean).join(" ");

@@ -462,8 +462,8 @@ function paneBound(): boolean {
 function remount() {
   const bound = paneBound();
   mount(bound ? paneHost(target) : null);
-  // Observing is tied to the operation, NOT to where the pill currently sits (review
-  // 51492eb3): hiding the target sends the pill home, and stopping there would leave
+  // Observing is tied to the operation, NOT to where the pill currently sits:
+  // hiding the target sends the pill home, and stopping there would leave
   // nothing to notice the target coming back — switch away and back mid-record and the
   // pill would stay in the bottom bar for the rest of the take.
   if (bound) watchPanes();

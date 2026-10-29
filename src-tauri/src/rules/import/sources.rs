@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use super::split::slug;
+use crate::agent_spec::{parse, Agent};
 use crate::rules::rune::{check_id, CONTEXTS};
 
 /// The largest source read (D5).
@@ -112,20 +113,21 @@ fn file_base(path: &Path) -> String {
 fn candidates(home: Option<&Path>, codex_home: Option<&Path>, cwd: Option<&Path>, primary: &str) -> Vec<Candidate> {
     let mut out = Vec::new();
     if let Some(h) = home {
-        out.push(Candidate { path: h.join(".claude").join("CLAUDE.md"), agent: "claude", base: "claude-user".into() });
+        out.push(Candidate { path: h.join(".claude").join("CLAUDE.md"), agent: Agent::Claude.as_str(), base: "claude-user".into() });
     }
     if let Some(c) = codex_home {
-        out.push(Candidate { path: codex_agents(c), agent: "codex", base: "codex-user".into() });
+        out.push(Candidate { path: codex_agents(c), agent: Agent::Codex.as_str(), base: "codex-user".into() });
     }
     if let Some(c) = cwd {
-        for (file, agent) in [("CLAUDE.md", "claude"), ("AGENTS.md", "codex")] {
+        for (file, agent) in [("CLAUDE.md", Agent::Claude.as_str()), ("AGENTS.md", Agent::Codex.as_str())] {
             let path = c.join(file);
             if !out.iter().any(|o: &Candidate| same_path(&o.path, &path)) {
                 out.push(Candidate { base: file_base(&path), path, agent });
             }
         }
     }
-    let primary = if primary == "codex" { "codex" } else { "claude" };
+    // The primary agent is Claude when unset (`primaryAgent`); the one parse of the setting's string.
+    let primary = parse(primary).unwrap_or(Agent::Claude).as_str();
     out.sort_by_key(|c| c.agent != primary); // stable: listed order within each agent
     out
 }

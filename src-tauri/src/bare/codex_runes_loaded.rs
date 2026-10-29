@@ -50,7 +50,7 @@ pub(crate) fn loaded(root: &Path, tab: &str, session_id: Option<&str>) -> Loaded
         return none("No Loads Recorded");
     }
     let source = if vault_rows { "vault" } else { "rollout" };
-    Loaded { source, reason: None, files, reads: Vec::new(), rune_reads: Vec::new(), skills: Vec::new(), truncated }
+    Loaded { source, reason: None, files, reads: Vec::new(), rune_reads: Vec::new(), rune_triggers: Default::default(), skills: Vec::new(), truncated }
 }
 
 /// `<home>\sessions\<Y>\<M>\<D>\rollout-*-<thread>.jsonl`, newest day first; three levels, no deeper.

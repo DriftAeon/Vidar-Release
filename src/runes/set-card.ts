@@ -9,11 +9,14 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?:
   return e;
 }
 
-/** The set head: icon slot, name, condition slot, count. A null count leaves `.runes-sc` empty. */
-export function setHead(name: string, count: number | string | null, icon: ColorIcon | null, cond?: HTMLElement): HTMLElement {
-  const sum = node("summary", "runes-set-head");
+/** The set head: icon slot, name, condition slot, count. A null count leaves `.runes-sc` empty. `check` (Modify's
+ *  checkbox or its empty slot, check-box.ts) goes first and makes the head `has-check`, whose columns line the
+ *  checkbox and title up with the rune rows below (runes.css). */
+export function setHead(name: string, count: number | string | null, icon: ColorIcon | null, cond?: HTMLElement, check?: HTMLElement): HTMLElement {
+  const sum = node("summary", check ? "runes-set-head has-check" : "runes-set-head");
   const scp = node("span", "runes-scp");
   if (icon) scp.appendChild(iconImg(icon));
+  if (check) sum.appendChild(check);
   sum.append(scp, node("span", "runes-sn", name), cond ?? node("span", "runes-cond"), node("span", "runes-sc", count === null ? "" : String(count)));
   return sum;
 }

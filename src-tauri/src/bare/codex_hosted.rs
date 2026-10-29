@@ -51,6 +51,8 @@ pub(super) struct CodexHome {
     /// The vault the launch loaded (`launch_row::vault_for`); `None` only for the test no-vault spawn.
     pub(super) vault: Option<super::vault::Vault>,
     pub(super) loadout_hash: String,
+    /// The vault's model rune, written as config.toml's top-level `model`.
+    pub(super) model: Option<String>,
     pub lock: home::HomeLock,
 }
 
@@ -92,11 +94,10 @@ pub(super) const UNTRUSTED_FOLDER_WARNING: &str = "Trust this Folder in your Cod
 /// in `dir` or an ancestor up to and including the nearest git root (a folder holding `.git`); with
 /// no git root above, `dir` alone.
 pub(super) fn has_codex_settings(dir: &Path) -> bool {
-    let Some(root) = dir.ancestors().find(|a| a.join(".git").exists()) else {
-        return dir.join(".codex").is_dir();
-    };
+    let settings_dir = ".codex";
+    let root = dir.ancestors().find(|a| a.join(".git").exists()).unwrap_or(dir);
     for a in dir.ancestors() {
-        if a.join(".codex").is_dir() {
+        if a.join(settings_dir).is_dir() {
             return true;
         }
         if a == root {
@@ -159,6 +160,9 @@ pub(super) fn prepare_home(
     if !loadout.refusals.is_empty() {
         return Err(format!("Rune Vault failed to resolve: {}; Bare spawn refused", loadout.refusals.join("; ")));
     }
+    // Codex's bundled skills are runes too: their markers leave the copy list, the config switch is appended last.
+    let off_held = vault.as_ref().is_some_and(super::codex_builtin::holds_off);
+    let builtins = super::codex_builtin::take(Agent::Codex, root, &mut loadout.skills, off_held);
     // The launch's vault picks its Codex home (`agent_homes::pick_vault`, keyed `vault:<id>`; read-only
     // here, recorded under the lock). The test no-vault spawn stays on the profile's home; a hosted
     // spawn hands its pick to Falcon (`SpawnParams.codex_home`, W9).
@@ -198,18 +202,18 @@ pub(super) fn prepare_home(
     if let Some(skill) = recall_skill::write(root, home_dir, guard, &loadout.recall_skill)? {
         loadout.skills.insert(0, skill.to_string_lossy().into_owned());
     }
-    let mut codex_guards: Vec<guards::BareCodexGuard> = Vec::new();
+    let mut hook_guards: Vec<guards::BareCodexGuard> = Vec::new();
     let mut raw_groups = Vec::new();
     for g in &loadout.guard_items {
         if let Some(raw) = guards::raw_hook(g).map_err(|e| format!("{e}; Bare spawn refused"))? {
             raw_groups.push(guards::raw_group(&raw, true));
             continue;
         }
-        codex_guards.push(serde_json::from_value(g.clone()).map_err(|e| format!("A set's codexGuards entry is not {{ event, matcher?, run, open? }} ({e}); Bare spawn refused"))?);
+        hook_guards.push(serde_json::from_value(g.clone()).map_err(|e| format!("A set's codexGuards entry is not {{ event, matcher?, run, open? }} ({e}); Bare spawn refused"))?);
     }
-    let unsupported_warnings: Vec<String> = loadout.unsupported.iter().map(|u| format!("{} {} Not Carried by Codex: {}", u.kind, u.item, u.reason)).collect();
+    let unsupported_warnings: Vec<String> = loadout.unsupported.iter().map(|u| set_loadout::not_carried(Agent::Codex, u)).collect();
     // The trust check needs node even when every hook is a raw command.
-    let node = match codex_guards.is_empty() && raw_groups.is_empty() {
+    let node = match hook_guards.is_empty() && raw_groups.is_empty() {
         true => PathBuf::new(),
         false => find(&env, &p.host.name).ok_or_else(|| format!("{} is not on the allowlisted Path for the guard hooks; Bare spawn refused", p.host.name))?,
     };
@@ -239,7 +243,7 @@ pub(super) fn prepare_home(
         }
     }
     let mcp = codex_mcp::LaunchArgs { warnings: mcp_warnings, ..Default::default() };
-    let items = manifest::LaunchItems::codex(&skill_plan, table_mcp.names.clone(), loadout.shadow.clone());
+    let items = manifest::LaunchItems::without_guards(&skill_plan, table_mcp.names.clone(), loadout.shadow.clone());
     let lock = home::lock(home_dir, home::LOCK_WAIT)?;
     agent_homes::record(Agent::Codex, &lock, home_dir, &legacy, &config, &picked)?;
     let mut copy_warnings = agent_homes::prune(Agent::Codex, &lock, home_dir, crate::fsx::now_ms());
@@ -248,11 +252,12 @@ pub(super) fn prepare_home(
     // install folder starts signed in and Flow's `auth.json` presence check sees the linked file.
     // A combination home's folder joins homeDirs for the check.
     let mut login_dirs = p.home_dirs.clone();
-    login_dirs.extend((codex_home != legacy).then(|| picked.rel.clone()));
-    let login_warnings = login_link::sync_codex(home_dir, &codex_home, &login_dirs, &lock)?;
+    let on_legacy = codex_home == legacy;
+    login_dirs.extend((!on_legacy).then(|| picked.rel.clone()));
+    let login_warnings = login_link_codex::sync_codex(home_dir, &codex_home, &login_dirs, &lock)?;
     let git = identity::write(&lock, home_dir, guard);
     // Before the payload: a refused guard copy leaves config.toml as it was.
-    let copied = guards::copy_codex(&lock, home_dir, &node, &under(root, "tools/bare/codex-shim.mjs"), &codex_guards)?;
+    let copied = guards::copy_codex(&lock, home_dir, &node, &under(root, "tools/bare/codex-shim.mjs"), &hook_guards)?;
     let mut groups = copied.groups.clone();
     groups.extend(raw_groups);
     let handlers = codex_hooks::write(&lock, &codex_home, &groups)?;
@@ -297,7 +302,7 @@ pub(super) fn prepare_home(
         Some(_) => String::new(),
         None => payload_text.replace('\r', ""),
     };
-    let config = match codex_home == legacy {
+    let config = match on_legacy {
         true => under(home_dir, &p.config_target),
         false => codex_home.join("config.toml"),
     };
@@ -307,20 +312,26 @@ pub(super) fn prepare_home(
     // the folder has a `.codex` to load (otherwise trusting it would change nothing).
     let launch_dir = cwd.filter(|c| !c.trim().is_empty());
     let trusted_cwd = launch_dir.filter(|c| trust_of(ambient.codex_config.as_deref(), c));
-    let trust_warning = (launch_dir.is_some_and(|c| trusted_cwd.is_none() && has_codex_settings(Path::new(c)))).then(|| UNTRUSTED_FOLDER_WARNING.to_string());
+    let settings_found = launch_dir.is_some_and(|c| has_codex_settings(Path::new(c)));
+    let trust_warning = (settings_found && trusted_cwd.is_none()).then(|| UNTRUSTED_FOLDER_WARNING.to_string());
     let untrusted_dir = launch_dir.filter(|_| trust_warning.is_some()).map(str::to_string);
     // Both surfaces: exactly the vault's server tables (none when it carries no MCP rune).
-    home::generate_codex_config_for(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp)?;
+    let model = loadout.model.clone();
+    home::generate_codex_config_with(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp, &home::HookTrust::default(), model.as_deref())?;
     if handlers > 0 {
         let hooks_json = codex_home.join(codex_hooks::HOOKS_FILE);
-        let launch_dir = cwd.filter(|c| !c.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| codex_home.clone());
+        let launch_dir = match cwd.filter(|c| !c.trim().is_empty()).map(PathBuf::from) {
+            Some(dir) => dir,
+            None => codex_home.clone(),
+        };
         let ctx = codex_hooks::ListCtx { env: &env, node: &node, js: codex(&env, &p.binary).map(|(js, _)| js), codex_home: &codex_home, cwd: &launch_dir };
         let mut write_trusted = |entries: &[(String, String)]| {
             let trust = home::HookTrust { hooks_json: Some(&hooks_json), entries };
-            home::generate_codex_config_with(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp, &trust)
+            home::generate_codex_config_with(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp, &trust, model.as_deref())
         };
         codex_hooks::trust(&ctx, &hooks_json, handlers, &mut write_trusted)?;
     }
+    builtins.apply(&config)?;
     Ok(CodexHome {
         p,
         env,
@@ -347,6 +358,7 @@ pub(super) fn prepare_home(
         home_dir: home_dir.to_path_buf(),
         vault,
         loadout_hash: loadout.hash,
+        model,
         lock,
     })
 }
@@ -424,6 +436,8 @@ pub struct CodexHostedLaunch {
     /// Falcon applies (`codex_payload::admit_codex_home`), for `SpawnParams.codex_home`; `None` when
     /// the launch runs on the profile's own home (no sets, or the seeded combination).
     pub codex_home: Option<PathBuf>,
+    /// The vault's model rune; beats the row's model at spawn (`falcon/session_commands.rs`).
+    pub model: Option<String>,
     manifest: manifest::Manifest,
     file_stamp: String,
     manifests_dir: PathBuf,
@@ -431,6 +445,12 @@ pub struct CodexHostedLaunch {
     /// it for the notice card's Trust Folder action (`codex_trust`).
     untrusted_dir: Option<String>,
     seed: Option<SessionSeed>,
+    /// The profile's host (node) name, its env and the install root: what `record_host` runs
+    /// `verify.mjs` with on a new Codex version, as the in-process prepare does (`verify_new_codex`).
+    /// Node is looked up only then, so the prepare itself still probes no binary.
+    verify_host: String,
+    verify_env: Env,
+    root: PathBuf,
     _lock: home::HomeLock,
 }
 
@@ -445,8 +465,26 @@ impl CodexHostedLaunch {
     /// Records what Falcon ran (the spawn reply's `codex_bare`): the executable, its version
     /// checked against the profile's pin and the accepted verdicts, and the pwsh its Path found
     /// after the WindowsApps drop (None: Codex's shell is Windows PowerShell 5.1). Returns the warning.
+    /// A version without a verdict against the pin starts the `verify.mjs` run on the executable
+    /// Falcon ran, so its verdict lands in Vidar's `codexAccepted` file for the next launch.
     pub fn record_host(&mut self, executable: &str, version: Option<&str>, pwsh: Option<&str>) -> Option<String> {
-        self.record_host_with(executable, version, pwsh, &read_accepted(&crate::paths::codex_accepted_path()))
+        let accepted_path = crate::paths::codex_accepted_path();
+        let warning = self.record_host_with(executable, version, pwsh, &read_accepted(&accepted_path));
+        if let Some(job) = self.verify_job(&accepted_path, &find_on_env_path) {
+            codex_verify::start_verify(job);
+        }
+        warning
+    }
+
+    /// The verify `record_host` starts for what it recorded; None on the pin, an accepted version or
+    /// no node on the profile's Path (the launch goes ahead unchecked).
+    pub(super) fn verify_job(&self, accepted_path: &Path, find: &dyn Fn(&Env, &str) -> Option<PathBuf>) -> Option<codex_verify::VerifyJob> {
+        let b = &self.manifest.binary;
+        if b.version.is_none() || b.version.as_deref() == Some(b.verified_version.as_str()) {
+            return None;
+        }
+        let node = find(&self.verify_env, &self.verify_host)?;
+        codex_verify::verify_job(b.version.as_deref(), &b.verified_version, &node, &b.path, &self.verify_env, &self.root, accepted_path)
     }
 
     pub(super) fn record_host_with(&mut self, executable: &str, version: Option<&str>, pwsh: Option<&str>, accepted: &codex_verify::AcceptedMap) -> Option<String> {
@@ -530,5 +568,8 @@ pub(super) fn prepare_codex_hosted_with(
     let binary = manifest::Binary { path: String::new(), version: None, verified_version: h.p.verified_version.clone(), warning: None };
     let (manifest, file_stamp) = h.manifest(binary, "falcon".into(), Vec::new());
     let seed = SessionSeed::new(root, Agent::Codex, "hosted", h.vault.as_ref(), &h.loadout_hash);
-    Ok(CodexHostedLaunch { payload_file, codex_home, manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), seed, _lock: h.lock })
+    Ok(CodexHostedLaunch {
+        payload_file, codex_home, model: h.model.clone(), manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), seed,
+        verify_host: h.p.host.name.clone(), verify_env: h.env.clone(), root: root.to_path_buf(), _lock: h.lock,
+    })
 }

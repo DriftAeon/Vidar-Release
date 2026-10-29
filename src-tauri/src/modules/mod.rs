@@ -185,8 +185,8 @@ mod tests {
             assert_eq!(id_ok(id), ok, "{id}");
         }
         assert!(id_ok(&"a".repeat(32)) && !id_ok(&"a".repeat(33)));
-        // core[] is the compiled-in set: "core" plus the contract's pack levels (ce3b86dd put
-        // required-hideable and optional surfaces in it).
+        // core[] is the compiled-in set: "core" plus the contract's pack levels (required-hideable
+        // and optional surfaces are in it).
         let allowed = |l: &str| l == "core" || c.pack_levels.iter().any(|p| p == l);
         assert!(c.core.iter().all(|m| allowed(&m.level) && id_ok(&m.id)));
         for id in ["relay", "speak", "auto-speak", "listen"] {

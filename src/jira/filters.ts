@@ -1,4 +1,4 @@
-// Jira bench filter bar (plan D6): Project, Type, Status, Assignee pickers, a Search box and Clear Filters.
+// Jira bench filter bar: Project, Type, Status, Assignee pickers, a Search box and Clear Filters.
 // The panel owns the filter state and the reloads; this file draws the bar and its popovers (fixed on body,
 // so the pane's overflow cannot clip them) and reports each change. Remote text goes in through textContent.
 import { lucide } from "../icons";
@@ -230,7 +230,7 @@ export function buildFilterBar(h: BarHandlers): FilterBar {
       btn.disabled = failed || loading;
       if (loading) btn.setAttribute("aria-busy", "true"); else btn.removeAttribute("aria-busy");
       btn.title = failed ? LIST_FAILED : kind === "status" && s.scope === "mine" && !s.blankJql ? STATUS_NARROWS : "";
-      // a count after the label read badly (user, 2026-10-24): the accent edge marks a set pick;
+      // a count after the label read badly: the accent edge marks a set pick;
       // only Assignee, a single choice, names its value
       const shown = kind === "assignee" ? counts[kind] : "";
       n.textContent = shown;

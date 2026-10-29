@@ -441,7 +441,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
   }
   /** Deny every open card the way Esc does, oldest first, before a stop or interrupt: an
    *  interrupt that lands while the agent waits on a permission makes the SDK throw, and the
-   *  session died with it (docs/explore/2026-10-16-jettison-cards.md). Resolves once each deny
+   *  session died with it. Resolves once each deny
    *  is sent (a hosted send is awaited); a failed send leaves its card open, unretried. */
   async function denyPending(): Promise<void> {
     for (const id of [...approvals.keys()]) {

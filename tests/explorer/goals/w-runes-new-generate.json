@@ -1,0 +1,18 @@
+{
+  "id": "w-runes-new-generate",
+  "title": "Generate Runes From My Project and Add Them",
+  "style": "new-user",
+  "scope": "vidar",
+  "surfaces": ["runes"],
+  "tags": ["runes", "model", "vault"],
+  "realModel": true,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "start a Claude Bare tab on an unlocked vault, open Runes and press Modify" },
+    { "intent": "press Add Local Files, tick the project's files I want turned into runes and pick a model and effort" },
+    { "intent": "press Generate and wait until the progress card reads Done" },
+    { "intent": "press Add to Vault on the Done line" },
+    { "intent": "press Done and check the generated runes are listed in this tab's vault, and that no other vault or launcher row changed" }
+  ]
+}

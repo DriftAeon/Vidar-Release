@@ -46,7 +46,7 @@ pub(super) fn unattended_permission_target(session: &Session, value: &Value) -> 
 /// permission was originally opened.
 pub(super) fn watch_requests_left_unattended(host: &Arc<Host>, session: &Arc<Session>) {
     for (request, state) in session.driver.permission_states() {
-        if matches!(state, crate::claude::PermissionState::Opened) {
+        if matches!(state, crate::session::driver_props::PermissionState::Opened) {
             spawn_unattended_watcher(host, session, request);
         }
     }

@@ -1,17 +1,10 @@
-//! The permission mode Flow Claude nodes spawn with: Flow's own `FLOW_MODE`, limited to the modes a
+//! The permission mode Flow Claude nodes spawn with: the mode the node's vault holds, limited to the modes a
 //! node can act in. `bypassPermissions` and `plan` are never followed; `auto` needs a classifier a
 //! gateway model cannot run, so it falls back to `default` there.
-
-use std::collections::HashMap;
 
 use super::env::CLAUDE_MODELS;
 
 const ACCEPTED: &[&str] = &["default", "acceptEdits", "auto"];
-
-/// Flow's own mode source. It used to read `--permission-mode` from the Bare Claude profile; a Bare
-/// session's mode now comes from its Rune Vault (`mode-auto` stock rune, run 2026-10-25-rune-vault
-/// L2b), and a Flow node is not a Bare session, so Flow keeps the `auto` the profile held.
-const FLOW_MODE: &str = "auto";
 
 /// The mode `requested` becomes for `model`: re-validated against the accepted set, and `auto`
 /// drops to `default` for a model outside `CLAUDE_MODELS`.
@@ -20,31 +13,50 @@ pub(super) fn effective(requested: &str, model: &str) -> &'static str {
     if mode == "auto" && !CLAUDE_MODELS.contains(&model) { "default" } else { mode }
 }
 
-/// Flow's mode as it applies to each of `models`.
-#[tauri::command]
-pub fn flow_permission_modes(models: Vec<String>) -> Result<HashMap<String, String>, String> {
-    Ok(models.into_iter().map(|m| { let e = effective(FLOW_MODE, &m).to_string(); (m, e) }).collect())
+/// One node's approval question: the model it runs, the vault it loads (`None` = the stock vault of
+/// its agent) and its agent id (required).
+#[derive(serde::Deserialize)]
+pub struct NodeAsk {
+    node: String,
+    model: String,
+    vault: Option<String>,
+    agent: String,
 }
+
+/// What approval binds for one node: the vault, the mode it spawns in, the exact allow entries and the
+/// vault hash `flow_run_node` is handed back.
+#[derive(serde::Serialize, Debug, PartialEq, Eq)]
+pub struct NodeGrant {
+    node: String,
+    vault: String,
+    mode: String,
+    allow: Vec<String>,
+    hash: String,
+}
+
+/// `ask` answered from the vault under `root`: an unknown vault or another agent's stock vault refuses.
+fn node_grant(root: &std::path::Path, ask: &NodeAsk) -> Result<NodeGrant, String> {
+    let agent = crate::agent_spec::parse(&ask.agent).ok_or_else(|| format!("Unknown Agent: {}", ask.agent))?;
+    let vault = ask.vault.clone().unwrap_or_else(|| format!("stock-{}", agent.as_str()));
+    let perms = crate::bare::vault_spawn::node_permissions(root, &vault, agent).map_err(|e| format!("Node {}: {e}", ask.node))?;
+    let mode = effective(perms.mode.as_deref().unwrap_or("default"), &ask.model).to_string();
+    Ok(NodeGrant { node: ask.node.clone(), vault, mode, allow: perms.allow, hash: perms.hash })
+}
+
+/// Each node's vault, mode, allow entries and hash, keyed by node (two nodes on one model may differ).
+#[tauri::command]
+pub fn flow_node_permissions(nodes: Vec<NodeAsk>) -> Result<Vec<NodeGrant>, String> {
+    let root = crate::paths::root();
+    nodes.iter().map(|n| node_grant(&root, n)).collect()
+}
+
+#[cfg(test)]
+#[path = "permission_tests.rs"]
+mod grant_tests;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn flow_mode_is_auto_and_accepted() {
-        assert_eq!(FLOW_MODE, "auto");
-        assert!(ACCEPTED.contains(&FLOW_MODE));
-    }
-
-    #[test]
-    fn flow_mode_no_longer_reads_the_bare_profile() {
-        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("profiles/bare/claude.json");
-        let doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
-        assert!(!doc["args"].as_array().unwrap().iter().any(|a| a == "--permission-mode"), "the Bare profile carries no mode; the vault does");
-        let modes = flow_permission_modes(vec!["claude-sonnet-5".into(), "glm-5".into()]).unwrap();
-        assert_eq!(modes["claude-sonnet-5"], "auto");
-        assert_eq!(modes["glm-5"], "default");
-    }
 
     #[test]
     fn auto_holds_for_claude_models_only() {

@@ -2,7 +2,7 @@
 // ships names a pack's declared trace term outside that pack's own folder and `owns` (same boundary and
 // engine as trace-check.ps1), and the real packs close over claude. This previews the artifact gate over
 // shippedPaths(set), by pack terms and by the set's own gated terms (modules-resolve.mjs --terms).
-// Runtime only (plan-phase-b-v2 Amendment A1/A2): the set's `reportOnly` prefixes (source trees and
+// Runtime only: the set's `reportOnly` prefixes (source trees and
 // package files) are source, reported by the burn-down, not gated here. The `omit` entries are cut
 // from shippedPaths, so they need no burn-down line.
 import baseTest from "node:test";

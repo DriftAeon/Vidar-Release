@@ -1,4 +1,4 @@
-// Cross-language contract (voice slots plan §1): contracts/voice-slots.json names the slots and
+// Cross-language contract: contracts/voice-slots.json names the slots and
 // the tokens each may use. Rust validates every manifest against it (src-tauri/src/voice_slots/
 // manifest.rs, include_str!); this pins the stock pack to the same file, so a slot or token
 // renamed on one side fails here instead of as a broken slot at runtime.

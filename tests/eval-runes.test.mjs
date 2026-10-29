@@ -6,7 +6,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { grade, loadSuite, planSessions, runSuite } from "../tools/bare/eval-runes.mjs";
+import { grade, loadSuite, planSessions, runSuite, spawnRunner } from "../tools/bare/eval-runes.mjs";
+import { TESTS } from "../tools/bare/probe-runes.mjs";
 
 const tool = fileURLToPath(new URL("../tools/bare/eval-runes.mjs", import.meta.url));
 const repoRunes = fileURLToPath(new URL("../runes", import.meta.url));
@@ -221,5 +222,22 @@ test("--dry prints the count; a real run refuses without a matching --confirm", 
     const r = spawnSync("node", [tool, "--lib", lib, ...args], { encoding: "utf8" });
     assert.equal(r.status, 2);
     assert.match(r.stderr, /planned count 10/);
+  }
+});
+
+test("Codex selects its probe and plans the same count without running a session", () => {
+  const calls = [];
+  spawnRunner("C:/repo", "codex", (...args) => (calls.push(args), { status: 0, stdout: "", stderr: "" }))("case.json", "out.json", {});
+  assert.ok(calls[0][1].includes(TESTS.codex));
+  assert.ok(!calls[0][1].includes(TESTS.claude));
+
+  const lib = makeLib({ "rule-a": { c1: {} }, "rule-b": { c1: {} } });
+  const dry = spawnSync("node", [tool, "--lib", lib, "--agent", "codex", "--dry"], { encoding: "utf8" });
+  assert.equal(dry.status, 0);
+  assert.match(dry.stdout, /10 sessions planned/);
+  for (const flag of ["--model", "--confirm-model"]) {
+    const refused = spawnSync("node", [tool, "--lib", lib, "--agent", "codex", flag, "sonnet", "--dry"], { encoding: "utf8" });
+    assert.equal(refused.status, 2);
+    assert.match(refused.stderr, /Claude-only/);
   }
 });

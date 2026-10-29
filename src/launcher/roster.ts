@@ -4,7 +4,7 @@ import { createSession, hasArmedAstra } from "../panels/sessions";
 import { recordedVault } from "../panels/sessions/lookup";
 import type { ModuleRow } from "../modules/registry";
 import { moduleViews } from "../modules/registry";
-import { agentKind } from "./agent-kind";
+import { agentKind, gatewayAgent } from "./agent-kind";
 import { rawPackRows } from "./pack-rows";
 export { agentKind } from "./agent-kind";
 import type { AgentType, Location } from "../config";
@@ -15,6 +15,19 @@ import { resolveVidarCwd } from "./vidar-path";
 import { prepareRules } from "../rules/prepare";
 import { geminiHiddenArgs } from "../startup-updates/gemini-launch";
 import { effectivePrimary } from "../agents/primary";
+import { AGENT_IDS, PTY_ONLY_IDS, isAgentId, type AgentId } from "../agents/id";
+import { ALL_ROWS } from "./row-facts";
+
+const astraAgent: Record<AgentId, boolean> = { claude: false, codex: true };
+const astraDependency: AgentId = AGENT_IDS.find((id) => astraAgent[id])!;
+const ptyArgHandlers: Record<typeof PTY_ONLY_IDS[number], (args: string[] | undefined, shell?: string) => string[] | undefined> = {
+  [PTY_ONLY_IDS[0]]: geminiHiddenArgs,
+  [PTY_ONLY_IDS[1]]: (args) => args,
+};
+function ptyArgs(id: string, args: string[] | undefined, shell?: string): string[] | undefined {
+  return (PTY_ONLY_IDS as readonly string[]).includes(id)
+    ? ptyArgHandlers[id as typeof PTY_ONLY_IDS[number]](args, shell) : args;
+}
 
 // The primary agent's root leads Claude/Codex in the default order, read at every shaping.
 setPrimaryRootSource(effectivePrimary);
@@ -35,39 +48,32 @@ export const BUILTIN_AGENTS: AgentType[] = [
   // The Bare roots lead Claude and Codex: Raw on Vidar's own home and layer (profiles/bare/*.json).
   // The backend builds the spawn line from the profile, so a Bare row carries no shell, args or rules.
   // The plain rows (PLAIN_KEYS, below) are an escape hatch, off until Settings › Agents turns them on.
-  { key: "claude-bare", id: "claude", label: "Claude", profile: "bare", requires: ["claude"] },
-  // Rendered Claude, Falcon-hosted, on the same home and layer (profiles/bare/claude.json `rendered`):
-  // Vidar prepares the home, Falcon builds the env, the sidecar maps the profile.
-  // auto = Claude Code's classifier mode. No built-in model: the CLI's own default applies. Our Fable
+  // Per agent (launcher/row-facts.ts, one table row each): the Bare root, then its Rendered variant.
+  // Claude Rendered is Falcon-hosted on the same home and layer (profiles/bare/claude.json `rendered`):
+  // Vidar prepares the home, Falcon builds the env, the sidecar maps the profile. Our Fable
   // guard (an unset model must never resolve to Fable on the host) lives in our vidar.json overlay;
   // config-agents.ts migrates a retired `claude-rendered` entry (model, effort, cwd) onto this row.
-  { key: "claude-rendered-bare", id: "claude", label: "Rendered", under: "claude", body: "rendered", profile: "bare", permissionMode: "auto", requires: ["claude", "node", "falcon"] },
-  // The Codex TUI in a PTY on the same home, config.toml and layer as Rendered
-  // (profiles/bare/codex.json `rawArgs`). The backend spawns `node codex.js` itself.
-  { key: "codex-bare", id: "codex", label: "Codex", profile: "bare", requires: ["codex", "node"] },
-  // Codex app-server on Vidar's own home and layer (profiles/bare/codex.json). The backend resolves
-  // the binary and builds env, home and config.toml; the row carries no rules.
-  { key: "codex-rendered-bare", id: "codex", label: "Rendered", under: "codex", body: "rendered", profile: "bare", requires: ["codex", "node"] },
+  // The Codex TUI runs in a PTY on the same home, config.toml and layer as Rendered (profiles/bare/codex.json
+  // `rawArgs`; the backend spawns `node codex.js` itself); Codex Rendered is the app-server on Vidar's own
+  // home and layer, where the backend resolves the binary and builds env, home and config.toml.
+  ...ALL_ROWS.flatMap((r) => [r.bare, r.bareRendered]),
   // Reviewer tab, a Codex variant (sits in Codex's flyout): approvals off so
   // nothing typed into it can approve a command (a review is read-only; a
   // blocked command just fails back to the model). `{vidar}` is the Vidar folder (vidar-path.ts, K6).
   // `desks` is the opt-in pack in tools\desks\ (K2): without its built hook wrapper done.json never
   // lands, so the row stays hidden until setup step 1 ran (tools\desks\README.md).
-  { key: "astra", id: "codex", label: "Astra", under: "codex", role: "astra", requires: ["codex", "desks"], cwd: "{vidar}\\runtime\\bridge\\display", args: ["-NoExit", "-Command", "codex -a never -s workspace-write -m gpt-6-astra -c model_reasoning_effort=low -c model_verbosity=low"] },
+  ...AGENT_IDS.filter((id) => astraAgent[id]).map((id): AgentType => ({ key: "astra", id, label: "Astra", under: id, role: "astra", requires: [id, "desks"], cwd: "{vidar}\\runtime\\bridge\\display", args: ["-NoExit", "-Command", "codex -a never -s workspace-write -m gpt-6-astra -c model_reasoning_effort=low -c model_verbosity=low"] })),
   // The plain (non-Bare) rows, in PLAIN_KEYS: Claude and Codex as the CLI starts them, hidden from
   // builtinAgents() unless the "launcher.plainRows" pref is on. A plain Rendered variant hangs off the
   // plain root (resolveAgents), not the Bare one.
-  { key: "claude", id: "claude", label: "Plain", requires: ["claude"], args: ["-NoExit", "-Command", "claude"] },
-  { key: "claude-rendered", id: "claude", label: "Plain Rendered", under: "claude", body: "rendered", permissionMode: "auto", requires: ["claude", "node", "falcon"] },
-  { key: "codex", id: "codex", label: "Plain", requires: ["codex"], args: ["-NoExit", "-Command", "codex"] },
-  { key: "codex-rendered", id: "codex", label: "Plain Rendered", under: "codex", body: "rendered", permissionMode: "default", requires: ["codex", "node"] },
+  ...ALL_ROWS.flatMap((r) => [r.plain, r.plainRendered]),
   // Pack rows come from builtinAgents() below, including Gemini, Pi, Local and gateways.
   // the plain shell sits last: it's the fallback, not the common case
   { key: "terminal", id: "shell", label: "Terminal" },
 ];
 
 /** The retired built-in rows that stay as an escape hatch: shown only while plain rows are on. */
-export const PLAIN_KEYS: ReadonlySet<string> = new Set(["claude", "claude-rendered", "codex", "codex-rendered"]);
+export const PLAIN_KEYS: ReadonlySet<string> = new Set(ALL_ROWS.flatMap((r) => [r.plain.key!, r.plainRendered.key!]));
 
 // Whether the plain rows are shown; settings/agents.ts binds the "launcher.plainRows" pref. Off until bound.
 let plainRowsOn: () => boolean = () => false;
@@ -92,10 +98,10 @@ function gatewayRows(): AgentType[] {
     const want = m.agent?.rows ?? ["raw", "rendered"];
     const rows: AgentType[] = [];
     if (want.includes("raw")) {
-      rows.push({ key: m.id, id: m.id, label: m.label, model: m.agent?.gateway?.model, requires: ["claude", ...deps], args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", `if (-not $env:VIDAR_ROOT) { throw 'VIDAR_ROOT is not set: this Vidar build predates vendor tabs' }; & \"$env:VIDAR_ROOT/tools/vendor/vendor-tab.ps1\" -Vendor ${m.id}`] });
+      rows.push({ key: m.id, id: m.id, label: m.label, model: m.agent?.gateway?.model, requires: [gatewayAgent, ...deps], args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", `if (-not $env:VIDAR_ROOT) { throw 'VIDAR_ROOT is not set: this Vidar build predates vendor tabs' }; & \"$env:VIDAR_ROOT/tools/vendor/vendor-tab.ps1\" -Vendor ${m.id}`] });
     }
     if (want.includes("rendered")) {
-      rows.push({ key: `${m.id}-rendered`, id: m.id, label: "Rendered", under: m.id, body: "rendered", permissionMode: "auto", requires: ["claude", "node", "falcon", ...deps] });
+      rows.push({ key: `${m.id}-rendered`, id: m.id, label: "Rendered", under: m.id, body: "rendered", permissionMode: "auto", requires: [gatewayAgent, "node", "falcon", ...deps] });
     }
     return rows;
   });
@@ -150,7 +156,7 @@ export async function spawnFrom(t: AgentType, loc: Location, title?: string, res
   // A launch profile belongs to a Claude or Codex row without a role (Raw in a PTY, Rendered on
   // Falcon or in-process) only: on a gateway row, another agent, the shell or a role it would open
   // a bare tab under that row's name.
-  const bareAgent = (t.id === "claude" || t.id === "codex") && !t.role;
+  const bareAgent = isAgentId(t.id) && !t.role;
   if (t.profile && !bareAgent) {
     throw new Error(`${typeLabel(t)} cannot carry the ${t.profile} profile: profiles are for Claude and Codex rows without a role only`);
   }
@@ -175,7 +181,7 @@ export async function spawnFrom(t: AgentType, loc: Location, title?: string, res
     art: t.id,
     shell: t.profile ? undefined : t.shell,
     cwd,
-    args: t.profile ? undefined : t.id === "gemini" ? geminiHiddenArgs(t.args, t.shell) : t.args,
+    args: t.profile ? undefined : ptyArgs(t.id, t.args, t.shell),
     model: t.model,
     effort: t.effort,
     role: t.role,
@@ -199,7 +205,7 @@ export async function spawnAstra(returnTo: string): Promise<string> {
   // The gate is the dep check: desks and codex must be confirmed found (depFound is null before the dep
   // report, where isAvailable is true), else the pick below falls through to a user role-astra row
   // (Astra Code, workspace-write at the repo root) instead of the read-only bridge\display tab.
-  if (depFound("desks") !== true || depFound("codex") !== true) return Promise.reject(new Error("Desks Pack Not Set Up"));
+  if (depFound("desks") !== true || depFound(astraDependency) !== true) return Promise.reject(new Error("Desks Pack Not Set Up"));
   // only what the launcher shows: a hidden Codex (dependency missing) takes Astra with it
   const roots = shownRoots();
   const astra = roots.flatMap(shownVariants).find((v) => v.role === "astra")

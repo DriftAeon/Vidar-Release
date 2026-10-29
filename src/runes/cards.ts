@@ -5,6 +5,9 @@ import { invoke } from "../ipc";
 import { iconImg, type ColorIcon } from "../icon-img";
 import { renderMarkdownOrText } from "../panels/markdown-build";
 import { setCard, setHead } from "./set-card";
+import { KIND_ICON, KIND_NAME } from "./kind-icons";
+import { byKind, kindGroup } from "./kind-groups";
+import { label as caseLabel, titleWords } from "../format";
 import { isPluginTarget, type TracedLibrary, type TracedSet } from "./trace";
 import { loadedLine, type LoadReason } from "./ledger";
 import type { RuneItem, RuneSet, RuneSetMember } from "./types";
@@ -21,29 +24,23 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 }
 
-const TC = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-const KIND_NAME: Record<string, string> = { rule: "Rule", fact: "Fact", procedure: "Procedure" };
-// The signed-off sets view used rules.svg, a book and todo_list.svg. Those assets are
-// not in the app icon set, so these are the closest installed equivalents.
-const KIND_ICON: Record<string, ColorIcon> = { rule: "shield", fact: "read", procedure: "flow" };
 const SCOPE_ICON: Record<string, ColorIcon> = { global: "globe", vidar: "vidar" };
 const ACT_ICON: Record<string, ColorIcon> = { always: "lock", paths: "floppy", recall: "restore" };
 const baseName = (p: string): string => p.split(/[\\/]/).pop() ?? p;
 const dirName = (p: string): string => p.replace(/[\\/][^\\/]*$/, "");
 
 // rune display name (data.mjs runeName): drop a leading segment that repeats the folder, then Title Case
-const ACRO: Record<string, string> = { ui: "UI", cli: "CLI", json: "JSON", dom: "DOM", npm: "npm", rg: "rg", exe: "EXE",
-  pty: "PTY", md: "MD", rs: "RS", ps1: "PS1", ps51: "PS 5.1", utf8: "UTF-8", css: "CSS", git: "Git", vs: "vs",
-  powershell: "PowerShell", readme: "README", textcontent: "textContent" };
-const MINOR = new Set(["a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to", "vs"]);
 export function runeName(r: RuneItem): string {
-  const segs = r.id.split("-"), folder = baseName(dirName(r.path));
-  const words = segs[0] === folder && segs.length > 1 ? segs.slice(1) : segs;
-  return words.map((w, i) => ACRO[w] ?? (i > 0 && MINOR.has(w) ? w : TC(w))).join(" ");
+  const segs = r.id.split(/[-_\s]+/).filter(Boolean), folder = baseName(dirName(r.path));
+  const trimmed = segs[0] === folder && segs.length > 1 ? segs.slice(1) : segs;
+  // a doubled id (kit MCP `slack-slack`, module and server alike) reads once; the stored id is unchanged
+  const words = trimmed.length === 2 && trimmed[0].toLowerCase() === trimmed[1].toLowerCase() ? trimmed.slice(0, 1) : trimmed;
+  // an id may be camelCase or snake_case (item runes); a known acronym keeps its spelling (format.ts table)
+  return titleWords(words.join("-")) || words.join(" ");
 }
 
 export const setTitle = (s: RuneSet): string =>
-  s.target ? baseName(s.target).replace(/\.md$/i, "") : s.id.split("-").map(TC).join(" ");
+  s.target ? baseName(s.target).replace(/\.md$/i, "") : titleWords(s.id) || s.id;
 
 /** The set header's condition slot: empty for every-session sets, a floppy icon for Load on Touch
  *  (paths in the tooltip, as the sets view), text for plugin, recall and not-loaded sets. */
@@ -105,7 +102,8 @@ function actButton(label: string, icon: ColorIcon, run: () => void): HTMLButtonE
   const b = el("button", "runes-act");
   b.type = "button";
   b.setAttribute("aria-label", label);
-  b.append(iconImg(icon), el("span", "", label));
+  b.title = label; // icon-only: the label is the tooltip
+  b.appendChild(iconImg(icon));
   b.addEventListener("click", (e) => { e.preventDefault(); run(); });
   return b;
 }
@@ -127,8 +125,8 @@ export function openedBody(r: CardRune, ctx: CardCtx, o: BodyOpts = {}): HTMLEle
   const bar = el("div", "runes-fmbar");
   const fms = el("span", "runes-fms");
   const scopes = el("span", "runes-fsv");
-  scopes.append(o.barScope ?? (r.scope.length ? r.scope.map(TC).join(", ") : "[]"));
-  fms.append(fm("Name", r.id, " fname"), fm("Kind", o.kindName ?? TC(r.kind)), fm("Scope", scopes), fm("Activate", TC(r.activate), r.activate === "recall" ? " a-recall" : ""));
+  scopes.append(o.barScope ?? (r.scope.length ? r.scope.map((s) => caseLabel(s)).join(", ") : "[]"));
+  fms.append(fm("Name", r.id, " fname"), fm("Kind", o.kindName ?? caseLabel(r.kind)), fm("Scope", scopes), fm("Activate", caseLabel(r.activate), r.activate === "recall" ? " a-recall" : ""));
   for (const [k, v] of o.fields ?? []) fms.appendChild(fm(k, v));
   if (r.origin?.trim()) fms.appendChild(fm("Origin", r.origin));
   if (r.closesWhen?.trim()) fms.appendChild(fm("Closes When", r.closesWhen));
@@ -193,12 +191,12 @@ export function cardDetails(r: CardRune, o: CardOpts, ctx: CardCtx): HTMLDetails
   const sum = el("summary", `runes-blk card${o.cls ?? ""}`);
   sum.title = o.title;
   const kslot = el("span", "runes-kslot");
-  const kind = iconChip("runes-chip k", KIND_ICON[r.kind] ?? "question", `Kind: ${KIND_NAME[r.kind] ?? TC(r.kind)}`);
+  const kind = iconChip("runes-chip k", KIND_ICON[r.kind] ?? "question", KIND_NAME[r.kind] ?? caseLabel(r.kind));
   kslot.appendChild(kind);
   const chips = el("span", "runes-chips");
   for (const c of o.lead ?? []) chips.appendChild(c);
   for (const s of o.scopes) chips.appendChild(iconChip("runes-chip", s.icon, s.title));
-  const act = iconChip(`runes-chip${r.activate === "recall" ? " a-recall" : ""}`, ACT_ICON[r.activate] ?? "question", `Activate: ${TC(r.activate)}`);
+  const act = iconChip(`runes-chip${r.activate === "recall" ? " a-recall" : ""}`, ACT_ICON[r.activate] ?? "question", caseLabel(r.activate));
   chips.appendChild(act);
   for (const c of o.tail ?? []) chips.appendChild(c);
   sum.append(kslot, el("span", "runes-rname", o.name));
@@ -209,6 +207,9 @@ export function cardDetails(r: CardRune, o: CardOpts, ctx: CardCtx): HTMLDetails
   }
   sum.appendChild(chips);
   det.appendChild(sum);
+  // open: the body shows what the tooltips say, so the head and its chips drop them until it closes
+  const tips = [...sum.querySelectorAll<HTMLElement>("[title]")].concat(sum).map((n) => [n, n.title] as const);
+  det.addEventListener("toggle", () => { for (const [n, t] of tips) n.title = det.open ? "" : t; });
   return det;
 }
 
@@ -226,6 +227,11 @@ export function lazyBody(det: HTMLDetailsElement, build: () => HTMLElement | nul
 // Open-state keys live outside the DOM (the shape test pins the markup): `lib/set` and `lib/set/rune`.
 const openKeyOf = new WeakMap<HTMLDetailsElement, string>();
 const fillers = new WeakMap<HTMLDetailsElement, () => void>();
+
+/** Give a set card built outside this file a stable open key, so `openKeys`/`reopen` keep it open across redraws. */
+export function keySet(det: HTMLDetailsElement, key: string): void {
+  openKeyOf.set(det, key);
+}
 
 /** Build an open card's body now (idempotent; the async toggle would build it a task later). */
 export function fillCard(det: HTMLDetailsElement): void {
@@ -253,11 +259,13 @@ export function reopen(host: ParentNode, keys: Set<string>): void {
   }
 }
 
+const closedKinds = new Set<string>();
+
 function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: TracedSet, ledger: ReadonlyMap<string, LoadReason>): HTMLElement {
   const r = t.lib.runes.find((x) => x.id === m.id);
   if (!r) {
     const miss = el("div", "runes-blk missing");
-    miss.appendChild(el("span", "runes-rname", m.id));
+    miss.appendChild(el("span", "runes-rname", titleWords(m.id) || m.id));
     return miss;
   }
   const others = (t.setsOf.get(r.id) ?? []).filter((x) => x !== inSet.set.id);
@@ -276,7 +284,7 @@ function runeCard(t: TracedLibrary, ctx: CardCtx, m: RuneSetMember, inSet: Trace
     title: `${r.id}\n${r.description}${others.length ? `\nAlso in ${others.join(", ")}` : ""}${m.recall ? "\nRecall: pointer line only" : ""}${load ? `\n${loadedLine(load)}` : ""}`,
     lead,
     scopes: (chipScope.length ? chipScope : ["(none)"]).map((sc) => ({
-      icon: SCOPE_ICON[sc] ?? "question", title: `Scope: ${sc === "(none)" ? "None" : TC(sc)}`,
+      icon: SCOPE_ICON[sc] ?? "question", title: sc === "(none)" ? "None" : caseLabel(sc),
     })),
   }, ctx);
   openKeyOf.set(card, `${t.lib.key}/${inSet.set.id}/${r.id}`);
@@ -291,9 +299,29 @@ export function setSection(t: TracedLibrary, ts: TracedSet, ctx: CardCtx, ledger
   sum.title = `${s.id}\n${s.target ?? "No file"}${s.paths.length ? `\n${s.paths.join("\n")}` : ""}`;
   const det = setCard(hueOf(s), sum);
   if (ts.state === "Not Loaded" || ts.state === "On Touch") det.classList.add("is-dim");
-  const tray = el("div", "runes-tray");
-  for (const m of s.members) tray.appendChild(runeCard(t, ctx, m, ts, ledger));
-  det.appendChild(tray);
+  // nested kind heads, default open; a head the user closed stays closed across redraws (module-level, not the DOM)
+  const kindOf = (m: RuneSetMember): string => t.lib.runes.find((x) => x.id === m.id)?.kind ?? "";
+  const known = s.members.filter((m) => kindOf(m));
+  const lost = s.members.filter((m) => !kindOf(m)); // a member the library no longer holds: its missing row, under no head
+  const runeOf = (m: RuneSetMember) => t.lib.runes.find((x) => x.id === m.id)!;
+  const order = {
+    off: (m: RuneSetMember) => !ledger.get(m.id) && t.runeLoaded.get(m.id) === false,
+    name: (m: RuneSetMember) => runeName(runeOf(m)),
+  };
+  for (const g of byKind(known, kindOf, order)) {
+    const tray = el("div", "runes-tray");
+    for (const m of g.items) tray.appendChild(runeCard(t, ctx, m, ts, ledger));
+    det.appendChild(kindGroup(g.kind, g.items.length, tray, (d) => {
+      const key = `${t.lib.key}/${s.id}:kind:${g.kind}`;
+      d.open = !closedKinds.has(key);
+      d.addEventListener("toggle", () => { if (d.open) closedKinds.delete(key); else closedKinds.add(key); });
+    }));
+  }
+  if (lost.length) {
+    const tray = el("div", "runes-tray");
+    for (const m of lost) tray.appendChild(runeCard(t, ctx, m, ts, ledger));
+    det.appendChild(tray);
+  }
   openKeyOf.set(det, `${t.lib.key}/${s.id}`);
   return det;
 }

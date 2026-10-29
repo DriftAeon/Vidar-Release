@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::items;
 use super::render::{Meta, Rendered, KEYS};
+use crate::agent_spec::{parse, Agent};
 use crate::bare::home::{guard_brick, Guard};
 use crate::bare::layer::{self, RowSets, SetRef};
 use crate::rules::codex::encode_toml_string;
@@ -158,8 +159,10 @@ pub fn validate(rendered: &Rendered, meta: &Meta, payload: &PayloadCtx) -> Check
     }
 
     // Bare Codex rows have no length cap (Raw rides `--profile`, Rendered `thread/start`); the size is only reported.
-    if payload.agent == "codex" {
-        c.encoded_chars = Some(encode_toml_string(&marked).chars().count());
+    match parse(payload.agent) {
+        Some(Agent::Codex) => c.encoded_chars = Some(encode_toml_string(&marked).chars().count()),
+        Some(Agent::Claude) => {}
+        None => c.structural.push(format!("invalid: agent `{}` is not claude or codex", payload.agent)),
     }
     c
 }

@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\vault_gate_tests.rs — the Rune Vault acceptance gate (run 2026-10-25-rune-vault, wave 0).
+//! src-tauri\src\bare\vault_gate_tests.rs — the Rune Vault acceptance gate.
 //! Contract: `docs/projects/bare/runeset-model.md` § Gate, R2, R3, R4, R6. Compiled only under
 //! `--features vault-gate` because it calls the vault API later lanes add; the run ends when
 //! `cargo test --features vault-gate -- vault_gate_tests` is green. Each test names the lane that turns it green.

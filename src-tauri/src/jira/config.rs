@@ -1,4 +1,4 @@
-//! vidar.json `jira` (plan § D3): `{ "site": "https://<name>.atlassian.net", "jql": "..." }` and
+//! vidar.json `jira`: `{ "site": "https://<name>.atlassian.net", "jql": "..." }` and
 //! nothing else. Email and token live in the credential (`vault.rs`), so copies and zips of the
 //! install folder carry neither. `validate_settings` is the `patch_settings` validator and runs
 //! again at request time, since vidar.json is hand- and agent-editable.

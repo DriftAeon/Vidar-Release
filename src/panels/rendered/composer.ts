@@ -122,7 +122,7 @@ export function createComposer(S: RenderedState, deps: ComposerDeps) {
     }
     userBlock(text);
     setInTurn(true); // optimistic; turn_start confirms, turn_done clears
-    // A refused send (a vault lock refusal, D-d, or a dead agent) puts the text back in the composer.
+    // A refused send (a vault lock refusal or a dead agent) puts the text back in the composer.
     void sendEncoded(S.adapter.encodeUser(wire)).then((ok) => {
       if (!ok) { sendStick.disarm(); bang.hold(runs); setInTurn(false); textarea.value = textarea.value ? `${text}\n\n${textarea.value}` : text; }
     });
@@ -157,8 +157,8 @@ export function createComposer(S: RenderedState, deps: ComposerDeps) {
     host.title = why;
   }
   /** The turn ended: everything typed during it goes as one message, in order. The
-   *  pending blocks stay exactly where they are until agent_send resolves (review
-   *  51492eb3) — clearing them first meant a rejected send left the text as an ordinary
+   *  pending blocks stay exactly where they are until agent_send resolves
+   *  — clearing them first meant a rejected send left the text as an ordinary
    *  user block that nothing could mark undelivered or recover. On success they are
    *  promoted in place by dropping `.blk-queued`, so nothing is redrawn and there is no
    *  window in which the text exists in neither state. */

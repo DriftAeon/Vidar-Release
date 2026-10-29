@@ -1,5 +1,5 @@
-// Tidy's layout: pure, no DOM, no value imports (a leaf, so node --test can load it). Lifted
-// from the approved mock bridge/display/flow-edges-mock.html; tidy.ts measures the cards and
+// Tidy's layout: pure, no DOM, no value imports (a leaf, so node --test can load it).
+// tidy.ts measures the cards and
 // animates to the result.
 
 export type LayoutNode = { id: string; w: number; h: number };

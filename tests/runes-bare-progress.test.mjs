@@ -1,8 +1,8 @@
-// Bare Runes generate progress reducer (src/runes/bare/progress.ts) against the fixture lane D's Rust events match.
+// Bare Runes generate progress reducer (src/runes/bare/progress.ts) against the fixture the Rust events match.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ADD_TO_VAULT_LABEL, addToVault, addToVaultOps, chunkLabel, emptyProgress, progressRows, reduceProgress, stopProgress } from "../src/runes/bare/progress.ts";
+import { ADD_TO_VAULT_LABEL, addToVault, addToVaultOps, chunkLabel, emptyProgress, groupedProgress, progressRows, reduceProgress, stopProgress } from "../src/runes/bare/progress.ts";
 
 const EVENTS = JSON.parse(readFileSync(new URL("./fixtures/rune-gen-progress.json", import.meta.url), "utf8"));
 const fold = (events, s = emptyProgress()) => events.reduce(reduceProgress, s);
@@ -55,6 +55,36 @@ test("a final error or cancel turns unfinished rows into Stopped, keeping done a
 
 test("chunkLabel joins the paths and names a split file's chunk", () => {
   assert.equal(chunkLabel([{ path: "a", part: null }, { path: "b", part: { k: 2, of: 3 } }]), "a, b - Chunk 2 of 3");
+});
+
+test("groupedProgress: kind bands, source frames, Chunk n cards, Merge apart", () => {
+  const g = groupedProgress(fold(EVENTS.slice(0, 6)));
+  assert.deepEqual(g.bands.map((b) => [b.kind, b.name]), [["rules", "Rules"], ["memory", "Memories"]]);
+  const [rules, mem] = g.bands;
+  assert.deepEqual(rules.sources.map((s) => s.path), ["~\\CLAUDE.md", "~\\rules\\ui.md"]);
+  // chunk 0 spans two sources: live under the first, a twin (no count) under the second
+  const [live, twin] = [rules.sources[0].cards[0], rules.sources[1].cards[0]];
+  assert.deepEqual([live.card.label, live.twin, live.card.text], ["Chunk 1", false, "12 Runes"]);
+  assert.deepEqual([twin.card.label, twin.twin, twin.card.text, twin.card.state], ["Chunk 1", true, "", "done"]);
+  assert.deepEqual(mem.sources[0].cards.map((c) => [c.card.label, c.card.text]), [["Chunk 1", "1 Rune"], ["Chunk 2", ""]]);
+  assert.equal(g.merge.label, "Merge");
+});
+
+test("groupedProgress: a twin mirrors a running state without the timer", () => {
+  const s = fold([{ runId: "x", stage: "plan", chunks: [
+    { files: [{ path: "a", part: null, kind: "rules" }, { path: "b", part: null, kind: "rules" }] },
+    { files: [{ path: "b", part: null, kind: "rules" }] },
+  ] }, { runId: "x", stage: "chunk", index: 0, state: "running", runes: null }], emptyProgress());
+  const g = groupedProgress(reduceProgress(s, { runId: "x", stage: "chunk", index: 0, state: "running", runes: null }, 1000));
+  const twin = g.bands[0].sources[1].cards[0];
+  assert.deepEqual([twin.twin, twin.card.state, twin.card.startedAt], [true, "running", null]);
+  assert.notEqual(g.bands[0].sources[0].cards[0].card.startedAt, null);
+  assert.deepEqual(g.bands[0].sources[1].cards.map((c) => c.card.label), ["Chunk 1", "Chunk 2"]);
+});
+
+test("groupedProgress: one chunk, or a chunk the plan has not named, stays flat", () => {
+  assert.equal(groupedProgress(fold([{ runId: "x", stage: "plan", chunks: [{ files: [{ path: "a.md", part: null, kind: "rules" }] }] }])), null);
+  assert.equal(groupedProgress(fold([EVENTS[1], EVENTS[2]])), null);
 });
 
 const GEN = { library: "gen-0a1b2c3d", set: "generated-20261017" };

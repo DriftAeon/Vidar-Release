@@ -1,4 +1,4 @@
-// Unpinned package-runner rule, shared by the rack listing and (lane D2) other spawners.
+// Unpinned package-runner rule, shared by the rack listing and other spawners.
 
 // ---- unpinned package runners ----
 //

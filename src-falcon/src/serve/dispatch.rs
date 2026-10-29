@@ -48,7 +48,7 @@ pub(super) fn dispatch(
             if host
                 .registry
                 .get(session_id)
-                .is_some_and(|s| s.agent == Agent::Codex.as_str())
+                .is_some_and(|s| v1_hides(&s.agent))
             {
                 return Response::failed(id, "protocol v1 cannot access Codex sessions");
             }
@@ -171,21 +171,35 @@ pub(super) fn dispatch(
     }
 }
 
+/// Whether protocol v1 clients cannot see a session of this agent (Codex arrived with v2).
+fn v1_hides(agent: &str) -> bool {
+    let Some(agent) = Agent::from_wire(agent) else {
+        return false;
+    };
+    match agent {
+        Agent::Claude => false,
+        Agent::Codex => true,
+    }
+}
+
 fn list(host: &Arc<Host>, id: u64, protocol: u32) -> Response {
     Response::applied(
         id,
-        json!({ "sessions": host.registry.list().into_iter().filter(|s| protocol >= PROTOCOL_V2 || s.agent != Agent::Codex.as_str()).collect::<Vec<_>>() }),
+        json!({ "sessions": host.registry.list().into_iter().filter(|s| protocol >= PROTOCOL_V2 || !v1_hides(&s.agent)).collect::<Vec<_>>() }),
     )
 }
 
 fn spawn(host: &Arc<Host>, id: u64, protocol: u32, params: SpawnParams) -> Response {
     let agent = match (protocol, params.agent) {
-        (PROTOCOL_V1, None | Some(Agent::Claude)) => Agent::Claude,
-        (PROTOCOL_V1, Some(Agent::Codex)) => {
-            return Response::failed(id, "protocol v1 cannot spawn Codex sessions")
-        }
-        (_, Some(agent)) => agent,
+        (PROTOCOL_V1, None) => Agent::Claude,
         (_, None) => return Response::failed(id, "protocol v2 spawn requires an explicit agent"),
+        (PROTOCOL_V1, Some(agent)) => match agent {
+            Agent::Claude => agent,
+            Agent::Codex => {
+                return Response::failed(id, "protocol v1 cannot spawn Codex sessions")
+            }
+        },
+        (_, Some(agent)) => agent,
     };
     if !host
         .falcon

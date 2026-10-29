@@ -13,7 +13,6 @@ const V1_KINDS: Record<V1NodeKind, true> = { input: true, agent: true, output: t
  *  loaded graph carrying a reserved (`effort`, `budget`, …) or legacy addon kind on a v1 agent
  *  node otherwise passes validation and is silently ignored at runtime. */
 const V1_ADDON_KIND_SET: Record<V1AddonKind, true> = {
-  "permission-allowlist": true,
   "system-prompt": true,
   cwd: true,
   retries: true,
@@ -45,6 +44,20 @@ export function setLiveModelIds(source: (() => readonly string[]) | null): void 
 function modelAvailable(id: string): boolean {
   if (liveModelIds) return liveModelIds().includes(id);
   return CORE_MODEL_IDS.has(id) || packModelIds.has(id);
+}
+
+let liveVaultIds: (() => readonly string[]) | null = null;
+let agentOfModel: ((model: string) => string) | null = null;
+
+/** inspector.ts hands in the vault ids `rune_vault_list` returned; until then (or on `null`) an
+ *  unknown vault id cannot be told apart from a slow list, so only the stock check runs. */
+export function setLiveVaultIds(source: (() => readonly string[]) | null): void {
+  liveVaultIds = source;
+}
+
+/** The agent id a model runs on (`stock-<agent>` is that agent's own vault); `null` skips the stock check. */
+export function setVaultAgentOf(fn: ((model: string) => string) | null): void {
+  agentOfModel = fn;
 }
 
 /** The `flowModels` ids of the active agent modules; replaces the previous set. */
@@ -170,6 +183,18 @@ function checkRequiredFields(node: FlowNode, issues: FlowValidationIssue[]): voi
   }
 }
 
+/** `vault` is optional (unset = the agent's stock vault). A set id must be a known vault, and a stock
+ *  vault must be the node's own agent's. */
+function checkVault(node: FlowNode, issues: FlowValidationIssue[]): void {
+  if (node.kind !== "agent" || isBlank(node.vault)) return;
+  const vault = node.vault as string;
+  if (vault.startsWith("stock-") && agentOfModel && !isBlank(node.model) && vault !== `stock-${agentOfModel(node.model as string)}`) {
+    issues.push({ nodeId: node.id, message: `Node "${node.id}": Stock Vault for Another Agent` });
+  } else if (liveVaultIds && !liveVaultIds().includes(vault)) {
+    issues.push({ nodeId: node.id, message: `Node "${node.id}": Unknown Vault "${vault}"` });
+  }
+}
+
 function isAbsoluteWindowsDir(p: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(p)) return true;
   return /^\\\\[^\\/?]+\\[^\\/]+/.test(p);
@@ -283,6 +308,7 @@ export function validateGraph(graph: FlowGraph): FlowValidationResult {
   for (const n of graph.nodes) {
     checkRequiredFields(n, issues);
     checkAddons(n, issues);
+    checkVault(n, issues);
     checkStructuredContent(n, issues);
     checkRefs(n, order, byId, issues);
   }

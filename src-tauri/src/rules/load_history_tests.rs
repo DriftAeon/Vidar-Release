@@ -187,7 +187,7 @@ fn load_history_matches_the_shared_fixture_shape() {
     let file = tmp.0.join("h.json");
     run_at(&file, &[t], &[(crate::fsx::now_ms(), vec!["vidar/recall-bare".into()])], "2026-10-25").unwrap();
     let ours: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    // lane D's fixture, pinned shape
+    // the shared fixture, pinned shape
     let fixture: Value = serde_json::from_str(crate::fsx::strip_bom(include_str!("../../../tests/fixtures/runes/load-history.json"))).unwrap();
     same_shape(&ours, &fixture, "");
 }

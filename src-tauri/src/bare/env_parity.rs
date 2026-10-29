@@ -12,12 +12,14 @@ struct Fixture {
     /// serde_json's `preserve_order` keeps the file order, which decides the first spelling.
     parent: serde_json::Map<String, serde_json::Value>,
     expected: Vec<String>,
-    codex: CodexFixture,
+    /// Every other key (the `$comment`, each other agent's block), by its fixture name.
+    #[serde(flatten)]
+    others: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Deserialize)]
-struct CodexFixture {
-    expected: Vec<String>,
+/// The `expected` names of the agent block `name`.
+fn expected_of(f: &Fixture, name: &str) -> Vec<String> {
+    serde_json::from_value(f.others[name]["expected"].clone()).expect("agent block lists its expected names")
 }
 
 fn fixture() -> Fixture {
@@ -81,5 +83,5 @@ fn rust_codex_builder_gives_the_fixture_names() {
     assert_no_inherited_drop(&f, &built);
     assert_eq!(built.get("CODEX_HOME").map(|v| v.to_string_lossy().into_owned()), Some(r"X:\vidar\runtime\homes\codex-home".into()));
     assert_eq!(built.get("LOCALAPPDATA").map(|v| v.to_string_lossy().into_owned()).as_deref(), parent_value(&f, "LOCALAPPDATA"), "the real one");
-    assert_eq!(sorted(built.names()), sorted(f.codex.expected));
+    assert_eq!(sorted(built.names()), sorted(expected_of(&f, "codex")));
 }

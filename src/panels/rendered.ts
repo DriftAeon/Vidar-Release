@@ -14,13 +14,13 @@
 // dropped.
 
 import type { AgentAdapter, PermissionMode, Usage } from "../agents/protocol";
-import { titleCase } from "../format";
+import { label } from "../format";
 import { cardsSnapshot, DRIVE_CLASS } from "./rendered-drive";
 import { bundleChip, BUNDLE_CHIP_TIP } from "./bundle-version";
 import { tauriAgentTransport } from "./rendered/transport";
 import { ensureListeners, releaseAdapterRoute } from "./rendered/host-router";
 import { hostHas } from "./rendered/host-profile";
-import { AGENT_PROFILE } from "./rendered/agent-profile";
+import { AGENT_PROFILE } from "../agents/agent-profile";
 import { el } from "./rendered/dom";
 import { restoredCard } from "./rendered/restored-block";
 import { createLatestPill } from "./rendered/latest-pill";
@@ -49,7 +49,7 @@ import { createLifecycle } from "./rendered/lifecycle";
 import { authCheck, createLogin } from "./rendered/login";
 import { API_KEY_CARD } from "./rendered/api-key-card";
 import { createBang } from "./rendered/bang";
-import { chipState } from "./rendered/state-chip";
+import { chipState, promptReady as promptReadyOf } from "./rendered/state-chip";
 import { claudeStatus, tabLogin } from "./rendered/claude-login";
 import type { RenderedOpts } from "./rendered/opts";
 
@@ -115,6 +115,8 @@ export interface RenderedBody {
     /** pending cards only (`.blk-approval:not(.settled)`). */
     cards: { id: string; tool: string; options: string[][]; settled: string | null }[];
     settledCards: number;
+    /** What `write()` checks, for a driver to print beside a refused send: `ready` is promptReady(). */
+    life: { ready: boolean; alive: boolean; spawning: boolean; holding: boolean; hydrating: boolean; disconnected: boolean; inTurn: boolean; gen: number; sessionId: string | null };
   };
 }
 
@@ -140,7 +142,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   const agentPill = el("div", "blk blk-agent-pill");
   function renderAgentPill(cwd = S.pillCwd): void {
     S.pillCwd = cwd;
-    const dir = titleCase(cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd);
+    const dir = label(cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd);
     const parts = [AGENT_PROFILE[opts.agent].label];
     if (S.pillVersion) parts.push(S.pillVersion);
     // no model here: the status bar owns it and follows a switch; this pill only knew init's (2026-10-04)
@@ -386,9 +388,8 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
 
   /* -- public -- */
 
-  // `S.spawning` clears only after transport.spawn resolved and `S.gen` was set.
-  const promptReady = (): boolean =>
-    S.isAlive && !S.spawning && !S.hydrating && !S.disconnected && !S.disposed;
+  // `S.spawning` clears only after transport.spawn resolved and `S.gen` was set; `S.holding` spans a whole respawn.
+  const promptReady = (): boolean => promptReadyOf(S);
 
   const body: RenderedBody = {
     el: root,
@@ -475,6 +476,8 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
           result: card.querySelector(`.${DRIVE_CLASS.result}`)?.textContent ?? null,
         }))),
         settledCards: allCards.length - pending.length,
+        life: { ready: promptReady(), alive: S.isAlive, spawning: !!S.spawning, holding: S.holding, hydrating: S.hydrating,
+          disconnected: S.disconnected, inTurn: S.inTurn, gen: S.gen, sessionId: S.sessionId },
       };
     },
     dispose() {

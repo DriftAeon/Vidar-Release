@@ -36,6 +36,16 @@ test("restoring and login are unknown; working, agents, starting work; idle is r
   assert.equal(deriveRendered(chip({}, true), null, 0).phase, "working");
 });
 
+test("a spawn in flight reads Starting… even once the sidecar said ready, so Ready means write() accepts", () => {
+  // E1 run 3 case 2: a respawn after a vault edit showed Ready while write() refused (promptReady checks spawning)
+  const inFlight = chip({ spawning: Promise.resolve() });
+  assert.equal(inFlight.key, "starting");
+  assert.equal(inFlight.title.split("\n")[0], "Starting…");
+  assert.equal(chip({ spawning: null }).key, "ready");
+  assert.equal(chip({ spawning: Promise.resolve(), hydrating: true }).key, "restoring");
+  assert.equal(chip({ spawning: Promise.resolve(), isAlive: false }).key, "stopped");
+});
+
 test("since holds across same-phase publishes and re-stamps on a phase change", () => {
   publish("t1", { phase: "working" }, 100);
   assert.equal(get("t1").since, 100);

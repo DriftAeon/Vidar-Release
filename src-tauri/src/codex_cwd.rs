@@ -1,7 +1,6 @@
 //! One concern: Codex never starts with the user profile (or a parent of it) as its workspace.
 //! Codex's Windows sandbox turns a profile-root workspace into a write grant on every child of
-//! `~` (`.claude` and AppData among them) and never revokes it (2026-10-10, dispatch f2c799ff,
-//! `docs/runs/2026-10-13-bare-mode/reports/acl.md`). Every Codex spawn path calls
+//! `~` (`.claude` and AppData among them) and never revokes it. Every Codex spawn path calls
 //! `refuse_home_cwd`: `agent.rs spawn_codex_appserver` and the Codex launches in `pty.rs spawn_pty`
 //! (a profiled Raw Codex Bare tab sends no shell or args, so `is_codex_launch` cannot see it:
 //! `pty.rs codex_bare_prepare` calls `refuse_home_cwd` itself, before the prepare trusts the folder).

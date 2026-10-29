@@ -5,7 +5,6 @@ import { onPress } from "../press";
 import dualViewIcon from "../../assets/dual-view.png";
 import singleViewIcon from "../../assets/single-view.png";
 import terminalIcon from "../../assets/terminal.png";
-import { armAstra, armBlocker, disarmAstra, isArmed } from "./astra-bridge";
 import { saveCodexTabs } from "./codex-save";
 import { hostedNames } from "../../launcher/hosted-names-pref";
 import { hostedFalconSession } from "./lookup";
@@ -291,16 +290,6 @@ export function openTabMenu(id: string, anchor: HTMLElement) {
   }
   if (!besideWorkbench) {
     row(dualViewIcon, "Workbench", () => { activate(id); openWorkbench(); });
-  }
-
-  // Astra: Codex tabs only. Disabled with the reason when the tab doesn't
-  // qualify (approvals must be off — see the bridge comment above).
-  if (sessions.get(id)?.agent === "codex") {
-    const blocker = armBlocker(id);
-    const arm = isArmed(id)
-      ? row(terminalIcon, "Disarm Astra", () => disarmAstra())
-      : row(terminalIcon, blocker ? `Arm as Astra — ${blocker}` : "Arm as Astra", () => { armAstra(id); });
-    if (!isArmed(id) && blocker) arm.disabled = true;
   }
 
   // Rendered tabs: Jettison and Close only (2026-10-04). Raw and page tabs get no

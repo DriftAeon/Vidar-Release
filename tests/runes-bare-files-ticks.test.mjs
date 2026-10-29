@@ -4,7 +4,7 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
 const { importMembers } = await import("../src/runes/bare/set-attach.ts");
-const { itemRuneInputs, kitItems } = await import("../src/runes/bare/kit-add.ts");
+const { itemRuneInputs, kitItems, kitOps } = await import("../src/runes/bare/kit-add.ts");
 const { moduleLayer } = await import("../src/runes/bare/module-ticks.ts");
 const file = (path, kind, rest = {}) => ({ path, shown: path, kind, scope: "global",
   ticked: true, pickable: true, ...rest });
@@ -16,6 +16,23 @@ test("Path ticks turn into item-rune inputs without a sidecar write", () => {
     { skills: ["C:/skills/review"], codexAgents: ["C:/agents/check.toml"] });
   assert.deepEqual(kitItems(files, null), { skills: ["C:/skills/review"],
     codexAgents: ["C:/agents/check.toml"] });
+});
+
+test("Kit items give Codex no Claude settings hooks and leave Claude's output alone", () => {
+  const hook = file("C:/hooks/block.mjs", "hook", { codexSupported: true,
+    guard: { event: "PreToolUse", matcher: "Bash", run: ["node", "C:/hooks/block.mjs"] } });
+  assert.deepEqual(kitItems([hook], null), { guards: [hook.guard] });
+  assert.deepEqual(itemRuneInputs([hook], new Set([hook.path]), null, true), {});
+});
+
+test("Add Kit ops add kit-<agent> only when the Kit library holds it", () => {
+  const base = { op: "addRuneset", ref: { library: "kit", set: "kit" } };
+  const own = (agent) => ({ op: "addRuneset", ref: { library: "kit", set: `kit-${agent}` } });
+  const sets = [{ library: "kit", set: "kit" }, { library: "kit", set: "kit-codex" }, { library: "other", set: "kit-claude" }];
+  assert.deepEqual(kitOps("codex", sets), [base, own("codex")]);
+  assert.deepEqual(kitOps("claude", sets), [base]);
+  assert.deepEqual(kitOps("codex", []), [base]);
+  assert.deepEqual(kitOps(undefined, sets), [base]);
 });
 
 test("A command hook value never enters item import arguments", () => {

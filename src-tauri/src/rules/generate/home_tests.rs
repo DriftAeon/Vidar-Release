@@ -128,6 +128,42 @@ fn an_instruction_file_in_the_config_dir_or_the_cwd_refuses_the_spawn() {
 }
 
 #[test]
+fn an_extra_file_or_skills_dir_in_the_config_dir_refuses_the_spawn() {
+    let fx = Fx::new("extra");
+    for agent in ["claude", "codex"] {
+        let run = build_run(agent, &fx.0, "0a1b2c3d", "S", None).unwrap();
+        let h = call(&run, "c01-0").unwrap();
+        std::fs::write(h.config.join("notes.txt"), "x").unwrap();
+        assert_eq!(assert_clean(&h), Err("spawn: generator home holds notes.txt".to_string()));
+        let h = call(&run, "c01-0").unwrap();
+        std::fs::create_dir_all(h.config.join("skills")).unwrap();
+        assert_eq!(assert_clean(&h), Err("spawn: generator home holds skills".to_string()));
+        let h = call(&run, "c01-0").unwrap();
+        std::fs::write(h.cwd.join("x.txt"), "x").unwrap();
+        assert!(assert_clean(&h).unwrap_err().starts_with("spawn: generator home holds"));
+    }
+}
+
+#[test]
+fn a_canary_instruction_file_in_an_ancestor_refuses_the_spawn() {
+    let fx = Fx::new("ancestor");
+    for name in ["CLAUDE.md", "AGENTS.md", "AGENTS.override.md"] {
+        let run = build_run("codex", &fx.0, "0a1b2c3d", "S", None).unwrap();
+        let h = call(&run, "c01-0").unwrap();
+        assert_clean(&h).unwrap();
+        std::fs::write(fx.0.join(name), "# canary").unwrap();
+        let err = assert_clean(&h).unwrap_err();
+        assert!(err.starts_with(&format!("spawn: generator home sits under {name}")), "{err}");
+        std::fs::remove_file(fx.0.join(name)).unwrap();
+    }
+    // A `.git` alone is no reason to refuse.
+    let run = build_run("claude", &fx.0, "0a1b2c3d", "S", None).unwrap();
+    let h = call(&run, "c01-0").unwrap();
+    std::fs::create_dir_all(fx.0.join(".git")).unwrap();
+    assert_clean(&h).unwrap();
+}
+
+#[test]
 fn a_missing_bare_credential_is_a_login_error_and_touches_nothing() {
     let fx = Fx::new("nologin");
     std::fs::remove_file(fx.0.join("codex-home").join("auth.json")).unwrap();
@@ -216,4 +252,30 @@ fn a_build_guard_removes_a_half_built_cwd_and_a_disarmed_one_leaves_it() {
     // A finished call home stays for the run to use.
     let h = call(&build_run("claude", &fx.0, "0a1b2c3d", "S", None).unwrap(), "c01-0").unwrap();
     assert!(h.cwd.is_dir());
+}
+
+#[test]
+fn the_runner_refuses_a_stray_file_in_the_config_dir_before_spawning() {
+    use super::super::run::{execute, Spec};
+    use crate::job::Job;
+    let fx = Fx::new("runner");
+    for agent in ["claude", "codex"] {
+        let run = build_run(agent, &fx.0, "0a1b2c3d", "S", None).unwrap();
+        let h = call(&run, "c01-0").unwrap();
+        // The program does not exist: only a refusal before the spawn gives the "holds" text.
+        let spec = Spec {
+            program: PathBuf::from(r"C:\definitely\not\here.exe"),
+            args: Vec::new(),
+            env: Vec::new(),
+            cwd: h.cwd.clone(),
+            agent: run.agent,
+            config: Some(h.config.clone()),
+            stdin: String::new(),
+        };
+        let job = Job::new().unwrap();
+        let run_it = || execute(&spec, &job, std::time::Duration::from_secs(5), 1000).unwrap_err();
+        assert!(!run_it().contains("holds"), "{}", run_it());
+        std::fs::write(h.config.join("stray.txt"), "x").unwrap();
+        assert_eq!(run_it(), "spawn: generator home holds stray.txt");
+    }
 }

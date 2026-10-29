@@ -1,5 +1,5 @@
 {
-  "$comment": "Bare launch profile for the Rendered Codex tab (plan Design 1-3, 6-8, § P6). Read by src-tauri/src/bare/ at every bare Codex spawn (agent.rs spawn_codex_appserver, pty.rs spawn_pty). Placeholders: {{root}} = the Vidar install root, {{home}} = the agentHomes folder (contracts/paths.json), both absolute at spawn; {{localappdata}} = the spawning process's own real LOCALAPPDATA (Vidar's, or Falcon's for a hosted spawn), refused when unset, relative or inside the Bare home (src-tauri/src/bare/env.rs), because a Codex shell's TEMP is built from it and a redirected folder that was never created leaves pwsh in ConstrainedLanguage. `binary` is the D7 resolver: the first allowlisted Path folder holding one of `shims` and `script` under it (never APPDATA); the version is read from `package`. The Rendered spawn is `<node> <script> app-server`; the Raw row (pty.rs) spawns `<node> <script> <rawArgs>`, the TUI in the tab's PTY: `--no-daemon` keeps it off the shared background server (outside the tab's process tree), `--no-alt-screen` runs it inline so the `[Vidar Bare: ...]` warning line stays in scrollback. `execArgs` is the one-shot line only the runes probe builds (tools/bare/probe-runes.mjs, `Surface::Exec`): `--no-daemon` is a top-level flag so it sits before `exec`, `--skip-git-repo-check` because the probe cwd is a temp folder, `--color never` for a plain reply; the probe appends `-o <file>` and the prompt after the `--profile`. All use an env built from contracts/agent-env.json plus `overlay`; the config template is generated into `configTarget` under the home on every launch. `setsPayload` is the template the session's Rune Vault text and copied skill-rune listing fill, built into {{home}}\\layer\\payload-<hash12>.md and supplied as developer instructions by the selected Codex surface (src-tauri/src/bare/mod.rs); `configTarget` keeps an inert developer-instructions baseline while the vault payload is active. `assets` is what tools/sandbox/check-zip.ps1 requires in the release zip.",
+  "$comment": "Bare launch profile for the Rendered Codex tab. Read by src-tauri/src/bare/ at every bare Codex spawn (agent.rs spawn_codex_appserver, pty.rs spawn_pty). Placeholders: {{root}} = the Vidar install root, {{home}} = the agentHomes folder (contracts/paths.json), both absolute at spawn; {{localappdata}} = the spawning process's own real LOCALAPPDATA (Vidar's, or Falcon's for a hosted spawn), refused when unset, relative or inside the Bare home (src-tauri/src/bare/env.rs), because a Codex shell's TEMP is built from it and a redirected folder that was never created leaves pwsh in ConstrainedLanguage. `binary` is the resolver: the first allowlisted Path folder holding one of `shims` and `script` under it (never APPDATA); the version is read from `package`. The Rendered spawn is `<node> <script> app-server`; the Raw row (pty.rs) spawns `<node> <script> <rawArgs>`, the TUI in the tab's PTY: `--no-daemon` keeps it off the shared background server (outside the tab's process tree), `--no-alt-screen` runs it inline so the `[Vidar Bare: ...]` warning line stays in scrollback. `execArgs` is the one-shot line only the runes probe builds (tools/bare/probe-runes.mjs, `Surface::Exec`): `--no-daemon` is a top-level flag so it sits before `exec`, `--skip-git-repo-check` because the probe cwd is a temp folder, `--color never` for a plain reply; the probe appends `-o <file>` and the prompt after the `--profile`. All use an env built from contracts/agent-env.json plus `overlay`; the config template is generated into `configTarget` under the home on every launch. `setsPayload` is the template the session's Rune Vault text and copied skill-rune listing fill, built into {{home}}\\layer\\payload-<hash12>.md and supplied as developer instructions by the selected Codex surface (src-tauri/src/bare/mod.rs); `configTarget` keeps an inert developer-instructions baseline while the vault payload is active. `assets` is what tools/sandbox/check-zip.ps1 requires in the release zip.",
   "id": "bare",
   "agent": "codex",
   "binary": {
@@ -7,7 +7,7 @@
     "script": "node_modules/@openai/codex/bin/codex.js",
     "package": "node_modules/@openai/codex/package.json"
   },
-  "verifiedVersion": "0.164.0",
+  "verifiedVersion": "0.165.0",
   "host": { "name": "node.exe" },
   "args": ["app-server"],
   "rawArgs": ["--no-daemon", "--no-alt-screen"],
@@ -44,7 +44,11 @@
     "profiles/bare/stock-runes/rules/bare-identity-codex.md",
     "profiles/bare/stock-runes/mcp/vidar-drive.md",
     "profiles/bare/stock-runes/skills/vidar-control.md",
-    "profiles/bare/stock-runes/permissions/drive-allow.md",
+    "profiles/bare/stock-runes/skills/codex-built-in/codex-imagegen.md",
+    "profiles/bare/stock-runes/skills/codex-built-in/codex-openai-docs.md",
+    "profiles/bare/stock-runes/skills/codex-built-in/codex-review-agent.md",
+    "profiles/bare/stock-runes/skills/codex-built-in/codex-skill-creator.md",
+    "profiles/bare/stock-runes/skills/codex-built-in/codex-skill-installer.md",
     "profiles/bare/templates/stock-codex.json",
     "contracts/agent-env.json",
     "tools/desks/codex-notify.ps1"

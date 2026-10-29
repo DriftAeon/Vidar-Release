@@ -1,5 +1,4 @@
-// Guard scan (run 2026-10-25-rune-vault, CONTEXT anti-drift 4): once the delete lane (wave 5) lands,
-// nothing reads or writes a launcher row's `sets`, the gen-index or a sidecar list outside migration code.
+// Guard scan: nothing reads or writes a launcher row's `sets`, the gen-index or a sidecar list outside migration code.
 // Model: docs/projects/bare/runeset-model.md § Not the model (one collection per launcher row, gen
 // index add-back, `.layer.json` sidecars) and R2 (a session loads exactly one vault). The launcher
 // pre-pick may read `defaults.json` and nothing else here. Scans tracked code files only (git
@@ -51,7 +50,7 @@ function offenders(files) {
 }
 
 test("no row-set read or write, gen-index or sidecar read outside migration code", () => {
-  // D1/D2 (wave 5) delete the readers; L2d moves the row-set readers to the session record or vault.
+  // The remaining readers are to be deleted; the row-set readers move to the session record or vault.
   assert.deepEqual(offenders(tracked()), [], "read the session's vault (bare/vault) instead");
 });
 

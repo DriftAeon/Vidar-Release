@@ -1,5 +1,5 @@
 //! src-tauri\src\rules\generate\mod.rs — agent-generated runes, the path an agent's reply must pass before it
-//! can land (docs/runs/2026-10-17-rune-generator/plan.md § Skill, D3, E5). `envelope` parses the reply strictly
+//! can land. `envelope` parses the reply strictly
 //! (every error collected) and adds the coverage and modal warnings; `render` turns it into rune files, the
 //! generated set and `generate.json`, with `items` adding ticked local skills, agents and hooks as item runes;
 //! `validate` builds the rendered library from a temp folder the way a Bare spawn would and splits structural errors

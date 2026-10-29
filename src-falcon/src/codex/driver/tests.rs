@@ -129,9 +129,18 @@ fn a_spawn_without_a_payload_sends_no_developer_instructions() {
 }
 
 #[test]
-fn resume_params_never_carry_developer_instructions() {
+fn resume_params_carry_developer_instructions() {
     let driver = CodexDriver::new(&params(Some("existing")))
         .with_developer_instructions(Some("payload".into()));
+    let messages = driver.startup_messages().unwrap();
+    assert_eq!(messages[2]["method"], "thread/resume");
+    assert_eq!(messages[2]["params"]["threadId"], "existing");
+    assert_eq!(messages[2]["params"]["developerInstructions"], "payload");
+}
+
+#[test]
+fn resume_without_a_payload_sends_no_developer_instructions() {
+    let driver = CodexDriver::new(&params(Some("existing"))).with_developer_instructions(None);
     let messages = driver.startup_messages().unwrap();
     assert_eq!(messages[2]["method"], "thread/resume");
     assert!(messages[2]["params"].get("developerInstructions").is_none());

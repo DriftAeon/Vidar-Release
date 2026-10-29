@@ -1,5 +1,4 @@
-//! src-tauri\src\bare\vault\migrate.rs — the startup Rune Vault migration (run 2026-10-25-rune-vault, L4c;
-//! plan v1 "Migration", D-f, D-g, D-j). Called once from `main.rs` setup after the fold call, per install
+//! src-tauri\src\bare\vault\migrate.rs — the startup Rune Vault migration. Called once from `main.rs` setup after the fold call, per install
 //! root. It turns today's Bare launcher rows into vaults and leaves no row binding behind:
 //!
 //! 1. Plan first, read-only; a plan with nothing to do writes nothing, so a second run is a no-op.
@@ -482,7 +481,7 @@ fn snapshot(plan: &mut Plan, env: &Env, lib_old: &str, set: &str, agent: Option<
                 }
             }
             for id in strings(o.get("off")).into_iter().filter(|i| !must.contains(i) && !have.contains(i)) {
-                warnings.push(format!("{lib_old}/{set}: recall member `{id}` is off; a snapshot cannot drop it"));
+                warnings.push(format!("{lib_old}/{set}: recall member `{id}` is off; the recall-member pass holds it in the vault copy"));
             }
         }
         let kept = remove_slots(&text, &out);
@@ -548,11 +547,7 @@ fn title(s: &str) -> String {
 }
 
 fn agent_of(a: &str) -> Option<Agent> {
-    match a {
-        "claude" => Some(Agent::Claude),
-        "codex" => Some(Agent::Codex),
-        _ => None,
-    }
+    crate::agent_spec::parse(a)
 }
 
 /// The home index entries that go (M1): every entry that is not one `vault:<id>` ref, unless it is
@@ -562,7 +557,7 @@ fn agent_of(a: &str) -> Option<Agent> {
 /// the folder's threads: it stays with a warning. A probe's entry (`vidar-runes-probe-*`) and an
 /// entry on any other folder (the legacy home, always listed) go. Only index entries change.
 fn stale_entries(plan: &mut Plan, home_dir: &Path) {
-    for a in [Agent::Claude, Agent::Codex] {
+    for a in crate::agent_spec::ALL {
         let file = agent_homes::index_file(a, home_dir);
         let Ok(index) = crate::fsx::read_json::<Index>(&file) else { continue };
         let dir = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -806,6 +801,7 @@ pub(crate) fn plan(env: &Env) -> Result<Plan, String> {
             locked_by: None,
             hash,
             pins: BTreeMap::new(),
+            off: Vec::new(), off_sets: Vec::new(),
         };
         let files = sets.into_iter().map(|(c, b)| (c.file, b)).collect();
         // Home re-key (step 5): the row's home (the adopted legacy one or its combination folder)
@@ -889,7 +885,7 @@ pub(crate) fn plan(env: &Env) -> Result<Plan, String> {
             },
         };
         let vault = Vault { version: 1, id: id.clone(), name: format!("Workspace {label}"), created_utc: now.clone(), from: None,
-            runesets: sets.iter().map(|(c, _)| c.clone()).collect(), runes: vec![], locked_utc: None, locked_by: None, hash, pins: BTreeMap::new() };
+            runesets: sets.iter().map(|(c, _)| c.clone()).collect(), runes: vec![], locked_utc: None, locked_by: None, hash, pins: BTreeMap::new(), off: Vec::new(), off_sets: Vec::new() };
         plan.vaults.push(VaultWrite { vault, files: sets.into_iter().map(|(c, b)| (c.file, b)).collect(), reuse, rows: vec![format!("workspace {label}")] });
         plan.strip_locations.insert(i);
     }
@@ -1029,7 +1025,7 @@ fn apply(env: &Env, plan: &Plan, journal: &mut Vec<Undo>) -> Result<(), String> 
             journal.push(Undo::Created(lock_file));
         }
         let lock = home::lock(home_dir, home::LOCK_WAIT)?;
-        for a in [Agent::Claude, Agent::Codex] {
+        for a in crate::agent_spec::ALL {
             let mine: Vec<&(Agent, String, Entry)> = plan.rekeys.iter().filter(|(x, _, _)| *x == a).collect();
             let drops: Vec<&String> = plan.drops.iter().filter(|(x, _, _)| *x == a).map(|(_, k, _)| k).collect();
             if mine.is_empty() && drops.is_empty() {
@@ -1132,7 +1128,7 @@ pub(crate) fn run(env: &Env) -> Result<Outcome, String> {
         vaults: plan.vaults.iter().filter(|v| !v.reuse).map(|v| v.vault.id.clone()).collect(),
         runes: plan.runes.iter().map(|w| (w.lib.clone(), w.rel.clone())).collect(),
         fixes: plan.fixes.iter().map(|f| f.vault.id.clone()).collect(),
-        homes: env.home_dir.map(|home_dir| [Agent::Claude, Agent::Codex].into_iter()
+        homes: env.home_dir.map(|home_dir| crate::agent_spec::ALL.into_iter()
             .filter(|a| plan.rekeys.iter().any(|(x, _, _)| x == a) || plan.drops.iter().any(|(x, _, _)| x == a))
             .filter_map(|a| agent_homes::index_file(a, home_dir).file_name().map(|n| n.to_string_lossy().into_owned()))
             .collect()).unwrap_or_default(),
@@ -1190,12 +1186,9 @@ pub fn run_at_startup() {
     let env = Env { root: &root, config: &config, home_dir: home_dir.as_deref(), stamp: &stamp, fail_at: None };
     match run(&env) {
         Ok(o) => {
-            for l in o.lines {
-                eprintln!("vault migrate: {l}");
-            }
-            if let Some(b) = o.backup {
-                eprintln!("vault migrate: backup {}", b.display());
-            }
+            o.lines.iter().for_each(|l| eprintln!("vault migrate: {l}"));
+            o.backup.inspect(|b| eprintln!("vault migrate: backup {}", b.display()));
+            super::migrate_recall::run_at_startup(&root, &stamp); // then off recall members into the vault
         }
         Err(e) => eprintln!("vault migrate: {e}"),
     }

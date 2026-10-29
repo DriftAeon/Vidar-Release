@@ -116,7 +116,7 @@ fn memory_slug(cwd: &str) -> String {
 
 // handoffs collapse a run of non-alnum separators into one '-' (":\" -> one
 // dash), where memory maps each character 1:1 (":\" -> two dashes) — the two
-// slugs are deliberately different strings for the same cwd (plan §1 row 3)
+// slugs are deliberately different strings for the same cwd
 fn handoff_slug(cwd: &str) -> String {
     let mut out = String::new();
     let mut in_run = false;

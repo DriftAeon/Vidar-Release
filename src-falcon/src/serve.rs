@@ -81,11 +81,29 @@ pub enum AgentRuntime {
     Codex(CodexRuntime),
 }
 impl AgentRuntime {
-    fn agent(&self) -> Agent {
+    pub fn agent(&self) -> Agent {
         match self {
             Self::Claude(_) => Agent::Claude,
             Self::Codex(_) => Agent::Codex,
         }
+    }
+
+    /// Resolve `agent`'s runtime from the bundle; one arm per agent.
+    pub fn resolve(agent: Agent, bundle: &std::path::Path, store: &std::path::Path) -> Result<Self, String> {
+        match agent {
+            Agent::Claude => ClaudeRuntime::resolve(bundle, store).map(Self::Claude),
+            Agent::Codex => CodexRuntime::resolve(bundle, store).map(Self::Codex),
+        }
+    }
+
+    /// Bind the Vidar folder this host's `--registry` names, the only root a client's rules or
+    /// profile paths are admitted under.
+    pub fn rooted(mut self, vidar_root: &std::path::Path) -> Self {
+        match &mut self {
+            Self::Claude(runtime) => runtime.bind_root(vidar_root),
+            Self::Codex(runtime) => runtime.bind_root(vidar_root),
+        }
+        self
     }
 }
 
@@ -528,12 +546,21 @@ fn negotiate(host: &Arc<Host>, protocol: u32, secret: &str) -> Result<Value, Str
 /// its driver runs turns.
 fn host_capabilities(supported_agents: &[String]) -> Vec<&'static str> {
     let mut capabilities = crate::protocol::CAPABILITIES.to_vec();
-    let codex = supported_agents.iter().any(|a| a == Agent::Codex.as_str());
-    if codex && crate::codex::CodexDriver::RUNS_TURNS {
-        capabilities.push(crate::protocol::CAPABILITY_CODEX_TURNS);
-        capabilities.push(crate::protocol::CAPABILITY_CODEX_QUERY);
-        capabilities.push(crate::protocol::CAPABILITY_CODEX_BARE);
-        capabilities.push(crate::protocol::CAPABILITY_CODEX_SKILLS);
+    for agent in Agent::ALL {
+        if !supported_agents.iter().any(|a| a == agent.as_str()) {
+            continue;
+        }
+        match agent {
+            Agent::Claude => {}
+            Agent::Codex => {
+                if crate::codex::CodexDriver::RUNS_TURNS {
+                    capabilities.push(crate::protocol::CAPABILITY_CODEX_TURNS);
+                    capabilities.push(crate::protocol::CAPABILITY_CODEX_QUERY);
+                    capabilities.push(crate::protocol::CAPABILITY_CODEX_BARE);
+                    capabilities.push(crate::protocol::CAPABILITY_CODEX_SKILLS);
+                }
+            }
+        }
     }
     capabilities
 }
@@ -1640,7 +1667,7 @@ mod tests {
         host.vidar_clients.fetch_add(1, Ordering::SeqCst);
     }
 
-    /// Review fix (2026-10-02): a relaunch after Vidar was closed 600 s must
+    /// A relaunch after Vidar was closed 600 s must
     /// get its full 300 s to re-adopt. The first `vidar` client restarts the
     /// clock; 300 s later, still unattached, the session ends.
     #[test]
@@ -1666,7 +1693,7 @@ mod tests {
         assert!(session.child.is_stopping(), "300 s after the connect, unattached: ended");
     }
 
-    /// Ruling §3 (review fix 2026-10-02): a Falcon shell window is a client
+    /// A Falcon shell window is a client
     /// but not Vidar, so with only the shell connected a Vidar-held session
     /// keeps the 900 s grace.
     #[test]
@@ -1683,7 +1710,7 @@ mod tests {
         assert!(session.child.is_stopping(), "shell only, past 900 s: ended");
     }
 
-    /// Ruling §2-3: with Vidar connected, a Claude session Vidar dropped and
+    /// With Vidar connected, a Claude session Vidar dropped and
     /// nobody picked up ends after 300 s, naming the conversation and reason.
     #[test]
     fn a_vidar_held_idle_session_past_300s_with_a_client_is_reaped() {
@@ -1710,7 +1737,7 @@ mod tests {
         assert!(clocks.contains_key(&session.id), "its clock keeps running");
     }
 
-    /// Ruling §4: a Jettisoned session (shell holds it parked) is never the
+    /// A Jettisoned session (shell holds it parked) is never the
     /// Vidar-held rule's, however long it sits.
     #[test]
     fn a_shell_held_session_is_never_reaped_while_a_client_is_connected() {
@@ -1734,7 +1761,7 @@ mod tests {
         assert!(!session.child.is_stopping(), "a queued prompt is pending work");
     }
 
-    /// Ruling §3: with no client connected the 900 s grace applies, so a swap
+    /// With no client connected the 900 s grace applies, so a swap
     /// with the close lock on does not lose an idle Vidar-held session at 300 s.
     #[test]
     fn with_no_client_a_vidar_held_session_waits_out_900s() {
@@ -1752,7 +1779,7 @@ mod tests {
             .any(|text| text.contains("vidar-held idle")));
     }
 
-    /// Ruling §4: Vidar detaches before the shell takes the lease, so a live
+    /// Vidar detaches before the shell takes the lease, so a live
     /// jettison handoff naming the session exempts it; a stale one does not.
     #[test]
     fn a_live_jettison_handoff_exempts_its_session() {

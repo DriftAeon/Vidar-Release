@@ -1,6 +1,6 @@
 {
   "$comment": "Disposition of every Codex app-server server request (pinned from the 0.162.1 schema). card: drawn as an approval/question card; refusal is its deny answer (Falcon's unattended deny, and the answer when Vidar does not draw it). refuse: answered with refusal at once. error: answered with the unsupported error. A method not listed is unknown and gets the unsupported error too. Read by src/agents/codex-methods.ts and src-falcon codex/driver/requests.rs; tests/codex-schema-drift.test.mjs validates it against tools/codex-schema/manifest.json.",
-  "codexVersion": "0.164.0",
+  "codexVersion": "0.165.0",
   "unsupported": { "code": -32601, "message": "{method} is not supported by Vidar" },
   "requests": {
     "account/chatgptAuthTokens/refresh": { "disposition": "error" },

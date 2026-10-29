@@ -56,17 +56,17 @@ export function paintLock(b: HTMLButtonElement, locked: boolean | null, busy: bo
 
 /** One rune as the ordinary card; `tail` carries the switch in Modify. A vault rune edited in its library after
  *  lock carries the Edited After This Session marker. */
-export function runeCard(lib: ViewLib, b: Brick, o: { dim: boolean; tail: HTMLElement[]; card: CardCtx; read?: boolean }): HTMLDetailsElement {
+export function runeCard(lib: ViewLib, b: Brick, o: { dim: boolean; tail: HTMLElement[]; card: CardCtx; read?: boolean; reason?: string | null }): HTMLDetailsElement {
   if (driftOf(b)) { const m = el("span", "runes-chip also", "Edited After This Session"); m.title = TIP_EDITED; o = { ...o, tail: [m, ...o.tail] }; }
   const rune = { id: b.id, kind: b.kind, scope: [], activate: b.activate, description: b.description, path: b.path, body: b.body,
     origin: b.origin, closesWhen: b.closesWhen, why: b.why, example: b.example };
   const globs = b.activate === "paths" ? b.paths ?? [] : [];
   const card = cardDetails(rune, {
-    // the name is the slug's Title Case form; a sentence description or heading goes to the tooltip (user, 2026-10-22)
+    // the name is the slug's Title Case form; a sentence description or heading goes to the tooltip
     name: runeName({ id: b.id, path: b.path } as RuneItem),
     dim: o.dim,
-    title: [b.id, ...new Set([b.description, b.section.join(" / ")].filter(Boolean)), ...(o.read ? [loadedLine({ reason: "recall" })] : [])].join("\n"),
-    scopes: [{ icon: BARE_SCOPE.icons[lib.scope], title: `Scope: ${BARE_SCOPE.names[lib.scope]}` }],
+    title: [b.id, ...new Set([b.description, b.section.join(" / ")].filter(Boolean)), ...(o.reason !== undefined ? (o.reason ? [o.reason] : []) : o.read ? [loadedLine({ reason: "recall" })] : [])].join("\n"),
+    scopes: [{ icon: BARE_SCOPE.icons[lib.scope], title: BARE_SCOPE.names[lib.scope] }],
     tail: o.tail,
     barScope: BARE_SCOPE.names[lib.scope],
     glob: globs.length ? { text: globs[0], title: globs.join("\n") } : undefined,

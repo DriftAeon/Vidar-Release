@@ -1,4 +1,4 @@
-//! Jira Cloud search, as pure functions over the `Transport` seam (plan § D5, § D6 output).
+//! Jira Cloud search, as pure functions over the `Transport` seam.
 //! One request, `POST /rest/api/3/search/jql`, first page only; the reply maps to the D6 issue
 //! shape or to an error kind. `unset` (no credential, or a site mismatch) is decided before
 //! any request, in B1's commands.
@@ -11,16 +11,16 @@ use super::http::{Request, SendError, Transport};
 pub const SEARCH_PATH: &str = "/rest/api/3/search/jql";
 pub const FIELDS: [&str; 6] = ["summary", "status", "issuetype", "priority", "updated", "parent"];
 pub const MAX_RESULTS: u32 = 50;
-/// Used when the saved JQL is blank (plan § Decided, Q4).
+/// Used when the saved JQL is blank.
 pub const DEFAULT_JQL: &str = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC";
 const MESSAGE_CAP: usize = 300;
 
-/// The built-in scope parts (plan § D1): composed, never parsed.
+/// The built-in scope parts: composed, never parsed.
 pub(super) const MINE_RESTRICTION: &str = "assignee = currentUser()";
 pub(super) const STATUS_CLAUSE: &str = "statusCategory != Done";
 pub(super) const ORDER: &str = "ORDER BY updated DESC";
 pub const TYPES_PATH: &str = "/rest/api/3/issuetype";
-/// First page of 100, the endpoint's maximum (plan § D6); later pages are not fetched.
+/// First page of 100, the endpoint's maximum; later pages are not fetched.
 pub const PROJECTS_PATH: &str = "/rest/api/3/project/search?maxResults=100&orderBy=key";
 
 /// The head's two-way switch.
@@ -201,7 +201,7 @@ fn first_error_message(body: &[u8]) -> String {
     listed.or_else(field).map(|m| m.chars().take(MESSAGE_CAP).collect()).unwrap_or_default()
 }
 
-/// Maps a transport result to a parsed 200 body or an error kind (plan § D5). An over-cap body
+/// Maps a transport result to a parsed 200 body or an error kind. An over-cap body
 /// is the endpoint misbehaving, not the network.
 pub(super) fn map_with<T>(sent: Result<(u16, Vec<u8>), SendError>, parse: impl FnOnce(&[u8]) -> Result<T, String>) -> Result<T, ApiError> {
     let (status, body) = sent.map_err(|e| match e {
@@ -220,7 +220,7 @@ pub(super) fn map_with<T>(sent: Result<(u16, Vec<u8>), SendError>, parse: impl F
     }
 }
 
-/// Maps a transport result to a page of issues or an error kind (plan § D5). An over-cap body
+/// Maps a transport result to a page of issues or an error kind. An over-cap body
 /// is the endpoint misbehaving, not the network.
 pub fn map_response(site: &str, sent: Result<(u16, Vec<u8>), SendError>) -> Result<Page, ApiError> {
     map_with(sent, |body| parse_search(site, body))
@@ -259,7 +259,7 @@ pub fn projects_request(site: &str) -> Result<Request, String> {
 }
 
 /// A 200 `GET issuetype` body (an array) → distinct names, level from `hierarchyLevel` (else -1
-/// for `subtask`, else 0), sorted level descending then name A-Z (plan § D4). The first level
+/// for `subtask`, else 0), sorted level descending then name A-Z. The first level
 /// seen wins for a repeated name.
 pub fn parse_types(body: &[u8]) -> Result<Vec<TypeOption>, String> {
     let v: Value = serde_json::from_slice(body).map_err(|e| format!("types reply is not JSON: {e}"))?;

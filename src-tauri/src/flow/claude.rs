@@ -31,17 +31,24 @@ const CLAUDE_MODULE: &str = "claude";
 
 /// Production's runner spec: the sidecar the listed claude module declares in `agent.flow.script`
 /// (validated as one of its own `owns` files), under the Vidar root.
-/// The sidecar runs on the Bare Claude env on Flow's own config dir (`flow/bare.rs`,
-/// `<home>\flow-claude`): Err with u1's string when the Bare config dir, or for a Claude model its
-/// login, is missing. A Claude-model stage also gets the Bare payload, the user's URL-only MCP
-/// servers and Flow's drive-only MCP file (`flow/claude_mcp.rs`); a gateway stage none of them.
-pub(super) fn spec(need: super::bare::Need) -> Result<RunnerSpec, String> {
-    let ce = super::bare::claude_env(need)?;
+/// The sidecar runs on the home the node's vault builds (`bare/flow_vault.rs`): its payload, plugins
+/// and MCP file ride the stage args, and Err with u1's string when a Claude model has no login there.
+/// Gateway stages load the vault through the same `admit_hosted` path.
+pub(super) fn spec(need: super::bare::Need, vault: &str, tab: &str) -> Result<RunnerSpec, String> {
+    let node = crate::bare::flow_vault::claude_node(vault, tab)?;
+    super::bare::verify_login(&node.config_dir, need)?;
     let registry = serde_json::to_value(crate::modules::listed()).map_err(|e| e.to_string())?;
     let script = flow_script_from(&registry, CLAUDE_MODULE).ok_or("Claude module not installed: no flow script")?;
-    let (args, mut warnings) = super::claude_mcp::for_stage(need, &ce);
-    warnings.extend(ce.warnings);
-    Ok(RunnerSpec::Claude { sidecar: script_path(&crate::paths::root(), &script), env: Some(ce.env), args, warnings })
+    Ok(spec_from(node, script_path(&crate::paths::root(), &script)))
+}
+
+fn spec_from(node: crate::bare::flow_vault::ClaudeNode, sidecar: PathBuf) -> RunnerSpec {
+    RunnerSpec::Claude { sidecar, env: Some(node.env), args: node.args, warnings: node.warnings }
+}
+
+/// The Claude agent, named by the one module id this file holds.
+pub(super) fn agent() -> crate::agent_spec::Agent {
+    crate::agent_spec::parse(CLAUDE_MODULE).expect("the claude module id is an agent id")
 }
 
 /// Pure: `agent.flow.script` of module `id` in a serialized `modules_list` result.
@@ -453,56 +460,52 @@ mod tests {
         assert!(required_mcp_args(&allow(&["Read", "mcp__bad"])).is_empty());
     }
 
-    /// The sidecar argv for a Claude-model stage vs a gateway stage: the gateway one is exactly the
-    /// fixed args plus `--require-mcp`; the Claude one adds the payload and carried servers between.
+    /// The sidecar argv for a node: the fixed args, then the vault home's stage args (`--flow
+    /// --profile .. --root .. --home ..`, never `--flow-payload` or `--mcp-servers`), then `--require-mcp`.
     #[test]
-    fn spawn_args_for_a_claude_node_vs_a_gateway_node() {
-        use super::super::bare::Need;
-        use super::super::claude_mcp::{stage_args, url_only_servers};
-        let user = r#"{"mcpServers":{"proxy":{"type":"http","url":"http://127.0.0.1:8765/mcp"},
-            "k":{"type":"http","url":"https://x","headers":{"Authorization":"Bearer t"}}}}"#;
-        let argv = |need: Need| {
-            let (stage, warnings) = stage_args(need, Path::new(r"C:\V"), url_only_servers(Some(user), &[]), None);
-            let mut extra = stage;
-            extra.extend(required_mcp_args(&allow(&["mcp__proxy__a"])));
-            let cmd = sidecar_command(
-                Path::new(r"C:\V\tools\claude-sidecar.mjs"),
-                Path::new(r"C:\n\node.exe"),
-                Path::new(r"C:\c\claude.exe"),
-                r"C:\w",
-                "m",
-                "auto",
-                &EnvPlan::default(),
-                &extra,
-                None,
-            );
-            let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
-            (args, warnings)
-        };
-        let fixed = [r"C:\V\tools\claude-sidecar.mjs", "--cwd", r"C:\w", "--model", "m", "--permission-mode", "auto", "--claude", r"C:\c\claude.exe"];
-        let (gateway, gw_warnings) = argv(Need::Gateway);
-        let mut want: Vec<String> = fixed.iter().map(|s| s.to_string()).collect();
-        want.extend(["--require-mcp".to_string(), r#"["proxy"]"#.to_string()]);
-        assert_eq!(gateway, want);
-        assert!(gw_warnings.is_empty());
-        let (claude, warnings) = argv(Need::Claude);
-        let mut want: Vec<String> = fixed.iter().map(|s| s.to_string()).collect();
-        want.extend(
-            [
-                "--flow-payload",
-                "bare",
-                "--root",
-                r"C:\V",
-                "--mcp-servers",
-                r#"{"proxy":{"type":"http","url":"http://127.0.0.1:8765/mcp"}}"#,
-                "--require-mcp",
-                r#"["proxy"]"#,
-            ]
-            .map(String::from),
+    fn spawn_args_name_the_vault_home_and_no_flow_payload() {
+        let stage: Vec<String> = [
+            "--flow", "--profile", "bare", "--root", r"C:\V", "--home", r"C:\H", "--payload", r"C:\H\layer\payload-0123456789ab.md",
+            "--set-plugin", r"C:\V\plugins\p", "--mcp-file", r"C:\H\layer\mcp-0123456789ab.json",
+        ]
+        .map(String::from)
+        .into();
+        let mut extra = stage.clone();
+        extra.extend(required_mcp_args(&allow(&["mcp__proxy__a"])));
+        let cmd = sidecar_command(
+            Path::new(r"C:\V\tools\claude-sidecar.mjs"),
+            Path::new(r"C:\n\node.exe"),
+            Path::new(r"C:\c\claude.exe"),
+            r"C:\w",
+            "m",
+            "auto",
+            &EnvPlan::default(),
+            &extra,
+            None,
         );
-        assert_eq!(claude, want);
-        assert_eq!(warnings, ["MCP server \"k\" left out of Flow: it carries headers, a token, env or a command"]);
-        assert!(!claude.iter().any(|a| a.contains("Bearer")));
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        let fixed = [r"C:\V\tools\claude-sidecar.mjs", "--cwd", r"C:\w", "--model", "m", "--permission-mode", "auto", "--claude", r"C:\c\claude.exe"];
+        let mut want: Vec<String> = fixed.iter().map(|s| s.to_string()).collect();
+        want.extend(stage);
+        want.extend(["--require-mcp".to_string(), r#"["proxy"]"#.to_string()]);
+        assert_eq!(args, want);
+        assert!(!args.iter().any(|a| a == "--flow-payload" || a == "--mcp-servers"));
+    }
+
+    /// The spec's argv is the one `flow_vault` builds: `--flow` first, the vault home after `--home`.
+    #[test]
+    fn the_spec_adds_the_flow_marker_ahead_of_the_profile() {
+        let node = crate::bare::flow_vault::ClaudeNode {
+            env: Env::default(),
+            args: ["--flow", "--profile", "bare", "--root", r"C:\V", "--home", r"C:\H"].map(String::from).into(),
+            config_dir: PathBuf::from(r"C:\H\claude-homes\0123456789ab"),
+            warnings: vec!["w".into()],
+        };
+        let RunnerSpec::Claude { args, warnings, env, .. } = spec_from(node, PathBuf::from("s.mjs")) else { panic!("a Claude spec") };
+        assert_eq!(args[..3], ["--flow", "--profile", "bare"]);
+        assert_eq!(args[5], "--home");
+        assert_eq!(warnings, ["w"]);
+        assert!(env.is_some());
     }
 
     /// The init backstop: connected passes; pending (the wait did not run) or failed fails in the same shape.

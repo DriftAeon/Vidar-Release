@@ -77,11 +77,13 @@ pub struct ItemKeys {
     pub mode: Option<String>,
     /// Claude output style, carried by an output-style rune.
     pub style: Option<String>,
+    /// The session model, carried by a model rune (`agent:` required).
+    pub model: Option<String>,
     /// `env:` entries, each `NAME=value`.
     pub env: Vec<String>,
 }
 
-pub const KINDS: [(&str, &str); 11] = [
+pub const KINDS: [(&str, &str); 12] = [
     ("rules", "rule"),
     ("facts", "fact"),
     ("procedures", "procedure"),
@@ -93,11 +95,12 @@ pub const KINDS: [(&str, &str); 11] = [
     ("permissions", "permission"),
     ("plugins", "plugin"),
     ("styles", "output-style"),
+    ("models", "model"),
 ];
 
 /// The kinds that are items a session carries beside its text (model R1: every kind is a rune).
 /// Twin of `ITEM_KINDS` in `tools/runes/header.mjs`.
-pub const ITEM_KINDS: [&str; 7] = ["skill", "agent", "hook", "mcp", "permission", "plugin", "output-style"];
+pub const ITEM_KINDS: [&str; 8] = ["skill", "agent", "hook", "mcp", "permission", "plugin", "output-style", "model"];
 
 pub fn is_item_kind(kind: &str) -> bool {
     ITEM_KINDS.contains(&kind)
@@ -114,13 +117,26 @@ fn item_keys_of(kind: &str) -> &'static [&'static str] {
         "mcp" => &["module", "server"],
         "permission" => &["allow", "ask", "mode"],
         "output-style" => &["style"],
+        "model" => &["model"],
         _ => &[],
     }
 }
 
 /// Keys only item kinds carry (each kind its own subset, plus `env`).
-const ITEM_ONLY_KEYS: [&str; 13] =
-    ["source", "event", "matcher", "run", "open", "command", "module", "server", "allow", "ask", "mode", "style", "env"];
+const ITEM_ONLY_KEYS: [&str; 14] =
+    ["source", "event", "matcher", "run", "open", "command", "module", "server", "allow", "ask", "mode", "style", "model", "env"];
+
+/// A model name goes into settings.json and config.toml unescaped, so it may hold no quote, control
+/// character (newline included) or leading `-` (which a CLI would read as a flag).
+pub fn check_model(m: &str) -> Result<(), String> {
+    if m.trim().is_empty() {
+        return Err("a model rune needs `model`".into());
+    }
+    if m.contains('"') || m.chars().any(char::is_control) || m.starts_with('-') {
+        return Err("`model` must not hold a quote or newline or start with `-`".into());
+    }
+    Ok(())
+}
 
 /// `NAME=value` with NAME `[A-Za-z_][A-Za-z0-9_]*`.
 fn check_env(entry: &str) -> Result<(), String> {
@@ -263,6 +279,7 @@ fn check_item(kind: &str, k: &ItemKeys) -> Result<(), String> {
             Err("a permission rune needs `allow`, `ask` or `mode`".into())
         }
         "output-style" if blank(&k.style) => Err("an output-style rune needs `style`".into()),
+        "model" => check_model(k.model.as_deref().unwrap_or("")),
         _ => Ok(()),
     }
 }
@@ -350,7 +367,7 @@ pub fn parse(text: &str) -> Result<Rune, String> {
     }
     let agent = scalar("agent");
     if let Some(a) = agent.as_deref() {
-        if a != "claude" && a != "codex" {
+        if crate::agent_spec::parse(a).is_none() {
             return Err(format!("invalid agent `{a}` (claude or codex)"));
         }
     }
@@ -381,8 +398,12 @@ pub fn parse(text: &str) -> Result<Rune, String> {
         ask: list("ask"),
         mode: scalar("mode"),
         style: scalar("style"),
+        model: scalar("model"),
         env,
     };
+    if kind == "model" && agent.is_none() {
+        return Err("a model rune needs `agent` (claude or codex): model names differ per agent".into());
+    }
     check_item(&kind, &item)?;
     Ok(Rune {
         agent,

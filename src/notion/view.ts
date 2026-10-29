@@ -151,7 +151,7 @@ export function buildNotionView(h: Handlers, topAdapter: Adapter): NotionView {
   token.spellcheck = false;
   token.autocomplete = "new-password";
   field.append(el("span", "nt-field-label", "Token"), token);
-  // personal token first: it reads what its owner can open, with no per-page sharing (user, 2026-10-22)
+  // personal token first: it reads what its owner can open, with no per-page sharing
   const link = textBtn("Create a Personal Token", "nt-link", () => h.openTokens());
   const formNote = el("span", "nt-sub");
   formNote.textContent = "Create a personal access token with the Notion API capability, then paste it. A connection token also works but reads only the pages you share with it. Either is kept in Windows Credential Manager, never in vidar.json."; // note-ok: user, 2026-10-22

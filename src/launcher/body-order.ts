@@ -3,6 +3,9 @@
 // picks the lead; absent or any other value reads as DEFAULT_LEAD. Read once at start. Raw is the
 // root's own launch, a Bare root now, so "bare" leads with Rendered and "raw" with Raw.
 
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENT_IDS } from "../agents/id.ts";
+
 export type Lead = "bare" | "raw";
 
 /** What an absent or unreadable `launcherLead` means. */
@@ -11,7 +14,7 @@ export const DEFAULT_LEAD: Lead = "bare";
 /** The Bare variants that lead, best first (roster keys): Claude's Rendered, then Codex's. The Raw Bare
  *  rows are the roots themselves ("Raw" below), so they are not variants. Any other shown profiled row
  *  follows in roster order. */
-const PREFERRED = ["claude-rendered-bare", "codex-rendered-bare"];
+const PREFERRED = AGENT_IDS.map((id) => `${id}-rendered-bare`);
 
 export type BodyRow<T> = { kind: "raw" } | { kind: "rendered" } | { kind: "bare"; variant: T };
 

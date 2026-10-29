@@ -59,16 +59,16 @@
 .blk-relay-answer > .ask-answer { flex: 1 1 auto; min-width: 0; }
 .blk-user > .queued-send { flex: none; align-self: center; } /* mid-height of the message (2026-10-05) */
 /* Steer: the wheel before the label (queued-block.ts; 2026-10-11) */
-.blk-user > .queued-send { display: inline-flex; align-items: center; gap: var(--space-6); } /* approved mock steer-marker-mock.html */
+.blk-user > .queued-send { display: inline-flex; align-items: center; gap: var(--space-6); } /* 6px icon gap */
 .blk-user > .queued-send > .icn { width: var(--space-16); height: var(--space-16); flex: none; }
 .blk-user.blk-queued.dropped { border-right-color: var(--dead-red); border-right-style: solid; }
 /* A prompt that steered (cut short) the turn before it: a tinted strip with the wheel and
-   "Steer" over the message, in place of that turn's footer (markSteered; 2026-10-11,
-   variant C). After the queued and relay rules: it overrides their flex row. */
+   "Steer" over the message, in place of that turn's footer (markSteered).
+   After the queued and relay rules: it overrides their flex row. */
 .blk-user.blk-steered { display: block; padding: 0; overflow: hidden; }
 .blk-steered > .steer-head {
-  display: flex; align-items: center; gap: var(--space-6); /* approved mock steer-marker-mock.html */
-  padding: var(--space-3) var(--space-10); /* approved mock; 10 keeps the strip on the message's text edge */
+  display: flex; align-items: center; gap: var(--space-6); /* 6px icon gap */
+  padding: var(--space-3) var(--space-10); /* 10 keeps the strip on the message's text edge */
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel)); color: var(--fg);
   font-family: var(--font-ui); font-size: var(--font-12); line-height: var(--line-20); white-space: nowrap;
 }
@@ -182,7 +182,7 @@
 /* Interrupted: a neutral chip, the cancel icon in its own colours (2026-10-13) */
 .blk-turn-chip {
   display: flex; align-items: center; gap: var(--space-4); width: fit-content;
-  padding: var(--space-2) var(--space-8) var(--space-2) var(--space-6); /* 6px icon side as in the approved mock (2026-10-13) */
+  padding: var(--space-2) var(--space-8) var(--space-2) var(--space-6); /* 6px icon side */
   background: var(--bg-panel); border: var(--border-w) solid var(--border); border-radius: var(--radius-4);
   color: var(--fg-dim); font-size: var(--font-12); line-height: var(--line-16);
 }
@@ -349,12 +349,12 @@ details.has-card > pre.tool-input { display: none; }
 .rendered.dead .rendered-input { opacity: 0.5; pointer-events: none; }
 .rendered-palette {
   position: absolute; left: 0; bottom: 100%; margin-bottom: var(--space-4); display: flex; flex-direction: column;
-  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-3); z-index: 5; max-height: min(40vh, 320px); overflow: auto; /* about ten rows (user 2026-10-15); no size token fits */
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-4); padding: var(--space-3); z-index: 5; max-height: min(40vh, 320px); overflow: auto; /* about ten rows; no size token fits */
 }
 .rendered-palette.hidden { display: none; }
 .palette-row { border-color: transparent; text-align: left; padding: var(--space-2) var(--space-8); }
 .palette-row.on { border-color: var(--accent); }
-/* Notice action card: amber wash inside a full amber border with even padding (user, 2026-10-25), the
+/* Notice action card: amber wash inside a full amber border with even padding, the
    warning left, the actions right on the Sheen Cap face (`.wb-actions > button.wb-card-btn`, workbench.css). */
 .blk-notice-card {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8);
@@ -366,7 +366,7 @@ details.has-card > pre.tool-input { display: none; }
 .blk-notice-card .notice-err { color: var(--dead-red); font-size: var(--font-12); margin-top: var(--space-4); overflow-wrap: anywhere; }
 .blk-notice-card > .notice-acts { display: flex; flex-direction: row; align-items: center; gap: var(--space-4); flex: none; margin-left: auto; }
 /* Trust Folder: the Sheen Cap shape on the decision pair's Approve green (--approve-grad, tokens.css), bold
-   --fg-bright label like Approve (user, 2026-10-22): white on --approve-fill reads 4.63:1, darker on the lower stops. */
+   --fg-bright label like Approve: white on --approve-fill reads 4.63:1, darker on the lower stops. */
 .blk-notice-card > .notice-acts > button.notice-trust {
   --face: var(--approve-grad); --depth: inset 0 1px 0 color-mix(in srgb, white 20%, transparent); --edge: var(--approve-edge);
   color: var(--fg-bright); font-weight: var(--weight-strong);

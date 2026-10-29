@@ -1,7 +1,7 @@
 // lint-copy-note.mjs — the note-sink judge for lint-copy.mjs: which classes are dim (derived from
 // CSS), whether a literal in a dim sink is a live value, and whether a `note-ok:` reason cites a
 // real authority. lint-copy.mjs finds the sinks; this file decides what passes. Rule:
-// .claude/rules/ui-copy.md; plan: docs/runs/2026-10-01-descriptor-text/plan.md §A.
+// .claude/rules/ui-copy.md.
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";

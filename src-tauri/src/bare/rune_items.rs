@@ -7,7 +7,7 @@
 //! - `map_items(agent, items, env)` (`map_claude`, `map_codex`) gives `Pieces`; a rune whose `agent:`
 //!   names the other agent maps with a warning, never dropped. Codex carries no permission list or mode
 //!   and no plugin: those come back as `Mapped::Unsupported { warning }` naming the rune.
-//! - Secrets (plan D-k): a hook `command` is a `rune::Secret`; any IPC or log shows `RuneItem::redacted`,
+//! - Secrets: a hook `command` is a `rune::Secret`; any IPC or log shows `RuneItem::redacted`,
 //!   where a command hook and every MCP field are a label only.
 
 #![allow(dead_code)] // L2a wires the mappers into `set_loadout`; L1b's vault IPC calls `redacted`.
@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use super::guards;
 use super::set_layer::{self, Permissions};
+use crate::agent_spec;
 use crate::falcon::Agent;
 use crate::rules::rune::{Rune, Secret};
 
@@ -39,7 +39,66 @@ pub enum Item {
     /// The server's url and command stay in `contracts/module-bundles.json`; a rune names them only.
     Mcp { module: String, server: String },
     Permission(Permissions),
-    OutputStyle(String),
+    /// `style:` names the style; a nonempty body is the style file itself (body-carrying, run runes-close U1).
+    OutputStyle { style: String, body: String },
+    /// `model:` names the session model for the rune's one `agent`.
+    Model { model: String },
+}
+
+/// A launch's output style: the name `outputStyle` takes and, when the rune carries a body, the file the
+/// launch writes as `<config dir>\output-styles\<id>.md` (`home::generate_settings_with`). On the wire, and
+/// so in the loadout hash, it is the name only (rule bodies stay out of the hash the same way).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct OutputStyle {
+    pub name: String,
+    /// The rune id: the style file's name.
+    pub id: String,
+    pub description: String,
+    /// Trimmed rune body; empty = a built-in or user style named only, no file written.
+    pub body: String,
+}
+
+impl OutputStyle {
+    /// The style file's name and text (frontmatter `name` is the name `outputStyle` takes, then the body);
+    /// `None` for a name-only style. An id that is not a plain file name is refused.
+    pub fn file(&self) -> Result<Option<(String, String)>, String> {
+        if self.body.is_empty() {
+            return Ok(None);
+        }
+        if self.id.is_empty() || self.id.starts_with('.') || self.id.contains(['/', '\\', ':']) {
+            return Err(format!("Bare output style: rune id {:?} is not a file name", self.id));
+        }
+        let q = |s: &str| serde_json::to_string(s).unwrap_or_default();
+        Ok(Some((format!("{}.md", self.id), format!("---\nname: {}\ndescription: {}\n---\n\n{}\n", q(&self.name), q(&self.description), self.body))))
+    }
+
+    /// Makes `dir` (`<config dir>\output-styles`) hold `style`'s file and no other `*.md`: written only when
+    /// its bytes differ, and the sweep runs only when `dir` sits inside the Bare `home` (no `..`).
+    pub fn sync_dir(style: Option<&OutputStyle>, dir: &Path, home: &Path) -> Result<(), String> {
+        let file = style.map(|s| s.file()).transpose()?.flatten();
+        if let Some((name, text)) = &file {
+            if std::fs::read(dir.join(name)).ok().as_deref() != Some(text.as_bytes()) {
+                std::fs::create_dir_all(dir).map_err(|e| format!("Bare output style {}: {e}", dir.display()))?;
+                crate::fsx::atomic_write(&dir.join(name), text.as_bytes()).map_err(|e| format!("Bare output style {name}: {e}"))?;
+            }
+        }
+        if !dir.starts_with(home) || dir.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            return Ok(());
+        }
+        for p in std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()) {
+            let kept = file.as_ref().is_some_and(|(n, _)| p.file_name().is_some_and(|f| f == n.as_str()));
+            if !kept && p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("md")) {
+                std::fs::remove_file(&p).map_err(|e| format!("Bare output style {}: {e}", p.display()))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Serialize for OutputStyle {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.name)
+    }
 }
 
 /// An item rune: id, payload and the keys any kind may carry.
@@ -56,7 +115,7 @@ pub struct RuneItem {
     pub env: Vec<(String, Secret)>,
 }
 
-/// The IPC- and log-safe view of an item rune (plan D-k): a command hook and an MCP rune show a label
+/// The IPC- and log-safe view of an item rune: a command hook and an MCP rune show a label
 /// in place of their fields; env shows names only.
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -86,23 +145,18 @@ pub struct RedactedItem {
     pub mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub env_names: Vec<String>,
 }
 
 fn agent_of(name: Option<&str>) -> Option<Agent> {
-    match name {
-        Some("claude") => Some(Agent::Claude),
-        Some("codex") => Some(Agent::Codex),
-        _ => None,
-    }
+    name.and_then(agent_spec::parse)
 }
 
 fn label_of(agent: Agent) -> &'static str {
-    match agent {
-        Agent::Claude => "Claude",
-        Agent::Codex => "Codex",
-    }
+    agent_spec::spec(agent).label
 }
 
 impl RuneItem {
@@ -125,7 +179,15 @@ impl RuneItem {
             },
             "mcp" => Item::Mcp { module: need(&k.module, "module")?, server: need(&k.server, "server")? },
             "permission" => Item::Permission(Permissions { allow: k.allow.clone(), ask: k.ask.clone(), mode: k.mode.clone() }),
-            "output-style" => Item::OutputStyle(need(&k.style, "style")?),
+            "output-style" => Item::OutputStyle { style: need(&k.style, "style")?, body: r.body.trim().to_string() },
+            "model" => {
+                let model = need(&k.model, "model")?;
+                crate::rules::rune::check_model(&model).map_err(|e| format!("`{}`: {e}", r.id))?;
+                if r.agent.is_none() {
+                    return Err(format!("`{}`: a model rune needs `agent`", r.id));
+                }
+                Item::Model { model }
+            }
             _ => return Ok(None),
         };
         let env = k
@@ -152,11 +214,12 @@ impl RuneItem {
             Item::Hook { .. } => "hook",
             Item::Mcp { .. } => "mcp",
             Item::Permission(_) => "permission",
-            Item::OutputStyle(_) => "output-style",
+            Item::OutputStyle { .. } => "output-style",
+            Item::Model { .. } => "model",
         }
     }
 
-    /// The view any IPC or log shows (plan D-k): never a hook command, an MCP field or an env value.
+    /// The view any IPC or log shows: never a hook command, an MCP field or an env value.
     pub fn redacted(&self) -> RedactedItem {
         let mut v = RedactedItem {
             id: self.id.clone(),
@@ -174,6 +237,7 @@ impl RuneItem {
             ask: Vec::new(),
             mode: None,
             style: None,
+            model: None,
             env_names: self.env.iter().map(|(n, _)| n.clone()).collect(),
         };
         match &self.item {
@@ -195,7 +259,8 @@ impl RuneItem {
                 (v.allow, v.ask, v.mode) = (p.allow.clone(), p.ask.clone(), p.mode.clone());
                 v.label = "Permission";
             }
-            Item::OutputStyle(style) => { v.label = "Output Style"; v.style = Some(style.clone()); }
+            Item::OutputStyle { style, .. } => { v.label = "Output Style"; v.style = Some(style.clone()); }
+            Item::Model { model } => { v.label = "Model"; v.model = Some(model.clone()); }
         }
         v
     }
@@ -234,7 +299,8 @@ pub enum Mapped {
     Guard(Value),
     Mcp(McpRef),
     Permissions(Permissions),
-    OutputStyle(String),
+    OutputStyle(OutputStyle),
+    Model(String),
     Env(String, Secret),
     Unsupported { warning: String },
 }
@@ -257,7 +323,7 @@ pub fn expand_path(path: &str, env: &MapEnv) -> Result<PathBuf, String> {
     if p.is_absolute() { Ok(p) } else { Err(format!("path {path:?} is not absolute, `~`- or {{{{root}}}}-relative")) }
 }
 
-/// A plugin loads by path from the repo's `plugins\` only (`mods-local-only`, plan v3 D-a):
+/// A plugin loads by path from the repo's `plugins\` only (`mods-local-only`):
 /// `{{root}}/plugins/<name>`, one plain segment.
 pub fn plugin_path(source: &str, env: &MapEnv) -> Result<PathBuf, String> {
     let name = source
@@ -275,19 +341,23 @@ fn text(p: PathBuf) -> String {
 /// A plugin or permission on Codex is `Unsupported`; a hook event or matcher the agent cannot carry
 /// is `Unsupported` too. Env rides with a carried item only.
 pub fn map_item(agent: Agent, it: &RuneItem, env: &MapEnv) -> Result<Vec<Mapped>, String> {
+    let carries = &agent_spec::spec(agent).carries;
     let at = |e: String| format!("Rune `{}`: {e}; skipped", it.id);
     let unsupported = |why: String| Ok(vec![Mapped::Unsupported { warning: format!("Rune `{}`: {why}; not carried", it.id) }]);
     let mut out = match &it.item {
+        Item::Model { .. } if it.agent.is_some_and(|a| a != agent) => {
+            return unsupported(format!("its model is for {}", it.agent.map_or("", label_of)));
+        }
+        Item::Model { .. } if carries.model.is_some() => return unsupported(carries.model.unwrap_or_default().into()),
+        Item::Model { model } => vec![Mapped::Model(model.clone())],
+        Item::Skill { .. } if carries.skill.is_some() => return unsupported(carries.skill.unwrap_or_default().into()),
         Item::Skill { source } => vec![Mapped::Skill(text(expand_path(source, env).map_err(at)?))],
+        Item::Agent { .. } if carries.agent.is_some() => return unsupported(carries.agent.unwrap_or_default().into()),
         Item::Agent { source } => vec![Mapped::Agent(text(expand_path(source, env).map_err(at)?))],
-        Item::Plugin { .. } if agent == Agent::Codex => return unsupported("Codex has no plugins".into()),
+        Item::Plugin { .. } if carries.plugin.is_some() => return unsupported(carries.plugin.unwrap_or_default().into()),
         Item::Plugin { source } => vec![Mapped::Plugin(text(plugin_path(source, env).map_err(at)?))],
         Item::Hook { event, matcher, action } => {
-            let why = match agent {
-                Agent::Claude => guards::claude_unsupported(event, matcher.as_deref()),
-                Agent::Codex => guards::codex_unsupported(event, matcher.as_deref()),
-            };
-            if let Some(why) = why {
+            if let Some(why) = (carries.guard)(event, matcher.as_deref()) {
                 return unsupported(why);
             }
             let mut g = json!({ "event": event });
@@ -307,18 +377,31 @@ pub fn map_item(agent: Agent, it: &RuneItem, env: &MapEnv) -> Result<Vec<Mapped>
             }
             vec![Mapped::Guard(g)]
         }
+        Item::Mcp { .. } if carries.mcp.is_some() => return unsupported(carries.mcp.unwrap_or_default().into()),
         Item::Mcp { module, server } => vec![Mapped::Mcp(McpRef { module: module.clone(), server: server.clone() })],
-        Item::Permission(p) if agent == Agent::Codex => {
-            let what = match (p.allow.is_empty() && p.ask.is_empty(), p.mode.is_none()) {
-                (false, false) => "Codex has no per-tool list or permission mode",
-                (false, true) => "Codex has no per-tool list",
-                _ => "Codex has no permission mode",
-            };
-            return unsupported(what.into());
+        Item::Permission(p) => {
+            let entries: Vec<String> = p.allow.iter().chain(p.ask.iter()).cloned().collect();
+            let carry = (carries.permission)(&entries, p.mode.as_deref());
+            match carry.refused {
+                // Entries the agent keeps (Codex's `mcp__`) ride on; the rest keep their warning.
+                Some(what) if !carry.kept.is_empty() => {
+                    let keep = |l: &[String]| l.iter().filter(|e| carry.kept.contains(e)).cloned().collect::<Vec<_>>();
+                    let warning = format!("Rune `{}`: {what}; not carried", it.id);
+                    vec![Mapped::Permissions(Permissions { allow: keep(&p.allow), ask: keep(&p.ask), mode: None }), Mapped::Unsupported { warning }]
+                }
+                Some(what) => return unsupported(what),
+                None => vec![Mapped::Permissions(p.clone())],
+            }
         }
-        Item::Permission(p) => vec![Mapped::Permissions(p.clone())],
-        Item::OutputStyle(_) if agent == Agent::Codex => return unsupported("Codex has no output style".into()),
-        Item::OutputStyle(style) => vec![Mapped::OutputStyle(style.clone())],
+        Item::OutputStyle { .. } if carries.output_style.is_some() => {
+            return unsupported(carries.output_style.unwrap_or_default().into());
+        }
+        Item::OutputStyle { style, body } => vec![Mapped::OutputStyle(OutputStyle {
+            name: style.clone(),
+            id: it.id.clone(),
+            description: it.description.clone(),
+            body: body.clone(),
+        })],
     };
     out.extend(it.env.iter().map(|(n, v)| Mapped::Env(n.clone(), v.clone())));
     Ok(out)
@@ -337,8 +420,10 @@ pub struct Pieces {
     pub mcp: Vec<McpRef>,
     /// Allow minus ask (an ask wins), first `mode` wins.
     pub permissions: Permissions,
-    /// First selected Claude output style.
-    pub output_style: Option<String>,
+    /// First selected Claude output style; a second style rune warns and is dropped.
+    pub output_style: Option<OutputStyle>,
+    /// First model rune for this agent; a second warns and is dropped.
+    pub model: Option<String>,
     /// Plugin folders, absolute (`<root>\plugins\<name>`).
     pub plugins: Vec<String>,
     pub env: Vec<(String, Secret)>,
@@ -361,11 +446,15 @@ fn push_unique(into: &mut Vec<String>, item: &str) {
     }
 }
 
+/// Claude Code's built-in output styles; a body-carrying style rune under one of these names would shadow it.
+/// (No list existed in the source; these are Default, Explanatory and Learning.)
+const BUILTIN_STYLES: [&str; 3] = ["Default", "Explanatory", "Learning"];
+
 /// Map every item for `agent` (see `map_item`) and merge the pieces.
 pub fn map_items(agent: Agent, items: &[RuneItem], env: &MapEnv) -> Pieces {
     let mut out = Pieces::default();
     for it in items {
-        if let Some(only) = it.agent.filter(|a| *a != agent) {
+        if let Some(only) = it.agent.filter(|a| *a != agent && !matches!(it.item, Item::Model { .. })) {
             out.warnings.push(format!("Rune `{}` is for {}; carried on {} anyway", it.id, label_of(only), label_of(agent)));
         }
         let mapped = match map_item(agent, it, env) {
@@ -403,9 +492,23 @@ pub fn map_items(agent: Agent, items: &[RuneItem], env: &MapEnv) -> Pieces {
                         _ => {}
                     }
                 }
-                Mapped::OutputStyle(style) => {
-                    if out.output_style.is_none() { out.output_style = Some(style); }
+                Mapped::OutputStyle(style) if !style.body.is_empty() && BUILTIN_STYLES.iter().any(|b| b.eq_ignore_ascii_case(&style.name)) => {
+                    out.warnings.push(format!("Rune `{}` carries a body under the built-in style name {}; the built-in stays", it.id, style.name));
                 }
+                Mapped::OutputStyle(style) => match &out.output_style {
+                    None => out.output_style = Some(style),
+                    Some(old) if old.id != style.id => {
+                        out.warnings.push(format!("Rune `{}` asks output style {}; {} came first and stays", it.id, style.name, old.name));
+                    }
+                    Some(_) => {}
+                },
+                Mapped::Model(m) => match &out.model {
+                    None => out.model = Some(m),
+                    Some(old) if *old != m => {
+                        out.warnings.push(format!("Rune `{}` asks model {m}; {old} came first and stays", it.id));
+                    }
+                    Some(_) => {}
+                },
                 Mapped::Env(n, v) => match out.env.iter().find(|(o, _)| *o == n) {
                     Some((_, old)) if old != &v => out.warnings.push(format!("Rune `{}` sets env {n} again; the first value stays", it.id)),
                     Some(_) => {}
@@ -420,10 +523,13 @@ pub fn map_items(agent: Agent, items: &[RuneItem], env: &MapEnv) -> Pieces {
     out
 }
 
+/// Test shorthands for `map_items`; the product maps through `agent_spec::ALL`.
+#[cfg(test)]
 pub fn map_claude(items: &[RuneItem], env: &MapEnv) -> Pieces {
     map_items(Agent::Claude, items, env)
 }
 
+#[cfg(test)]
 pub fn map_codex(items: &[RuneItem], env: &MapEnv) -> Pieces {
     map_items(Agent::Codex, items, env)
 }
@@ -501,10 +607,14 @@ mod tests {
         let items = stock_items();
         let perm = items.iter().find(|i| i.id == "gate-permission").unwrap();
         let mapped = map_item(Agent::Codex, perm, &env).unwrap();
-        assert!(matches!(mapped.as_slice(), [Mapped::Unsupported { warning }] if warning.contains("gate-permission") && warning.contains("permission mode")));
+        // The `mcp__` entries ride on Codex (Flow reads them); the mode keeps its warning.
+        assert!(matches!(mapped.as_slice(), [Mapped::Permissions(k), Mapped::Unsupported { warning }]
+            if k.mode.is_none() && !k.allow.is_empty() && k.allow.iter().chain(&k.ask).all(|e| e.starts_with("mcp__"))
+                && warning.contains("gate-permission") && warning.contains("permission mode")));
         let p = map_codex(&items, &env);
         assert!(p.unsupported.iter().any(|w| w.contains("gate-permission")) && p.unsupported.iter().any(|w| w.contains("vidar-app")), "{:?}", p.unsupported);
-        assert!(p.plugins.is_empty() && p.permissions == Permissions::default());
+        assert!(p.plugins.is_empty() && p.permissions.mode.is_none());
+        assert_eq!((p.permissions.allow.as_slice(), p.permissions.ask.as_slice()), (&["mcp__plugin_vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..]));
         assert_eq!(p.guard_items.len(), 2, "both hooks ride on Codex");
         // The Claude MCP rune `fixture-echo` rides on Codex with a warning, beside `vidar-drive`.
         assert!(p.skills.len() == 1 && p.agents.len() == 1 && p.mcp.len() == 2, "{:?}", p.mcp);
@@ -539,5 +649,43 @@ mod tests {
         assert_eq!(p.guard_items.len(), 1);
         assert_eq!(p.guard_items[0]["command"].as_str(), Some(want.as_str()));
         assert_eq!(p.guard_items[0]["event"].as_str(), Some("PreToolUse"));
+    }
+
+    #[test]
+    fn a_style_rune_carries_its_body_and_a_second_style_warns() {
+        let root = repo();
+        let env = MapEnv { root: &root, user_home: None };
+        let brief = item("---\nname: brief\nkind: output-style\nscope: [global]\ndescription: Short answers.\nstyle: Brief\n---\n\nAnswer in one line.\n");
+        let named = item("---\nname: explain\nkind: output-style\nscope: [global]\nstyle: Explanatory\n---\n");
+        let p = map_claude(&[brief.clone(), named.clone(), brief.clone()], &env);
+        let s = p.output_style.as_ref().unwrap();
+        assert_eq!((s.name.as_str(), s.id.as_str(), s.description.as_str(), s.body.as_str()), ("Brief", "brief", "Short answers.", "Answer in one line."));
+        assert_eq!(p.warnings, ["Rune `explain` asks output style Explanatory; Brief came first and stays"], "a repeat of the first rune does not warn");
+        assert_eq!(serde_json::to_string(s).unwrap(), "\"Brief\"", "the wire carries the name only");
+        assert_eq!(brief.redacted().style.as_deref(), Some("Brief"));
+        assert!(map_claude(&[named], &env).output_style.unwrap().body.is_empty());
+        assert!(map_codex(&[brief], &env).output_style.is_none());
+    }
+
+    #[test]
+    fn a_model_rune_needs_an_agent_and_a_clean_name_and_the_first_one_wins() {
+        let root = repo();
+        let env = MapEnv { root: &root, user_home: None };
+        let head = |name: &str, agent: &str, model: &str| format!("---\nname: {name}\nkind: model\nscope: [global]\n{agent}model: {model}\n---\n");
+        let a = item(&head("opus", "agent: claude\n", "opus"));
+        let b = item(&head("sonnet", "agent: claude\n", "sonnet"));
+        let c = item(&head("gpt", "agent: codex\n", "gpt-6"));
+        let p = map_claude(&[a.clone(), b.clone(), a.clone(), c.clone()], &env);
+        assert_eq!(p.model.as_deref(), Some("opus"));
+        assert_eq!(p.warnings, ["Rune `sonnet` asks model sonnet; opus came first and stays"]);
+        assert_eq!(p.unsupported, ["Rune `gpt`: its model is for Codex; not carried"]);
+        assert_eq!(map_codex(&[a.clone(), c], &env).model.as_deref(), Some("gpt-6"));
+        assert_eq!(a.redacted().model.as_deref(), Some("opus"));
+        let err = rune::parse(&head("m", "", "opus")).unwrap_err();
+        assert!(err.contains("needs `agent`"), "{err}");
+        for bad in ["\"a\\\"b\"", "-fast"] {
+            assert!(rune::parse(&head("m", "agent: claude\n", bad)).is_err(), "{bad}");
+        }
+        assert!(rune::parse("---\nname: r\nkind: rule\nscope: [global]\nmodel: opus\n---\n").is_err(), "model key only on a model rune");
     }
 }

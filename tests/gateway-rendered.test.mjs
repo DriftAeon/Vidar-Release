@@ -44,7 +44,7 @@ test("adoption takes the gateway from the caller's summary and retains it on cle
   assert.equal(spawned.gateway, "acme");
   assert.equal(listed, false, "adopt must not list the host first");
   const hosted = readFileSync(new URL("../src/launcher/hosted.ts", import.meta.url), "utf8");
-  assert.match(hosted, /art: s\.gateway \?\? "claude"/);
+  assert.match(hosted, /art: s\.gateway \?\? AGENTS\[agent\]\.art/);
 });
 
 test("the ordinary Active adoption guard remains", () => {

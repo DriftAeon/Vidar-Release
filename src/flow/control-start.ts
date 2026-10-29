@@ -10,7 +10,7 @@ import { validateGraph } from "./validate";
 import { autoLayout } from "./layout";
 import { approveSnapshot, prepareFlow, saveSnapshot } from "./control-core";
 import type { FlowGraph } from "./model";
-import type { NodeModes } from "./permission-mode";
+import type { NodeGrants } from "./permission-mode";
 
 export async function prepareControlFlow(request: unknown): Promise<FlowGraph> {
   await initFlowStorage();
@@ -28,8 +28,8 @@ export async function saveControlFlow(request: unknown): Promise<string> {
   return saveSnapshot(graph, { validateGraph, commit: commitControlGraph });
 }
 
-export async function approveControlFlow(snapshot: FlowGraph, modes?: NodeModes): Promise<string> {
+export async function approveControlFlow(snapshot: FlowGraph, grants?: NodeGrants): Promise<string> {
   return approveSnapshot(snapshot, { validateGraph, reserve: reserveControlStart,
     preflight: async () => { await initRunsStore(heldRunIds()); initEngine(); },
-    commit: commitControlGraph, start: (graph) => startRun(graph, true, modes).id });
+    commit: commitControlGraph, start: (graph) => startRun(graph, true, grants).id });
 }

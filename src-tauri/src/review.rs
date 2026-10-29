@@ -15,7 +15,7 @@
 //!
 //! Claim-by-rename before emit: a crash between the two loses the request
 //! (the requester times out and says so) rather than typing it twice after a
-//! restart. Lost is the better failure (plan review, risk 4).
+//! restart. Lost is the better failure.
 //!
 //! The claim / park / pending / poll mechanics live in dispatch_bridge.rs
 //! shared with open.rs; the `Dispatch` shape and

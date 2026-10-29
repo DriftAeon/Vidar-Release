@@ -14,7 +14,7 @@
 //! is decoupled from `AppHandle` on purpose: every `FlowChild` carries its own
 //! `emit: Box<dyn Fn(FlowNodeEventPayload) + Send + Sync>` closure, captured once
 //! at spawn time from the real `AppHandle`. That is what lets `flow_answer_permission`
-//! (frozen with no `AppHandle` parameter, §2) emit "running again" when a node's
+//! (which takes no `AppHandle` parameter) emit "running again" when a node's
 //! pending-permission set empties, and it is what lets the transport test (§7) drive
 //! `start_node_process` directly against the fake sidecar with a channel-backed
 //! `emit` instead of standing up a real Tauri app.
@@ -32,11 +32,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::control::policy::PolicyState;
 
 // §4.4 node env plan and executable resolution live in flow/env.rs; the Claude runner uses them.
-// flow/bare.rs puts every node on the Bare home (run 2026-10-19-codex-primary, U2).
+// flow/bare.rs puts every node on the home its Rune Vault builds (bare/flow_vault.rs).
 mod bare;
 mod child;
 mod claude;
-mod claude_mcp;
 mod codex;
 mod codex_mcp;
 mod env;
@@ -59,7 +58,7 @@ pub struct FlowManager {
     // the previous attempt's reaper has removed it.
     sessions: Sessions,
     next_token: Arc<AtomicU64>,
-    // The first Bare home/login verdict per run and node kind (flow/bare.rs `check_once`).
+    // The first home/login verdict per run, node kind and vault (flow/bare.rs `check_once`).
     bare_checks: bare::Checks,
 }
 
@@ -108,7 +107,8 @@ pub struct FlowPermissionPayload {
 // would read back as undefined at runtime, a gap `cargo check`/`npm run build` cannot catch.
 
 // ---------------------------------------------------------------------------
-// Tauri commands (frozen signatures, §2)
+// Tauri commands (flow_run_node's signature changed in FV1: `vault`/`vaultHash` replace the
+// allowlist and mode keys; the others are unchanged, §2)
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -122,27 +122,46 @@ pub async fn flow_run_node(       // async: PATH probe, `reg query` and spawn mu
     model: String,                // provider model id: a claude id or a module's flowModels id
     prompt: String,                // the already-rendered prompt text (§3 renderPrompt), never a template
     cwd: String,                   // empty = no "cwd" addon on the node; defaults to repo_root() below
-    tool_allowlist: Vec<String>,  // "permission-allowlist" addon values; auto-approved without a UI pause
-    permission_mode: String,      // the run's resolved mode; re-validated here, Codex ignores it
+    vault: Option<String>,        // the node's Rune Vault id; unset = its agent's stock vault
+    vault_hash: String,           // the hash approval bound; a changed vault refuses, a missing one is refused
 ) -> Result<u64, String> {
-    let permission_mode = permission::effective(&permission_mode, &model).to_string();
     // Ok(u64) = spawn token: FlowManager-monotonic, returned once the child is spawned
     // and the prompt line written. Diagnostic only (logged by engine.ts); events are
     // matched by runId/nodeId/attempt. Err covers pre-spawn failures (no node.exe /
-    // claude.exe, unknown backend, missing vendor key, no Bare home or login).
-    let need = bare::need_for(&backend, &model).ok_or_else(|| format!("backend not yet wired: {backend}"))?;
-    // Every node runs on the Bare home; the first missing home or login fails the run's
-    // later nodes of that kind with the same message, before anything is built or spawned.
-    // Resolved first: a Codex node's home trusts it (W2-L2d).
+    // claude.exe, unknown backend or vault, a changed vault, missing vendor key, no login).
+    // The mode and the allow entries come from the node's vault (`permission` FV1b); the engine's
+    // `toolAllowlist` and `permissionMode` keys are gone, and any it still sends are ignored.
+    let agent = bare::agent_of(&backend).ok_or_else(|| format!("backend not yet wired: {backend}"))?;
+    let need = bare::need_for(agent, &model).ok_or_else(|| format!("backend not yet wired: {backend}"))?;
+    if vault_hash.trim().is_empty() {
+        return Err("Vault Approval Missing; Approve It Again".into());
+    }
+    // Resolved first: a Codex node's home trusts it.
     let cwd = if cwd.trim().is_empty() { repo_root().display().to_string() } else { cwd };
     if !Path::new(&cwd).is_dir() {
         return Err(format!("cwd is not a directory: {cwd}"));
     }
-    let spec = bare::check_once(&state.bare_checks, &run_id, need, || match backend.as_str() {
-        "sdk" => claude::spec(need),
-        "codex" => codex::spec(&cwd),
-        _ => Err(format!("backend not yet wired: {backend}")),
-    })?;
+    // Every node loads its vault's home; the first missing login fails the run's later nodes
+    // of that kind on that vault with the same message, before anything is built or spawned.
+    let (spec, tool_allowlist, permission_mode) = {
+        let checks = Arc::clone(&state.bare_checks);
+        let (run_id, node_id, model, cwd) = (run_id.clone(), node_id.clone(), model.clone(), cwd.clone());
+        tauri::async_runtime::spawn_blocking(move || {
+            let approved = crate::bare::flow_vault::approve(&crate::paths::root(), agent, vault.as_deref(), Some(vault_hash.as_str()))?;
+            let tab = bare::ctl_tab(&run_id, &node_id);
+            let mut spec = bare::check_once(&checks, &run_id, need, &approved.vault, || match need {
+                bare::Need::Claude | bare::Need::Gateway => claude::spec(need, &approved.vault, &tab),
+                bare::Need::Codex => codex::spec(&cwd, &approved.vault, &tab),
+            })?;
+            if let Some(w) = crate::bare::flow_vault::dropped_allow_warning(&crate::paths::root(), agent, &approved.vault) {
+                bare::add_warning(&mut spec, w);
+            }
+            let mode = permission::effective(approved.perms.mode.as_deref().unwrap_or("default"), &model).to_string();
+            Ok::<_, String>((spec, approved.perms.allow, mode))
+        })
+        .await
+        .map_err(|e| e.to_string())??
+    };
     // Codex nodes only: the token the Bare config's `vidar_drive` server forwards.
     let ctl_token = bare::ctl_token_of(&spec);
     let sessions = Arc::clone(&state.sessions);

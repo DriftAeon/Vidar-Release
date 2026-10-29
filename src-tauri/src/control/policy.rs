@@ -23,7 +23,7 @@ pub enum Class {
     Denied,
 }
 
-/// Verb -> class (plan `Verbs` table). Unknown verbs fall through to
+/// Verb -> class. Unknown verbs fall through to
 /// `Denied`; `prompt`/`spawn`/`ask` classify as `Act`, and each has its own
 /// `route()` arm that goes through `card::request`.
 pub fn class_of(verb: &str) -> Class {

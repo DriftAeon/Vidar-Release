@@ -7,7 +7,7 @@ import { invoke } from "../ipc";
 import { rejection as coreRejection, resolveAfterSave, type ChordBinding } from "../shortcuts-core";
 
 // `description` is the dim line under the name: only a consequence the name doesn't state (needs a
-// restart, a limit); `tip` is the row's tooltip for an explanation (docs/runs/2026-10-01-descriptor-text/plan.md).
+// restart, a limit); `tip` is the row's tooltip for an explanation.
 export interface Shortcut {
   id: string;
   name: string;

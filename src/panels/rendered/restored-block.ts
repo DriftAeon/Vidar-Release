@@ -6,6 +6,6 @@ import { iconImg } from "../../icon-img";
 export function restoredCard(text: string, truncated: boolean): HTMLElement {
   const card = el("div", "blk blk-restored");
   card.append(iconImg("restore"), el("span", undefined, text));
-  if (truncated) card.title = "Older history omitted"; // copy-ok: full-sentence tooltip, sentence case (user brief)
+  if (truncated) card.title = "Older history omitted"; // copy-ok: full-sentence tooltip, sentence case
   return card;
 }

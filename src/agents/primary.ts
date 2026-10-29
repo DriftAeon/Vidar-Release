@@ -1,10 +1,15 @@
 // src\agents\primary.ts — the primary agent: vidar.json `primaryAgent` ("codex" | "claude", optional)
 // resolved against the agent modules that are active right now. Installed means active in the
-// module registry (`modulesOf("agent")`, the same list `pickSetupRunner` reads). No runtime
-// imports, so `node --test` loads it directly: settings/agents.ts binds the two sources at boot
-// (`setPrimarySources`), and every consumer reads `effectivePrimary()` at use time.
+// module registry (`modulesOf("agent")`, the same list `pickSetupRunner` reads). Its runtime
+// imports (id.ts, descriptor.ts) carry a `.ts` suffix, so `node --test` loads it directly:
+// settings/agents.ts binds the two sources at boot (`setPrimarySources`), and every consumer reads
+// `effectivePrimary()` at use time.
 
-import type { AgentId } from "./id";
+// @ts-ignore TS5097: the .ts specifiers let node --test load this file without a bundler
+import { isAgentId } from "./id.ts";
+// @ts-ignore TS5097
+import { agentOrder } from "./descriptor.ts";
+import type { AgentId } from "./id.ts";
 
 export type PrimaryAgent = AgentId;
 
@@ -15,8 +20,7 @@ export interface PrimaryModule {
   agent?: { setup?: { order?: number } };
 }
 
-const isPick = (v: unknown): v is PrimaryAgent => v === "codex" || v === "claude";
-const other = (p: PrimaryAgent): PrimaryAgent => (p === "codex" ? "claude" : "codex");
+const isPick = isAgentId;
 
 /** Pure: the active primary-capable agents by ascending `agent.setup.order` (absent sorts last,
  *  ties keep registry order), so unset with both active gives today's order: Claude (0), Codex (1). */
@@ -37,7 +41,7 @@ export function resolvePrimary(saved: unknown, active: readonly PrimaryModule[])
   const choices = choicesOf(active);
   if (isPick(saved)) {
     if (choices.includes(saved)) return saved;
-    return choices.includes(other(saved)) ? other(saved) : null;
+    return agentOrder(saved).find((a) => choices.includes(a)) ?? null;
   }
   return choices[0] ?? null;
 }

@@ -1,8 +1,7 @@
 // The warm `stt` process: the slot's `warm` command (`stt_parakeet.py --serve`) held loaded in a
-// kill-on-close job, so a press costs one decode instead of a model load
-// (docs/runs/2026-10-05-parakeet-trim/plan-warm.md).
+// kill-on-close job, so a press costs one decode instead of a model load.
 //
-// Lifecycle: `ensure()` (from `listen_start` only, user decision 2026-10-05) spawns it; nothing
+// Lifecycle: `ensure()` (from `listen_start` only) spawns it; nothing
 // unloads it but Vidar's exit (the job closes with the process, crash and swap included).
 // `listen_stop` leaves it loaded. `try_run` is caller-agnostic: PTT and wake both use a loaded
 // process, and the `WARM` mutex serialises them (one decode at a time).

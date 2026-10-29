@@ -47,7 +47,7 @@ export class BusGoneError extends BusUnavailableError {}
 export class BusTimeoutError extends Error {}
 
 const MAX_FRAME = 16 * 1024 * 1024;
-const DEFAULT_TIMEOUT_MS = 300_000; // matches the ask gate's 300 s requester deadline (plan v1->v2)
+const DEFAULT_TIMEOUT_MS = 300_000; // matches the ask gate's 300 s requester deadline
 
 /** Pull the three fields `connect` needs out of a parsed registry object. */
 function registryFields(registry, source) {

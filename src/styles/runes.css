@@ -45,6 +45,11 @@
 .runes-act:disabled { opacity: 0.5; cursor: default; }
 .runes-refresh { margin-left: auto; justify-content: center; min-width: var(--row-24); padding-inline: var(--space-4); box-sizing: border-box; }
 .runes-refresh[hidden] { display: none; }
+.runes-acts .runes-act { justify-content: center; min-width: var(--row-24); padding-inline: var(--space-4); box-sizing: border-box; } /* Edit and Open Folder: icon-only, square like Refresh */
+/* Make Variant notice: right-aligned in the pane head, one line, ellipsis (full text in the tooltip) */
+.runes-head-note { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-12); color: var(--fg-dim); }
+.runes-head-note[hidden] { display: none; }
+.runes-head-note:not([hidden]) + .runes-refresh { margin-left: 0; }
 .runes-refresh[aria-busy="true"] { cursor: progress; }
 
 .runes-group { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -53,12 +58,9 @@
   font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg);
 }
 .runes-missing { font-size: var(--font-12); color: var(--fg); font-family: var(--font-mono); overflow-wrap: anywhere; }
-.runes-outside { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--space-2); }
-/* Loaded files no set targets: one dim-hued card row per file, name only, path in the tooltip */
-.runes-outside { --set-hue: var(--fg-dim); }
+/* Auto Imports: loaded files no set targets, one row per file in a set card's tray, path in the tooltip */
 .runes-outside-row { width: 100%; box-sizing: border-box; font: inherit; color: var(--fg); text-align: left; }
-.runes-outside-row .icn, .runes-group-head .icn { width: var(--space-16); height: var(--space-16); flex: none; }
-.runes-group-head .icn { display: block; }
+.runes-outside-row .icn { width: var(--space-16); height: var(--space-16); flex: none; }
 .runes-outside-row:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
 
 /* set hues (data.mjs) → tokens: CLAUDE.md, AGENTS.md, path-scoped, recall, not loaded */
@@ -69,10 +71,14 @@
 .runes-set.hue-none { --set-hue: var(--fg-dim); }
 .runes-set.hue-generated { --set-hue: var(--hue-generated); }
 .runes-set.hue-set { --set-hue: var(--hue-set); }
+.runes-set.hue-agent-claude { --set-hue: var(--hue-agent-claude-set); }
+.runes-set.hue-agent-codex { --set-hue: var(--agent-codex); }
 .runes-set.hue-inherited { --set-hue: var(--hue-inherited); }
 .runes-set.hue-skill { --set-hue: var(--kind-skill); }
 .runes-set.hue-agent { --set-hue: var(--kind-agent); }
 .runes-set.hue-hook { --set-hue: var(--kind-hook); }
+.runes-set.hue-rule { --set-hue: var(--kind-page); } /* the same steel blue as MCP; the head fill is --fill-rule below */
+.runes-set.hue-mcp { --set-hue: var(--kind-page); } /* MCP never had a kind colour (grey until now); the steel blue of the page kind (2026-10-29) */
 
 /* the hue fills the head only: no side bar, bodies neutral (2026-10-20) */
 .runes-set { border-radius: var(--radius-4); background: var(--bg); overflow: hidden; }
@@ -80,36 +86,49 @@
 .runes-set-head {
   display: grid; grid-template-columns: var(--space-16) minmax(0, 1fr) auto auto; gap: var(--space-8); align-items: center;
   padding: var(--space-4) var(--space-12); list-style: none; cursor: pointer;
-  background: color-mix(in srgb, var(--set-hue) 16%, var(--bg-panel));
+  background: var(--set-fill); /* solid, like the Flow node header (2026-10-29) */
 }
 .runes-set-head::-webkit-details-marker { display: none; }
-.runes-set-head:hover { background: color-mix(in srgb, var(--set-hue) 24%, var(--bg-panel)); }
+.runes-set-head:hover { background: color-mix(in srgb, var(--set-fill) 88%, var(--fg)); } /* solid fill with 12% --fg mixed in */
+.runes-set-head .runes-sn, .runes-set-head .runes-sc, .runes-set-head .runes-cond { color: var(--set-ink); }
 .runes-set-head:focus-visible, .runes-blk.card:focus-visible, button.runes-chip:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
 /* a set nested in a library (Kit > Skills) sits inset like the tray's cards and takes their edge (2026-10-22) */
 /* Frame and head are one colour, like the Notion group bands (notion.css): the head merges into the border on
-   the left, right and top and the body sits inside it. The colour is the card head's earlier fill, 26% hue over
-   --bg-panel (34% on hover); 30% over --border read greyed out (user, 2026-10-23: "depressingly sadder") */
-.runes-set { --set-frame: color-mix(in srgb, var(--set-hue) 26%, var(--bg-panel)); }
-.runes-set:has(> .runes-set-head:hover) { --set-frame: color-mix(in srgb, var(--set-hue) 34%, var(--bg-panel)); }
+   the left, right and top and the body sits inside it. The colour is the solid set hue (was 26% hue over
+   --bg-panel, which let the panel leak through and read brown), 12% --fg mixed in on hover.
+   The fill is the hue taken 30% toward --bg (the full hue read too light). Ink is whichever of
+   --bg / --fg reads better per hue; several land 3-4:1, under the 4.5 rule, by decision. */
+.runes-set { --set-fill: color-mix(in srgb, var(--set-hue) 70%, var(--bg)); --set-ink: var(--bg); --set-frame: var(--set-fill); }
+.runes-set.hue-set, .runes-set.hue-agent-claude, .runes-set.hue-inherited, .runes-set.hue-none { --set-ink: var(--fg); }
+/* kind heads and Stock take their dark fills as given, not a hue darkened toward --bg */
+.runes-set.hue-agent { --set-fill: var(--fill-agent); --set-ink: var(--fg); }
+.runes-set.hue-skill { --set-fill: var(--fill-skill); --set-ink: var(--fg); }
+.runes-set.hue-hook { --set-fill: var(--fill-hook); --set-ink: var(--bg); }
+.runes-set.hue-rule { --set-fill: var(--fill-rule); --set-ink: var(--fg); }
+.runes-set.hue-plugin { --set-hue: var(--fill-plugin); --set-fill: var(--fill-plugin); --set-ink: var(--fg); }
+.runes-set.hue-stock { --set-fill: var(--fill-stock); --set-ink: var(--fg); }
+.runes-set:has(> .runes-set-head:hover) { --set-frame: color-mix(in srgb, var(--set-fill) 88%, var(--fg)); }
 .runes-set > .runes-set, .runes-card { border: var(--border-w) solid var(--set-frame); }
 .runes-set > .runes-set > .runes-set-head, .runes-card > .runes-set-head { background: var(--set-frame); }
 .runes-set > .runes-set { margin: var(--space-4) var(--space-4) 0 var(--space-4); }
-.runes-set > .runes-set > .runes-tray { padding-right: var(--space-4); } /* rows sit 4 in from each side of the nested card (2026-10-22) */
 .runes-set > summary + .runes-set { margin-top: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
 .runes-tray + .runes-set { margin-top: 0; }
+/* Delete Library at a library card's end: the nested sets' inset, so it lines up with the rune cards and has the same gap above and below */
+.runes-set > .runes-lib-delete { display: block; box-sizing: border-box; width: calc(100% - 2 * var(--space-4)); margin: var(--space-6) var(--space-4); } /* legacy space-6: the tray's own inset */
 .runes-set > .runes-set:last-child { margin-bottom: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
 .runes-set > .runes-err + .runes-set { margin-top: var(--space-6); } /* legacy space-6: the tray's own inset, kept so the nested head matches (2026-10-22) */
 /* the one set card (set-card.ts): Inherited's bordered head over Kit's nested kind groups and rows (2026-10-22);
-   padded like the Kit skill rows (.rp-source) so a set head reads a step above its 24px rune rows (user, 2026-10-22) */
+   padded like the Kit skill rows (.rp-source) so a set head reads a step above its 24px rune rows */
 .runes-card { background: transparent; }
 .runes-card > .runes-set-head {
-  box-sizing: border-box; padding: var(--space-6) var(--space-12); /* legacy space-6: the bigger name and icon take back the 8px pad's height (user, 2026-10-22) */
+  box-sizing: border-box; padding: var(--space-6) var(--space-12); /* legacy space-6: the bigger name and icon take back the 8px pad's height */
 }
 .runes-card > .runes-set-head .runes-sn { font-family: var(--font-title); font-size: var(--font-16); }
 .runes-card > .runes-set-head .runes-scp .icn { width: var(--space-16); height: var(--space-16); }
 .runes-scp { display: flex; }
 .runes-cond { display: flex; align-items: center; }
 .runes-cond .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.runes-set > .runes-div { margin-inline: var(--space-4); padding-inline: var(--space-8); } /* Modify's Modules divider inside a set card takes the nested cards' inset (2026-10-29) */
 .runes-div { margin-top: var(--space-12); font-size: var(--font-11); font-weight: var(--weight-strong); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--fg-dim); border-bottom: var(--border-w) solid var(--border); padding-bottom: var(--space-2); }
 .runes-scp .icn, .runes-chip .icn { width: var(--space-12); height: var(--space-12); flex: none; }
 .runes-sn { font-family: var(--font-mono); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -117,21 +136,33 @@
 .runes-sc { min-width: 3ch; font-family: var(--font-mono); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); font-variant-numeric: tabular-nums; text-align: right; }
 
 /* rune cards: Kind slot | name | +N, Scope, Activate */
-.runes-tray { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6) var(--space-12) var(--space-6) var(--space-4); } /* space-6: user asked top and bottom to meet between 4 and 8 (2026-10-11) */
+.runes-tray { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6) var(--space-4); } /* space-6: top and bottom meet between 4 and 8 */
 .runes-blk {
   display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); padding: 0 var(--space-4);
-  border: var(--border-w) solid color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); border-radius: var(--radius-4);
+  border: var(--border-w) var(--rn-edge-style, solid) var(--rn-edge, color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border))); border-radius: var(--radius-4);
   background: color-mix(in srgb, var(--fg-dim) 26%, var(--bg-panel)); overflow: hidden;
 }
+/* the opened body (.runes-rb) reads the same --rn-edge pair, so its left, right and bottom edges track the head in every state */
+.runes-rn { --rn-edge: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); }
+.runes-rn:has(> .runes-blk.card:hover) { --rn-edge: var(--set-hue, var(--fg-dim)); }
+.runes-rn:has(> .runes-blk.rc) { --rn-edge: var(--fg-dim); --rn-edge-style: dotted; }
+.runes-rn:has(> .runes-blk.ps) { --rn-edge: var(--fg-dim); }
+.runes-rn:has(> .runes-blk.missing) { --rn-edge: var(--border-strong); --rn-edge-style: dashed; }
 .runes-blk.card { list-style: none; cursor: pointer; }
 .runes-blk.card::-webkit-details-marker { display: none; }
-.runes-blk.card:hover { background: color-mix(in srgb, var(--fg-dim) 34%, var(--bg-panel)); border-color: var(--set-hue, var(--fg-dim)); }
-.runes-blk.rc { background: transparent; border-style: dotted; border-color: var(--fg-dim); }
-.runes-blk.ps { background: transparent; border-color: var(--fg-dim); }
-.runes-blk.missing { background: transparent; border-style: dashed; border-color: var(--border-strong); }
+.runes-blk.card:hover { background: color-mix(in srgb, var(--fg-dim) 34%, var(--bg-panel)); border-color: var(--rn-edge, var(--set-hue, var(--fg-dim))); }
+.runes-blk.rc { background: transparent; border-style: var(--rn-edge-style, dotted); border-color: var(--rn-edge, var(--fg-dim)); }
+.runes-blk.ps { background: transparent; border-color: var(--rn-edge, var(--fg-dim)); }
+.runes-blk.missing { background: transparent; border-style: var(--rn-edge-style, dashed); border-color: var(--rn-edge, var(--border-strong)); }
 .runes-rn[open] > .runes-blk { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* open: no edge between head and body, so the pair reads as one section; :hover keeps it off too */
+/* width 0, not a transparent colour: a transparent bottom edge mitres the side edges' last pixel, a 1px notch at the join */
+/* the padding takes the edge's 1px back, so the content box and its centred text stay put on open */
+.runes-rn[open] > .runes-blk, .runes-rn[open] > .runes-blk:hover { border-bottom-width: 0; padding-bottom: var(--border-w); }
 .runes-kslot { flex: none; display: flex; width: var(--row-24); }
 .runes-kslot .runes-chip { width: 100%; }
+/* the kind icon stands bare: no pill behind it; the box keeps its size so nothing shifts */
+.runes-kslot .runes-chip.k { background: transparent; border-color: transparent; }
 .runes-rname { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-12); font-weight: var(--weight-strong); color: var(--fg); }
 .runes-chips { flex: none; display: flex; align-items: center; gap: var(--space-4); }
 .runes-chip {
@@ -148,11 +179,11 @@ button.runes-chip:disabled { cursor: default; border-color: var(--border); backg
 .runes-chip.a-recall, .runes-fm.a-recall .runes-fv { color: var(--class-web); }
 
 /* opened card: frontmatter bar (Edit, Open Folder) over the body */
-.runes-rb { margin-bottom: var(--space-4); background: var(--bg-panel); border: var(--border-w) solid var(--border); border-top: none; border-radius: 0 0 var(--radius-4) var(--radius-4); overflow: hidden; }
+.runes-rb { margin-bottom: var(--space-4); background: var(--bg-panel); border: var(--border-w) var(--rn-edge-style, solid) var(--rn-edge, var(--border)); border-top: none; border-radius: 0 0 var(--radius-4) var(--radius-4); overflow: hidden; }
 .runes-fmbar { display: flex; align-items: center; gap: var(--space-12); padding: var(--space-4) var(--space-8); background: var(--bg); border-bottom: var(--border-w) solid color-mix(in srgb, var(--fg-dim) 45%, var(--bg-panel)); }
 .runes-fms { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); }
-.runes-fm { display: inline-flex; height: var(--line-20); border: var(--border-w) solid var(--border); border-radius: var(--radius-2); overflow: hidden; font-family: var(--font-mono); font-size: var(--font-11); line-height: var(--line-20); white-space: nowrap; }
-.runes-fk { padding: 0 var(--space-4); color: var(--fg-dim); background: var(--bg-hover); border-right: var(--border-w) solid var(--border); }
+.runes-fm { display: inline-flex; height: var(--line-20); border: var(--border-w) solid var(--border); border-radius: var(--radius-2); overflow: hidden; font-family: var(--font-mono); font-size: var(--font-11); line-height: 1; white-space: nowrap; } /* line-height 1: the 18px content box (line-20 less borders) centres key and value alike */
+.runes-fk { display: inline-flex; align-items: center; padding: 0 var(--space-4); color: var(--fg-dim); background: var(--bg-hover); border-right: var(--border-w) solid var(--border); }
 .runes-fv { display: inline-flex; align-items: center; padding: 0 var(--space-8); color: var(--fg); }
 .runes-fm.fname .runes-fv { font-weight: var(--weight-strong); }
 .runes-acts { flex: none; display: flex; align-items: center; gap: var(--space-4); }

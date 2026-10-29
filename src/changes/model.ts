@@ -5,6 +5,8 @@
 // from failing the whole batch).
 import type { ChangedFile } from "../ipc";
 import type { LucideName } from "../icons";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { label, titleWords } from "../format.ts";
 
 export type Group = "staged" | "changes";
 /** Drives the status letter's tint (changes.css `.cx-st-<kind>`, the --git-* tokens). */
@@ -161,12 +163,12 @@ export function truncatePath(path: string, max: number): { name: string; dir: st
  *  edit/integrate → M, delete/move/delete → D, anything else its first letter upper-cased. `title`
  *  is the action word in Title Case ("move/delete" → "Move/Delete"). */
 export function p4ActionLetter(action: string): { letter: string; kind: StatusKind; title: string } {
-  const title = action.replace(/(^|[/\-_ ])([a-z])/g, (_m, sep: string, c: string) => sep + c.toUpperCase());
+  const title = action.split("/").map((part) => titleWords(part) || part).join("/");
   switch (action) {
     case "add": case "branch": case "move/add": return { letter: "A", kind: "added", title };
     case "edit": case "integrate": return { letter: "M", kind: "modified", title };
     case "delete": case "move/delete": return { letter: "D", kind: "deleted", title };
-    default: return { letter: action.charAt(0).toUpperCase(), kind: "untracked", title };
+    default: return { letter: label(action.charAt(0)), kind: "untracked", title };
   }
 }
 

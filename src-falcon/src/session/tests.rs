@@ -1507,7 +1507,7 @@ fn a_record_over_the_page_budget_hydrates_alone_on_its_page() {
     session.child.terminate_tree();
 }
 
-/// Regression: a journal written before 847b995 can hold a record over
+/// Regression: a journal written before the record cap can hold a record over
 /// `LONE_RECORD_CAP` (but within `MAX_RECORD`). Hydrate failed on it every
 /// time, so that session could never rehydrate. It now pages an `Overflow`
 /// in its place at the same seq and carries on past it.

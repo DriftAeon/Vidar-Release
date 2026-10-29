@@ -1,13 +1,16 @@
 // Full Flow approval disclosure; never routes through lane-card's truncating formatter.
 import type { FlowGraph, FlowNode } from "../flow/model";
-import type { NodeModes } from "../flow/permission-mode";
+import type { NodeGrants, NodeModes } from "../flow/permission-mode";
 import type { MatrixFact, NodeMatrix } from "./node-matrix";
 // Title Case card values for the modes a node can run in (kept here: this file loads under node --test).
 const MODE_LABELS: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", auto: "Auto" };
 // This is a field key; the paths gate counts its whole literal as a folder.
 const INPUT_CONTENT_FIELD = "con" + "tent";
 
-export function flowCardRows(graph: FlowGraph, askedBy: string, orderedNodes: (graph: FlowGraph) => FlowNode[], modes?: NodeModes): [string, string][] {
+/** The vault's exact allow entries for a node, comma-joined; blank when the vault allows nothing. */
+const allows = (grants: NodeGrants | undefined, id: string) => (grants?.[id]?.allow ?? []).join(", ");
+
+export function flowCardRows(graph: FlowGraph, askedBy: string, orderedNodes: (graph: FlowGraph) => FlowNode[], modes?: NodeModes, grants?: NodeGrants): [string, string][] {
   const order = orderedNodes(graph);
   const rows: [string, string][] = [
     ["Asked By", askedBy], ["Flow", graph.name],
@@ -19,14 +22,15 @@ export function flowCardRows(graph: FlowGraph, askedBy: string, orderedNodes: (g
     const addon = (kind: string) => node.addons?.find((item) => item.kind === kind)?.value ?? "";
     rows.push(["Agent", `${node.id}: ${node.title}`], ["Model", node.model ?? ""],
       ["Working Directory", addon("cwd")], ["Task", node.fields.find((field) => field.k === "task")?.v ?? ""],
-      ["Permission Mode", MODE_LABELS[modes?.[node.id] ?? "default"] ?? "Default"], ["Allowlist", addon("permission-allowlist")],["System Prompt", addon("system-prompt")], ["Retries", addon("retries") || "0"]);
+      ["Vault", grants?.[node.id]?.vault ?? ""], ["Permission Mode", MODE_LABELS[modes?.[node.id] ?? "default"] ?? "Default"],
+      ["Allows", allows(grants, node.id)], ["System Prompt", addon("system-prompt")], ["Retries", addon("retries") || "0"]);
   }
   return rows;
 }
 
 /** The same disclosure as flowCardRows, laid out as the Node Matrix: agent nodes are the columns in run
  *  order (so no Order row), the flow-wide facts sit above. Full text, never truncated. */
-export function flowCardMatrix(graph: FlowGraph, askedBy: string, orderedNodes: (graph: FlowGraph) => FlowNode[], modes?: NodeModes): NodeMatrix {
+export function flowCardMatrix(graph: FlowGraph, askedBy: string, orderedNodes: (graph: FlowGraph) => FlowNode[], modes?: NodeModes, grants?: NodeGrants): NodeMatrix {
   const order = orderedNodes(graph);
   const agents = order.filter((node) => node.kind === "agent");
   const input = order.find((node) => node.kind === "input")?.fields.find((field) => field.k === INPUT_CONTENT_FIELD)?.v ?? "";
@@ -41,10 +45,11 @@ export function flowCardMatrix(graph: FlowGraph, askedBy: string, orderedNodes: 
     fields: [
       { label: "Model", icon: "model", mono: true, cells: agents.map((node) => node.model ?? "") },
       { label: "Working Directory", icon: "folder", mono: true, cells: agents.map((node) => addon(node, "cwd")) },
+      { label: "Vault", icon: "key", mono: true, cells: agents.map((node) => grants?.[node.id]?.vault ?? "") },
       { label: "Permission Mode", icon: "shield", cells: agents.map((node) => MODE_LABELS[modes?.[node.id] ?? "default"] ?? "Default") },
       { label: "Retries", icon: "retry", cells: agents.map((node) => addon(node, "retries") || "0") },
       { label: "Task", icon: "task", cells: agents.map((node) => node.fields.find((field) => field.k === "task")?.v ?? "") },
-      { label: "Allowlist", icon: "key", mono: true, cells: agents.map((node) => addon(node, "permission-allowlist")) },
+      { label: "Allows", icon: "tool", mono: true, cells: agents.map((node) => allows(grants, node.id)) },
       { label: "System Prompt", icon: "prompt", cells: agents.map((node) => addon(node, "system-prompt")) },
     ],
   };

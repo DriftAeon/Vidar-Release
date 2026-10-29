@@ -93,6 +93,21 @@ test("gate refusal installs no guard", async () => {
   assert.equal(w.__vidarExternalGuard, undefined);
 });
 
+test("no-press: the shared decision pair is pressable, the real swap UI is not", () => {
+  // Runes / Flow / Settings confirms: swap-yes and swap-no outside the swap container
+  for (const [name, cls] of [["Delete", "swap-yes"], ["Cancel", "swap-no"], ["Trust", "swap-yes vs-trust-confirm"], ["Cancel", "swap-no vs-trust-cancel"]]) {
+    assert.equal(matchNoPress({ role: "button", name, cls, inSwapUi: false }), null, `${name} ${cls}`);
+  }
+  // The title bar's swap confirm reuses the pair: Yes starts a swap, so it stays refused by container
+  assert.ok(matchNoPress({ role: "button", name: "Yes", cls: "swap-yes", inSwapUi: true }));
+  assert.ok(matchNoPress({ role: "button", name: "No", cls: "swap-no", inSwapUi: true }));
+  // swap button (name "Swap Vidar", its spinner), RMB menu row, and bare class tokens
+  assert.ok(matchNoPress({ role: "button", name: "Swap Vidar", cls: "" }));
+  assert.ok(matchNoPress({ role: "span", name: "", cls: "swap-spin", inSwapUi: true }));
+  assert.ok(matchNoPress({ role: "menuitemcheckbox", name: "Confirmation Panel", cls: "on", inSwapUi: true }));
+  for (const cls of ["swap", "restart", "quit", "x quit"]) assert.ok(matchNoPress({ role: "button", name: "X", cls }), cls);
+});
+
 test("no-press matchers refuse each protected control", async () => {
   const cases = [
     { role: "button", name: "Close", inCaption: true }, { role: "button", name: "Minimize", inCaption: true }, { role: "button", name: "Maximise", inCaption: true },

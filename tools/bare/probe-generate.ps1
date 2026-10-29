@@ -1,6 +1,5 @@
 #Requires -Version 7
-# Generator isolation probe for the rune generator (run 2026-10-17-rune-generator, W0; plan.md § Runner,
-# D1, D5, E5, E6). Builds a scratch generator home per agent that mirrors D1 (login only, empty settings,
+# Generator isolation probe for the rune generator. Builds a scratch generator home per agent that mirrors the generator's (login only, empty settings,
 # no hooks, skills, MCP or instruction files; Codex config.toml without developer_instructions), runs tiny
 # generations through it and records PASS/FAIL/UNKNOWN with evidence for the ten W0 checks:
 #   1 canaries (instruction files, hooks, skill, MCP, ambient ~\.claude / ~\.codex) never reach the model
@@ -13,20 +12,28 @@
 #   8 --max-budget-usd under a subscription login; any Codex equivalent
 #   9 Codex in a non-repository cwd: the exact invocation that works
 #  10 wall time for a 20K-char input at the highest effort (behind -Heavy)
+#  11 app call layout (Codex; tools/bare/probe-generate-layout.ps1): the layout rules/generate/home.rs builds
+#     (config dir with credential + config.toml only, empty cwd), canary AGENTS.md one level above the cwd and in
+#     a fake USERPROFILE, the Codex argv exactly as run.rs codex_argv builds it, then again with
+#     `-c project_doc_max_bytes=0`. PASS = neither canary text appears in either reply. Cost: 2 tiny Codex calls
+#     (about 3-4 counting the standard Codex section's retries when run alongside); check 1 tested flags, not this.
 # Who runs it: the user, in a normal terminal. Agents run -DryRun only: it prints every argv, env diff and
 # file it would create, runs nothing and spends nothing (it only runs `--version` and `--help`).
 #
 # Usage: pwsh -NoProfile -File tools/bare/probe-generate.ps1 [-Agent claude|codex|both] [-DryRun]
 #          [-Out <dir>] [-Heavy] [-Keep] [-BareHome <dir>] [-CodexAuth <file>] [-ClaudeModel <m>]
-#          [-CodexModel <m>]
-#   -Agent        which agent to probe; default both.
+#          [-CodexModel <m>] [-Check <n>[,<n>...]]
+#   -Agent        which agent to probe; default both. Check 11 is Codex only.
+#   -Check        run only the named checks (e.g. -Check 11). 1-10 run as one standard section per agent (they share
+#                 their calls); naming any of them runs that whole section. Default: all, including 11.
 #   -DryRun       print the plan (calls, argv, env diff, files); create and run nothing.
 #   -Out          result folder; default <repo>\runtime\probe-generate\<yyyyMMdd-HHmmss>. Gets result.json
 #                 and result.md (no token values; paths and sizes only).
 #   -Heavy        also run check 10 (one 20K-char run per agent at the highest effort).
 #   -Keep         keep the scratch homes under %TEMP%\vpg-<stamp> (credential copies are deleted anyway).
-#   -BareHome     the Bare home to take logins from; default the newest %LOCALAPPDATA%\Vidar\homes\<key>
-#                 holding claude-config or codex-home.
+#   -BareHome     the Bare home to take logins from. Default: the shared login store
+#                 %LOCALAPPDATA%\Vidar\homes\_shared\<agent>\<file>, then this repo's own keyed home
+#                 (homes\<installRootKey(repo)>, tools/lib/agent-env.mjs).
 #   -CodexAuth    Codex auth.json to use when the Bare codex-home has none.
 # Scratch homes and cwds live under %TEMP% (no .git above them, so check 9 is honest); the real Bare homes
 # are only read, never written. Refuses (exit 2) a -Out inside a Bare home.
@@ -41,7 +48,8 @@ param(
   [string]$BareHome,
   [string]$CodexAuth,
   [string]$ClaudeModel = 'sonnet',
-  [string]$CodexModel
+  [string]$CodexModel,
+  [int[]]$Check
 )
 $ErrorActionPreference = 'Stop'
 $Utf8 = [Text.UTF8Encoding]::new($false)
@@ -184,17 +192,29 @@ function Add-Canaries([string]$agent, [string]$b) {
 }
 
 # ---------- login ----------
+# This install's own home: %LOCALAPPDATA%\Vidar\homes\<installRootKey(repo)> (tools/lib/agent-env.mjs),
+# never the newest folder under homes, which can belong to another install root.
+$script:KeyedHome = $null
 function Find-BareHome {
   if ($BareHome) { return $BareHome }
-  if (-not (Test-Path $HomesRoot)) { return $null }
-  $c = Get-ChildItem $HomesRoot -Directory | Where-Object { $_.Name -notlike '_*' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-  if ($c) { return $c.FullName }; return $null
+  if ($script:KeyedHome) { return $script:KeyedHome }
+  $js = "const {pathToFileURL}=await import('node:url'); const {resolveHome}=await import(pathToFileURL(process.argv[1]).href); console.log(resolveHome(process.argv[2]))"
+  $h = (& node --input-type=module -e $js (Join-Path $Repo 'tools\lib\agent-env.mjs') $Repo) -join ''
+  if ($LASTEXITCODE -ne 0 -or -not $h.Trim()) { return $null }
+  $script:KeyedHome = $h.Trim(); return $script:KeyedHome
 }
+# Login file per agent: the shared store every home links to (src-tauri/src/bare/login_link.rs), then the keyed
+# home. An explicit -BareHome or -CodexAuth wins over both.
+$LoginFile = @{ claude = @('claude-config', '.credentials.json'); codex = @('codex-home', 'auth.json') }
 function Cred-Source([string]$agent) {
+  if ($agent -eq 'codex' -and $CodexAuth) { return $CodexAuth }
+  $sub, $name = $LoginFile[$agent]
+  if (-not $BareHome) {
+    $shared = Join-Path $HomesRoot "_shared\$agent\$name"
+    if (Test-Path -LiteralPath $shared) { return $shared }
+  }
   $bh = Find-BareHome
-  if ($agent -eq 'claude') { if ($bh) { return (Join-Path $bh 'claude-config\.credentials.json') }; return $null }
-  if ($CodexAuth) { return $CodexAuth }
-  if ($bh) { return (Join-Path $bh 'codex-home\auth.json') }; return $null
+  if ($bh) { return (Join-Path $bh "$sub\$name") }; return $null
 }
 # Paths and sizes only; hard-link names via fsutil (read-only). Never reads the content.
 function Cred-Facts([string]$p) {
@@ -234,10 +254,13 @@ if ($doCodex) {
 }
 $Meta.bareHome = Find-BareHome
 Say "bare home: $($Meta.bareHome)"
+$runStd = (-not $Check) -or [bool]($Check | Where-Object { $_ -ge 1 -and $_ -le 10 })
+$run11 = $doCodex -and ((-not $Check) -or ($Check -contains 11))
 $planCalls = 0
-if ($doClaude) { $planCalls += 7 + [int][bool]$Heavy }
-if ($doCodex) { $planCalls += 6 + [int][bool]$Heavy }
-Say "PLAN: $planCalls model calls (claude 7, codex 6, +1 each with -Heavy; the auth-error and the no-skip-flag Codex call fail fast). Prompts are tiny."
+if ($runStd -and $doClaude) { $planCalls += 7 + [int][bool]$Heavy }
+if ($runStd -and $doCodex) { $planCalls += 6 + [int][bool]$Heavy }
+if ($run11) { $planCalls += 2 }
+Say "PLAN: $planCalls model calls (claude 7, codex 6, +1 each with -Heavy, +2 for check 11; the auth-error and the no-skip-flag Codex call fail fast). Prompts are tiny."
 if (-not $DryRun) { Mkdir-P $Out; Mkdir-P $Work }
 
 # ---------- Claude ----------
@@ -460,10 +483,13 @@ function Run-Codex {
   } else { Rec 10 codex 'UNKNOWN' 'not run (needs -Heavy)' }
 }
 
+. (Join-Path $PSScriptRoot 'probe-generate-layout.ps1')   # check 11 (Run-Check11)
+
 # ---------- run ----------
 try {
-  if ($doClaude) { Run-Claude }
-  if ($doCodex) { Run-Codex }
+  if ($runStd -and $doClaude) { Run-Claude }
+  if ($runStd -and $doCodex) { Run-Codex }
+  if ($run11) { Run-Check11 }
 } finally {
   if (-not $DryRun) {
     # Credential copies and links are removed from scratch whatever happened; the Bare homes were only read.

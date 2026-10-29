@@ -1,13 +1,15 @@
-//! src-tauri\src\bare\login_link.rs — one login across every Bare home (Bare slice 2 Part A,
-//! `docs/projects/bare/slice2-plan.md` A-D1 to A-D6). Each home's login file name (the profile's
+//! src-tauri\src\bare\login_link.rs — one login across every Bare home. Each home's login file name (the profile's
 //! `sharedLogin` entries) is hardlinked to `<local app data>\Vidar\homes\_shared\<agent>\<name>`,
 //! so a moved or fresh install root reuses the login a sibling home already holds. Codex's
 //! `auth.json` (in the profile's `CODEX_HOME`) is shared the same way as `_shared\codex\auth.json`
-//! (`sync_codex`, run 2026-10-21-onboarding); its entry is built here, not read from the profile.
+//! (`sync_codex`); its entry is built here, not read from the profile.
 //!
-//! Trust boundary: this module never opens a login file's contents. It reads names, reparse
-//! attributes, file IDs (volume serial + file index, opened for attributes only), link counts and
-//! DACLs, and it links, unlinks and renames names. The state it keeps per home and agent
+//! Trust boundary: only when both copies of Claude's `.credentials.json` changed, this module
+//! reads at most 64 KB from each file in-process to parse `claudeAiOauth.expiresAt`. Only the
+//! numeric expiry leaves the reader; file contents and parse errors are never logged. No other
+//! login file contents are opened. Otherwise it reads names, reparse attributes, file IDs
+//! (volume serial + file index, opened for attributes only), link counts and DACLs, and it
+//! links, unlinks and renames names. The state it keeps per home and agent
 //! (`<home>\logs\login-link.json` for Claude, `login-link-<agent>.json` for any other) is the file
 //! ID last seen at sync, never bytes.
 //!
@@ -24,9 +26,9 @@
 //!   this home unlinked with a warning (Orion S5);
 //! - same file ID → nothing;
 //! - IDs differ → the side whose ID changed since this home's last sync wins; no record yet → the
-//!   store wins, and the launch warning names the `.split` left in the home; both changed → a
-//!   skip: each keeps its own file, the record stays, the spawn goes on with a launch warning (a
-//!   conflict never overwrites a file that changed; slice2-plan, 2026-10-21). The loser, when
+//!   store wins, and the launch warning names the `.split` left in the home; both changed → for
+//!   Claude credentials, the readable later expiry wins (tie to store); if neither is readable,
+//!   or for Codex, each keeps its file and the spawn warns. The loser, when
 //!   still linked elsewhere, only loses this name; a sole copy keeps a `<name>.split` name, one
 //!   per name (Open A1). Neither side's name is ever missing mid-swap: a failed step puts the
 //!   home's own name back. Last-write times (sibling adoption only) come from file metadata,
@@ -49,6 +51,17 @@ use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
 
 use super::home::{self, acl, HomeLock};
+use crate::agent_spec::{self, spec, Agent};
+
+use super::login_link_claude::{clear_login, is_credentials_key, AGENT as CLAUDE_AGENT};
+#[cfg(test)]
+pub(super) use super::{login_link_claude::sync_claude, login_link_codex::sync_codex};
+#[path = "login_link_expiry.rs"]
+mod login_link_expiry;
+#[path = "login_link_sweep.rs"]
+mod login_link_sweep;
+#[cfg(not(test))]
+pub(crate) use login_link_sweep::start_login_sweep;
 
 /// One `sharedLogin` entry in a profile (A-D4): `file` is relative to the home and sits under a
 /// `homeDirs` entry; the store matches it by file name under `_shared\<agent>`.
@@ -73,17 +86,11 @@ impl std::fmt::Display for FileId {
 
 const STATE: &str = "login-link.json";
 const LOG: &str = "login-link.log";
-/// The Codex entries `sync_codex` builds: `<CODEX_HOME>\auth.json`, shared as `_shared\codex\auth.json`,
-/// and the MCP OAuth store `.credentials.json` (`mcp_oauth_credentials_store = "file"`) beside it, so
-/// every set-combination home (W2 L6) holds the one login and the one set of server tokens.
-const CODEX_AGENT: &str = "codex";
-const CODEX_LOGINS: &[&str] = &["auth.json", ".credentials.json"];
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 const FILE_READ_ATTRIBUTES: u32 = 0x80;
 const FILE_SHARE_ALL: u32 = 0x7;
 const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-
 /// Why a step stopped: `Refuse` ends the spawn; `Skip` leaves this home's own file in use and
 /// the spawn goes on with a warning.
 enum Fail {
@@ -98,6 +105,7 @@ struct Done {
     id: Option<FileId>,
     line: Option<String>,
     warning: Option<String>,
+    keep_pair: Option<(FileId, FileId)>,
 }
 
 fn skip(what: String) -> impl FnOnce(std::io::Error) -> Fail {
@@ -124,6 +132,7 @@ fn injected(at: &str) -> std::io::Result<()> {
 /// the launch warnings.
 pub fn sync_profile(home: &Path, entries: &[SharedLogin], home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
     if entries.is_empty() {
+        clear_login(home)?;
         return Ok(Vec::new());
     }
     validate(entries, home_dirs)?;
@@ -133,26 +142,21 @@ pub fn sync_profile(home: &Path, entries: &[SharedLogin], home_dirs: &[String], 
     }
 }
 
-/// The Codex prepare call site: `<codex_home>\auth.json` synced like Claude's login, when
-/// `codex_home` sits under `home` (any other `CODEX_HOME`, or a home outside `…\Vidar\homes`,
-/// shares nothing). `home_dirs` is the Codex profile's.
-pub fn sync_codex(home: &Path, codex_home: &Path, home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
-    sync_dir(home, codex_home, CODEX_AGENT, CODEX_LOGINS, home_dirs, lock)
+pub(super) fn clear_record(home: &Path, agent: &str) -> Result<(), String> {
+    let path = home.join("logs").join(record_name(agent));
+    if path.exists() {
+        std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
-/// The Claude prepare call site (fold W2 L2a): `<dir>\.credentials.json` synced to the one shared
-/// Claude login, for the profile's own config dir and every set-combination home alike (the
-/// store is per file name, so each home links the same `_shared\claude\.credentials.json`).
-/// `dir` outside `home` shares nothing; `home_dirs` must hold `dir`'s folder.
-pub fn sync_claude(home: &Path, dir: &Path, home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
-    sync_dir(home, dir, CLAUDE_AGENT, CLAUDE_LOGINS, home_dirs, lock)
-}
-
-const CLAUDE_AGENT: &str = "claude";
-const CLAUDE_LOGINS: &[&str] = &[".credentials.json"];
-
-/// `files` in `dir` (under `home`) as `agent`'s shared-login entries.
-fn sync_dir(home: &Path, dir: &Path, agent: &str, files: &[&str], home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
+/// `spec(agent).logins` in `dir` (under `home`) as the agent's shared-login entries; an agent
+/// with no login record shares nothing. The per-agent call sites are `login_link_claude.rs` and
+/// `login_link_codex.rs`.
+pub(super) fn sync_dir(home: &Path, dir: &Path, agent: Agent, home_dirs: &[String], lock: &HomeLock) -> Result<Vec<String>, String> {
+    let s = spec(agent);
+    let Some(agent) = s.login_record else { return Ok(Vec::new()) };
+    let files = s.logins;
     let Ok(rel) = dir.strip_prefix(home) else { return Ok(Vec::new()) };
     if rel.as_os_str().is_empty() || !rel.components().all(|c| matches!(c, Component::Normal(_))) {
         return Ok(Vec::new());
@@ -164,19 +168,32 @@ fn sync_dir(home: &Path, dir: &Path, agent: &str, files: &[&str], home_dirs: &[S
 
 /// The warnings' lead per agent; Claude's keep their original wording.
 fn label(agent: &str) -> &'static str {
-    if agent.eq_ignore_ascii_case(CODEX_AGENT) {
-        "Shared Codex login"
-    } else {
-        "Shared login"
-    }
+    // `validate` refuses unknown agents before any warning is built; the plain lead is for a
+    // direct caller that skipped it.
+    agent_of(agent).map_or("Shared login", |a| spec(a).login_lead)
+}
+
+/// An entry's agent name (case-insensitive, as `validate` always read it) through the one parser.
+fn agent_of(name: &str) -> Option<Agent> {
+    agent_spec::parse(&name.to_ascii_lowercase())
 }
 
 /// Each agent's own sync record under `<home>\logs`; Claude's keeps its original name.
 fn record_name(agent: &str) -> String {
-    if agent.eq_ignore_ascii_case("claude") {
-        STATE.to_string()
-    } else {
-        format!("login-link-{}.json", agent.to_ascii_lowercase())
+    match agent_of(agent) {
+        Some(a) => record_of(a),
+        None => own_record(agent),
+    }
+}
+
+fn own_record(agent: &str) -> String {
+    format!("login-link-{}.json", agent.to_ascii_lowercase())
+}
+
+fn record_of(agent: Agent) -> String {
+    match agent {
+        Agent::Claude => STATE.to_string(),
+        Agent::Codex => own_record(agent.as_str()),
     }
 }
 
@@ -196,6 +213,9 @@ fn validate(entries: &[SharedLogin], home_dirs: &[String]) -> Result<(), String>
         let bad = |why: &str| Err(format!("Launch profile sharedLogin {:?} / {:?}: {why}; spawn refused", e.agent, e.file));
         if e.agent.is_empty() || !e.agent.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
             return bad("the agent must be a plain name");
+        }
+        if agent_of(&e.agent).is_none() {
+            return bad("the agent is not one Vidar knows");
         }
         let p = Path::new(&e.file);
         if e.file.is_empty() || !p.components().all(|c| matches!(c, Component::Normal(_))) || e.file.contains(':') {
@@ -218,6 +238,10 @@ fn validate(entries: &[SharedLogin], home_dirs: &[String]) -> Result<(), String>
 /// store lock is taken after it. Bookkeeping never refuses: an unreadable state file is no record,
 /// a failed state or log write is a warning.
 pub fn sync(home: &Path, shared: &Path, entries: &[SharedLogin], _lock: &HomeLock) -> Result<Vec<String>, String> {
+    sync_inner(home, shared, entries, _lock, false)
+}
+
+fn sync_inner(home: &Path, shared: &Path, entries: &[SharedLogin], _lock: &HomeLock, sweep: bool) -> Result<Vec<String>, String> {
     let logs = home.join("logs");
     // One record per agent (Claude's and Codex's never share a file); each keeps only its own keys.
     let mut agents: Vec<String> = Vec::new();
@@ -232,16 +256,24 @@ pub fn sync(home: &Path, shared: &Path, entries: &[SharedLogin], _lock: &HomeLoc
         state.extend(r.into_iter().filter(|(k, _)| owned(k, a)));
     }
     let (mut lines, mut warnings) = (Vec::new(), Vec::new());
-    let result = sync_entries(home, shared, entries, &mut state, &mut lines, &mut warnings);
+    let result = sync_entries(home, shared, entries, &mut state, &mut lines, &mut warnings, sweep);
     for a in &agents {
         let mine: BTreeMap<&String, &FileId> = state.iter().filter(|(k, _)| owned(k, a)).collect();
         let kept = std::fs::create_dir_all(&logs)
             .map_err(|e| e.to_string())
             .and_then(|_| serde_json::to_vec_pretty(&mine).map_err(|e| e.to_string()))
-            .and_then(|json| crate::fsx::atomic_write(&logs.join(record_name(a)), &json).map_err(|e| e.to_string()));
+            .and_then(|json| {
+                let path = logs.join(record_name(a));
+                if std::fs::read(&path).ok().as_deref() == Some(json.as_slice()) { Ok(()) }
+                else { crate::fsx::atomic_write(&path, &json).map_err(|e| e.to_string()) }
+            });
         if let Err(e) = kept {
             warnings.push(format!("{} record not saved ({e}); the next launch re-checks this home", label(a)));
         }
+    }
+    // A periodic retry can revisit an unchanged conflict or refusal indefinitely.
+    if sweep {
+        lines.retain(|line| !line.starts_with("keep-both ") && !line.starts_with("refused ") && !line.starts_with("skipped "));
     }
     if let Err(e) = append_log(&logs.join(LOG), &lines) {
         let lead = entries.first().map_or("Shared login", |e| label(&e.agent));
@@ -250,7 +282,8 @@ pub fn sync(home: &Path, shared: &Path, entries: &[SharedLogin], _lock: &HomeLoc
     result.map(|_| warnings)
 }
 
-fn sync_entries(home: &Path, shared: &Path, entries: &[SharedLogin], state: &mut BTreeMap<String, FileId>, lines: &mut Vec<String>, warnings: &mut Vec<String>) -> Result<(), String> {
+#[allow(clippy::too_many_arguments)]
+fn sync_entries(home: &Path, shared: &Path, entries: &[SharedLogin], state: &mut BTreeMap<String, FileId>, lines: &mut Vec<String>, warnings: &mut Vec<String>, sweep: bool) -> Result<(), String> {
     // The `Vidar` folder: every folder from it down to either name is checked for a reparse point.
     let top = shared.parent().and_then(Path::parent).unwrap_or(shared).to_path_buf();
     let store = refuse_reparse_down(&top, home)
@@ -276,11 +309,30 @@ fn sync_entries(home: &Path, shared: &Path, entries: &[SharedLogin], state: &mut
         let key = format!("{}/{}", e.agent, parts(&e.file).join("/"));
         let name = Path::new(&e.file).file_name().map(|n| n.to_os_string()).unwrap_or_default();
         let others: Vec<PathBuf> = siblings.iter().map(|s| super::under(s, &e.file)).collect();
+        let home_file = super::under(home, &e.file);
+        let store_file = dir.join(&name);
+        let pair_home = format!("{key}#keep-home");
+        let pair_store = format!("{key}#keep-store");
+        if let (Some(&home_id), Some(&store_id)) = (state.get(&pair_home), state.get(&pair_store)) {
+            if refuse_reparse_down(&top, &home_file).is_ok()
+                && refuse_reparse_down(&top, &store_file).is_ok()
+                && seen(&home_file).ok().flatten().map(|x| x.0) == Some(home_id)
+                && seen(&store_file).ok().flatten().map(|x| x.0) == Some(store_id) {
+                if !sweep { warnings.push(format!("{} {key}: this tab keeps its own sign-in, because this home's login file and the shared one both changed since the last sync", label(&e.agent))); }
+                continue;
+            }
+        }
+        state.remove(&pair_home);
+        state.remove(&pair_store);
         let outcome = refuse_reparse_down(&top, &dir)
             .and_then(|_| private_dir(&dir))
-            .and_then(|_| sync_one(&top, label(&e.agent), &key, &super::under(home, &e.file), &dir.join(&name), state.get(&key).copied(), &others));
+            .and_then(|_| sync_one(&top, label(&e.agent), &key, &home_file, &store_file, state.get(&key).copied(), &others));
         match outcome {
             Ok(done) => {
+                if let Some((home_id, store_id)) = done.keep_pair {
+                    state.insert(pair_home, home_id);
+                    state.insert(pair_store, store_id);
+                }
                 match done.id {
                     Some(id) => state.insert(key, id),
                     None => state.remove(&key),
@@ -325,12 +377,12 @@ fn sync_one(top: &Path, lead: &str, key: &str, h: &Path, s: &Path, rec: Option<F
     }
     let ids = |a: &Option<(FileId, u32)>| a.map_or("none".to_string(), |(id, n)| format!("{id} links={n}"));
     let what = format!("{key} home={} shared={}", ids(&hs), ids(&ss));
-    let done = |id, line: String, warning| Ok(Done { id: Some(id), line: Some(line), warning });
+    let done = |id, line: String, warning| Ok(Done { id: Some(id), line: Some(line), warning, keep_pair: None });
     match (hs, ss) {
         (None, None) => {
             // Nothing linked yet and no store: a sibling home's newest login seeds it (Orion S1).
             let Some((p, id)) = newest_sibling(top, others, None) else {
-                return Ok(Done { id: None, line: None, warning: None });
+                return Ok(Done { id: None, line: None, warning: None, keep_pair: None });
             };
             match adopt_sibling(lead, key, &p, s, id, None)? {
                 Ok(line) => {
@@ -361,19 +413,37 @@ fn sync_one(top: &Path, lead: &str, key: &str, h: &Path, s: &Path, rec: Option<F
             link_name(s, h, store)?;
             done(store, format!("{line}link {what}"), None)
         }
-        (Some((a, _)), Some((b, _))) if a == b => Ok(Done { id: Some(a), line: None, warning: None }),
+        (Some((a, _)), Some((b, _))) if a == b => Ok(Done { id: Some(a), line: None, warning: None, keep_pair: None }),
         (Some((a, an)), Some((b, bn))) => {
-            // A conflict never overwrites a file that changed since this home's last sync
-            // (slice2-plan, 2026-10-21): a failed CLI refresh is always the newest write, so no
-            // last-write order decides between two changed files (Orion M1).
+            // File times cannot decide which changed login still has the later expiry.
             let home_changed = rec.is_some_and(|r| r != a);
             let shared_changed = rec.is_some_and(|r| r != b);
             if home_changed && shared_changed {
-                let warning = format!(
-                    "{lead} {key}: this tab keeps its own sign-in, because this home's login file and the shared one both changed since the last sync"
+                let expiries = is_credentials_key(key).then(||
+                    (login_link_expiry::read(h), login_link_expiry::read(s))
                 );
-                // The record stays: neither side may later win over the other by default.
-                return Ok(Done { id: rec, line: Some(format!("keep-both {what}")), warning: Some(warning) });
+                match expiries {
+                    Some((Some(home), Some(store))) if home > store => {
+                        let aside = adopt(h, s, Some(bn))?;
+                        return done(a, format!("home-wins {what}{aside}"), None);
+                    }
+                    Some((Some(_), None)) => {
+                        let aside = adopt(h, s, Some(bn))?;
+                        return done(a, format!("home-wins {what}{aside}"), None);
+                    }
+                    Some((Some(_), Some(_)) | (None, Some(_))) => {
+                        let split = replace_home(s, h, b, an)?;
+                        let aside = split.as_ref().map_or(format!(" unlinked={}", h.display()), |p| format!(" split={}", p.display()));
+                        return done(b, format!("shared-wins {what}{aside}"), None);
+                    }
+                    _ => {
+                        let warning = format!(
+                            "{lead} {key}: this tab keeps its own sign-in, because this home's login file and the shared one both changed since the last sync"
+                        );
+                        // Keep the record so neither side later wins by default.
+                        return Ok(Done { id: rec, line: Some(format!("keep-both {what}")), warning: Some(warning), keep_pair: Some((a, b)) });
+                    }
+                }
             }
             if home_changed {
                 let aside = adopt(h, s, Some(bn))?;
@@ -405,6 +475,7 @@ fn adopt_sibling(lead: &str, key: &str, p: &Path, s: &Path, id: FileId, store_li
             let got = now.ok().flatten().map_or("none".to_string(), |(n, _)| n.to_string());
             Ok(Err(Done {
                 id: None,
+                keep_pair: None,
                 line: Some(format!("adopt-sibling-moved {key} from={from} want={id} got={got}{aside}")),
                 warning: Some(format!(
                     "{lead} {key} not linked: another home's login file changed while it was being shared, so this tab starts without a login file; the next launch links the shared one"
@@ -512,6 +583,9 @@ fn adopt(h: &Path, s: &Path, store_links: Option<u32>) -> Step<String> {
         undo(&[tmp.as_path(), split.as_path()][..if keep_split { 2 } else { 1 }]);
         return Err(Fail::Skip(format!("rename {} -> {}: {e}", tmp.display(), s.display())));
     }
+    if keep_split {
+        stamp_aside(&split)?;
+    }
     Ok(match store_links {
         Some(1) => format!(" split={}", split.display()),
         Some(_) => format!(" unlinked={}", s.display()),
@@ -533,11 +607,18 @@ fn replace_home(s: &Path, h: &Path, want: FileId, links: u32) -> Step<Option<Pat
             Err(r) => format!("{e}; restoring {} from {} failed: {r}", h.display(), aside.display()),
         }));
     }
+    if keep { stamp_aside(&aside)?; }
     if !keep {
         // A stray temp name is cleared by the next sync; the old file is still linked elsewhere.
         let _ = std::fs::remove_file(&aside);
     }
     Ok(keep.then_some(aside))
+}
+
+fn stamp_aside(path: &Path) -> Step<()> {
+    std::fs::OpenOptions::new().write(true).open(path)
+        .and_then(|file| file.set_modified(std::time::SystemTime::now()))
+        .map_err(skip(format!("stamp {}", path.display())))
 }
 
 /// Links the home name to the store file and checks it took (a lost race removes the new name).
@@ -657,9 +738,9 @@ mod conflict_tests {
 
     impl Kind {
         fn run(&self, h: &Path, lock: &HomeLock) -> Result<Vec<String>, String> {
-            match self.agent {
-                "claude" => sync_claude(h, &h.join(self.dir), &dirs(), lock),
-                _ => sync_codex(h, &h.join(self.dir), &dirs(), lock),
+            match agent_spec::parse(self.agent).expect("a known test agent") {
+                Agent::Claude => sync_claude(h, &h.join(self.dir), &dirs(), lock),
+                Agent::Codex => sync_codex(h, &h.join(self.dir), &dirs(), lock),
             }
         }
         fn cred(&self, h: &Path) -> PathBuf {
@@ -670,8 +751,8 @@ mod conflict_tests {
         }
         /// Every warning of this kind leads with its own wording.
         fn lead(&self, warnings: &[String]) {
-            let lead = if self.agent == "codex" { "Shared Codex login " } else { "Shared login " };
-            assert!(warnings.iter().all(|w| w.starts_with(lead)), "{warnings:?}");
+            let lead = format!("{} ", spec(agent_spec::parse(self.agent).expect("a known test agent")).login_lead);
+            assert!(warnings.iter().all(|w| w.starts_with(lead.as_str())), "{warnings:?}");
         }
     }
 
@@ -813,6 +894,69 @@ mod conflict_tests {
     #[test]
     fn codex_both_changed_keeps_each_file_whichever_is_newer() {
         both_changed(&CODEX);
+    }
+
+    fn split_with_expiries(home: &str, store: &str) -> (TempDir, PathBuf, HomeLock, FileId, FileId) {
+        let t = TempDir::new("expiry");
+        let (a, la) = t.home("aaaaaaaaaaaaaaaa");
+        std::fs::write(CLAUDE.cred(&a), r#"{"claudeAiOauth":{"expiresAt":1000}}"#).unwrap();
+        CLAUDE.run(&a, &la).unwrap();
+        let (b, lb) = t.home("bbbbbbbbbbbbbbbb");
+        CLAUDE.run(&b, &lb).unwrap();
+        rewrite_by_rename(&CLAUDE.cred(&a), home, Duration::ZERO);
+        rewrite_by_rename(&t.store(&CLAUDE), store, Duration::ZERO);
+        let home_id = id(&CLAUDE.cred(&a));
+        let store_id = id(&t.store(&CLAUDE));
+        (t, a, la, home_id, store_id)
+    }
+
+    #[test]
+    fn both_changed_claude_later_home_expiry_is_adopted() {
+        let (t, a, la, home_id, store_id) = split_with_expiries(
+            r#"{"claudeAiOauth":{"expiresAt":3000},"secret":"HOME_MARKER"}"#,
+            r#"{"claudeAiOauth":{"expiresAt":2000},"secret":"STORE_MARKER"}"#,
+        );
+        assert_ne!(home_id, store_id);
+        assert!(CLAUDE.run(&a, &la).unwrap().is_empty());
+        assert_eq!(id(&t.store(&CLAUDE)), home_id);
+        assert_eq!(id(&CLAUDE.cred(&a)), home_id);
+        let log = std::fs::read_to_string(a.join("logs").join(LOG)).unwrap();
+        assert!(log.contains("home-wins") && !log.contains("MARKER"), "unexpected log");
+    }
+
+    #[test]
+    fn both_changed_claude_later_store_expiry_is_relinked() {
+        let (t, a, la, home_id, store_id) = split_with_expiries(
+            r#"{"claudeAiOauth":{"expiresAt":2000}}"#,
+            r#"{"claudeAiOauth":{"expiresAt":3000}}"#,
+        );
+        assert_ne!(home_id, store_id);
+        assert!(CLAUDE.run(&a, &la).unwrap().is_empty());
+        assert_eq!(id(&CLAUDE.cred(&a)), store_id);
+        assert_eq!(id(&t.store(&CLAUDE)), store_id);
+    }
+
+    #[test]
+    fn both_changed_claude_equal_expiry_favors_store() {
+        let (_t, a, la, home_id, store_id) = split_with_expiries(
+            r#"{"claudeAiOauth":{"expiresAt":3000}}"#,
+            r#"{"claudeAiOauth":{"expiresAt":3000}}"#,
+        );
+        assert_ne!(home_id, store_id);
+        assert!(CLAUDE.run(&a, &la).unwrap().is_empty());
+        assert_eq!(id(&CLAUDE.cred(&a)), store_id);
+    }
+
+    #[test]
+    fn both_changed_claude_unreadable_expiries_keep_warning() {
+        let (t, a, la, home_id, store_id) = split_with_expiries(
+            r#"{"claudeAiOauth":{"expiresAt":"invalid"}}"#,
+            r#"{"claudeAiOauth":{}}"#,
+        );
+        let warnings = CLAUDE.run(&a, &la).unwrap();
+        assert!(warnings.len() == 1 && warnings[0].contains("keeps its own sign-in"));
+        assert_eq!(id(&CLAUDE.cred(&a)), home_id);
+        assert_eq!(id(&t.store(&CLAUDE)), store_id);
     }
 
     fn unrecorded_loses(k: &Kind) {
@@ -964,6 +1108,40 @@ mod conflict_tests {
         assert_eq!(again, claude);
     }
 
+    /// O3: `codex mcp login` writes `.credentials.json` in one home after the store was set up. The
+    /// next Codex spawn of that home adopts it; a sibling that lacks it links it on its own spawn;
+    /// a sibling with its own differing file keeps that file aside (`.split`).
+    #[test]
+    fn codex_mcp_login_appearing_later_is_adopted_and_linked_into_siblings() {
+        let t = TempDir::new("o3");
+        let auth = CODEX;
+        let mcp = Kind { agent: "codex", dir: "codex-home", file: ".credentials.json" };
+        let (a, la) = t.home("aaaaaaaaaaaaaaaa");
+        std::fs::write(auth.cred(&a), "AUTH").unwrap();
+        auth.run(&a, &la).unwrap();
+        let (b, lb) = t.home("bbbbbbbbbbbbbbbb");
+        auth.run(&b, &lb).unwrap();
+        assert!(!t.store(&mcp).exists(), "no store file before the login");
+        // The CLI login lands in A only.
+        std::fs::write(mcp.cred(&a), "MCP-A").unwrap();
+        let before = id(&auth.cred(&a));
+        auth.run(&a, &la).unwrap();
+        assert_eq!(id(&t.store(&mcp)), id(&mcp.cred(&a)), "A's login moved into the store");
+        assert_eq!(id(&auth.cred(&a)), before, "auth.json untouched");
+        // B has none: its next spawn links the store.
+        auth.run(&b, &lb).unwrap();
+        assert_eq!(id(&mcp.cred(&b)), id(&t.store(&mcp)));
+        // C (made after the login) has its own differing file: kept aside, never deleted.
+        let (c, lc) = t.home("cccccccccccccccc");
+        std::fs::write(mcp.cred(&c), "C-OWN").unwrap();
+        stamp(&mcp.cred(&c), 3 * HOUR);
+        auth.run(&c, &lc).unwrap();
+        assert_eq!(id(&mcp.cred(&c)), id(&t.store(&mcp)));
+        assert_eq!(std::fs::read_to_string(mcp.split(&mcp.cred(&c))).unwrap(), "C-OWN");
+        let rec: BTreeMap<String, FileId> = crate::fsx::read_json(&a.join("logs").join("login-link-codex.json")).unwrap();
+        assert!(rec.contains_key("codex/codex-home/.credentials.json") && rec.contains_key("codex/codex-home/auth.json"), "{rec:?}");
+    }
+
     #[test]
     fn a_codex_home_outside_the_bare_home_shares_nothing() {
         let t = TempDir::new("codex-outside");
@@ -974,5 +1152,15 @@ mod conflict_tests {
         assert!(sync_codex(&a, &elsewhere, &dirs(), &la).unwrap().is_empty());
         assert!(sync_codex(&a, &a, &dirs(), &la).unwrap().is_empty());
         assert!(!t.homes().join("_shared").exists(), "a store was made for an outside CODEX_HOME");
+    }
+
+    #[test]
+    fn an_unknown_agent_is_refused_not_given_codex_paths() {
+        let t = TempDir::new("grok-agent");
+        let (a, la) = t.home("aaaaaaaaaaaaaaaa");
+        let entries = vec![SharedLogin { agent: "grok".into(), file: "claude-config/auth.json".into() }];
+        let e = sync_profile(&a, &entries, &dirs(), &la).unwrap_err();
+        assert!(e.contains("not one Vidar knows"), "{e}");
+        assert!(!t.homes().join("_shared").exists());
     }
 }

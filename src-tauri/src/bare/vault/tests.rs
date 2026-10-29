@@ -368,32 +368,58 @@ fn lookup_goes_falcon_session_then_thread_then_tab_and_the_newest_wins() {
 }
 
 #[test]
-fn make_variant_moves_the_tab_and_the_earlier_thread_keeps_its_vault() {
+fn make_variant_leaves_the_tab_record_on_the_locked_vault() {
     let fx = Fx::new("move");
     let v = full_vault(&fx, "Gate Move");
-    let mut r = session::record("claude", "rendered", "tab-m", VaultPin { id: v.id.clone(), hash: v.hash.clone() }, "h", "l");
+    let pin = VaultPin { id: v.id.clone(), hash: v.hash.clone() };
+    let mut r = session::record("claude", "rendered", "tab-m", pin.clone(), "h", "l");
     r.falcon_session = Some("fs-m".into());
     r.thread_id = Some("th-m".into());
     session::write(fx.root(), &r).unwrap();
     fx.store().lock(&v.id, LockedBy::FirstMessage, &v.hash).unwrap();
     let var = fx.store().edit(&v.id, &[Op::RemoveRune(stock("gate-skill"))], EditMode::Variant).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(5));
-    let pin = VaultPin { id: var.id.clone(), hash: var.hash.clone() };
-    let moved = session::move_to(fx.root(), "tab-m", Some("fs-m"), pin.clone()).unwrap().expect("a record to move");
-    assert_eq!((moved.vault.clone(), moved.thread_id.clone(), moved.falcon_session.as_deref()), (pin.clone(), None, Some("fs-m")));
-    assert_eq!(session::find(fx.root(), "tab-m", None, None).unwrap().unwrap().vault, pin, "the tab respawns on the variant");
-    assert_eq!(session::find(fx.root(), "tab-m", Some("fs-m"), None).unwrap().unwrap().vault, pin);
-    let earlier = session::find(fx.root(), "x", None, Some("th-m")).unwrap().unwrap();
-    assert_eq!(earlier.vault, VaultPin { id: v.id.clone(), hash: v.hash.clone() }, "a Resume of the earlier thread keeps its vault");
+    assert_ne!(var.id, v.id);
+    // the variant is for new sessions: nothing repoints the tab's or the thread's record
+    for found in [
+        session::find(fx.root(), "tab-m", None, None).unwrap().unwrap(),
+        session::find(fx.root(), "tab-m", Some("fs-m"), None).unwrap().unwrap(),
+        session::find(fx.root(), "x", None, Some("th-m")).unwrap().unwrap(),
+    ] {
+        assert_eq!(found.vault, pin, "the record keeps the vault the session loaded");
+    }
     assert!(fx.store().get(&v.id).unwrap().locked_utc.is_some(), "the original stays locked");
-    assert!(session::move_to(fx.root(), "none", None, pin).unwrap().is_none());
+}
+
+#[test]
+fn a_variant_of_a_stock_or_custom_vault_never_takes_a_reserved_id() {
+    let fx = Fx::new("variant-id");
+    let dir = crate::paths::rune_templates_dir_in(fx.root());
+    std::fs::create_dir_all(&dir).unwrap();
+    let template = Template { version: 1, id: "stock-claude".into(), name: "Stock Claude".into(), runesets: vec![], runes: vec![stock("bare-identity")] };
+    std::fs::write(dir.join("stock-claude.json"), serde_json::to_vec(&template).unwrap()).unwrap();
+    let stock_v = fx.store().ensure_stock("stock-claude").unwrap();
+    let ops = [Op::AddRune(stock("gate-skill"))];
+    let a = fx.store().edit(&stock_v.id, &ops, EditMode::Variant).unwrap();
+    assert_eq!(a.id, "claude-variant");
+    let b = fx.store().edit(&stock_v.id, &ops, EditMode::Variant).unwrap();
+    assert_eq!(b.id, "claude-variant-2");
+    let c = fx.store().edit(&a.id, &[Op::RemoveRune(stock("gate-skill"))], EditMode::Variant).unwrap();
+    assert_eq!(c.id, "claude-variant-3", "a variant of a non-reserved id keeps today's -<n> rule");
+    let custom = fx.store().create_custom(&[kit_set()], &[]).unwrap();
+    let cv = fx.store().edit(&custom.id, &ops, EditMode::Variant).unwrap();
+    assert_eq!(cv.id, "variant");
+    let cv2 = fx.store().edit(&custom.id, &ops, EditMode::Variant).unwrap();
+    assert_eq!(cv2.id, "variant-2");
+    for id in [&a.id, &b.id, &cv.id, &cv2.id] {
+        assert!(!id.starts_with("stock-") && !id.starts_with("custom-"), "{id}");
+    }
 }
 
 #[test]
 fn the_shipped_stock_templates_create_a_vault_and_resolve_every_rune() {
     for (template, ids) in [
         ("stock-claude", vec!["bare-identity", "vidar-app", "gate", "drive-allow", "mode-auto", "mcp-write-asks", "guard-driver", "mcp-gate"]),
-        ("stock-codex", vec!["bare-identity-codex", "vidar-drive", "vidar-control", "drive-allow"]),
+        ("stock-codex", vec!["bare-identity-codex", "vidar-drive", "vidar-control", "codex-imagegen", "codex-openai-docs", "codex-review-agent", "codex-skill-creator", "codex-skill-installer"]),
     ] {
         let t = TempDir::new(template);
         let repo = crate::paths::root();

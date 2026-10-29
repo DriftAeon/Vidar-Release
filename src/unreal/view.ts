@@ -41,7 +41,7 @@ function statusPart(icon: ColorIcon, label: string, detail: string, signal: Sign
   part.setAttribute("aria-label", detail);
   const dot = el("span", "ux-dot");
   dot.dataset.state = signal;
-  part.append(dot, iconImg(icon)); // dot left, logo right: the logo lines up with the larger action buttons (user, 2026-10-22)
+  part.append(dot, iconImg(icon)); // dot left, logo right: the logo lines up with the larger action buttons
   return part;
 }
 

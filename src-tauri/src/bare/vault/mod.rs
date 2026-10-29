@@ -1,15 +1,21 @@
-//! src-tauri\src\bare\vault\mod.rs — the Rune Vault wire types and IPC (run 2026-10-25-rune-vault, L1b).
+//! src-tauri\src\bare\vault\mod.rs — the Rune Vault wire types and IPC.
 //! Contract: `docs/projects/bare/runeset-model.md` (R2, R3, R4, R6). A vault is what a session loads:
 //! runesets byte-copied in at placement plus one-off runes. `store.rs` is its single writer; `session.rs`
 //! records which vault (and hash) each session loaded. Nothing here reads a launcher row.
 //! Wire format: `tests/fixtures/rune-vault/vaults/**` (field order, nulls and empty `pins` always emitted).
 
 pub mod migrate;
+pub mod migrate_recall;
 pub mod session;
 pub mod store;
+mod store_header;
 
 #[cfg(test)]
 mod member_tests;
+#[cfg(test)]
+mod migrate_recall_tests;
+#[cfg(test)]
+mod off_tests;
 #[cfg(test)]
 mod session_tests;
 #[cfg(test)]
@@ -38,6 +44,15 @@ pub struct Vault {
     /// `<library>/<id>` -> sha12 of the body the locked vault loaded (recall members included); empty unlocked.
     #[serde(default)]
     pub pins: BTreeMap<String, String>,
+    /// One-off runes Modify switched off (`Op::RemoveRune`): never loaded and outside the hash, kept so the
+    /// Runes View still lists them off after Done and in a variant; `Op::AddRune` takes one back out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub off: Vec<RuneRef>,
+    /// Whole placed runesets Modify switched off (`Op::RemoveRuneset`): their copy is gone and they never load;
+    /// outside the hash like `off`. The view lists the library runeset's runes off under its head;
+    /// `Op::AddRuneset` takes one back out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub off_sets: Vec<SetSource>,
 }
 
 /// Lineage: a variant of a vault at a hash, or a copy of a template.
@@ -76,8 +91,10 @@ pub struct SetSource {
 }
 
 /// One rune switched in (`on`) or out of the vault's own copy of placed runeset `library/runeset`
-/// (`store::Op::Member`, run 2026-10-25-rune-vault L3d). Only the copy under the vault folder changes,
+/// (`store::Op::Member`). Only the copy under the vault folder changes,
 /// never the library runeset (model R3: copy, not link). `rune` names its own library (a cross-library slot).
+/// A slotted rune's line goes or comes back; a `<?recall?>` member's id goes in or out of the copy's
+/// `recall-off` header.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MemberEdit {
     pub library: String,
@@ -158,9 +175,14 @@ pub struct VaultView {
     pub runes: Vec<ViewRune>,
     /// Runes left out of the list above: a missing copy or a file that does not parse.
     pub warnings: Vec<String>,
+    /// Runes the vault holds switched off, never loaded, listed so Modify draws them off: a runeset copy's
+    /// recall members (`recall-off` header, `store::RECALL_OFF`) and slot members (`slot-off` header,
+    /// `store::SLOT_OFF`), then the vault's switched-off one-offs (`Vault::off`). Omitted when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub off: Vec<ViewRune>,
 }
 
-/// One rune a vault loads, for the Runes View (plan D-k): a text kind carries its body; an item kind
+/// One rune a vault loads, for the Runes View: a text kind carries its body; an item kind
 /// carries `item` (`rune_items::RuneItem::redacted`) and an empty body, so no hook command, MCP field
 /// or env value reaches the UI. A locked vault's text is the copy in `revs/<hash>/` (R6).
 #[derive(Serialize, Clone, Debug)]
@@ -221,16 +243,19 @@ pub(crate) fn read_view(s: &store::Store, id: &str, hash: Option<&str>) -> Resul
     // drift against the read revision's own pins; a locked vault, or a session's earlier revision,
     // shows the copy that session loaded
     let drift = if earlier { s.view_drift(&vault)? } else { s.drift(&id)? };
-    let (runes, warnings) = s.view_runes(&vault, earlier || vault.locked_utc.is_some(), &drift)?;
-    Ok(VaultView { vault, drift, runes, warnings })
+    let (runes, warnings, off) = s.view_runes(&vault, earlier || vault.locked_utc.is_some(), &drift)?;
+    Ok(VaultView { vault, drift, runes, warnings, off })
 }
 
 /// A Custom vault on `agent`'s floor (model R2): the stock template's runesets and runes, then the picks
 /// not already in it, as `src/launcher/set-pick.ts` `createCustom` does. A missing or unreadable template
 /// refuses: a vault without the floor would load without the identity and guard runes.
 pub(crate) fn floored_custom(root: &std::path::Path, agent: &str, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Vault, String> {
+    let Some(parsed) = crate::agent_spec::parse(agent) else {
+        return Err(format!("Agent {agent:?} is not claude or codex; vault refused"));
+    };
     let s = store::Store::open(root);
-    let id = format!("stock-{agent}");
+    let id = format!("stock-{}", parsed.as_str());
     let file = crate::paths::rune_templates_dir_in(root).join(format!("{id}.json"));
     if !file.is_file() {
         return Err(format!("Stock Template Missing: {id}"));
@@ -261,9 +286,9 @@ pub fn rune_vault_create(name: Option<String>, from: Option<VaultFrom>, runesets
 pub(crate) fn create_at(root: &std::path::Path, name: Option<String>, from: Option<VaultFrom>, runesets: &[SetSource], runes: &[RuneRef], agent: Option<&str>) -> Result<Vault, String> {
     match name.filter(|n| !n.trim().is_empty()) {
         Some(n) => store::Store::open(root).create(&n, from, runesets, runes),
-        None => match agent {
-            Some(a @ ("claude" | "codex")) => floored_custom(root, a, runesets, runes),
-            _ => Err("A Custom vault needs its agent (claude or codex) for the stock floor; vault refused".into()),
+        None => match agent.and_then(crate::agent_spec::parse) {
+            Some(a) => floored_custom(root, a.as_str(), runesets, runes),
+            None => Err("A Custom vault needs its agent (claude or codex) for the stock floor; vault refused".into()),
         },
     }
 }
@@ -278,15 +303,6 @@ pub fn rune_vault_lock(id: String, by: LockedBy, expect_hash: String) -> Result<
     store().lock(&id, by, &expect_hash)
 }
 
-/// Moves tab `tab` to vault `id` at its current hash (a Make Variant answer, L3b2): writes a copy of the tab's
-/// newest record pinned there, so the respawn that follows loads it. `null` when the tab has no record.
-#[tauri::command]
-pub fn rune_vault_session_move(tab: String, falcon_session: Option<String>, id: String) -> Result<Option<session::Record>, String> {
-    let s = store();
-    let v = s.get(&id)?;
-    session::move_to(&crate::paths::root(), &tab, falcon_session.as_deref(), session::VaultPin { id: v.id, hash: v.hash })
-}
-
 /// `rune_vault_library_runes` reply: the runes Modify's Add Rune picker offers (`Store::library_runes`).
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -296,7 +312,7 @@ pub struct LibraryRunes {
     pub warnings: Vec<String>,
 }
 
-/// Every rune a vault for `agent` can take as a one-off (run 2026-10-25-rune-vault, L3d). Reads only.
+/// Every rune a vault for `agent` can take as a one-off. Reads only.
 #[tauri::command]
 pub fn rune_vault_library_runes(agent: String) -> Result<LibraryRunes, String> {
     library_runes_in(&store(), &agent)
@@ -314,7 +330,7 @@ pub fn rune_vault_session(tab: String, falcon_session: Option<String>, thread_id
     session::find(&crate::paths::root(), &tab, falcon_session.as_deref(), thread_id.as_deref())
 }
 
-// ---- the launcher pre-pick (plan Q2: Last Vault Used), read by `src/launcher/roster.ts` only ----
+// ---- the launcher pre-pick (Last Vault Used), read by `src/launcher/roster.ts` only ----
 
 /// `<vaults folder>\defaults.json`, version 1: the last vault a Bare launch used, per agent.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]

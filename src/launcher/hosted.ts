@@ -2,6 +2,9 @@
 // Claude's column, its session flyout, and adoptHosted. Split from menu.ts; closeLauncher arrives
 // once through setHostedClose (registered by initLauncherMenu), so this module never imports
 // menu.ts. Rows and columns come from menu-rows.ts and columns.ts.
+import { AGENTS, isAgentId } from "../agents/descriptor";
+import type { AgentId } from "../agents/id";
+import type { RulesLaunch } from "../rules/inject";
 import { invoke } from "../ipc";
 import { DASH } from "../format";
 import type { FalconSessionSummary } from "../ipc";
@@ -25,6 +28,11 @@ export function setHostedClose(fn: () => void): void {
 // had to launch inside Vidar's own job (no breakaway), so it will die with Vidar; null once a
 // clean launch clears it.
 type FalconHostedSession = FalconSessionSummary;
+const rulesFromHost = (file: string): RulesLaunch => ({ file, codex: null, warnings: [] });
+const hostedRules: Record<AgentId, (file: string) => RulesLaunch> = {
+  claude: rulesFromHost,
+  codex: rulesFromHost,
+};
 
 let hostedGen = 0;
 
@@ -125,7 +133,7 @@ async function openHosted(anchor: HTMLElement) {
     // every session on one host, so the ordinal is the part a human can tell apart.
     const ordinal = Number.parseInt(s.session.split("-").pop() ?? "", 10);
     const label = s.conversation
-      ? `${s.agent === "codex" ? "Codex" : "Claude"} · ${s.conversation.slice(0, 8)}`
+      ? `${AGENTS[isAgentId(s.agent) ? s.agent : adoptAgent(s)].name} · ${s.conversation.slice(0, 8)}`
       : `Falcon · ${Number.isFinite(ordinal) ? `#${ordinal}` : s.session}`;
     const subLine = (on: boolean) => `${state} · ${folder}${queued}${on ? " · Driver" : ""}`;
     const b = twoLineRow(
@@ -224,7 +232,7 @@ export async function adoptHosted(
   return createSession({
     agent,
     // A gateway session keeps the identity the host summary reports: tab art, and the gateway a /clear respawns under.
-    ...(agent === "codex" ? { art: "codex" } : { art: s.gateway ?? "claude" }),
+    art: s.gateway ?? AGENTS[agent].art,
     // A Rendered Bare session keeps its launch profile: a /clear respawn stays bare, and the panels
     // read the tab's own home (rack, loadout, handoffs).
     profile: s.profile,
@@ -237,7 +245,7 @@ export async function adoptHosted(
     falconSession: s.session,
     restoreSlot: opts.restoreSlot,
     // a Resume or /clear respawn of this tab keeps the rules the host launched it with
-    rules: s.rules_file ? { file: s.rules_file, codex: null, warnings: [] } : undefined,
+    rules: s.rules_file ? hostedRules[agent](s.rules_file) : undefined,
     // seeds the body's id: a resumed session with no turn yet has had no system/init
     resume: s.conversation ?? undefined,
     // The user's rename (hosted-names.ts), else the name the tab was spawned with, kept by the host;

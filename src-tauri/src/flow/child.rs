@@ -28,10 +28,10 @@ pub(super) type Sessions = Arc<Mutex<HashMap<String, Arc<FlowChild>>>>;
 
 /// Which runner a node starts on, with that runner's spawn inputs.
 pub(super) enum RunnerSpec {
-    /// The sidecar script, the Bare Claude env it runs on (`None`: Vidar's env minus the
-    /// scrub, as the transport tests use), the stage's extra sidecar args (a Claude-model stage:
-    /// the Bare payload and carried MCP servers, `flow/claude_mcp.rs`; empty otherwise) and the
-    /// warnings from building them.
+    /// The sidecar script, the env it runs on (`None`: Vidar's env minus the scrub, as the
+    /// transport tests use), the stage's sidecar args (the profile mapping on the node's vault
+    /// home: `--flow --profile --root --home` and the vault's payload, plugins and MCP file) and
+    /// the warnings from building them.
     Claude { sidecar: PathBuf, env: Option<Env>, args: Vec<String>, warnings: Vec<String> },
     /// The Codex npm entrypoint, run as `node <js> app-server`, the Codex home whose config
     /// the pre-spawn MCP check reads (`None`: no check), and the Bare spawn inputs (`None`:
@@ -442,10 +442,11 @@ pub(super) fn start_node_process(
 
     let mut list_timeouts = codex_mcp::ListTimeouts::new();
     let mut warnings: Vec<String> = Vec::new();
+    let mut instructions: Option<String> = None;
     let (runner, (mut child, job)) = match &spec {
         RunnerSpec::Claude { sidecar, env, args: stage_args, warnings: stage_warnings } => {
-            // The stage's payload and carried servers, then the allowlist's MCP servers, which ride
-            // argv so the sidecar waits for them (carried ones included) before the first turn.
+            // The stage's vault-home args, then the allowlist's MCP servers, which ride argv so the
+            // sidecar waits for them before the first turn.
             let mut args = extra_args.clone();
             args.extend(stage_args.iter().cloned());
             warnings = stage_warnings.clone();
@@ -453,17 +454,17 @@ pub(super) fn start_node_process(
             (Runner::Claude, claude::spawn(sidecar, &model, &cwd, &permission_mode, &args, env.as_ref())?)
         }
         RunnerSpec::Codex { js, home, bare } => {
-            // The Bare overrides (network, carried servers) first, then the allowlist's MCP
-            // tools; a name unsafe for a `-c` key, or a server neither the Codex config nor the
-            // carry defines, fails here, before anything spawns.
+            // The vault's overrides (network, MCP) first, then the allowlist's MCP tools; a name
+            // unsafe for a `-c` key, or a server the vault's Codex config does not define, fails
+            // here, before anything spawns.
             let mut args = extra_args.clone();
             if let Some(b) = bare {
                 args.extend(b.args.iter().cloned());
                 warnings = b.warnings.clone();
+                instructions = b.instructions.clone();
             }
             args.extend(codex_mcp::approval_args(&tool_allowlist)?);
-            let carried = bare.as_ref().map_or(&[][..], |b| b.carried.as_slice());
-            list_timeouts = codex_mcp::preflight(home.as_deref(), &cwd, &tool_allowlist, carried)?;
+            list_timeouts = codex_mcp::preflight(home.as_deref(), &cwd, &tool_allowlist, &[])?;
             let on_bare = bare.as_ref().map(|b| (b.node.as_path(), &b.env));
             (Runner::Codex, codex::spawn(js, &cwd, &args, on_bare)?)
         }
@@ -494,7 +495,7 @@ pub(super) fn start_node_process(
         sidecar_error: Mutex::new(None),
         result_error_reason: Mutex::new(None),
         live_text: Mutex::new(String::new()),
-        rpc: Mutex::new(codex::Rpc::with_list_timeouts(list_timeouts)),
+        rpc: Mutex::new(codex::Rpc::with_list_timeouts(list_timeouts).with_instructions(instructions)),
         warnings,
         emit,
     });

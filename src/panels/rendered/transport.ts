@@ -4,7 +4,7 @@
 import { invoke } from "../../ipc";
 import type { SetRef } from "../../ipc";
 import type { Effort, PermissionMode } from "../../agents/protocol";
-import { AGENT_PROFILE } from "./agent-profile";
+import { AGENT_PROFILE } from "../../agents/agent-profile";
 import type { RulesLaunch } from "../../rules/inject";
 import type { AgentId } from "../../agents/id";
 import { codexThreadHolder, recordedVault, refreshRawCodexThreads } from "../sessions/lookup";
@@ -84,7 +84,7 @@ export interface AgentTransport {
  *  rollout (B2). Raw tabs are re-resolved from their own home's rollouts first (codex-thread.ts),
  *  since their launch line names no thread or a stale one. */
 async function refuseHeldCodexThread(params: AgentSpawnParams): Promise<void> {
-  if (params.agent !== "codex" || !params.resume) return;
+  if (!AGENT_PROFILE[params.agent].refusesHeldResume || !params.resume) return;
   await refreshRawCodexThreads();
   if (codexThreadHolder(params.resume, params.tabId)) throw new Error("This Codex thread is already open in another tab.");
 }
@@ -98,7 +98,7 @@ async function refuseHeldCodexThread(params: AgentSpawnParams): Promise<void> {
 async function reportBare(params: AgentSpawnParams, warnings: string[]): Promise<void> {
   if (!params.onBareWarnings) return;
   let trust: { folder: string; text: string } | null = null;
-  if (params.agent === "codex") {
+  if (AGENT_PROFILE[params.agent].trustOffer) {
     try { trust = await invoke("codex_trust_offer", { id: params.tabId }); } catch { trust = null; }
   }
   if (warnings.length || trust) params.onBareWarnings(warnings, trust);
@@ -160,7 +160,7 @@ export const tauriAgentTransport: AgentTransport = {
 export const falconAgentTransport: AgentTransport = {
   durable: true,
   async spawn(params) {
-    const codex = params.agent === "codex";
+    const profile = AGENT_PROFILE[params.agent];
     // The host reports every Codex thread free (session_commands.rs), so a thread another tab holds
     // (Rendered, or a live Raw tab's) is refused here: two writers on one rollout (B2).
     await refuseHeldCodexThread(params);
@@ -172,11 +172,11 @@ export const falconAgentTransport: AgentTransport = {
       permissionMode: params.permissionMode,
       resume: params.resume ?? null,
       // a profiled (bare) spawn sends no rules file: its layer comes from the profile (bare/mod.rs admit_hosted)
-      rulesFile: params.profile || codex ? null : params.rules?.file ?? null,
+      rulesFile: params.profile || !profile.sendsRulesFile ? null : params.rules?.file ?? null,
       tabName: params.tabName ?? null,
       // omitted for Claude, so a Claude spawn keeps its wire shape
-      ...(codex ? { agent: "codex" as const } : {}),
-      ...(params.gateway && !codex ? { gateway: params.gateway } : {}),
+      ...(profile.namesAgentOnWire ? { agent: params.agent } : {}),
+      ...(params.gateway && profile.sendsGateway ? { gateway: params.gateway } : {}),
       ...(params.profile ? { profile: params.profile } : {}),
       ...(params.profile && params.rowKey ? { rowKey: params.rowKey } : {}),
       ...(params.profile ? vaultOrSets(params.vault ?? null, params.sets) : params.sets !== undefined ? { sets: params.sets } : {}),

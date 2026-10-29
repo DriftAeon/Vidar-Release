@@ -816,7 +816,7 @@ fn refuse_live(p: &Path) {
     }
 }
 
-/// Rehearsal (run 2026-10-25-rune-vault R1): the migration against a copied root, never live data.
+/// Rehearsal: the migration against a copied root, never live data.
 /// `VIDAR_MIGRATE_REHEARSAL_ROOT` is the copied install root (vidar.json, runtime\runes, profiles\bare,
 /// contracts\module-bundles.json); `VIDAR_MIGRATE_REHEARSAL_HOME`, when set, the copied Bare home
 /// (claude-homes.json, codex-homes.json). Runs twice: the second run must be a no-op.

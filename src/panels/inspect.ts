@@ -2,7 +2,9 @@
 // "vidar-ref:" string to paste into a Claude chat. Pure frontend debug layer.
 
 import { iconImg } from "../icon-img";
+import { pickFreeze } from "../tools/pick-freeze";
 
+const freeze = pickFreeze();
 let active = false;
 let btn: HTMLElement;
 let box: HTMLElement;
@@ -285,6 +287,7 @@ async function copyRef(region: Region) {
 // of xterm's mouse-protocol reporting.
 function onHover(e: MouseEvent) {
   e.stopPropagation();
+  if (!freeze.tracking) return; // picked: the highlight stays on the picked region
   paint(resolve(e.target as Element));
 }
 
@@ -295,7 +298,11 @@ function onSuppressed(e: MouseEvent) {
   e.stopPropagation();
   if (e.type === "click") {
     const region = resolve(e.target as Element);
-    if (region) void copyRef(region);
+    if (region) {
+      freeze.pick();
+      paint(region); // a second click moves the held highlight here
+      void copyRef(region);
+    }
   }
 }
 
@@ -375,6 +382,7 @@ function enter() {
   for (const t of SUPPRESSED) document.addEventListener(t, onSuppressed, true);
   document.addEventListener("keydown", onKey, true);
   hideAids();
+  freeze.reset();
   flashUntil = 0;
   showChip("inspect: click a region to copy its ref — C toggles layout colours — Esc exits", null);
 }
@@ -382,6 +390,7 @@ function enter() {
 function exit() {
   if (!active) return;
   active = false;
+  freeze.reset();
   document.body.classList.remove("inspect-mode");
   btn.classList.remove("active");
   document.removeEventListener("mouseover", onHover, true);

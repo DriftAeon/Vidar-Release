@@ -1,6 +1,7 @@
 // Add Kit turns selected local items into library item runes, then places the Kit runeset in the vault.
 import { agentFiles, type BareFlowIo, type BareLocalFile, type BareModuleBundles, type ItemRuneInputs } from "./flow";
 import type { VaultOp } from "../../ipc";
+import type { AgentId } from "../../agents/id";
 
 /** Path and module inputs consumed by item-rune creation; no set layer is written. */
 export function itemRuneInputs(files: readonly BareLocalFile[], picked: ReadonlySet<string>,
@@ -49,10 +50,17 @@ export function kitItems(files: readonly BareLocalFile[], bundles: BareModuleBun
 }
 
 export const KIT_OPS: VaultOp[] = [{ op: "addRuneset", ref: { library: "kit", set: "kit" } }];
-export async function addKit(io: BareFlowIo, cwd: string, bundles: BareModuleBundles | null):
+/** The base Kit set, plus `kit-<agent>` when the Kit library holds it; a missing agent set is skipped. */
+export function kitOps(agent: AgentId | undefined, sets: readonly { library?: string; set: string }[]): VaultOp[] {
+  const own = agent ? `kit-${agent}` : null;
+  if (!own || !sets.some((s) => s.library === "kit" && s.set === own)) return KIT_OPS;
+  return [...KIT_OPS, { op: "addRuneset", ref: { library: "kit", set: own } }];
+}
+export async function addKit(io: BareFlowIo, cwd: string, bundles: BareModuleBundles | null, agent?: AgentId):
   Promise<{ created: boolean; skipped: number; ops: VaultOp[] }> {
   if (!io.kitCreate) throw new Error("Add Kit is unavailable");
   const sources = await io.localSources(cwd);
   const result = await io.kitCreate({ layer: kitItems(sources.files, bundles) });
-  return { created: result.created, skipped: result.dropped.length, ops: KIT_OPS };
+  const sets = await io.kitSets?.().catch(() => []) ?? [];
+  return { created: result.created, skipped: result.dropped.length, ops: kitOps(agent, sets) };
 }

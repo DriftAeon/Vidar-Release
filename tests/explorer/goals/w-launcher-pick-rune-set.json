@@ -1,17 +1,17 @@
 {
   "id": "w-launcher-pick-rune-set",
-  "title": "Pick a Rune Set From the Launcher",
+  "title": "Pick a Vault From the Launcher",
   "style": "changes-mind",
   "scope": "vidar",
   "surfaces": ["launcher", "runes"],
   "tags": ["launcher", "runes"],
   "realModel": false,
   "core": false,
-  "source": ["102979aa"],
+  "source": [],
   "steps": [
-    { "intent": "open the launcher and press Pick Vault on a Bare row to see the available rune sets" },
-    { "intent": "untick one set and read what the row lists" },
-    { "intent": "change my mind and tick it again and untick a different set, without pressing Launch" },
-    { "intent": "check the list only shows current items, with no old duplicate generations under raw ids" }
+    { "intent": "open the launcher and press Pick Vault on a Bare row to see the Rune Vault list" },
+    { "intent": "choose Custom and tick one set, then read which sets are ticked" },
+    { "intent": "change my mind: untick it, tick a different set, then choose another vault in the list, without pressing Launch" },
+    { "intent": "check the list shows vault and set names only, with no raw ids and no duplicates, and closing Pick Vault starts no session" }
   ]
 }

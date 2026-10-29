@@ -1,5 +1,5 @@
 //! src-tauri\src\rules\import\memory.rs — a Claude memory folder (`~\.claude\projects\<slug>\memory`) read as
-//! one rules source for the importer (docs/runs/2026-10-17-bare-runes-flow fold 8, 9).
+//! one rules source for the importer.
 //! - Every top-level `*.md` but `MEMORY.md` (the index), in name order, becomes `## <section>` and its body
 //!   after the front matter; `section` is the front matter `name:`, else the file stem. Headings inside a body
 //!   move two levels down, so every brick's `section[0]` is its file's section.

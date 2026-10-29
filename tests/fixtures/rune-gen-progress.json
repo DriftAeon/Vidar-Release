@@ -1,8 +1,8 @@
 [
   { "runId": "0a1b2c3d", "stage": "plan", "chunks": [
-    { "files": [ { "path": "~\\CLAUDE.md", "part": null }, { "path": "~\\rules\\ui.md", "part": null } ] },
-    { "files": [ { "path": "~\\memory", "part": { "k": 1, "of": 2 } } ] },
-    { "files": [ { "path": "~\\memory", "part": { "k": 2, "of": 2 } } ] }
+    { "files": [ { "path": "~\\CLAUDE.md", "part": null, "kind": "rules" }, { "path": "~\\rules\\ui.md", "part": null, "kind": "rules" } ] },
+    { "files": [ { "path": "~\\memory", "part": { "k": 1, "of": 2 }, "kind": "memory" } ] },
+    { "files": [ { "path": "~\\memory", "part": { "k": 2, "of": 2 }, "kind": "memory" } ] }
   ] },
   { "runId": "0a1b2c3d", "stage": "chunk", "index": 0, "state": "running", "runes": null },
   { "runId": "0a1b2c3d", "stage": "chunk", "index": 1, "state": "running", "runes": null },

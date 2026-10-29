@@ -1,4 +1,4 @@
-/* Shared empty state (src/panels/empty-state.ts; centred stack at the top, user pick 2026-10-21): Not Connected in Jira,
+/* Shared empty state (src/panels/empty-state.ts; centred stack at the top): Not Connected in Jira,
    Slack and Notion, Not a Git Repository in Changes. Connect and Generate Git Prompt are the decision pair's
    green (`.ws-btn.ws-add`, decision-pair.css); Hide is the Sheen icon button (`.ws-btn`, settings-modal.css).
    Loads after changes, jira, slack and notion so the host's `.cx-empty` padding gives way. */

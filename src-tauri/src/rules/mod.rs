@@ -4,8 +4,6 @@
 //! `rune` (header parse, id grammar), `library` (kind folders, tombstones, containment),
 //! `set` (template render, recall), `check` (dangling references),
 //! `build` (concatenate, hash, last-good), `codex` (TOML encoding, length rule, app-server argv).
-//! Design: docs/runs/2026-10-06-rule-injection/plan.md.
-
 pub mod build;
 pub mod catalog;
 pub mod check;

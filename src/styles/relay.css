@@ -15,13 +15,13 @@
 /* the item open large */
 .relay-card.current { border-color: var(--accent); background: var(--bg-selected); }
 .relay-card-head { display: flex; align-items: center; gap: var(--space-8); height: var(--row-24); }
-/* Ask card (user pick, 2026-10-22): the head is a solid amber bar and the card's 1px frame is the same amber,
+/* Ask card: the head is a solid amber bar and the card's 1px frame is the same amber,
    one rounded shape. Ink is --bg-panel (Onyx #17171c, 7.94:1 on --approval-amber; every theme's panel is darker still). */
 .relay-card.relay-ask-card { padding: 0; gap: 0; overflow: hidden; border-color: var(--approval-amber); }
 .relay-ask-card .relay-card-ask { padding: var(--space-8) var(--space-12) var(--space-12); }
 .relay-ask-card > .relay-card-head { height: var(--row-28); padding: 0 var(--space-12); background: var(--approval-amber); color: var(--bg-panel); }
 .relay-ask-card .relay-card-head .mark { color: var(--bg-panel); font-weight: var(--weight-bold); }
-/* Ask overlay (user pick, 2026-10-22): while the asker's Rendered tab is on screen the body sits under a scrim with one amber
+/* Ask overlay: while the asker's Rendered tab is on screen the body sits under a scrim with one amber
    action. Ink is --bg-panel on --approval-amber (7.94:1); hover/active are ink washes like Open Large above. */
 .relay-ask-card .relay-card-ask { position: relative; }
 .relay-ask-scrim {
@@ -38,7 +38,7 @@
 .relay-ask-go:focus-visible { outline: var(--border-w) solid var(--fg); outline-offset: var(--space-2); }
 .relay-ask-go:active:not(:disabled) { background: color-mix(in srgb, var(--bg-panel) 26%, var(--approval-amber)); }
 .relay-ask-go:disabled { opacity: 0.4; cursor: default; }
-/* Settled ask (user pick): the bar drops to the neutral hover fill with a green check, the body folds to question over answer */
+/* Settled ask: the bar drops to the neutral hover fill with a green check, the body folds to question over answer */
 .relay-card.relay-ask-card.relay-ask-settled { border-color: var(--border); }
 .relay-ask-settled > .relay-card-head { background: var(--bg-hover); color: var(--fg); }
 .relay-ask-card.relay-ask-settled .relay-card-head .mark { color: var(--ok-green); }
@@ -185,7 +185,7 @@
 .relay-ask-copy:active:not(:disabled) { background: var(--bg-selected); }
 .relay-ask-state { font-size: var(--font-11); white-space: nowrap; }
 
-/* approval card fields (user pick, 2026-10-24, mock relay-approval-card-r2 Chips Only): a bold label over its value at
+/* approval card fields (chips only): a bold label over its value at
    full card width, no lines; piped text splits into steps, Windows paths become chips */
 .relay-card-fields { display: flex; flex-direction: column; gap: var(--space-12); }
 .relay-card-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }

@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\home.rs — the Vidar agent home (plan Design 3, D2a): where it lives, its
+//! src-tauri\src\bare\home.rs — the Vidar agent home: where it lives, its
 //! private ACL, the per-home lock, and the settings generated into it from the profile template.
 //!
 //! Location (D2b): `%LOCALAPPDATA%\Vidar\homes\<install-root-key>`, the key being the Falcon host's
@@ -38,7 +38,7 @@ pub fn resolve() -> Result<PathBuf, String> {
     Ok(resolve_for(&crate::paths::root(), &lad))
 }
 
-/// Refuses a home under a sync client's root (D2a): credentials would leave the machine.
+/// Refuses a home under a sync client's root: credentials would leave the machine.
 pub fn refuse_sync_root(home: &Path) -> Result<(), String> {
     let h = norm(&home.to_string_lossy());
     for var in ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"] {
@@ -61,7 +61,7 @@ pub fn prepare_dirs(home: &Path, dirs: &[String]) -> Result<(), String> {
         }
         acl::create_private_dir(home, &[])?;
     }
-    let caps = codex_cap_sids(home);
+    let caps = super::codex_caps::cap_sids(home);
     acl::check_private_allowing(home, &caps)?;
     for d in dirs {
         let p = home.join(d);
@@ -71,44 +71,7 @@ pub fn prepare_dirs(home: &Path, dirs: &[String]) -> Result<(), String> {
     probe_writable(home)
 }
 
-/// The capability SIDs Codex's workspace-write sandbox recorded in THIS home's
-/// `codex-home\cap_sid` (`workspace`, `readonly`, `workspace_by_cwd.*`, `writable_root_by_path.*`).
-/// It grants one of them write on the TEMP it runs with (the bare overlay points TEMP into
-/// `user-home`) and never revokes, so those ACEs are Codex's own, not a foreign principal. A missing
-/// or unparsable file, or any entry that is not a SID, yields no exemptions at all.
-/// Every Codex home gets the same rule (W3 L9): the legacy `codex-home` and each indexed
-/// combination home (`agent_homes::listed`) are read alike, each file on its own, so a bad file
-/// voids only itself and no home grants more than a legacy file would. Flow's `flow-codex` home
-/// (W2-L2d) is read alike: its Codex runs on the same TEMP.
-fn codex_cap_sids(home: &Path) -> Vec<acl::Sid> {
-    let legacy = home.join("codex-home");
-    let homes = super::agent_homes::listed(super::agent_homes::Agent::Codex, home, &legacy).into_iter().map(|(dir, _)| dir);
-    homes.chain([super::flow_home::dir(home)]).flat_map(|dir| cap_sids_in(&dir)).collect()
-}
-
-/// The exemptions one Codex home's own `cap_sid` records.
-fn cap_sids_in(codex_home: &Path) -> Vec<acl::Sid> {
-    let Ok(text) = std::fs::read_to_string(codex_home.join("cap_sid")) else { return Vec::new() };
-    let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) else { return Vec::new() };
-    let mut texts: Vec<&Value> = Vec::new();
-    for (k, v) in &doc {
-        match (k.as_str(), v) {
-            ("workspace" | "readonly", v) => texts.push(v),
-            ("workspace_by_cwd" | "writable_root_by_path", Value::Object(m)) => texts.extend(m.values()),
-            _ => {}
-        }
-    }
-    let mut out = Vec::new();
-    for t in texts {
-        match t.as_str().and_then(acl::parse_sid) {
-            Some(s) => out.push(s),
-            None => return Vec::new(),
-        }
-    }
-    out
-}
-
-/// Create, replace and delete a probe file in the home as the normal user (D2a).
+/// Create, replace and delete a probe file in the home as the normal user.
 fn probe_writable(home: &Path) -> Result<(), String> {
     let p = home.join(".vidar-probe");
     let step = |what: &str, r: std::io::Result<()>| r.map_err(|e| format!("Bare home {} is not writable ({what}): {e}", home.display()));
@@ -216,7 +179,7 @@ fn has_token(hay: &str, needle: &str) -> bool {
 }
 
 /// The parsed-back file: same top-level keys as the template, hook events still arrays of
-/// matcher objects (P1's 8e27b21a bug), no placeholder left, no user-profile path or username
+/// matcher objects, no placeholder left, no user-profile path or username
 /// outside the root and home paths.
 pub fn validate(generated: &Value, template: &Value, root: &str, home: &str, guard: &Guard) -> Result<(), String> {
     let (Some(g), Some(t)) = (generated.as_object(), template.as_object()) else {
@@ -280,6 +243,7 @@ pub(crate) fn guard_brick(body: &str, root: &str, home: &str, guard: &Guard) -> 
 }
 
 /// Template -> substituted, guard copies appended (`guards.rs`) -> temp file + rename -> read back and validated; any failure refuses.
+#[cfg(test)]
 pub fn generate_settings(template_path: &Path, target: &Path, root: &Path, home: &Path, guard: &Guard, hooks: &[super::guards::HookEntry]) -> Result<(), String> {
     generate_settings_with(template_path, target, root, home, guard, hooks, &SettingsExtras::default())
 }
@@ -292,7 +256,9 @@ pub struct SettingsExtras {
     pub allow: Vec<String>,
     pub ask: Vec<String>,
     pub mode: Option<String>,
-    pub output_style: Option<String>,
+    pub output_style: Option<super::rune_items::OutputStyle>,
+    /// The vault's model rune, as top-level `model` (the session's default model).
+    pub model: Option<String>,
 }
 
 /// `generate_settings` plus a launch's `extras`. The file is written only when its bytes differ;
@@ -314,9 +280,15 @@ pub fn generate_settings_with(
     substitute(&mut generated, &root_s, &home_s);
     super::guards::append(&mut generated, hooks)?;
     apply_extras(&mut generated, extras)?;
-    if let (Some(style), Some(t)) = (&extras.output_style, template.as_object_mut()) {
-        t.insert("outputStyle".into(), Value::String(style.clone()));
+    // A body-carrying style's file beside the settings (`<config dir>\output-styles\<id>.md`), when its bytes differ.
+    // Every other `*.md` there is a previous launch's style and goes, but only inside the Bare home.
+    if let Some(dir) = target.parent().map(|d| d.join("output-styles")) {
+        super::rune_items::OutputStyle::sync_dir(extras.output_style.as_ref(), &dir, home)?;
     }
+    if let (Some(style), Some(t)) = (&extras.output_style, template.as_object_mut()) {
+        t.insert("outputStyle".into(), Value::String(style.name.clone()));
+    }
+    if let (Some(m), Some(t)) = (&extras.model, template.as_object_mut()) { t.insert("model".into(), Value::String(m.clone())); }
     let bytes = serde_json::to_vec_pretty(&generated).map_err(|e| e.to_string())?;
     if std::fs::read(target).ok().as_deref() != Some(bytes.as_slice()) {
         crate::fsx::atomic_write(target, &bytes).map_err(|e| format!("Bare settings {}: {e}", target.display()))?;
@@ -348,8 +320,9 @@ fn apply_extras(settings: &mut Value, extras: &SettingsExtras) -> Result<(), Str
         }
     }
     if let Some(style) = &extras.output_style {
-        obj.insert("outputStyle".into(), Value::String(style.clone()));
+        obj.insert("outputStyle".into(), Value::String(style.name.clone()));
     }
+    if let Some(m) = &extras.model { obj.insert("model".into(), Value::String(m.clone())); }
     Ok(())
 }
 
@@ -366,22 +339,7 @@ pub enum Toml {
 /// `table.key` (or `key` before the first header) -> value, in file order.
 pub type TomlDoc = Vec<(String, Toml)>;
 
-/// `s` as the body of a TOML basic string (no surrounding quotes).
-pub fn toml_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => out.push_str(&format!("\\u{:04X}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out
-}
+pub use super::home_toml::toml_escape;
 
 fn bare_key(k: &str) -> bool {
     !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
@@ -579,7 +537,7 @@ fn fill_placeholders(text: &str, values: &[(&str, String)]) -> String {
 pub const CTL_ENV_VARS: &[&str] = &["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_CTL_SECRET"];
 
 /// The parsed-back Codex config: the template's keys exactly, the isolation keys at their bare
-/// values (plan Design 6 plus the P6 probes), `developer_instructions` = the payload, `notify`
+/// values, `developer_instructions` = the payload, `notify`
 /// ending in the repo's `tools\desks\codex-notify.ps1` by absolute path, and no user-profile path
 /// or username outside the root and home paths. `pwsh` is the absolute pwsh Vidar resolved for
 /// `notify` (Codex runs notify outside its sandbox, with the bare `Path` that no longer holds the
@@ -731,10 +689,11 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
         }).collect()),
         x => x.clone(),
     });
+    let notify_script = super::codex_caps::NOTIFY_SCRIPT;
     match get("notify") {
         Some(Toml::Array(argv))
             if Some(&Toml::Array(argv.clone())) == want.as_ref()
-                && matches!(argv.last(), Some(Toml::Str(s)) if s.ends_with("codex-notify.ps1") && Path::new(s).is_absolute()) => {}
+                && matches!(argv.last(), Some(Toml::Str(s)) if s.ends_with(notify_script) && Path::new(s).is_absolute()) => {}
         _ => return Err(format!("{L}: notify must be the template's argv ending in an absolute codex-notify.ps1")),
     }
     // The stock vidar-drive rune adds this pinned table only for vaults that carry it. Its
@@ -813,18 +772,22 @@ pub fn generate_codex_config(template_path: &Path, target: &Path, root: &Path, h
 
 /// `generate_codex_config` plus a trusted `[projects]` entry for the launch folder `cwd` (Codex
 /// would otherwise ask about trusting it at every start, since this file is rewritten per launch).
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub fn generate_codex_config_for(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, mcp: &McpTables) -> Result<(), String> {
-    generate_codex_config_with(template_path, target, root, home, pwsh, payload, guard, cwd, mcp, &HookTrust::default())
+    generate_codex_config_with(template_path, target, root, home, pwsh, payload, guard, cwd, mcp, &HookTrust::default(), None)
 }
 
 /// `generate_codex_config_for` plus the `[hooks.state."<key>"]` trust tables of Vidar's own hooks
-/// (`codex_hooks::trust`), validated by `validate_codex_with`.
+/// (`codex_hooks::trust`), validated by `validate_codex_with`, and the vault's model rune: a
+/// top-level `model = "..."` written before the first table and mirrored into the template for the
+/// key check. `None` writes nothing.
 #[allow(clippy::too_many_arguments)]
-pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, mcp: &McpTables, trust: &HookTrust) -> Result<(), String> {
+pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, mcp: &McpTables, trust: &HookTrust, model: Option<&str>) -> Result<(), String> {
     let text = crate::fsx::read_text(template_path).map_err(|e| format!("Bare Codex template {}: {e}", template_path.display()))?;
     let text = crate::fsx::strip_bom(&text);
-    let template = parse_toml_lite(text).map_err(|e| format!("Bare Codex template {}: {e}", template_path.display()))?;
+    let mut template = parse_toml_lite(text).map_err(|e| format!("Bare Codex template {}: {e}", template_path.display()))?;
+    if let Some(m) = model { template.push(("model".into(), Toml::Str(m.into()))); }
     // The payload's own `{{root}}` (raw; the TOML escape below covers it); other names stay, so
     // the guard refuses them.
     let payload = &fill_placeholders(payload, &[("root", root.to_string_lossy().into_owned())]);
@@ -838,6 +801,8 @@ pub fn generate_codex_config_with(template_path: &Path, target: &Path, root: &Pa
             ("pwsh", toml_escape(&pwsh.to_string_lossy())),
         ],
     );
+    // Top-level keys precede every table, so the line goes first.
+    if let Some(m) = model { filled.insert_str(0, &format!("model = \"{}\"\n", toml_escape(m))); }
     if !mcp.text.is_empty() {
         if !filled.ends_with('\n') {
             filled.push('\n');
@@ -1141,7 +1106,7 @@ pub(crate) mod acl {
         let w = wide(dir);
         let refuse = |why: String| {
             Err(format!(
-                "Bare home {} {why}; refused. It must grant only the current user, SYSTEM and Administrators (D2a): fix or remove it yourself, Vidar never re-ACLs it",
+                "Bare home {} {why}; refused. It must grant only the current user, SYSTEM and Administrators: fix or remove it yourself, Vidar never re-ACLs it",
                 dir.display()
             ))
         };

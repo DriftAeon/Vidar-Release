@@ -4,6 +4,8 @@ import { JSDOM } from "jsdom";
 import { compareVersions, explicitCheck, offeredUpdates, quietCheck, skippedVersions } from "../src/startup-updates/core.ts";
 import { renderStartupUpdateRows } from "../src/settings/dependencies-view.ts";
 import { GEMINI_HIDDEN_PRELOAD, geminiHiddenArgs } from "../src/startup-updates/gemini-launch.ts";
+import { cardShell } from "../src/startup-updates/shell.ts";
+import { pendingUpdates, updateAll } from "../src/startup-updates/batch.ts";
 import cp from "node:child_process";
 import { SKEW_KEY, SKEW_TEXT, warnCodexSkew } from "../src/startup-updates/codex-skew.ts";
 
@@ -85,6 +87,80 @@ test("one dependency row per CLI dispatches Update / Skip and disables actions w
   assert.equal(root.querySelector('[data-cli="claude"] .deps-note').textContent, "Close claude Tabs First");
   assert.equal(root.querySelector('[data-cli="codex"] .deps-update').disabled, false);
   assert.equal(root.querySelectorAll(".deps-note").length, 1);
+});
+
+test("Update is the primary button and Update All starts every unblocked row, disabled when none", async () => {
+  const { document } = new JSDOM("<!doctype html><body></body>").window;
+  const root = document.createElement("aside");
+  const offers = ["gemini", "codex", "claude"].map((id) => ({ id, label: id, installed: "1.0.0", latest: "1.1.0" }));
+  let all = 0;
+  const actions = { update() {}, skip() {}, updateAll: () => { all += 1; } };
+  renderStartupUpdateRows(root, offers, null, null, actions);
+  assert.ok([...root.querySelectorAll(".deps-update")].every((b) => b.classList.contains("ws-primary")));
+  assert.ok(!root.querySelector(".deps-skip").classList.contains("ws-primary"));
+  const button = () => root.querySelector(".deps-update-all");
+  assert.equal(button().textContent, "Update All");
+  assert.ok(button().classList.contains("ws-primary"));
+  button().click();
+  assert.equal(all, 1);
+  // Running or a single job busy: disabled, with the running label.
+  renderStartupUpdateRows(root, offers, null, null, actions, undefined, true);
+  assert.equal(button().disabled, true);
+  assert.equal(button().textContent, "Updating All…");
+  assert.ok([...root.querySelectorAll("button")].every((b) => b.disabled));
+  renderStartupUpdateRows(root, offers, { id: "codex", label: "Updating…" }, null, actions);
+  assert.equal(button().disabled, true);
+  // Nothing startable: every row waits on an open tab.
+  renderStartupUpdateRows(root, offers, null, null, { ...actions, blocked: () => "Close Tabs First" });
+  assert.equal(button().disabled, true);
+  // One startable row is enough.
+  renderStartupUpdateRows(root, offers, null, null, { ...actions, blocked: (u) => u.id === "claude" ? "x" : null });
+  assert.equal(button().disabled, false);
+  // No Update All unless the caller asks for it (the release group).
+  renderStartupUpdateRows(root, offers, null, null, { update() {}, skip() {} });
+  assert.equal(button(), null);
+
+  // The batch runs the unblocked rows in order and stops at the first failure.
+  const ran = [];
+  const blocked = (u) => u.id === "codex" ? "Close codex Tabs First" : null;
+  assert.equal(await updateAll(offers, blocked, async (u) => { ran.push(u.id); return true; }), 2);
+  assert.deepEqual(ran, ["gemini", "claude"]);
+  ran.length = 0;
+  assert.equal(await updateAll(offers, () => null, async (u) => { ran.push(u.id); return u.id !== "gemini"; }), 0);
+  assert.deepEqual(ran, ["gemini"]);
+  assert.deepEqual(pendingUpdates([], () => null), []);
+  assert.equal(await updateAll([], () => null, async () => true), 0);
+});
+
+test("the card keeps a Close button through an update, and Escape or Close hides it", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  try {
+    const shell = cardShell(document, () => document.createElement("img"));
+    const close = shell.card.querySelector(".su-close");
+    assert.equal(close.getAttribute("aria-label"), "Close");
+    assert.equal(close.title, "Close");
+    // Painting the rows during an update (every row button disabled) leaves Close alone.
+    const offers = [{ id: "gemini", label: "gemini", installed: "1.0.0", latest: "1.1.0" }];
+    renderStartupUpdateRows(shell.body, offers, { id: "gemini", label: "Updating…" }, null, { update() {}, skip() {} });
+    assert.ok([...shell.body.querySelectorAll("button")].every((b) => b.disabled));
+    assert.equal(close.disabled, false);
+    assert.ok(shell.card.contains(close));
+    close.click();
+    assert.equal(shell.card.hidden, true);
+    shell.show();
+    assert.equal(shell.card.hidden, false);
+    document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" }));
+    assert.equal(shell.card.hidden, true);
+    shell.show();
+    shell.destroy();
+    document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" }));
+    assert.equal(document.querySelector(".startup-updates"), null);
+  } finally {
+    delete globalThis.document;
+    delete globalThis.window;
+  }
 });
 
 test("Gemini preload hides both spawn signatures without dropping arguments or existing options", async () => {

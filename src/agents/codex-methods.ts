@@ -1,4 +1,4 @@
-// Codex app-server method tables (pinned from the 0.164.0 schema): the
+// Codex app-server method tables (pinned from the 0.165.0 schema): the
 // notifications Vidar knows and fallback answers for server requests
 // (contracts/codex-server-requests.json). Data only; the Codex request handler reads them.
 // Refresh tools/codex-schema/manifest.json with refresh.mjs; the hermetic
@@ -7,7 +7,7 @@ import serverRequests from "../../contracts/codex-server-requests.json" with { t
 
 type Json = Record<string, unknown>;
 
-/** Every notification method the 0.163.0 experimental schema names. Known-but-unused ones
+/** Every notification method the pinned experimental schema names. Known-but-unused ones
  *  become quiet notices; anything else is `unknown` (the drift alarm). */
 export const KNOWN_NOTIFICATIONS = new Set([
   "error", "thread/started", "thread/status/changed", "thread/archived", "thread/deleted", "thread/unarchived",

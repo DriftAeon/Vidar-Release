@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\env.rs — the bare spawn env (plan Design 2), BUILT from the allowlist in
+//! src-tauri\src\bare\env.rs — the bare spawn env, BUILT from the allowlist in
 //! `contracts/agent-env.json` plus the `=X:` drive entries, never Vidar's env minus a list.
 //! Names match case-insensitively (Windows env semantics); the first spelling seen is kept.
 //! The contract's `drop` list is never applied here: it is what the tests assert cannot survive.
@@ -116,7 +116,7 @@ pub fn codex(inherited: impl IntoIterator<Item = (OsString, OsString)>, overlay:
 
 /// The overlay placeholder for the spawning process's own `LOCALAPPDATA`. A Bare Codex shell's
 /// TEMP is built from the Codex process's LOCALAPPDATA; a redirected, never-created folder there
-/// leaves pwsh in ConstrainedLanguage with unwritable temp (run 2026-10-19-codex-primary, T4/T5).
+/// leaves pwsh in ConstrainedLanguage with unwritable temp.
 /// Filled in `codex`, so every spawn path (Vidar's and Falcon's, via the mounted module) shares it.
 pub const LOCALAPPDATA_PLACEHOLDER: &str = "{{localappdata}}";
 

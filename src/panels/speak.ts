@@ -152,7 +152,7 @@ export function initSpeak(btn: HTMLButtonElement, signal?: AbortSignal): SpeakAp
 
   const off = async () => {
     try {
-      // Owner-scoped (plan §1): a Kokoro a terminal started or claimed, or one from before the
+      // Owner-scoped: a Kokoro a terminal started or claimed, or one from before the
       // owner tag, stays up, and the button says so instead of painting Off over it.
       const r = await invoke("speak_off");
       if (dead()) return;

@@ -21,7 +21,8 @@
 
 use super::{answers, lock, requests, CodexDriver};
 use crate::{
-    claude::PermissionState, journal::CodexRecord, process::WriteStatus, protocol::Outcome,
+    journal::CodexRecord, process::WriteStatus, protocol::Outcome,
+    session::driver_props::PermissionState,
 };
 use serde_json::{json, Value};
 use std::collections::{BTreeSet, HashMap};

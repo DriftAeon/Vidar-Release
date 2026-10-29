@@ -39,7 +39,7 @@
   /* Rendered inline code that is not a path (symbols, keys, file types); gold on trial (2026-10-04):
      --approval-amber #d9a441 with saturation cut 20% (HSL 39° 67%→53%, L 55%). */
   --code-ink: #ca9f50;
-  /* Unreal Starship button (U1, user 2026-10-10): fixed greys, not themed, so the decision pair reads the same in every armor. */
+  /* Unreal Starship button : fixed greys, not themed, so the decision pair reads the same in every armor. */
   --btn-fill: #383838;
   --btn-fill-hover: #575757;
   --btn-fill-press: #2f2f2f;
@@ -47,7 +47,7 @@
   --fg-bright: #ffffff;
   --btn-focus: #0070e0;
   --deny-glyph: #ef3535;
-  /* Approve/Deny fills (user 2026-10-11): #278630 and #bf1912; the soft 3D stops built on them are in new-ui. */
+  /* Approve/Deny fills: #278630 and #bf1912; the soft 3D stops built on them are in new-ui. */
   --approve-fill: #278630;
   --deny-fill: #bf1912;
   /* Git status colours (Changes tab letters and +/- counts; 2026-10-15): their own tokens, not themed, seeded
@@ -58,7 +58,7 @@
   --git-deleted: #c8473f;
   --git-renamed: #7fa7d6;
   --git-untracked: #c08ec9;
-  /* Browser status tones (shared browser bands and pills; Jira plan D5, picks Q2 and Q3, 2026-10-17): their own
+  /* Browser status tones (shared browser bands and pills): their own
      tokens, not themed, seeded from --class-read, --approval-amber, --class-web and --ok-green; blocked is #e66a42,
      lighter than --dead-red so its label reads 4.5:1 or better on its tint. */
   --status-todo: #7fa7d6;
@@ -98,7 +98,7 @@
   /* tokens:end */
   --bar-inset: var(--space-6); /* legacy 6: the left bar's side inset (leftbar.css re-sets it); the caption row reads it */
 
-  /* new-ui:start — the only tokens new components use (user-approved 2026-10-03), plus
+  /* new-ui:start — the only tokens new components use, plus
      --space-2 4 8 12 16 24 32, --radius-2 4 6 (and -full for dots), --font-11 12 13 16, --font-title (titles only),
      the themed colours (--accent, never --accent2) and the signal colours above. The rest of
      the tokens:start block is legacy: kept for existing rules, never picked for new ones.
@@ -116,12 +116,12 @@
   --row-28: 28px;
   --row-32: 32px;
   --border-w: 1px;
-  --opacity-dim: 0.5; /* disabled controls and the inactive side of a switch (user, 2026-10-24) */
+  --opacity-dim: 0.5; /* disabled controls and the inactive side of a switch */
   --bg-hover: color-mix(in srgb, var(--fg) 5%, var(--bg-panel));
   --bg-selected: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
   --border-strong: color-mix(in srgb, var(--fg) 20%, var(--bg-panel));
   /* Gate and confirm title bar strip (2026-10-11): a deep accent tint, blue in cobalt, set apart
-     from the card body; swap this one value to recolour every head (gold later, the user's call). */
+     from the card body; swap this one value to recolour every head (gold later). */
   --bg-titlebar: color-mix(in srgb, var(--accent) 16%, var(--bg-panel));
   /* Sheen (2026-10-11): the strip lit from the top, --bg-titlebar at 55%, plus a 1px inner
      top highlight. White title per stop: cobalt top #27405d 10.66:1, bottom #182536 15.46:1; default top
@@ -165,7 +165,7 @@
   --tint-ok-edge: color-mix(in srgb, var(--ok-green) 40%, var(--bg-panel));
   --tint-warn: color-mix(in srgb, var(--approval-amber) 12%, var(--bg-panel));
   --tint-warn-edge: color-mix(in srgb, var(--approval-amber) 40%, var(--bg-panel));
-  /* Notice action card (Rendered Bare warnings with Trust Folder / Ask Agent to Fix; user 2026-10-22):
+  /* Notice action card (Rendered Bare warnings with Trust Folder / Ask Agent to Fix):
      amber at 8% over the transcript ground, and a 2px amber left edge. */
   --notice-warn-wash: color-mix(in srgb, var(--approval-amber) 8%, var(--bg));
   --notice-warn-edge: 2px solid var(--approval-amber);
@@ -181,11 +181,20 @@
   --kind-skill: #8cc496;
   --kind-agent: #a495e8;
   --kind-hook: #e3bd4f;
+  /* Runes set-head fills, used as is */
+  --fill-agent: #36365c;
+  --fill-skill: #314944;
+  --fill-hook: #ab871a; /* gold (was #4b462b); bright, so its ink is --bg */
+  --fill-stock: #5e1417; /* red (was #71181b, #493039) */
+  --fill-rule: #233459; /* blue (was #2e3e58) */
+  --fill-plugin: #51302e; /* #b00500's hue at the other fills' depth and saturation */
   /* Generated rune libraries' set-head hue (2026-10-20) */
   --hue-generated: #3fbfb0;
-  /* Set-only libraries (Kit) and the Inherited Runes card (user-approved, 2026-10-22) */
+  /* Set-only libraries (Kit) and the Inherited Runes card */
   --hue-set: #e07a7a;
   --hue-inherited: #4f7df0;
+  /* Claude's own sets (Kit Claude): the Flow Output orange, so they part from Kit and stock */
+  --hue-agent-claude-set: #c97a4a;
   /* Module kind and place colours (Jira, Notion, Slack card edges, 2026-10-18); story and task are
      retuned away from --status-done and --status-todo */
   --kind-epic: #a495e8;
@@ -195,7 +204,7 @@
   --kind-subtask: #9aa6c8;
   --kind-source: #e3bd4f;
   --kind-page: #8ea4bf;
-  /* Notion bright tones (Tinted Edges, user pick 2026-10-22): band labels, card edges and solid pill fills; one set for
+  /* Notion bright tones (tinted edges): band labels, card edges and solid pill fills; one set for
      every theme, as the kind and status tokens are */
   --kind-source-bright: #3fe0cf;
   --kind-page-bright: #a3bcff;
@@ -209,8 +218,8 @@
   --place-group: #a495e8;
   --place-channel: #8cc496;
   --place-private: #e3a15c;
-  /* Ask scrim (user pick, 2026-10-22): the panel-dark ink at 78% over an ask card's body, with the one
-     user-picked blur exception; --bg is the dark family (#0f0f13 and its three theme siblings) in every theme */
+  /* Ask scrim: the panel-dark ink at 78% over an ask card's body, with the one
+     blur exception; --bg is the dark family (#0f0f13 and its three theme siblings) in every theme */
   --ask-scrim: color-mix(in srgb, var(--bg) 78%, transparent);
   --blur-scrim: 1.5px;
   /* new-ui:end */

@@ -96,7 +96,7 @@ function pwshQuote(text: string): string {
 
 // Route: pwsh -NoExit -Command "& '<exe>' '<prompt>'" — the exe is the detected `claude` location
 // (a shim path counts), called through & so a quoted path runs. Newlines in the prompt are
-// collapsed first so the argument stays on one line (plan v2).
+// collapsed first so the argument stays on one line.
 export function setupCommand(prompt: string, exe: string): string {
   return `& ${pwshQuote(exe)} ${pwshQuote(oneLine(prompt))}`;
 }

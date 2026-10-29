@@ -98,7 +98,7 @@ pub(crate) enum Effect {
     None,
     State(&'static str),
     /// A wake fired while transcribing/delivering: the UI flashes and chimes "busy", the
-    /// wake is otherwise dropped (no buffering, per plan §7).
+    /// wake is otherwise dropped (no buffering).
     Busy,
 }
 
@@ -430,7 +430,7 @@ fn handle_effect(ctx: &Arc<Ctx>, eff: Effect) {
 }
 
 /// Runs off the reader/ticker thread on its own thread so neither is blocked on the model
-/// load + whisper-cli round trip. `stem` is per-call (plan §7 delta) so this never races a
+/// load + whisper-cli round trip. `stem` is per-call so this never races a
 /// concurrent push-to-talk transcription over `bridge\voice\last.wav`. The `stt` slot is
 /// resolved per utterance, so a model changed since `listen_start` is caught by its pin.
 fn finish_recording(ctx: Arc<Ctx>) {
@@ -864,7 +864,7 @@ pub async fn listen_start(app: AppHandle, state: State<'_, ListenState>, cfg: Wa
         .map_err(|e| e.to_string())
         .and_then(|r| r);
     if result.is_ok() {
-        // Listen on is the warm stt trigger (plan-warm.md, Decision); after start_session, whose
+        // Listen on is the warm stt trigger; after start_session, whose
         // stt resolve has already paid the first-use hash.
         crate::stt_warm::ensure();
     }

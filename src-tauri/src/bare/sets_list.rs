@@ -1,7 +1,7 @@
-//! src-tauri\src\bare\sets_list.rs — `bare_sets_list`: every rune set the resolver can name, read-only
-//! (run 2026-10-24-runesets-full-stack, W4 L12b). The rules library (`rulesLibrary`, library omitted) first,
+//! src-tauri\src\bare\sets_list.rs — `bare_sets_list`: every rune set the resolver can name, read-only.
+//! The rules library (`rulesLibrary`, library omitted) first,
 //! then each import library under `runtime\runes\` in name order, opened as `layer::library_dir` +
-//! `Library::open` open them. Backups (`*.pre-split`) and folders that are not library names are skipped.
+//! `Library::open` open them. Backups (`*.pre-split`, `*.deleted-*`) and folders that are not library names are skipped.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -40,7 +40,7 @@ pub fn sets_in(root: &Path) -> Vec<SetEntry> {
         .flatten()
         .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
         .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|n| !n.contains(".pre-split") && rune::check_id(n).is_ok())
+        .filter(|n| !n.contains(".pre-split") && !n.contains(".deleted-") && rune::check_id(n).is_ok())
         .collect();
     names.sort();
     for name in names {
@@ -83,6 +83,7 @@ mod tests {
         set(&imports.join("kit"), "base");
         set(&imports.join("other"), "solo");
         set(&imports.join("kit.pre-split"), "old");
+        set(&imports.join("kit.deleted-20261028-101500"), "gone");
         // A cook recipe lives in `recipes/`, a folder `Library::open` never reads: never listed.
         let rec = root.join("rules").join("recipes");
         std::fs::create_dir_all(&rec).unwrap();

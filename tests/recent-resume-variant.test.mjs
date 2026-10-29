@@ -15,7 +15,8 @@ const dom = setupDom({ stubs: {
   "launcher/columns": `export function openColumn() { return document.createElement("div"); }
     export function placeColumn() {}
     export function hoverOpen() {}`,
-  "launcher/codex-recent": `export async function openCodexRecent(t, rendered) { globalThis.__codexList = rendered; }`,
+  "launcher/codex-recent": `export async function openCodexRecent(t, rendered) { globalThis.__codexList = rendered; }
+    export function drawCapped(sub, list, draw, place) { list.forEach(draw); place(); }`,
   "launcher/menu-rows": "export function twoLineRow() { return document.createElement('button'); }",
   "tab-names": "export function mintTabName() { return 'Tab'; }",
   "capabilities/registry": "export function use() { return null; }",

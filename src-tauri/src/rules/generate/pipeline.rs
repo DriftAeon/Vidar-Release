@@ -1,5 +1,4 @@
-//! src-tauri\src\rules\generate\pipeline.rs — the chunk scheduler
-//! (docs/runs/2026-10-18-rune-gen-per-source/plan.md § Limits, § Failure policy; amendments 3, 4, 11).
+//! src-tauri\src\rules\generate\pipeline.rs — the chunk scheduler.
 //! At most `cap` attempts run at once; chunk 0 starts alone and the rest follow when it finishes or `fanout_delay`
 //! passes (the first call refreshes the login, so parallel starts would race it). An `output:` error retries once;
 //! any other error, or a second `output:`, is the run's failure: the first one wins, `halt` runs once, nothing new

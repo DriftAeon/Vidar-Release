@@ -1,4 +1,4 @@
-// tools/bare/mcp-gate.mjs: Claude Bare PreToolUse gate (matcher `mcp__.*`, run 2026-10-24-runesets-full-stack).
+// tools/bare/mcp-gate.mjs: Claude Bare PreToolUse gate (matcher `mcp__.*`).
 // Passes drive (`mcp__plugin_vidar_drive__*`) and the `reads` contracts/module-bundles.json declares per server;
 // asks for every other MCP tool, unknown servers and an unreadable bundles file included.
 // Usage: node tools/bare/mcp-gate.mjs < PreToolUse JSON   (VIDAR_MCP_GATE_BUNDLES overrides the bundles path)

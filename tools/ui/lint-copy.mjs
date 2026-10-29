@@ -24,7 +24,7 @@
 // and, or, of, to, in, on, for, at, by, vs, via, per) after the first word. Any other word starting
 // lowercase is a finding. `copy-ok: <reason>` in a comment on the line suppresses it.
 //
-// Note sink (descriptor text; docs/runs/2026-10-01-descriptor-text/plan.md §A). A literal that lands
+// Note sink (descriptor text). A literal that lands
 // in a dim element is a sub-line, and a sub-line ships only if it reports a failure, shows a live
 // value or is a transient loading word. Dim = a class token in the dim set: every single-class
 // selector (`.x { … }`, whole selector) in src/**/*.css whose rule sets `color: var(--fg-dim)`,

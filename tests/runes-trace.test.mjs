@@ -2,7 +2,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { setupDom } from './helpers/dom-mount.mjs';
 import { traceRunes, normPath, canLoad } from '../src/runes/trace.ts';
+
+setupDom({ stubs: { 'panels/sessions/lookup': `
+  export const getFocusedSession = () => null;
+  export const renderedSessionId = () => null;
+  export const renderedBody = () => null;
+  export const sessionLaunchInfo = () => null;` } });
+const { outsideRow } = await import('../src/panels/runes.ts');
 
 const FX = new URL('./fixtures/runes-catalog/', import.meta.url);
 const BASE = 'D:\\fx\\repo';
@@ -86,4 +94,72 @@ test('canLoad hides unread every-session and tier 4 sets; path-scoped, plugin an
   assert.equal(canLoad(of(t, 'hooked')), true);
   const u = traceRunes(c, { source: 'none', reason: 'No Session Yet', files: [], truncated: false }, BASE);
   assert.equal(canLoad(of(u, 'other-agent')), true); // unknown, kept
+});
+
+test('Codex rows carry their lowercased memoryType as the icon kind; Claude rows carry none', () => {
+  const files = [
+    { path: 'kit/ctx', memoryType: 'skill', when: 'start', source: 'vault' },
+    { path: 'kit/jira-atlassian', memoryType: 'mcp', when: 'start', source: 'vault' },
+    { path: 'imagegen', memoryType: 'Skill', when: 'start', source: 'rollout' },
+    { path: 'D:\\fx\\repo\\AGENTS.md', memoryType: 'AGENTS.md', when: 'start', source: 'rollout' },
+    { path: 'D:\\fx\\home\\.claude\\skill', memoryType: 'skill', when: 'start' },
+  ];
+  const t = traceRunes(catalog(), { source: 'vault', files, truncated: false }, BASE);
+  // the vault rows are members, not outsiders; the rollout rows and the Claude row stay
+  assert.deepEqual(t.outside.map((o) => o.kind), ['skill', 'agents.md', undefined]);
+  assert.deepEqual(t.outside.map((o) => o.file), [false, true, true]);
+});
+
+const vaultRow = (path, memoryType = 'rule') => ({ path, memoryType, when: 'start', source: 'vault' });
+
+test('a Codex trace whose items are all vault members leaves the outside list empty', () => {
+  const files = [vaultRow('kit/ctx', 'skill'), vaultRow('kit/plain-words'), vaultRow('stock/gate-fact', 'fact'),
+    { path: 'ctx', memoryType: 'Skill', when: 'start', source: 'rollout' }];
+  const t = traceRunes(catalog(), { source: 'vault', files, truncated: false }, BASE);
+  assert.deepEqual(t.outside, []);
+});
+
+test('one true outsider stays outside beside the vault members', () => {
+  const files = [vaultRow('kit/ctx', 'skill'), vaultRow('stock/gate-fact', 'fact'),
+    { path: 'permissions instructions', memoryType: 'Developer', when: 'start', source: 'rollout' }];
+  const t = traceRunes(catalog(), { source: 'vault', files, truncated: false }, BASE);
+  assert.deepEqual(t.outside.map((o) => o.path), ['permissions instructions']);
+});
+
+test('a rollout developer label renders as a card without an open action', () => {
+  const files = [{ path: 'AGENTS.md', memoryType: 'Developer', when: 'start', source: 'rollout' }];
+  const [row] = traceRunes(catalog(), { source: 'rollout', files, truncated: false }, BASE).outside;
+  let opened = 0;
+  const card = outsideRow(row.path, () => opened++, row.kind, row.file);
+  assert.equal(row.file, false);
+  assert.equal(card.tagName, 'DIV');
+  assert.equal(card.getAttribute('role'), null);
+  assert.ok(!card.classList.contains('card'), 'a row with nothing to open takes no card hover');
+  card.click();
+  assert.equal(opened, 0);
+});
+
+test('a rollout AGENTS.md file renders as an opening button', () => {
+  const path = `${BASE}\\AGENTS.md`;
+  const files = [{ path, memoryType: 'AGENTS.md', when: 'start', source: 'rollout' }];
+  const [row] = traceRunes(catalog(), { source: 'rollout', files, truncated: false }, BASE).outside;
+  let opened;
+  const card = outsideRow(row.path, (p) => { opened = p; }, row.kind, row.file);
+  assert.equal(row.file, true);
+  assert.equal(card.tagName, 'BUTTON');
+  card.click();
+  assert.equal(opened, path);
+});
+
+test('a vault row stays out of outside when its library is absent from the catalog', () => {
+  const files = [vaultRow('missing-library/ctx', 'skill')];
+  const t = traceRunes(catalog(), { source: 'vault', files, truncated: false }, BASE);
+  assert.deepEqual(t.outside, []);
+});
+
+test('a vault row from a catalog library ticks its rune', () => {
+  const t = traceRunes(catalog(), { source: 'vault', files: [vaultRow('vidar/beta-fact', 'fact')], truncated: false }, BASE);
+  assert.equal(vidar(t).runeLoaded.get('beta-fact'), true);
+  assert.equal(vidar(t).runeLoaded.get('alpha-rule'), false);
+  assert.deepEqual(t.outside, []);
 });

@@ -18,7 +18,7 @@ export const click = ({ a1, evalJs, q }) =>
 export const text = ({ a1, evalJs, q }) =>
   evalJs(`[...document.querySelectorAll(${q(a1)})].map((e) => e.textContent.trim())`);
 
-// Page-side: element rect in document coordinates for a ref (lane A's byRef) or a selector.
+// Page-side: element rect in document coordinates for a ref (`byRef`) or a selector.
 const clipRectJs = (target, q) => `(() => {
   const t = ${q(target)};
   const st = globalThis.__vidarExplorer;

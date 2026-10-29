@@ -1,4 +1,4 @@
-// Eval-runes: grades whether a recall rune is read, and applied, when its text is not always-on (run 2026-10-25-runes-batch).
+// Eval-runes: grades whether a recall rune is read, and applied, when its text is not always-on.
 //
 // What it does: reads a suite `<lib>/evals/<rune-id>/<case>/{prompt.md,case.json}` and runs one headless Bare turn per
 //   planned session through the probe (`probe_runes_runs_one_real_bare_turn_with_a_recall_set`, driven by
@@ -18,9 +18,10 @@
 //   synthetic scaffold, not the real checkout; the report says so.
 //
 // Usage:
-//   node tools/bare/eval-runes.mjs --lib <dir> [--rune <id>[,<id>]] [--model <m>] [--confirm-model <m>] --dry
+//   node tools/bare/eval-runes.mjs --lib <dir> [--agent claude|codex] [--rune <id>[,<id>]] [--model <m>] [--confirm-model <m>] --dry
 //   node tools/bare/eval-runes.mjs [same flags] --confirm <planned-count>
 //   --lib is required (e.g. the checkout's runes folder). The planned count is exact unless a harness error aborts.
+// Codex cases use their own model; --model and --confirm-model apply only to Claude.
 // Refuses (exit 2): no --lib; a real run without --confirm, or one that differs from the planned count; an unknown flag; a
 //   missing suite, a bad case.json (kind, regex, no grader, target not in runes), or no case selected.
 // Never launches Vidar. Do not run it from an agent session without the user's go: each session is a paid model turn.
@@ -131,9 +132,9 @@ function harnessWhy(status, result) {
 }
 
 /** The default runner: the probe's cargo test, with the case file and out file in the env. */
-export function spawnRunner(repo, agent = "claude") {
+export function spawnRunner(repo, agent = "claude", spawn = spawnSync) {
   return (caseFile, outFile, c) => {
-    const p = spawnSync(
+    const p = spawn(
       "cargo",
       ["test", "--manifest-path", join(repo, "src-tauri", "Cargo.toml"), TESTS[agent], "--", "--ignored", "--nocapture", "--test-threads=1"],
       { cwd: repo, encoding: "utf8", env: { ...process.env, VIDAR_PROBE_CASE: caseFile, VIDAR_PROBE_OUT: outFile }, timeout: ((c.timeoutSec ?? 180) + 600) * 1000 },
@@ -273,7 +274,7 @@ export function runSuite(cases, opts, run, { outDir, tmp = tmpdir(), now = () =>
 
 export function parseArgs(argv) {
   const o = { dry: false };
-  const val = { "--lib": "lib", "--rune": "rune", "--model": "model", "--confirm-model": "confirmModel", "--confirm": "confirm", "--out": "out" };
+  const val = { "--lib": "lib", "--agent": "agent", "--rune": "rune", "--model": "model", "--confirm-model": "confirmModel", "--confirm": "confirm", "--out": "out" };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--dry") o.dry = true;
     else if (Object.hasOwn(val, argv[i]) && argv[i + 1] !== undefined) o[val[argv[i]]] = argv[++i];
@@ -286,6 +287,9 @@ function main() {
   try {
     const o = parseArgs(process.argv.slice(2));
     if (!o.lib) throw fail("Refusing: --lib <dir> is required (the library whose evals/ folder holds the suite)");
+    const agent = o.agent ?? "claude";
+    if (!Object.hasOwn(TESTS, agent)) throw fail(`Refusing: --agent must be claude or codex (got ${agent})`);
+    if (agent === "codex" && (o.model !== undefined || o.confirmModel !== undefined)) throw fail("Refusing: --model and --confirm-model are Claude-only");
     const lib = pathResolve(o.lib);
     const cases = loadSuite(lib, o.rune ? o.rune.split(",") : []);
     const opts = { model: o.model, confirmModel: o.confirmModel };
@@ -297,7 +301,7 @@ function main() {
     }
     if (o.confirm === undefined || Number(o.confirm) !== plan.length) throw fail(`Refusing: --confirm must equal the planned count ${plan.length} (got ${o.confirm ?? "none"}); see --dry`);
     const outDir = o.out ? pathResolve(o.out) : join(resolve("runs"), `${new Date().toISOString().slice(0, 10)}-rune-eval`);
-    const result = runSuite(cases, opts, spawnRunner(root()), { outDir });
+    const result = runSuite(cases, opts, spawnRunner(root(), agent), { outDir });
     for (const [id, r] of Object.entries(result.runes)) console.log(`${id}: ${r.verdict}`);
     console.log(`${result.ran}/${result.planned} sessions; report ${join(outDir, "report.md")}`);
     if (result.aborted) {

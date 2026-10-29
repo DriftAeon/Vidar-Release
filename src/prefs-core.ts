@@ -217,7 +217,7 @@ const LEGACY_KEYS: Record<string, { key: PrefKey; parse: (raw: string) => Json |
   "vidar.character.animationDropdown": { key: "character.animationDropdown", parse: str },
 };
 
-/** Module ids renamed in place, old -> new (the Benchmark tab became Lab, user 2026-10-17). A saved
+/** Module ids renamed in place, old -> new (the Benchmark tab became Lab). A saved
  *  list naming an old id reads as the new one, so a hidden tab stays hidden and keeps its order slot;
  *  modules/names.ts applies the same map to vidar.json `moduleNames`. */
 export const RENAMED_MODULE_IDS: Readonly<Record<string, string>> = { benchmark: "lab" };

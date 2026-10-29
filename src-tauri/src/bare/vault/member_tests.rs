@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\vault\member_tests.rs — `Op::Member` (run 2026-10-25-rune-vault, L3d): a rune switched
+//! src-tauri\src\bare\vault\member_tests.rs — `Op::Member`: a rune switched
 //! inside a placed runeset edits only the vault's own `sets/` copy; the library runeset stays byte-identical
 //! (model R3), and a locked vault takes the toggle only as a variant or an Edit Original (R5).
 
@@ -117,18 +117,20 @@ fn a_cross_library_slot_goes_out_and_comes_back_with_its_library_named() {
     let s = fx.store();
     let v = s.create("Cross", None, &[kit_set()], &[]).unwrap();
     s.edit(&v.id, &[member("stock", "gate-fact", false)], EditMode::Unlocked).unwrap();
-    assert!(!std::fs::read_to_string(fx.copy_file(&v.id)).unwrap().contains("gate-fact"));
+    let copy = std::fs::read_to_string(fx.copy_file(&v.id)).unwrap();
+    assert!(!copy.contains("<?rune stock/gate-fact?>") && copy.contains("slot-off: [stock/gate-fact]"), "{copy}");
     s.edit(&v.id, &[member("stock", "gate-fact", true)], EditMode::Unlocked).unwrap();
     assert!(std::fs::read_to_string(fx.copy_file(&v.id)).unwrap().contains("<?rune stock/gate-fact?>"));
 }
 
 #[test]
-fn a_recall_member_or_an_absent_runeset_refuses_and_writes_nothing() {
+fn a_non_member_or_an_absent_runeset_refuses_and_writes_nothing() {
     let fx = Fx::new("refuse");
     let s = fx.store();
     let v = s.create("Refuse", None, &[kit_set()], &[]).unwrap();
     let copy = std::fs::read(fx.copy_file(&v.id)).unwrap();
-    let e = s.edit(&v.id, &[member("kit", "kit-recall-tip", false)], EditMode::Unlocked).unwrap_err();
+    // a recall member now switches off in the copy's header (migrate_recall_tests.rs); a non-member refuses
+    let e = s.edit(&v.id, &[member("kit", "kit-nope", false)], EditMode::Unlocked).unwrap_err();
     assert!(e.contains("recall"), "{e}");
     let other = Op::Member(MemberEdit { library: "kit".into(), runeset: "nope".into(), rune: RuneRef { library: "kit".into(), id: "x".into() }, on: false });
     assert!(s.edit(&v.id, &[other], EditMode::Unlocked).unwrap_err().contains("not in the vault"));

@@ -19,40 +19,40 @@
 .flow-approve-approve, .relay-approve, .swap-yes, .release-build__go, .ws-btn.ws-add, .approval-actions button.approval-allow {
   background: var(--approve-grad); border-color: var(--approve-edge); box-shadow: var(--approve-shadow);
 }
-.flow-approve-deny, .relay-deny, .cx-confirm-pair .cx-yes, #flow-delete-confirm .swap-yes, .approval-actions button.approval-deny {
+.flow-approve-deny, .relay-deny, .cx-confirm-pair .cx-yes, #flow-delete-confirm .swap-yes, .runes-delete-confirm .swap-yes, .approval-actions button.approval-deny {
   background: var(--deny-grad); border-color: var(--deny-edge); box-shadow: var(--deny-shadow);
 }
 .flow-approve-approve:hover:not(:disabled), .relay-approve:hover:not(:disabled), .swap-yes:hover:not(:disabled),
 .release-build__go:hover:not(:disabled), .ws-btn.ws-add:hover:not(:disabled),
 .approval-actions button.approval-allow:hover:not(:disabled) { background: var(--approve-grad-hover); border-color: var(--approve-edge); box-shadow: var(--approve-shadow-hover); }
 .flow-approve-deny:hover:not(:disabled), .relay-deny:hover:not(:disabled), .cx-confirm-pair .cx-yes:hover:not(:disabled),
-#flow-delete-confirm .swap-yes:hover:not(:disabled),
+#flow-delete-confirm .swap-yes:hover:not(:disabled), .runes-delete-confirm .swap-yes:hover:not(:disabled),
 .approval-actions button.approval-deny:hover:not(:disabled) { background: var(--deny-grad-hover); border-color: var(--deny-edge); box-shadow: var(--deny-shadow-hover); }
 .flow-approve-approve:active:not(:disabled), .relay-approve:active:not(:disabled), .swap-yes:active:not(:disabled),
 .release-build__go:active:not(:disabled), .ws-btn.ws-add:active:not(:disabled),
 .approval-actions button.approval-allow:active:not(:disabled) { background: var(--approve-grad-press); border-color: var(--approve-edge); box-shadow: var(--approve-shadow-press); }
 .flow-approve-deny:active:not(:disabled), .relay-deny:active:not(:disabled), .cx-confirm-pair .cx-yes:active:not(:disabled),
-#flow-delete-confirm .swap-yes:active:not(:disabled),
+#flow-delete-confirm .swap-yes:active:not(:disabled), .runes-delete-confirm .swap-yes:active:not(:disabled),
 .approval-actions button.approval-deny:active:not(:disabled) { background: var(--deny-grad-press); border-color: var(--deny-edge); box-shadow: var(--deny-shadow-press); }
 
 /* Neutral No/Cancel (swap and voice trust confirms, the API key card's Cancel) and Dismiss (Relay strip and ask
    form). The key card's selector outranks the approval card's red .approval-deny in every state. */
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-no, :is(.relay-strip, .relay-ask-actions) .relay-dismiss,
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) .swap-no, :is(.relay-strip, .relay-ask-actions) .relay-dismiss,
 .blk-login .approval-actions button.approval-deny, .cx-confirm-pair .cx-no, .release-build .release-build__cancel {
   background: var(--neutral-grad); border-color: var(--border); color: var(--fg-dim);
   border-radius: var(--radius-6); box-shadow: var(--neutral-shadow);
 }
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-no:hover:not(:disabled),
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) .swap-no:hover:not(:disabled),
 :is(.relay-strip, .relay-ask-actions) .relay-dismiss:hover:not(:disabled),
 .blk-login .approval-actions button.approval-deny:hover:not(:disabled), .cx-confirm-pair .cx-no:hover:not(:disabled),
 .release-build .release-build__cancel:hover:not(:disabled) { border-color: var(--border-strong); color: var(--fg); }
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-no:active:not(:disabled),
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) .swap-no:active:not(:disabled),
 :is(.relay-strip, .relay-ask-actions) .relay-dismiss:active:not(:disabled),
 .blk-login .approval-actions button.approval-deny:active:not(:disabled), .cx-confirm-pair .cx-no:active:not(:disabled),
 .release-build .release-build__cancel:active:not(:disabled) {
   background: var(--neutral-grad-press); box-shadow: var(--neutral-shadow-press);
 }
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-no:focus-visible,
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) .swap-no:focus-visible,
 :is(.relay-strip, .relay-ask-actions) .relay-dismiss:focus-visible,
 .blk-login .approval-actions button.approval-deny:focus-visible, .cx-confirm-pair .cx-no:focus-visible,
 .release-build .release-build__cancel:focus-visible {
@@ -70,7 +70,7 @@
    Each selector matches or outranks its surface's own sizing rule, and this file loads after all of them. */
 .flow-approve-approve, .flow-approve-deny,
 :is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny, .relay-dismiss), .relay-ask-copy,
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) :is(.swap-yes, .swap-no), .cx-confirm-pair :is(.cx-yes, .cx-no),
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) :is(.swap-yes, .swap-no), .cx-confirm-pair :is(.cx-yes, .cx-no),
 .release-build :is(.release-build__go, .release-build__cancel),
 .approval-actions button:is(.approval-allow, .approval-deny) {
   box-sizing: border-box; height: var(--row-28); padding-top: 0; padding-bottom: 0;
@@ -89,7 +89,7 @@
    none below and the centred label drops 1px without changing the box height. */
 .flow-approve-approve:active:not(:disabled), .flow-approve-deny:active:not(:disabled),
 :is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny, .relay-dismiss):active:not(:disabled),
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) :is(.swap-yes, .swap-no):active:not(:disabled), .cx-confirm-pair :is(.cx-yes, .cx-no):active:not(:disabled),
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) :is(.swap-yes, .swap-no):active:not(:disabled), .cx-confirm-pair :is(.cx-yes, .cx-no):active:not(:disabled),
 .release-build :is(.release-build__go, .release-build__cancel):active:not(:disabled),
 .approval-actions button:is(.approval-allow, .approval-deny):active:not(:disabled) { padding-top: var(--space-2); padding-bottom: 0; }
 /* Focus is the border colour alone: the ask-gate :focus ring stays for programmatic focus, the keyboard rings go.
@@ -98,10 +98,10 @@
   border-color: var(--fg-bright); outline: none;
 }
 :is(.relay-strip, .relay-ask-actions) :is(.relay-approve, .relay-deny):focus-visible,
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) .swap-yes:focus-visible, .cx-confirm-pair .cx-yes:focus-visible, .release-build__go:focus-visible, .ws-btn.ws-add:focus-visible,
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) .swap-yes:focus-visible, .cx-confirm-pair .cx-yes:focus-visible, .release-build__go:focus-visible, .ws-btn.ws-add:focus-visible,
 .approval-actions button:is(.approval-allow, .approval-deny):focus-visible { border-color: var(--fg-bright); outline: none; }
 /* disabled: the surfaces' own 0.4 (0.45 / 0.5 on the older two) plus no lift */
 :is(.flow-approve-btn, .relay-approve, .relay-deny, .relay-dismiss, .swap-yes, .swap-no,
   .approval-actions button.approval-allow, .approval-actions button.approval-deny):disabled,
-:is(#swap-confirm, .vs-confirm, #flow-delete-confirm) :is(.swap-yes, .swap-no):disabled, .cx-confirm-pair :is(.cx-yes, .cx-no):disabled,
+:is(#swap-confirm, .vs-confirm, #flow-delete-confirm, .runes-delete-confirm) :is(.swap-yes, .swap-no):disabled, .cx-confirm-pair :is(.cx-yes, .cx-no):disabled,
 .release-build :is(.release-build__go, .release-build__cancel):disabled, .ws-btn.ws-add:disabled { box-shadow: none; }

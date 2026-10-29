@@ -4,6 +4,10 @@ import { invoke } from "../ipc";
 import { renderStartupUpdateRows } from "../settings/dependencies-view";
 import { explicitCheck, offeredUpdates, quietCheck, skippedVersions } from "./core";
 import type { CliUpdate, CliUpdateBusy } from "./core";
+import { iconImg } from "../icon-img";
+import { updateAll } from "./batch";
+import { cardShell } from "./shell";
+import type { CardShell } from "./shell";
 import { driveSnapshot } from "../panels/sessions/lookup";
 import { showSessionsToast } from "../panels/sessions/zoom";
 import { warnCodexSkew } from "./codex-skew";
@@ -68,23 +72,21 @@ export async function checkUpdatesNow(): Promise<number> {
 
 // One fixed card holds both groups: CLI offers on top, Vidar and pack releases below. It leaves the
 // page once both groups are gone.
-let card: HTMLElement | null = null;
+let shell: CardShell | null = null;
 let cliGroup: HTMLElement | null = null;
 let releaseGroup: HTMLElement | null = null;
+
+/** Close only hides the card (shell.ts): an update in flight is an `invoke` promise owned by `act`,
+ *  not by the card, so it runs on and its failure surfaces as a toast. A new offer shows it again. */
 function container(): HTMLElement {
-  if (!card) {
-    card = document.createElement("aside");
-    card.className = "startup-updates vs-confirm";
-    card.setAttribute("role", "region");
-    card.setAttribute("aria-live", "polite");
-    document.body.appendChild(card);
-  }
-  return card;
+  shell ??= cardShell(document, () => iconImg("close"));
+  shell.show();
+  return shell.body;
 }
 function settle(): void {
-  if (!card) return;
-  if (!cliGroup && !releaseGroup) { card.remove(); card = null; return; }
-  card.setAttribute("aria-label", cliGroup ? "CLI Updates" : "Update Available");
+  if (!shell) return;
+  if (!cliGroup && !releaseGroup) { shell.destroy(); shell = null; return; }
+  shell.card.setAttribute("aria-label", cliGroup ? "CLI Updates" : "Update Available");
 }
 
 function mount(initial: CliUpdate[]): void {
@@ -107,8 +109,9 @@ function mount(initial: CliUpdate[]): void {
       publish();
     }
   };
-  async function act(u: CliUpdate, skip: boolean): Promise<void> {
-    if (busy) return;
+  let batch = false;
+  async function act(u: CliUpdate, skip: boolean): Promise<boolean> {
+    if (busy) return false;
     busy = { id: u.id, label: skip ? "Saving…" : "Updating…" };
     error = null;
     paint();
@@ -116,15 +119,27 @@ function mount(initial: CliUpdate[]): void {
       if (skip) await invoke("patch_state", { entries: { [`startupUpdates.skip.${u.id}`]: u.latest } });
       else await invoke("update_cli", { id: u.id, version: u.latest });
       remove(u.id);
+      return true;
     } catch (e) {
       busy = null;
       // The backend's own reason first; the generic line only when it gave none.
       error = String(e ?? "") || (skip ? "Skip Could Not Be Saved" : "Update Failed — Try Again or Use Dependencies");
       paint();
+      // The card may have been closed meanwhile; say so where the user is looking.
+      if (shell?.card.hidden) showSessionsToast(`${u.label}: ${error}`, 6000);
+      return false;
     }
   }
+  async function runAll(): Promise<void> {
+    if (busy || batch) return;
+    batch = true;
+    paint();
+    try { await updateAll(updates, blockedBy, (u) => act(u, false)); }
+    finally { batch = false; if (cliGroup === root) paint(); }
+  }
+  const blockedBy = (u: CliUpdate): string | null => liveTabs(u) ? `Close ${u.label} Tabs First` : null;
   setUpdateActor((u, skip) => {
-    if (busy) return "Another Update Is Running";
+    if (busy || batch) return "Another Update Is Running";
     if (!skip && liveTabs(u)) return `Close ${u.label} Tabs First`;
     void act(u, skip);
     return null;
@@ -134,8 +149,9 @@ function mount(initial: CliUpdate[]): void {
     renderStartupUpdateRows(root, updates, busy, error, {
       update: (u) => { if (!liveTabs(u)) void act(u, false); },
       skip: (u) => { void act(u, true); },
-      blocked: (u) => liveTabs(u) ? `Close ${u.label} Tabs First` : null,
-    });
+      blocked: blockedBy,
+      updateAll: () => { void runAll(); },
+    }, undefined, batch);
   }
   // Tabs open and close while the card waits: re-read them when the pointer reaches the card, so
   // the block lifts once the last tab of that CLI is closed.

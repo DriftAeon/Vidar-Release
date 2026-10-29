@@ -46,17 +46,18 @@ pub struct CodexLoadout {
 pub async fn read_codex_loadout(
     app: AppHandle,
     tab: Option<String>,
+    falcon_session: Option<String>,
     profile: Option<String>,
     row: Option<String>,
     cwd: String,
 ) -> Result<CodexLoadout, String> {
-    tauri::async_runtime::spawn_blocking(move || read_codex_loadout_now(&app, tab, profile, row, cwd))
+    tauri::async_runtime::spawn_blocking(move || read_codex_loadout_now(&app, tab, falcon_session, profile, row, cwd))
         .await
         .map_err(|e| e.to_string())
 }
 
-fn read_codex_loadout_now(app: &AppHandle, tab: Option<String>, profile: Option<String>, row: Option<String>, cwd: String) -> CodexLoadout {
-    read_codex_loadout_home(codex_config::home_for_row(app, tab.as_deref(), profile.as_deref(), row.as_deref()), &cwd)
+fn read_codex_loadout_now(app: &AppHandle, tab: Option<String>, falcon_session: Option<String>, profile: Option<String>, row: Option<String>, cwd: String) -> CodexLoadout {
+    read_codex_loadout_home(codex_config::home_for_row(app, tab.as_deref(), falcon_session.as_deref(), profile.as_deref(), row.as_deref()), &cwd)
 }
 
 fn read_codex_loadout_home(home: Home, cwd: &str) -> CodexLoadout {

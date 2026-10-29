@@ -1,4 +1,4 @@
-//! HTTPS for the Jira tab over the shared `net::https` WinHTTP request (plan § D4): the system
+//! HTTPS for the Jira tab over the shared `net::https` WinHTTP request: the system
 //! certificate store and the system proxy. `Request` carries no header text; `WinHttpTransport`
 //! builds `Authorization` itself from a `Token` whose Debug is redacted and hands it to `net` as a
 //! `Secret`, so no `{:?}`, test failure or JoinError string can carry the token.

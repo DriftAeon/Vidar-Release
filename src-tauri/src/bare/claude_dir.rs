@@ -1,5 +1,5 @@
 //! src-tauri\src\bare\claude_dir.rs — the one resolver for "which Claude config dir does this tab
-//! use" (plan P4). Observers (Loadout, MCP rack, Recent, status bar, handoffs) take the tab's optional launch profile and ask here, never `USERPROFILE\.claude`
+//! use". Observers (Loadout, MCP rack, Recent, status bar, handoffs) take the tab's optional launch profile and ask here, never `USERPROFILE\.claude`
 //! directly. No profile keeps today's `crate::paths::claude_dir()`; `bare` is
 //! `<agentHomes>\claude-config`; an unknown profile resolves to nothing (the caller skips the
 //! lookup, it never falls back to the user's home). A Bare profile also runs on one dir per set
@@ -90,7 +90,10 @@ pub fn transcript_in(homes: &[PathBuf], slug: &str, session_id: &str) -> Option<
 /// session's Rune Vault record, then an older launch manifest when either names a listed home;
 /// otherwise the profile's own. An unknown profile resolves to nothing.
 pub fn home_of_session(profile: Option<&str>, tab: Option<&str>, session: Option<&str>, _row: Option<&str>) -> Option<PathBuf> {
-    let Some(p) = profile else { return claude_dir_for(None) };
+    let p = match profile {
+        Some(p) => p,
+        None => return claude_dir_for(None),
+    };
     if !plain_profile(p) {
         return None;
     }
@@ -107,7 +110,7 @@ fn session_home_with(p: &str, root: &Path, home_dir: &Path, listed: &[PathBuf], 
         if let Some(r) = recorded {
             return listed.iter().find(|l| norm(l) == norm(Path::new(&r.home))).cloned();
         }
-        let recorded = super::manifest::claude_config_in(&home_dir.join("manifests"), tab, session);
+        let recorded = super::manifest::recorded_home_in(super::Agent::Claude, &home_dir.join("manifests"), tab, session);
         if let Some(d) = recorded.and_then(|r| listed.iter().find(|l| norm(l) == norm(&r)).cloned()) {
             return Some(d);
         }

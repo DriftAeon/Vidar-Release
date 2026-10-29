@@ -132,16 +132,28 @@ pub(super) fn capability_refusal(op: &Op, host_capabilities: &[String]) -> Optio
     })
 }
 
+/// The capability a host must list before it runs this agent's turns; `None` = it needs none (the
+/// agent's child speaks the stream itself). The one per-agent table of the client's turn rules.
+pub(super) fn turns_capability(agent: Agent) -> Option<&'static str> {
+    match agent {
+        Agent::Claude => None,
+        Agent::Codex => Some(CAPABILITY_CODEX_TURNS),
+    }
+}
+
+/// The one string boundary for a host-listed agent name: the protocol's own lowercase id, else
+/// `None`. Callers refuse or skip an unknown name; none treats it as another agent.
+pub(super) fn parse_agent(name: &str) -> Option<Agent> {
+    serde_json::from_value(Value::String(name.to_string())).ok()
+}
+
 /// Refuse, before a spawn or adopt, a hosted Codex tab on a host that did not
 /// list `codex_turns`: `supported_agents` alone says the runtime exists, not
 /// that the host runs its turns (protocol.rs `CAPABILITY_CODEX_TURNS`). Claude
 /// needs nothing. The frontend may match `cannot run hosted Codex` to fall
 /// back to an in-process tab; keep the phrase.
 pub(super) fn agent_refusal(agent: Agent, host_capabilities: &[String]) -> Option<String> {
-    let needed = match agent {
-        Agent::Claude => return None,
-        Agent::Codex => CAPABILITY_CODEX_TURNS,
-    };
+    let needed = turns_capability(agent)?;
     (!host_capabilities.iter().any(|held| held == needed)).then(|| {
         format!("falcon host cannot run hosted Codex; it predates the '{needed}' capability")
     })
@@ -206,5 +218,14 @@ mod tests {
         assert_eq!(agent_refusal(Agent::Codex, &["steer".into(), "codex_turns".into()]), None);
         assert_eq!(agent_refusal(Agent::Claude, &[]), None);
         assert_eq!(CAPABILITY_CODEX_TURNS, "codex_turns");
+    }
+
+    #[test]
+    fn an_unknown_agent_name_does_not_parse() {
+        assert_eq!(parse_agent("codex"), Some(Agent::Codex));
+        assert_eq!(parse_agent("claude"), Some(Agent::Claude));
+        for name in ["gemini", "Codex", ""] {
+            assert_eq!(parse_agent(name), None, "{name:?}");
+        }
     }
 }

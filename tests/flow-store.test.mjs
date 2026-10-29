@@ -24,7 +24,7 @@ import {
   LEGACY_LAYOUT_KEY,
 } from '../src/flow/store-core.ts';
 import { EDIT_RULE, RETIRED_STARTER_IDS, STARTER_TEMPLATES } from '../src/flow/templates.ts';
-import { validateGraph, setLiveModelIds } from '../src/flow/validate.ts';
+import { validateGraph, setLiveModelIds, setLiveVaultIds, setVaultAgentOf } from '../src/flow/validate.ts';
 
 // Map-backed StorageLike stub — never touches window/localStorage (leaf-module rule, §7).
 function mapStorage(seed = {}) {
@@ -364,7 +364,7 @@ test('starter templates match the §6 model/preset table exactly', () => {
 
 // ---- legacy kind normalisation (normalizeLegacyGraph / normalizeLegacyEnvelope) ----
 
-/** The pre-v1 MOCK_GRAPH shape (git show 7ce42e9:src/flow/model.ts), as migrateLegacyLayout
+/** The pre-v1 MOCK_GRAPH shape (the old src/flow/model.ts), as migrateLegacyLayout
  *  stored it: trigger → agent → tool → review → output, legacy addons with value backfilled. */
 function legacyMockGraph() {
   const layout = {
@@ -406,7 +406,7 @@ test('normalizeLegacyGraph: every node ends up a v1 kind, every addon a v1 addon
   assert.equal(changed, true);
   assert.deepEqual(graph.nodes.map((n) => n.kind), ['input', 'agent', 'agent', 'output']);
   for (const n of graph.nodes) {
-    for (const a of n.addons ?? []) assert.ok(['permission-allowlist', 'system-prompt', 'cwd', 'retries'].includes(a.kind), a.kind);
+    for (const a of n.addons ?? []) assert.ok(['system-prompt', 'cwd', 'retries'].includes(a.kind), a.kind);
   }
 });
 
@@ -418,14 +418,14 @@ test('normalizeLegacyGraph: trigger becomes the "input" node and edges follow; t
   assert.deepEqual(pairs, ['agent>review', 'input>agent', 'review>output']);
 });
 
-test('normalizeLegacyGraph: model addon/field → node.model, permission → permission-allowlist', () => {
+test('normalizeLegacyGraph: model addon/field → node.model, permission is stripped', () => {
   const { graph } = normalizeLegacyGraph(legacyMockGraph());
   const agent = graph.nodes.find((n) => n.id === 'agent');
   const review = graph.nodes.find((n) => n.id === 'review');
   assert.equal(agent.model, 'claude-sonnet-5');
   assert.equal(review.model, 'claude-opus-5-5');
   assert.ok(!agent.fields.some((f) => f.k === 'model'));
-  assert.deepEqual(review.addons, [{ kind: 'permission-allowlist', label: 'Read,Grep,Glob', value: 'Read,Grep,Glob' }]);
+  assert.equal(review.addons, undefined);
   assert.equal(review.fields.find((f) => f.k === 'preset')?.v, 'review');
   assert.ok(review.fieldSpecs.some((s) => s.k === 'task' && s.required));
   // user content kept as fields, never turned into invented task text
@@ -442,6 +442,7 @@ test('normalizeLegacyGraph: every dropped addon/node is recorded with its text',
     'agent:addon:rule:rendered-panel.md',
     'agent:addon:skill:adversarial-diff-review',
     'review:addon:effort:high',
+    'review:addon:permission:read-only',
     'tool:addon:hook:guard-crawl',
     'tool:node:tool:Tool',
   ]);
@@ -462,6 +463,60 @@ test('normalizeLegacyGraph: runs once — a second pass is a no-op', () => {
   assert.equal(second.changed, false);
   assert.equal(second.graph, first.graph);
   assert.deepEqual(second.drops, []);
+});
+
+/** A one-agent graph: input → a → output, valid once the vault checks are set aside. */
+function vaultGraph(node) {
+  const g = instantiateTemplate(STARTER_TEMPLATES[0], NOW);
+  g.nodes = [
+    { id: 'input', kind: 'input', title: 'Input', x: 0, y: 0, inputs: [], outputs: ['out'],
+      fields: [{ k: 'shape', v: 'free-text' }, { k: 'content', v: 'x' }] },
+    { id: 'a', kind: 'agent', title: 'A', x: 0, y: 100, inputs: ['in'], outputs: ['out'],
+      fields: [{ k: 'task', v: 'do it' }], model: 'claude-sonnet-5', ...node },
+    { id: 'output', kind: 'output', title: 'Output', x: 0, y: 200, inputs: ['in'], outputs: [], fields: [] },
+  ];
+  g.edges = [
+    { id: 'e1', from: { node: 'input', port: 'out' }, to: { node: 'a', port: 'in' } },
+    { id: 'e2', from: { node: 'a', port: 'out' }, to: { node: 'output', port: 'in' } },
+  ];
+  return g;
+}
+
+test('vault: the node field round-trips through the envelope', () => {
+  const storage = mapStorage();
+  const g = vaultGraph({ vault: 'v-custom' });
+  saveGraphsEnvelope(storage, { v: 1, activeGraphId: g.id, graphs: [g] });
+  assert.equal(loadGraphsEnvelope(storage).graphs[0].nodes[1].vault, 'v-custom');
+});
+
+test('validate: another agent\'s stock vault and an unknown vault fail, the node\'s own passes', () => {
+  setLiveModelIds(() => ['claude-sonnet-5', 'codex-default']);
+  setVaultAgentOf((m) => (m.startsWith('codex') ? 'codex' : 'claude'));
+  setLiveVaultIds(() => ['stock-claude', 'stock-codex', 'v-custom']);
+  try {
+    const msgs = (n) => validateGraph(vaultGraph(n)).issues.map((i) => i.message);
+    assert.deepEqual(msgs({}), []);
+    assert.deepEqual(msgs({ vault: 'stock-claude' }), []);
+    assert.deepEqual(msgs({ vault: 'v-custom' }), []);
+    assert.match(msgs({ vault: 'stock-codex' }).join('\n'), /Stock Vault for Another Agent/);
+    assert.match(msgs({ vault: 'v-gone' }).join('\n'), /Unknown Vault/);
+  } finally {
+    setLiveModelIds(null);
+    setVaultAgentOf(null);
+    setLiveVaultIds(null);
+  }
+});
+
+test('load: a saved permission-allowlist addon is gone, other addons stay', () => {
+  const g = vaultGraph({
+    addons: [
+      { kind: 'permission-allowlist', label: 'Read', value: 'Read' },
+      { kind: 'retries', label: '1', value: '1' },
+    ],
+  });
+  const { graph, changed } = normalizeLegacyGraph(g);
+  assert.equal(changed, true);
+  assert.deepEqual(graph.nodes[1].addons, [{ kind: 'retries', label: '1', value: '1' }]);
 });
 
 test('instantiateTemplate: a no-Claude roster gives runnable nodes, the template keeps its models', () => {

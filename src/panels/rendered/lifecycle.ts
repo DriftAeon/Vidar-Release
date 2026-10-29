@@ -12,12 +12,15 @@ import type { Group, RenderedState, StatusLine, ToolRecord } from "./state";
 import { modeLabel } from "./status-bar";
 import type { HydrateStats } from "./hydrate-stats";
 import { closeHydration } from "./host-payload";
-import { initCodexPlans } from "../../agents/codex-plan-store";
+import { AGENT_PROFILE } from "../../agents/agent-profile";
 import { AGENT_EXITED, denyWithin } from "./cards";
 import { bareNotices, vidarFolderCard } from "./notice-actions";
 
 /** The spawn error for a home-folder Codex launch: equals `HOME_CWD_REFUSED` in src-tauri/src/codex_cwd.rs
  *  (tests/codex-home-refused.test.mjs keeps the two in step). */
+/** How long a send released from a respawn's hold waits for the new session's replay to end. */
+const HELD_HYDRATION_MS = 15000;
+
 export const HOME_CWD_REFUSED = "Codex Can't Start in Your Home Folder: Pick a Project Folder";
 
 /** The spawn error for a Vidar-folder Codex launch: equals `VIDAR_CWD_REFUSED` in src-tauri/src/bare/mod.rs
@@ -158,12 +161,16 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
   }
   let rulesNoted = false; // prepare-time warnings land once per body, not on every Resume or Retry
   function spawn(): Promise<void> {
-    const p = spawnInner().finally(() => { if (S.spawning === p) S.spawning = null; });
+    // the chip reads Starting… while a spawn is in flight (state-chip.ts): repaint once it clears. spawnInner starts
+    // a microtask later, so S.spawning is already set when its own status paint runs (with a pinned model the
+    // status line never reads "Starting…", and that paint read Ready: E1 run 4, case 2)
+    const p = Promise.resolve().then(spawnInner).finally(() => { if (S.spawning === p) { S.spawning = null; if (!S.disposed) refreshState(); } });
     S.spawning = p;
     return p;
   }
   async function spawnInner(): Promise<void> {
-    if (opts.agent === "codex") await initCodexPlans();
+    const before = AGENT_PROFILE[opts.agent].beforeSpawn;
+    if (before) await before();
     if (S.disposed) return; // The body may close while its plan snapshots load.
     S.adapter = newAdapter();
     cancelApprovals("session restarted");
@@ -268,13 +275,27 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
     }
   }
   /** Sends hold while a respawn or a spawn has no generation yet (D-d): a line sent then would reach the old
-   *  process, or no process. `holdSends` returns the release; send() re-checks after every release. */
+   *  process, or no process. `holdSends` returns the release; send() re-checks after every release. `S.holding`
+   *  mirrors the hold, so the chip reads Starting… and `write()` refuses from the respawn's first step. */
   let nextGen: Promise<void> | null = null;
   function holdSends(): () => void {
     let release!: () => void;
     const p = new Promise<void>((r) => { release = r; });
     nextGen = p;
-    return () => { if (nextGen === p) nextGen = null; release(); };
+    S.holding = true;
+    refreshState();
+    return () => {
+      if (nextGen === p) { nextGen = null; S.holding = false; if (!S.disposed) refreshState(); }
+      release();
+    };
+  }
+  /** A hosted spawn resolves before its replay ends (`hydration: end` comes later from the reader thread), so a send
+   *  released from a hold waits out that hydration, bounded, rather than being refused by it. */
+  async function hydrated(): Promise<void> {
+    const end = Date.now() + HELD_HYDRATION_MS;
+    while (S.hydrating && S.isAlive && !S.disposed && Date.now() < end) {
+      await new Promise<void>((r) => { window.setTimeout(r, 50); });
+    }
   }
   /** A fresh session in this tab through the /clear route (a Rune Vault edit, D-d): open cards are denied, the
    *  agent stops, the transcript and context clear, and a new process spawns with no resume. Sends made meanwhile
@@ -293,7 +314,9 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
     } finally { release(); }
   }
   async function send(line: string): Promise<boolean> {
-    while (nextGen) await nextGen;
+    let held = false;
+    while (nextGen) { held = true; await nextGen; }
+    if (held) await hydrated();
     return sendNow(line);
   }
   async function sendNow(line: string): Promise<boolean> {

@@ -258,7 +258,8 @@ export interface LegacyDrop {
 
 // Pre-v1 kinds (the deleted MOCK_GRAPH/persist.ts era). Restated here, leaf-module rule.
 const LEGACY_NODE_KINDS = new Set(["trigger", "review"]);
-const LEGACY_ADDON_KINDS = new Set(["rule", "skill", "model", "hook", "permission"]);
+// `permission` and `permission-allowlist` are stripped on load: a node's permissions come from its vault.
+const LEGACY_ADDON_KINDS = new Set(["rule", "skill", "model", "hook", "permission", "permission-allowlist"]);
 
 /** Legacy `model` values were aliases ("sonnet", "opus"); v1's `FlowNode.model` is a provider id.
  *  Core claude ids only: a module's model has no legacy alias and fails validate.ts if absent. */
@@ -272,12 +273,6 @@ const LEGACY_MODEL_IDS: Record<string, ModelId> = {
   "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
   "claude-fable-5-1": "claude-fable-5-1",
 };
-
-/** Legacy `permission` values named a mode, not a tool list. "read-only" → the read tools, which
- *  `permission-allowlist` auto-approves (everything else still pauses for Approve/Deny). */
-function legacyAllowlist(value: string): string {
-  return value.trim().toLowerCase() === "read-only" ? "Read,Grep,Glob" : value;
-}
 
 /** A graph is "legacy" only if it carries a pre-v1 node or addon kind. A v1 graph holding a
  *  reserved kind (`tool`, `effort`) from a future version is left alone for validate.ts to flag. */
@@ -303,8 +298,9 @@ function withField(fields: FlowField[], k: string, v: string, first = false): Fl
  *    the required `task` field (empty unless present: no invented task text).
  *  - node `tool` (legacy only; reserved v2 kind, no v1 equivalent) → dropped, its in-edge bridged
  *    to its out-edge so the chain stays connected.
- *  - addon/field `model` → `node.model` (alias mapped); addon `permission` → `permission-allowlist`.
- *  - addons `rule`/`skill`/`hook`/`effort` → dropped (no v1 transport, §3).
+ *  - addon/field `model` → `node.model` (alias mapped).
+ *  - addons `rule`/`skill`/`hook`/`effort`/`permission`/`permission-allowlist` → dropped (no v1 transport, §3;
+ *    permissions come from the node's vault).
  *  Idempotent: its output is not legacy, so a second call returns `changed:false` — that is what
  *  makes it run once per graph. */
 export function normalizeLegacyGraph(graph: FlowGraph): { graph: FlowGraph; changed: boolean; drops: LegacyDrop[] } {
@@ -343,9 +339,6 @@ export function normalizeLegacyGraph(graph: FlowGraph): { graph: FlowGraph; chan
       const value = a.value ?? a.label;
       if (a.kind === ("model" as string)) {
         if (!takeModel(value)) drop(src.id, "addon", a.kind, value);
-      } else if (a.kind === ("permission" as string)) {
-        const list = legacyAllowlist(value);
-        addons.push({ kind: "permission-allowlist", label: list, value: list }); // label = value, as inspector.ts's ADD does
       } else if (LEGACY_ADDON_KINDS.has(a.kind as string) || a.kind === "effort") {
         drop(src.id, "addon", a.kind, value);
       } else {
@@ -516,8 +509,7 @@ export type DeleteGraphResult =
 /** Delete for the picker's User list: `env` without graph `id`. A template or starter id
  *  (`protectedIds`) is refused even if a graph somehow carries it, and so is an id the list
  *  does not hold. Deleting the active graph leaves none active (`null`): the canvas shows the
- *  empty state until New or a template, never a fallback graph or an Untitled draft (user,
- *  2026-10-16). Runs live in their own store and are not touched. */
+ *  empty state until New or a template, never a fallback graph or an Untitled draft. Runs live in their own store and are not touched. */
 export function deleteGraphFromEnvelope(env: GraphsEnvelope, id: string, protectedIds: readonly string[]): DeleteGraphResult {
   if (protectedIds.includes(id)) return { ok: false, reason: "protected" };
   if (!env.graphs.some((g) => g.id === id)) return { ok: false, reason: "missing" };

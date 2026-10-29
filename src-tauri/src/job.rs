@@ -1,4 +1,4 @@
-//! src-tauri\src\job.rs — the Windows Job Object that owns a child-process tree (rune generator plan D6/E4).
+//! src-tauri\src\job.rs — the Windows Job Object that owns a child-process tree.
 //! Moved out of `flow/child.rs` so Flow and the rune generator share one: a `Job` has kill-on-close set, so
 //! dropping it ends every process assigned to it, and `terminate` ends them at once without waiting for the drop.
 //! `agent.rs` and `proc_job.rs` keep their own copies; this one is Flow's, behaviour unchanged.

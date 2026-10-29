@@ -28,7 +28,10 @@ import { scheduleGraphSave } from "./store";
 import { modelLabel, wiredModels } from "./roster";
 import { releaseFullOutput } from "./output-fill";
 import { setSelection } from "./selection";
-import { isBlank } from "./validate";
+import { isBlank, setLiveVaultIds, setVaultAgentOf } from "./validate";
+import { agentOfModel } from "./runner";
+import { invoke } from "../ipc";
+import type { VaultListed } from "../ipc";
 import { buildModifiers, closeAddonMenu } from "./modifiers";
 import "./inspector.css";
 
@@ -159,6 +162,65 @@ function buildModelRow(node: FlowNode, locked: boolean): HTMLElement {
   return wrap;
 }
 
+setVaultAgentOf(agentOfModel);
+
+// set-pick.ts loads on first use: a static import would close runtime import cycles (tests/import-cycles.test.mjs).
+let vaultRows: ((list: readonly VaultListed[], agent: string) => VaultListed[]) | null = null;
+let vaultList: VaultListed[] | null = null;
+let vaultFetch: Promise<void> | null = null;
+
+/** Reads `rune_vault_list` once (the same fetch the launcher's vault pick makes), hands the ids to
+ *  validate.ts, then re-draws the card the row was built for. */
+function loadVaults(node: FlowNode): void {
+  if (vaultList) return;
+  vaultFetch ??= Promise.all([
+    import("../launcher/set-pick"),
+    invoke("rune_vault_list").catch((e) => { console.error("flow vault list:", e); return [] as VaultListed[]; }),
+  ])
+    .then(([pick, all]) => {
+      vaultRows = pick.vaultRows;
+      vaultList = all;
+      setLiveVaultIds(() => all.map((v) => v.id));
+    });
+  void vaultFetch.then(() => { if (vaultList?.length && S.selected.size === 1 && S.selected.has(node.id)) renderInspector(node); });
+}
+
+function buildVaultRow(node: FlowNode, locked: boolean): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.append(capLabel("Vault"));
+  const agent = agentOfModel(node.model ?? "");
+  const stock = `stock-${agent}`;
+  const current = node.vault ?? stock;
+  const rows = vaultList && vaultRows ? vaultRows(vaultList, agent) : [];
+  const options = rows.map((v) => ({ value: v.id, label: v.name, bad: "" }));
+  if (!options.some((o) => o.value === current)) {
+    const bad = current.startsWith("stock-") ? "Stock Vault for Another Agent" : vaultList ? "Unknown Vault" : "";
+    options.unshift({ value: current, label: bad ? `${current} (${bad})` : current, bad });
+  }
+  const select = document.createElement("select");
+  select.className = "flow-model-select";
+  select.setAttribute("aria-label", "Vault");
+  select.disabled = locked;
+  for (const item of options) {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.disabled = !!item.bad;
+    option.textContent = item.label;
+    select.append(option);
+  }
+  select.value = current;
+  if (options.some((o) => o.bad)) select.classList.add("warn");
+  select.addEventListener("change", () => {
+    if (select.value === stock) delete node.vault;
+    else node.vault = select.value;
+    scheduleGraphSave();
+    renderInspector(node);
+  });
+  wrap.append(select);
+  loadVaults(node);
+  return wrap;
+}
+
 function buildTaskCard(node: FlowNode, locked: boolean): HTMLElement {
   const idx = node.fields.findIndex((f) => f.k === "task");
   const value = idx >= 0 ? node.fields[idx].v : "";
@@ -274,7 +336,7 @@ export function renderInspector(node: FlowNode): void {
     if (preset) body.append(preset);
     const controls = document.createElement("div");
     controls.className = running ? "flow-pop-controls locked" : "flow-pop-controls";
-    controls.append(buildModelRow(node, running), buildTaskCard(node, running), buildModifiers(node, running));
+    controls.append(buildModelRow(node, running), buildVaultRow(node, running), buildTaskCard(node, running), buildModifiers(node, running));
     body.append(controls);
     const result = buildResult(node, running);
     if (result) body.append(result);

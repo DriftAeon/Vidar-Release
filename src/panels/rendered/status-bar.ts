@@ -3,8 +3,8 @@
 
 import type { Effort, PermissionMode } from "../../agents/protocol";
 import { AGENT_IDS, type AgentId } from "../../agents/id";
-import { AGENT_PROFILE, MODE_LABELS } from "./agent-profile";
-import { titleCase, prettyModel } from "../../format";
+import { AGENT_PROFILE, MODE_LABELS } from "../../agents/agent-profile";
+import { label, prettyModel } from "../../format";
 import { currentModelIndex, groupModels, menuLabel } from "./model-groups";
 import { createCommandCabinet } from "./command-cabinet";
 import { el } from "./dom";
@@ -52,7 +52,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
   // read as one "how the agent is running" cell
   const modeSlot = el("span", "sl-mode-slot");
   const sl: StatusLine = {
-    dir: titleCase(opts.cwd.split(/[\\/]/).filter(Boolean).pop() ?? opts.cwd),
+    dir: label(opts.cwd.split(/[\\/]/).filter(Boolean).pop() ?? opts.cwd),
     model: "Starting…",
     mode: "",
     ctxPct: null as number | null,
@@ -229,7 +229,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
   function pickEffortMenu() {
     const anchor = effortBtn ?? S.modelBtn;
     if (effortBlocked() || !anchor) return;
-    openStMenu(anchor, effortLevels().map((l) => ({ label: titleCase(l), value: l, current: l === sl.effort })), (v) => setEffort(v as Effort));
+    openStMenu(anchor, effortLevels().map((l) => ({ label: label(l), value: l, current: l === sl.effort })), (v) => setEffort(v as Effort));
   }
   /* -- the model and mode pills: built once, re-marked in place by syncControls, so focus, hover
         and an open menu's aria-expanded survive every redraw -- */
@@ -288,7 +288,7 @@ export function createStatusBar(S: RenderedState, deps: StatusBarDeps) {
       parts.push(effortBtn);
     } else if (sl.effort) {
       effortBtn = null;
-      parts.push(statusValue(titleCase(sl.effort), "st-value sl-effort", `Effort: ${titleCase(sl.effort)}`));
+      parts.push(statusValue(label(sl.effort), "st-value sl-effort", `Effort: ${label(sl.effort)}`));
     }
     if (cabinet) parts.push(cabinet.button);
     if (sl.mode) {

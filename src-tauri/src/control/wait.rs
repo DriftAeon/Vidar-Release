@@ -13,13 +13,13 @@ use tauri::{AppHandle, Emitter};
 use super::policy::Requester;
 use crate::open::valid_reason;
 
-/// `vidar.mjs wait` default (plan: "10 min default").
+/// `vidar.mjs wait` default: 10 minutes.
 const DEFAULT_TIMEOUT_MS: u64 = 600_000;
 const MIN_TIMEOUT_MS: u64 = 1_000;
 /// Upper bound so one parked wait cannot pin a `PENDING_CAP` slot indefinitely.
 const MAX_TIMEOUT_MS: u64 = 3_600_000;
-/// `--report` is echoed back only, never read or confined (plan review gate
-/// 4); bounded so the reply stays one line.
+/// `--report` is echoed back only, never read or confined;
+/// bounded so the reply stays one line.
 const MAX_REPORT: usize = 400;
 /// The frontend answers `err timeout` at the deadline; this slack keeps the
 /// parked entry alive past it so that answer still has somewhere to go.

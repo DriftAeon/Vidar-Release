@@ -7,8 +7,9 @@
 #
 #   -DryRun        print the keep/delete lists, delete nothing.
 #   -Json          also print one JSON line {aborted, keep_bundles, delete_bundles, keep_profiles,
-#                  delete_profiles, keep_store, delete_store} (store entries as "<kind>/<id>";
-#                  tests/falcon-prune.test.mjs reads it).
+#                  delete_profiles, keep_store, delete_store, store_skip} (store entries as
+#                  "<kind>/<id>"; store_skip is why the store pass kept everything, or null;
+#                  tests/falcon-prune*.test.mjs read it).
 #   -Root          Vidar root (default: two levels up from this script).
 #   -LocalAppData  profile base (default: $env:LOCALAPPDATA).
 #   -ProfileIdentifier  profile root name (default: src-falcon\tauri.conf.json identifier). Must
@@ -31,8 +32,9 @@
 # into the store before its bundle exists). Only 64-hex directory names are deletable; tmp copies
 # and strays are kept as not id-shaped. A kept bundle with an unreadable manifest or missing pin
 # skips the store pass (all kept) without stopping the bundle and profile prune; so does a running
-# falcon-build.ps1 into this root (it can reuse an unpinned entry before its bundle exists; a build whose
-# absolute -File lies under another root is ignored, a relative one counts) or an unreadable store.
+# falcon-build.ps1 into this root (it can reuse an unpinned entry before its bundle exists; only pwsh's own
+# -File counts, not one inside -Command text; a build whose absolute -File lies under another root is
+# ignored, a relative one counts) or an unreadable store.
 #
 # Only build artefacts, the CLI store and WebView2 caches are in scope. Session journals
 # (bridge\falcon\runtime\journals), transcripts and review reports are history and are never
@@ -84,6 +86,8 @@ function Result($aborted, $keepB, $delB, $keepP, $delP, $keepS, $delS) {
       delete_profiles = @($delP | Sort-Object)
       keep_store = @($keepS | Sort-Object)
       delete_store = @($delS | Sort-Object)
+      # Why the store pass kept every entry, or null when it ran (script scope: unset before the store pass).
+      store_skip = $script:storeSkip
     } | ConvertTo-Json -Compress | Write-Output
   }
 }
@@ -246,7 +250,20 @@ if (-not $storeSkip -and -not $created.ContainsKey($pointer.bundle_id)) { $store
 # Only a build into this root counts: falcon-build.ps1 has no root parameter and writes to the store of
 # the checkout it lives in, so an absolute -File under another root cannot touch this store. A relative
 # or otherwise unresolvable -File counts (the process's cwd is not visible here).
-$fileArg = '(?i)(?:^|\s)-f(?:i(?:le?)?)?\s+("[^"]*"|\S+)'
+# Only pwsh's own -File counts: the parameters are walked up to the first -File, and a -Command or
+# -EncodedCommand before it ends the walk, since everything after that is script text. A script that
+# merely mentions "pwsh -File tools/release/falcon-build.ps1" in a string (tools/release/release-build.test.mjs
+# spawns one) is not a build; matching -File anywhere made it count as a relative build for every root.
+function Get-PwshFileArg([string]$cmdLine) {
+  $tokens = @([regex]::Matches($cmdLine, '"[^"]*"|\S+') | ForEach-Object Value)
+  for ($i = 1; $i -lt $tokens.Count; $i++) {
+    if ($tokens[$i] -notmatch '^-(\w+)$') { continue }   # the exe (token 0) and parameter values
+    $name = $Matches[1].ToLowerInvariant()
+    if ('file'.StartsWith($name)) { if ($i + 1 -lt $tokens.Count) { return $tokens[$i + 1].Trim('"') }; return $null }
+    if ('command'.StartsWith($name) -or $name -in 'e', 'ec' -or ($name.Length -ge 2 -and 'encodedcommand'.StartsWith($name))) { return $null }
+  }
+  return $null
+}
 function Test-BuildTargetsRoot([string]$file) {
   if ($file -notmatch '^(?:[A-Za-z]:[\\/]|\\\\|//)') { return $true }
   try {
@@ -256,9 +273,9 @@ function Test-BuildTargetsRoot([string]$file) {
   } catch { return $true }
 }
 $building = @($procs | Where-Object {
-  if ($_.Name -notin 'pwsh.exe', 'powershell.exe' -or "$($_.CommandLine)" -notmatch $fileArg) { return $false }
-  $file = $Matches[1].Trim('"')
-  $file -match '(?i)(?:^|[\\/])falcon-build\.ps1$' -and (Test-BuildTargetsRoot $file)
+  if ($_.Name -notin 'pwsh.exe', 'powershell.exe') { return $false }
+  $file = Get-PwshFileArg "$($_.CommandLine)"
+  $file -and $file -match '(?i)(?:^|[\\/])falcon-build\.ps1$' -and (Test-BuildTargetsRoot $file)
 })
 if ($building.Count -gt 0) { $storeSkip ??= "falcon-build running (pid $($building.ProcessId -join ', '))" }
 $storeEntries = @{ claude = @(); codex = @() }

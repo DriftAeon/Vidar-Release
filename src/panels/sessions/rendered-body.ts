@@ -3,8 +3,9 @@
 import { createFalconAdoptTransport, createRenderedBody, falconAgentTransport } from "../rendered";
 import { createFalconProfileTransport, createGatewayTransport, createProfileTransport, createRefusedTransport } from "../rendered/transport";
 import { claudeArt } from "./gateway-art";
-import { AGENT_PROFILE, codexHostShape } from "../rendered/agent-profile";
+import { AGENT_PROFILE, codexHostShape } from "../../agents/agent-profile";
 import { hostedCodexOn } from "../../launcher/readopt";
+import { isAgentId } from "../../agents/id";
 import { invoke } from "../../ipc";
 import { dispatchCharacterActivity, dispatchCharacterCompletion, dispatchCharacterStatus } from "../../character/events";
 import { dispatchReplyDone } from "../reply-events";
@@ -80,7 +81,7 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
   // Claude is always hosted by Falcon; a Codex tab is hosted when its profile's check admits it
   // (gate on, host capability, no rules file or profile), else it keeps the in-process path.
   // `undefined` means "the default", which is Vidar's own backend.
-  const agentKind = s.agent === "codex" ? "codex" : "claude";
+  const agentKind = isAgentId(s.agent) ? s.agent : "claude";
   const hosted = AGENT_PROFILE[agentKind].falconHosted({
     hostedCodex: hostedCodexOn(), capabilities, rulesFile: s.rules?.file ?? null, profile: s.profile ?? null,
   });

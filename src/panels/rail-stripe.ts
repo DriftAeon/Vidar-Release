@@ -5,9 +5,8 @@
 // A drawer is fixed on body (menus escape overflow) and never widens the rail; Escape and an outside
 // press close it; one is open at a time. Look: styles/rail.css.
 import { iconImg, type ColorIcon } from "../icon-img";
-import { invoke } from "../ipc";
 import { getPref } from "../prefs";
-import { mcpFocus, mcpFocusKey } from "./mcp-focus";
+import { mcpFocus, mcpFocusKey, mcpFocusRead } from "./mcp-focus";
 import { initRack, type McpRack, type RackOptions } from "./rack";
 import { isProxyServer, rackServerId, railServers, type RailServer } from "./rack-modules";
 import { getFocusedSession, type FocusedSession } from "./sessions";
@@ -18,10 +17,7 @@ interface Drawer { close: () => void; btn: HTMLButtonElement; surface: HTMLEleme
 // else Claude's, with the tab's Bare row selecting its Codex home.
 function readFocused(s: FocusedSession | null): { key: string; read: () => Promise<McpRack> } {
   const f = mcpFocus(s);
-  const { tab, project, profile, row } = f;
-  return { key: mcpFocusKey(f), read: f.agent === "codex"
-    ? () => invoke("read_codex_mcp_servers", { tab, profile, row })
-    : () => invoke("read_mcp_servers", { project, profile, tab, row }) };
+  return { key: mcpFocusKey(f), read: () => mcpFocusRead(f) };
 }
 
 export function initRailStripe(host: HTMLElement, signal: AbortSignal): void {

@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
 use super::connection::{reply_from_frame, request_frame, Connection};
+use super::ops::{parse_agent, turns_capability};
 use super::reader_control::ReaderControl;
 // `falcon.rs` imports the shared protocol under a different root per build.
 #[cfg(falcon_shell)]
@@ -46,7 +47,8 @@ pub(super) fn event_body(body: &Value) -> Option<&Value> {
 /// pipe: a slow page there used to time out the control request, which drops
 /// that connection and with it every hosted tab's lease. `hydrate` is a
 /// read-only op the host answers on any negotiated connection, so this needs
-/// no host change.
+/// no host change. `on_line` sees every replayed agent line, oldest first.
+#[allow(clippy::too_many_arguments)] // 8 args: ids, the cut and the replayed-line hook passed separately
 fn replay_history(
     app: &AppHandle,
     falcon: &Falcon,
@@ -55,11 +57,12 @@ fn replay_history(
     generation: u64,
     through: u64,
     reader: &ReaderControl,
+    on_line: &mut dyn FnMut(&Value),
 ) -> Result<(), String> {
     let registry = read_registry(&falcon.paths)?;
     let mut pages = Connection::open(&registry)?;
     let mut batch = ReplayBatch::default();
-    let result = replay_pages(app, &mut pages, tab, session, generation, through, reader, &mut batch);
+    let result = replay_pages(app, &mut pages, tab, session, generation, through, reader, &mut batch, on_line);
     // Pending items go out before Ok or Err is returned, so nothing replayed is lost.
     let flushed = batch.flush(app, tab, generation);
     result.and(flushed)
@@ -104,7 +107,7 @@ fn emit_batch(app: &AppHandle, tab: &str, generation: u64, items: Vec<Value>) ->
     .map_err(|error| format!("emit falcon replay batch: {error}"))
 }
 
-#[allow(clippy::too_many_arguments)] // 8 args: connection, ids and replay state passed separately
+#[allow(clippy::too_many_arguments)] // 9 args: connection, ids, replay state and the line hook passed separately
 fn replay_pages(
     app: &AppHandle,
     pages: &mut Connection,
@@ -114,6 +117,7 @@ fn replay_pages(
     through: u64,
     reader: &ReaderControl,
     batch: &mut ReplayBatch,
+    on_line: &mut dyn FnMut(&Value),
 ) -> Result<(), String> {
     let mut after = 0u64;
     let mut seen_states: HashMap<String, String> = HashMap::new();
@@ -176,6 +180,7 @@ fn replay_pages(
                     let text = serde_json::to_string(line)
                         .map_err(|error| format!("encode falcon replay line: {error}"))?;
                     batch.push(app, tab, generation, json!({ "line": text, "replay": true }))?;
+                    on_line(line);
                 }
                 Some("overflow") => {
                     batch.push(
@@ -260,6 +265,71 @@ mod replay_batch_tests {
             .map(|v| v["n"].as_u64().unwrap())
             .collect();
         assert_eq!(all, (0..130).collect::<Vec<u64>>());
+    }
+}
+
+#[cfg(all(test, not(falcon_shell)))]
+mod thread_note_tests {
+    use super::*;
+    use crate::bare::vault::session::{self, VaultPin};
+
+    struct Root(std::path::PathBuf);
+    impl Root {
+        /// A temp root holding one hosted Codex record for tab `t1`, Falcon session `s1`.
+        fn with_record(tag: &str) -> Root {
+            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+            let p = std::env::temp_dir().join(format!("vidar-thread-note-{tag}-{}-{nanos}", std::process::id()));
+            std::fs::create_dir_all(&p).unwrap();
+            let mut r = session::record("codex", "hosted", "t1", VaultPin { id: "v1".into(), hash: "h1".into() }, "", "");
+            r.falcon_session = Some("s1".into());
+            session::write(&p, &r).unwrap();
+            Root(p)
+        }
+        fn thread(&self) -> Option<String> {
+            session::find(&self.0, "t1", Some("s1"), None).unwrap().unwrap().thread_id
+        }
+    }
+    impl Drop for Root {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn thread_line(id: &str) -> Value {
+        json!({ "method": "falcon/thread", "params": { "result": { "thread": { "id": id } }, "resumed": false } })
+    }
+
+    // The bug: a hosted Codex spawn's `falcon/thread` is journalled before the attach, so it only
+    // ever arrives replayed; a reader taking live lines alone left the record's threadId null.
+    #[test]
+    fn a_spawn_takes_the_replayed_thread_line() {
+        let root = Root::with_record("spawn");
+        let mut note = ThreadNote::new(true);
+        note.see(&root.0, "t1", "s1", &json!({ "method": "turn/started" }), true);
+        assert_eq!(root.thread(), None, "a line naming no thread records nothing");
+        note.see(&root.0, "t1", "s1", &thread_line("th-1"), true);
+        assert_eq!(root.thread().as_deref(), Some("th-1"));
+        let found = session::find(&root.0, "", None, Some("th-1")).unwrap().expect("resume finds the record by thread");
+        assert_eq!(found.vault.id, "v1");
+    }
+
+    #[test]
+    fn a_re_adopt_skips_replayed_lines_and_takes_live_ones() {
+        let root = Root::with_record("adopt");
+        let mut note = ThreadNote::new(false);
+        note.see(&root.0, "t1", "s1", &thread_line("th-old"), true);
+        assert_eq!(root.thread(), None, "a moved record never takes the replayed earlier thread");
+        note.see(&root.0, "t1", "s1", &thread_line("th-live"), false);
+        assert_eq!(root.thread().as_deref(), Some("th-live"));
+    }
+
+    #[test]
+    fn only_the_first_thread_line_counts() {
+        let root = Root::with_record("first");
+        let mut note = ThreadNote::new(true);
+        note.see(&root.0, "t1", "s1", &thread_line("th-1"), true);
+        note.see(&root.0, "t1", "s1", &thread_line("th-2"), false);
+        assert_eq!(root.thread().as_deref(), Some("th-1"));
     }
 }
 
@@ -358,9 +428,10 @@ impl CodexQueries {
     /// session that names its cwd.
     pub(super) fn for_attach(session: &str, cut: &Value, capabilities: &[String]) -> Option<Self> {
         let summary = cut.get("session")?;
-        if summary.get("agent").and_then(Value::as_str) != Some("codex") {
-            return None;
-        }
+        // Only an agent the host runs turns for (a turns capability) takes queries; an unknown name
+        // takes none.
+        let agent = summary.get("agent").and_then(Value::as_str).and_then(parse_agent)?;
+        turns_capability(agent)?;
         let listed = |name: &str| capabilities.iter().any(|held| held == name);
         if !listed(CAPABILITY_CODEX_QUERY) {
             return None;
@@ -528,6 +599,8 @@ mod codex_queries_tests {
     fn only_a_codex_session_on_a_codex_query_host_asks() {
         assert!(CodexQueries::for_attach("s1", &cut("claude"), &[CAPABILITY_CODEX_QUERY.into()])
             .is_none());
+        assert!(CodexQueries::for_attach("s1", &cut("gemini"), &[CAPABILITY_CODEX_QUERY.into()])
+            .is_none(), "an unknown agent asks nothing");
         assert!(CodexQueries::for_attach("s1", &cut("codex"), &[]).is_none(), "an older host");
         assert!(CodexQueries::for_attach("s1", &json!({}), &[CAPABILITY_CODEX_QUERY.into()])
             .is_none());
@@ -687,6 +760,39 @@ mod codex_queries_tests {
     }
 }
 
+/// The session record takes this session's thread id once (model R4: resume finds the vault by it).
+/// A hosted Codex spawn returns only after Falcon has the `thread/start` reply
+/// (`src-falcon/src/serve/spawn.rs`, `wait_ready`), so its `falcon/thread` line is already journalled
+/// when the spawn's attach cuts: it arrives replayed, never live. A spawn's first attach therefore
+/// takes replayed lines too; a re-adopt takes live lines only, since its replay was seen before and
+/// a record a Make Variant moved (`session::move_to` drops the id) must not take the earlier thread.
+#[cfg(not(falcon_shell))]
+struct ThreadNote {
+    take_replayed: bool,
+    known: bool,
+}
+
+#[cfg(not(falcon_shell))]
+impl ThreadNote {
+    fn new(take_replayed: bool) -> ThreadNote {
+        ThreadNote { take_replayed, known: false }
+    }
+
+    /// Appends the first thread id `line` names to the session's record under `root`.
+    fn see(&mut self, root: &std::path::Path, tab: &str, session: &str, line: &Value, replayed: bool) {
+        if self.known || (replayed && !self.take_replayed) {
+            return;
+        }
+        let Some(thread) = crate::bare::vault::session::thread_id_in_line(line) else {
+            return;
+        };
+        self.known = true;
+        if let Err(error) = crate::bare::vault::session::append_thread_id(root, tab, Some(session), thread) {
+            eprintln!("falcon {session}: session record thread id: {error}");
+        }
+    }
+}
+
 /// Attach a read-only connection, replay the history, then stream live events —
 /// all in `agent.rs`'s envelope.
 ///
@@ -716,6 +822,8 @@ mod codex_queries_tests {
 /// lines — `through` is a journal position, `seq` is a dense event count — and
 /// comparing them drops events. Falcon's own protocol doc says so at
 /// `protocol.rs`; this is the consumer that would have been bitten.
+///
+/// `spawned` is true on the attach right after this tab spawned the session (see `ThreadNote`).
 pub(super) fn start_event_reader(
     app: AppHandle,
     falcon: &Arc<Falcon>,
@@ -723,7 +831,10 @@ pub(super) fn start_event_reader(
     session: String,
     generation: u64,
     reader: Arc<ReaderControl>,
+    spawned: bool,
 ) -> Result<(), String> {
+    #[cfg(falcon_shell)]
+    let _ = spawned;
     let registry = read_registry(&falcon.paths)?;
     let mut connection = Connection::open(&registry)?;
     // Attached here, on this thread, so a failure is reported to the caller
@@ -780,8 +891,16 @@ pub(super) fn start_event_reader(
             if ready.send(Ok(())).is_err() {
                 return;
             }
+            #[cfg(not(falcon_shell))]
+            let mut thread_note = ThreadNote::new(spawned);
+            #[cfg(not(falcon_shell))]
+            let root = crate::paths::root();
+            let mut on_replayed = |_line: &Value| {
+                #[cfg(not(falcon_shell))]
+                thread_note.see(&root, &tab, &session, _line, true);
+            };
             let replayed =
-                replay_history(&app, &falcon, &tab, &session, generation, through, &reader_thread)
+                replay_history(&app, &falcon, &tab, &session, generation, through, &reader_thread, &mut on_replayed)
                     .and_then(|()| {
                         app.emit(
                             "agent-event",
@@ -811,10 +930,6 @@ pub(super) fn start_event_reader(
             for ask in catalog.as_mut().map(CodexQueries::start).unwrap_or_default() {
                 let _ = connection.write_frame(&ask);
             }
-            // The session record takes this session's thread id once (model R4: resume finds the
-            // vault by it); only live lines, since a re-adopt's replayed history was seen before.
-            #[cfg(not(falcon_shell))]
-            let mut thread_known = false;
             loop {
                 if reader_thread.is_cancelled() {
                     let _ = connection.request(
@@ -884,19 +999,7 @@ pub(super) fn start_event_reader(
                             json!({ "id": tab, "gen": generation, "line": text }),
                         );
                         #[cfg(not(falcon_shell))]
-                        if !thread_known {
-                            if let Some(thread) = crate::bare::vault::session::thread_id_in_line(line) {
-                                thread_known = true;
-                                if let Err(error) = crate::bare::vault::session::append_thread_id(
-                                    &crate::paths::root(),
-                                    &tab,
-                                    Some(&session),
-                                    thread,
-                                ) {
-                                    eprintln!("falcon {session}: session record thread id: {error}");
-                                }
-                            }
-                        }
+                        thread_note.see(&root, &tab, &session, line, false);
                         for ask in catalog
                             .as_mut()
                             .map(|catalog| catalog.on_line(line))

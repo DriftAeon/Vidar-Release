@@ -1,5 +1,5 @@
 {
-  "$comment": "Env allowlist for bare agent spawns (plan Design 2). A bare env is BUILT from `allow` (names matched case-insensitively) plus the `=X:` drive entries plus the profile overlay; it is never Vidar's env minus a list. `drop` is not applied: it is what the tests assert never survives the build. Read by src-tauri/src/bare/env.rs with include_str!. Seed: P1 probe c27-auth-rc observed.allowlist (2026-10-13).",
+  "$comment": "Env allowlist for bare agent spawns. A bare env is BUILT from `allow` (names matched case-insensitively) plus the `=X:` drive entries plus the profile overlay; it is never Vidar's env minus a list. `drop` is not applied: it is what the tests assert never survives the build. Read by src-tauri/src/bare/env.rs with include_str!.",
   "allow": [
     "ALLUSERSPROFILE",
     "CommonProgramFiles",

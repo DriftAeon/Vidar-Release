@@ -1,16 +1,15 @@
 // claude-sidecar-bare.mjs: the launch-profile (`--profile bare`) mapping for claude-sidecar.mjs, the
-// Falcon-hosted Rendered Bare tab (plan P5). Imported by claude-sidecar.mjs and bundled beside it
+// Falcon-hosted Rendered Bare tab. Imported by claude-sidecar.mjs and bundled beside it
 // (tools/release/falcon-inputs.ps1 $FalconSidecarModules).
 //
-// Also, for a Flow Claude stage (Vidar's flow/claude.rs, not Falcon): flowOptions maps
-// `--flow-payload bare --root <abs root>` to the profile's static payload as `systemPrompt.append` (its text,
-// never the path) and `--mcp-servers <json>` to `mcpServers`; nothing else of the profile (settingSources,
-// plugins, allowedTools) applies, so Flow keeps its own permission mode, allowlist and setting sources.
+// A Flow Claude stage (Vidar's flow/claude.rs, marked `--flow`, no Falcon) runs on the same mapping, on its
+// node's vault home: --profile bare --root --home --payload --set-plugin --mcp-file; the sidecar keeps
+// its `canUseTool` and the `--permission-mode` it was given.
 //
-// Usage: import { bareOptions, flowOptions, writeInitOnce } from "./claude-sidecar-bare.mjs";
-//        const flow = flowOptions({ profile, payload: "bare", servers: "<json>", root }, fail); // {} with neither
+// Usage: import { bareOptions, writeInitOnce } from "./claude-sidecar-bare.mjs";
 //        const bare = bareOptions({ profile: "bare", root: "<abs Vidar root>", home: "<abs agent home>",
 //                                   payload: "<home>\\layer\\payload-<hash12>.md" /* optional, --payload */,
+//                                   mcpFile: "<home>\\layer\\mcp-<hash12>.json" /* optional, --mcp-file */,
 //                                   setPlugins: ["<root>\\plugins\\<name>", "<home>\\layer\\plugins\\<set>-<hash12>"] /* --set-plugin, repeated */,
 //                                   warn: (msg) => {} /* a dropped set plugin; default: stderr */ });
 //        setPluginArgs(argv) // every --set-plugin value, in order
@@ -86,35 +85,8 @@ function staticPayload(doc, root) {
   return readFileSync(payload);
 }
 
-/* A Flow Claude stage (`--flow-payload bare --root <abs root>`, flow/claude.rs): only the profile's
-   static payload, as the `systemPrompt.append` a Bare tab gets (its text, never the path). Nothing
-   else of the profile (settingSources, plugins, allowedTools) applies: Flow keeps its own. */
-export function flowPayload({ profile, root }) {
-  const { doc } = readProfile(profile, root);
-  return { type: "preset", preset: "claude_code", append: staticPayload(doc, root).toString("utf8") };
-}
-
-/* A Flow Claude stage's carried MCP servers (`--mcp-servers <json>`, flow/claude_mcp.rs): a JSON object
-   of name → { type: "http"|"sse", url }, rebuilt with exactly those two fields for the SDK's
-   `mcpServers` option. Throws on anything else (Rust filters first; this is the backstop): a name
-   that is not plain or starts with `plugin_` (the SDK's plugin-server namespace), another type, or a
-   url that is not http(s). */
-export function flowMcpServers(raw) {
-  let doc;
-  try { doc = JSON.parse(raw); } catch { throw new Error("--mcp-servers is not JSON"); }
-  if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw new Error("--mcp-servers must be a JSON object");
-  const out = {};
-  for (const [name, s] of Object.entries(doc)) {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || name.startsWith("plugin_")) throw new Error(`bad MCP server name ${JSON.stringify(name)}`);
-    if (s?.type !== "http" && s?.type !== "sse") throw new Error(`MCP server ${name} is not http or sse`);
-    if (typeof s.url !== "string" || !/^https?:\/\//i.test(s.url)) throw new Error(`MCP server ${name} has no http(s) url`);
-    out[name] = { type: s.type, url: s.url };
-  }
-  return out;
-}
-
-/* Falcon passes --mcp-file only for a Bare profile. The file must be a regular
-   direct child of the real home's own layer, with the generated file name. */
+/* `--mcp-file` (a Bare tab's, or a Flow stage's, which runs on the same profile). The file must be a
+   regular direct child of the real home's own layer, with the generated file name. */
 function readBareMcpFile(raw, home) {
   if (typeof raw !== "string" || !isAbsolute(raw)) throw new Error("--mcp-file must be an absolute path");
   if (!home || !isAbsolute(home)) throw new Error("--home must be an absolute agent home");
@@ -136,41 +108,11 @@ function readBareMcpFile(raw, home) {
   return servers;
 }
 
-/* A Flow Claude stage's SDK options from its argv (flow/claude_mcp.rs; never with --profile),
-   plus a Bare profile's --mcp-file. The main sidecar spreads this return into SDK options:
-   `--flow-payload <profile> --root <abs root>` → systemPrompt, `--mcp-servers <json>` → mcpServers (omitted when
-   empty). A Flow stage's --mcp-file (Flow's own drive-only file, fold W2 L2a) needs --flow-payload and
-   --home; its servers and the user's URL-only ones form one strict set. With no Flow args or MCP file:
-   {}, so no option changes. A bad arg goes to `fail(message)` (the sidecar's: error line, exit 1); {}
-   if it returns. */
-export function flowOptions({ profile, payload, servers, root }, fail, argv = process.argv.slice(2)) {
-  const out = {};
-  try {
-    const at = argv.indexOf("--mcp-file");
-    if (at !== -1) {
-      const launch = profile !== undefined && payload === undefined && servers === undefined;
-      const flowStage = profile === undefined && payload !== undefined;
-      if (!launch && !flowStage) throw new Error("an MCP file needs a launch profile or a Flow payload");
-      const raw = argv[at + 1];
-      const homeAt = argv.indexOf("--home");
-      out.mcpServers = readBareMcpFile(raw, homeAt === -1 ? undefined : argv[homeAt + 1]);
-      out.strictMcpConfig = true;
-    }
-    if ((payload !== undefined || servers !== undefined) && profile !== undefined) throw new Error("a launch profile carries no flow arguments");
-    if (payload !== undefined) out.systemPrompt = flowPayload({ profile: payload, root });
-    if (servers !== undefined) {
-      const s = flowMcpServers(servers);
-      if (Object.keys(s).length) out.mcpServers = { ...s, ...(out.mcpServers ?? {}) };
-    }
-  } catch (e) { fail(`flow stage: ${e?.message ?? e}`); return {}; }
-  return out;
-}
-
 const PLUGIN_RUNE_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const sameDir = (a, b) => resolve(a).replace(/[\\/]+$/, "").toLowerCase() === resolve(b).replace(/[\\/]+$/, "").toLowerCase();
 
 /* A vault plugin rune (`--set-plugin <root>\plugins\<name>`; Falcon admitted it from SpawnParams
-   `plugin_names`, run 2026-10-25-rune-vault L2b). Checked again here: the name is Falcon's
+   `plugin_names`). Checked again here: the name is Falcon's
    (`^[a-z0-9][a-z0-9-]{0,63}$`), <root>\plugins is the real root's own (not a junction), the folder
    is no reparse point and sits directly in it, and holds a regular .claude-plugin\plugin.json. One
    that fails throws: Falcon refuses the spawn on the same checks, so a miss here is tampering. */
@@ -253,7 +195,7 @@ function launchConfigDir(env, home, overlayDir) {
   return overlayDir;
 }
 
-export function bareOptions({ profile, root, home, payload: rowPayload, setPlugins = [], warn = stderrWarn, env = process.env }) {
+export function bareOptions({ profile, root, home, payload: rowPayload, setPlugins = [], mcpFile, warn = stderrWarn, env = process.env }) {
   if (!BARE_PROFILES.includes(profile)) throw new Error(`unknown launch profile ${JSON.stringify(profile)}`);
   if (!root || !isAbsolute(root)) throw new Error("--root must be an absolute Vidar root");
   if (!home || !isAbsolute(home)) throw new Error("--home must be an absolute agent home");
@@ -268,6 +210,7 @@ export function bareOptions({ profile, root, home, payload: rowPayload, setPlugi
   const fill = (s) => String(s).replaceAll("{{root}}", root).replaceAll("{{home}}", home);
   const overlayDir = doc.overlay?.CLAUDE_CONFIG_DIR ? fill(doc.overlay.CLAUDE_CONFIG_DIR) : join(home, "claude-config");
   const configDir = launchConfigDir(env, home, overlayDir);
+  const mcp = mcpFile === undefined ? {} : { mcpServers: readBareMcpFile(mcpFile, home), strictMcpConfig: true };
   return {
     profile,
     root,
@@ -278,12 +221,13 @@ export function bareOptions({ profile, root, home, payload: rowPayload, setPlugi
     extraArgs: {},
     plugins,
     allowedTools: vaultAllowedTools(configDir),
+    ...mcp,
   };
 }
 
 /* The BARE_ALLOWED_TOOLS entries the launch's own settings.json `permissions.allow` holds: Vidar writes
    that list only from the vault's permission runes (`drive-allow`), so a vault without the rune gets
-   none (run 2026-10-25-rune-vault L2b). Unreadable settings: none. */
+   none. Unreadable settings: none. */
 function vaultAllowedTools(configDir) {
   let allow = [];
   try {

@@ -1,4 +1,4 @@
-//! Page property values as text (plan § IPC `notion_page`) and as facet values (§ D3). Missing or
+//! Page property values as text (`notion_page`) and as facet values. Missing or
 //! odd shapes give "" (or no facet value), never an error: the remote JSON is untrusted.
 
 use serde_json::Value;

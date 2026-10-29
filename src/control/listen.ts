@@ -18,7 +18,7 @@ import type { Requester } from "./requester";
 import { watchTab } from "./watch";
 import { createLanes, laneDeliverTo, laneReport, type LaneLease } from "./lanes";
 import type { ReplyDoneDetail } from "../panels/reply-events";
-import { titleCase } from "../format";
+import { label } from "../format";
 import { briefRows } from "./brief-card";
 import { cardText, laneRows } from "./lane-card";
 import { handleFlowCard, listenFlowObserve } from "./flow";
@@ -305,7 +305,7 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
         asker: { tab: requesterTabId(requester), label: spawnLabel, verified: true },
         rows: [
           // agent, model and effort read as one value (2026-10-10: lean card, no row per field)
-          ["Asked By", spawnLabel], ["Agent", [titleCase(agent), model, effort && titleCase(effort)].filter(Boolean).join(" · ")],
+          ["Asked By", spawnLabel], ["Agent", [label(agent), model, effort && label(effort)].filter(Boolean).join(" · ")],
           ...optionalRows, ...promptRows,
         ],
         askedAtMs: claimedAtMs, expiresAtMs, comment: true, drawInAskerTab: true,

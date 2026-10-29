@@ -1,4 +1,4 @@
-// Runes tab refresh (run 2026-10-17-sharpness, lane C1): one query per switch, and open sets and cards
+// Runes tab refresh: one query per switch, and open sets and cards
 // survive a redraw. Catalog fixture from runes-trace.test.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";

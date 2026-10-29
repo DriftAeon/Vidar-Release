@@ -8,6 +8,7 @@ import { CARD_KINDS, type CardKind } from "../panels/rendered/card-kinds";
 import { addSettingRow, registerCategory } from "./registry";
 
 const CARDS_CATEGORY = "cards";
+const LONGEST_LABEL = Math.max(...CARD_KINDS.map((k) => k.label.length));
 
 /** The kind drawn as the chain draws it: icon then name, coloured by its data-tool-class, in the
  *  chain bar's frame. */
@@ -24,6 +25,7 @@ function sampleSegment(kind: CardKind): HTMLElement {
   const bar = document.createElement("span");
   bar.className = "activity-label chain-bar";
   bar.appendChild(seg);
+  bar.style.setProperty("--cards-name-ch", String(LONGEST_LABEL)); // every card takes the longest name's width
   return bar;
 }
 

@@ -34,8 +34,22 @@ export function handlers(call = makeCall(undefined, LAUNCH_CWD)) {
   };
 }
 
-const real = (p) => { try { return realpathSync(p).toLowerCase(); } catch { return null; } };
-if (process.argv[1] && real(process.argv[1]) === real(fileURLToPath(import.meta.url))) {
+// Strips the Win32 `\\?\` / `\\?\UNC\` prefix (Rust `canonicalize` emits it; Node 24 `realpathSync` keeps it, so
+// the raw compare never matched and the server exited 0 with empty stdout), then resolves and case-folds on Windows.
+export const normPath = (p, platform = process.platform) => {
+  try {
+    const strip = (s) => s.replace(/^\\\\\?\\UNC\\/i, "\\\\").replace(/^\\\\\?\\/, "");
+    let s = strip(String(p));
+    try { s = strip(realpathSync(s)); } catch { /* keep the stripped path */ }
+    s = resolve(s);
+    return platform === "win32" ? s.toLowerCase() : s;
+  } catch { return null; }
+};
+export const isMain = (argv1, metaUrl, platform = process.platform) => {
+  const a = argv1 ? normPath(argv1, platform) : null;
+  return a !== null && a === normPath(fileURLToPath(metaUrl), platform);
+};
+if (isMain(process.argv[1], import.meta.url)) {
   process.chdir(REPO); // repo-relative tool paths; a spawn `brief`/`cwd` resolves against LAUNCH_CWD, not the repo
   await serve({ input: process.stdin, output: process.stdout, handlers: handlers() });
   process.stdout.write("", () => process.exit(0)); // every reply flushed, then exit

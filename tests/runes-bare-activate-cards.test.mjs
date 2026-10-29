@@ -29,7 +29,7 @@ test("a paths card gets act-paths, its first glob beside the name, and keeps its
   assert.equal(glob.textContent, "src/launcher/**");
   assert.equal(glob.title, "src/launcher/**\nvidar.example.json");
   assert.equal(sum.querySelectorAll(".runes-chips .runes-chip").length, 2, "Scope and Activate");
-  assert.ok([...sum.querySelectorAll(".runes-chip")].some((x) => x.title === "Activate: Paths"));
+  assert.ok([...sum.querySelectorAll(".runes-chip")].some((x) => x.title === "Paths"));
 });
 
 test("an always card, and a paths card without globs, get no extra look", () => {

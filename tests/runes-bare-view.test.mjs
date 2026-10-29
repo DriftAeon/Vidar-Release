@@ -11,7 +11,7 @@ const rune = (id, rest = {}) => ({ set: SET, library: "kit", id, kind: "rule", a
   description: id, section: ["Work"], recall: false, body: `Body of ${id}`, drift: false, ...rest });
 const file = (path, kind, rest = {}) => ({ path, shown: path, kind, scope: "global", ticked: false, pickable: true, ...rest });
 
-function harness({ locked = false, files = [], bundles = null, imported = [{ library: "kit", id: "imported", kind: "skill" }] } = {}) {
+function harness({ headNote = undefined, locked = false, files = [], bundles = null, imported = [{ library: "kit", id: "imported", kind: "skill" }] } = {}) {
   const calls = [];
   const vault = { id: "daily", name: "Daily", hash: "abc", lockedUtc: locked ? "2026-10-25T00:00:00Z" : null,
     runesets: [{ source: SET, file: "kit.md", copiedUtc: "", sourceHash: "" }], runes: [], pins: {} };
@@ -26,7 +26,6 @@ function harness({ locked = false, files = [], bundles = null, imported = [{ lib
     current: async (id) => { calls.push(["current", id]); return structuredClone(vault); },
     currentView: async (id) => { calls.push(["currentView", id]); return structuredClone(view); },
     edit: async (args) => { calls.push(["edit", args]); return structuredClone(vault); },
-    moveTab: async (id) => { calls.push(["moveTab", id]); return true; },
     respawn: async () => { calls.push(["respawn"]); },
   };
   const io = {
@@ -40,7 +39,7 @@ function harness({ locked = false, files = [], bundles = null, imported = [{ lib
   const host = document.createElement("div");
   document.body.appendChild(host);
   const handle = mountBareView(host, { agent: "claude", cwd: "C:/proj", profile: "bare",
-    vault: vaultIo, vaultEdit }, io);
+    vault: vaultIo, vaultEdit, ...(headNote ? { headNote } : {}) }, io);
   return { calls, host, handle, view, vault, async modify() { await settle(); handle.modeButton.click(); await settle(); },
     dispose() { handle.dispose(); host.remove(); } };
 }
@@ -52,6 +51,7 @@ test("View reads only the session vault revision and shows its rune", async () =
     assert.deepEqual(h.calls.filter((c) => c[0] === "read"), [["read", "daily", "abc"]]);
     assert.ok(h.host.querySelector('[data-id="instruction"]'));
     assert.equal(h.host.querySelector('[data-id="instruction"] .runes-bare-switch'), null);
+    assert.equal(h.host.querySelector(".runes-check, .runes-row, .has-check"), null, "read mode draws no checkbox");
     assert.equal(h.handle.modeButton.hidden, false);
     assert.equal(h.calls.some((c) => c[0] === "itemsImport"), false);
   } finally { h.dispose(); }
@@ -98,11 +98,28 @@ test("An absent session record shows No Vault Session once the backoff runs out"
   } finally { handle.dispose(); host.remove(); }
 });
 
+test("Make Variant hands its notice to the pane head, adds no body line, and Modify clears it", async () => {
+  const notes = [];
+  const h = harness({ locked: true, headNote: (t) => notes.push(t) });
+  try {
+    await h.modify();
+    h.host.querySelector(".runes-set-head.has-check > .runes-check").click();
+    await settle();
+    [...h.host.querySelector(".runes-vault-choice").querySelectorAll("button")].find((b) => b.textContent === "Make Variant").click();
+    await settle();
+    assert.match(notes.at(-1) ?? "", /^Saved as .+\. New sessions can pick it\.$/);
+    assert.equal(h.host.querySelector(".runes-bare-note"), null);
+    h.handle.modeButton.click();
+    await settle();
+    assert.equal(notes.at(-1), null);
+  } finally { h.dispose(); }
+});
+
 test("Modify's runeset switch edits the vault and respawns the tab", async () => {
   const h = harness();
   try {
     await h.modify();
-    h.host.querySelector(".runes-cond .runes-bare-switch").click();
+    h.host.querySelector(".runes-set-head.has-check > .runes-check").click();
     await settle();
     assert.deepEqual(h.calls.find((c) => c[0] === "edit")[1].ops,
       [{ op: "removeRuneset", ref: SET }]);
@@ -114,7 +131,7 @@ test("A locked vault waits for Make Variant before writing", async () => {
   const h = harness({ locked: true });
   try {
     await h.modify();
-    h.host.querySelector(".runes-cond .runes-bare-switch").click();
+    h.host.querySelector(".runes-set-head.has-check > .runes-check").click();
     await settle();
     assert.equal(h.calls.some((c) => c[0] === "edit"), false);
     const choice = h.host.querySelector(".runes-vault-choice");
@@ -122,7 +139,9 @@ test("A locked vault waits for Make Variant before writing", async () => {
     [...choice.querySelectorAll("button")].find((b) => b.textContent === "Make Variant").click();
     await settle();
     assert.equal(h.calls.find((c) => c[0] === "edit")[1].mode, "variant");
-    assert.ok(h.calls.some((c) => c[0] === "moveTab"));
+    assert.equal(h.calls.some((c) => c[0] === "respawn"), false, "the tab keeps its vault");
+    assert.equal(h.host.querySelector(".runes-vault-choice"), null, "the choice is answered");
+    assert.match(h.host.querySelector(".runes-bare-note")?.textContent ?? "", /^Saved as .+\. New sessions can pick it\.$/);
   } finally { h.dispose(); }
 });
 
@@ -147,7 +166,10 @@ test("A module tick imports its items and submits member ops", async () => {
   } } }, imported: [{ library: "kit", id: "notion-notion", kind: "mcp" }] });
   try {
     await h.modify();
-    h.host.querySelector('[data-module="notion"] .runes-cond button').click();
+    const head = h.host.querySelector('[data-module="notion"] > .runes-set-head');
+    assert.equal(head.firstElementChild.className, "runes-check", "the module head's checkbox sits at its left");
+    assert.equal(head.querySelector(".runes-cond").childElementCount, 0, "no switch left in the cond slot");
+    head.firstElementChild.click();
     await settle();
     assert.deepEqual(h.calls.find((c) => c[0] === "itemsImport")[1],
       { library: "kit", layer: { modules: { notion: { off: [] } } } });

@@ -77,7 +77,7 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
   const isDisplay = item.view.type === "display";
   // a display or ask card shows icon-only Open Large right after the title (2026-10-11); a spacer then
   // pushes the rest right: a display card's file actions (its time is on the file line), an ask card's time.
-  // A single-question ask fits its card, so only a multi-question ask gets it (user, 2026-10-24).
+  // A single-question ask fits its card, so only a multi-question ask gets it.
   const roomy = item.view.type === "question" && item.view.record.questions.length > 1;
   const openHost = isDisplay || roomy ? span("relay-card-actions relay-card-open") : null;
   const cluster = isDisplay ? div("relay-card-actions") : null;
@@ -92,7 +92,7 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
     title.textContent = "Question";
     head.append(askMark, title, sep, forTab);
   } else if (isApproval) {
-    // an approval card wears the ask shell (user pick, 2026-10-24): amber bar, mark, title, time; no chip, no dot
+    // an approval card wears the ask shell: amber bar, mark, title, time; no chip, no dot
     el.classList.add("relay-ask-card");
     head.append(labelledMark("awaiting", "Approval"), title);
   } else {

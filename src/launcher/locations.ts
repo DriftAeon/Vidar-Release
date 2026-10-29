@@ -10,7 +10,7 @@ import { falconRowParent } from "./roster-shown";
 import { effectivePrimary } from "../agents/primary";
 import { depsReport, isAvailable, loadDeps } from "../deps/state";
 import { rel } from "../paths";
-import { codexBareRefusesCwd } from "./codex-vidar-cwd";
+import { codexBareRefusesCwd as refusesBareCwd } from "./codex-vidar-cwd";
 import { showVidarPath } from "./vidar-path";
 import { appendHostedRow } from "./hosted";
 import { closeLauncher, launcherSub } from "./menu";
@@ -25,6 +25,12 @@ import { prepareRules } from "../rules/prepare";
 import { isGateway } from "./agent-kind";
 import { attachSetPick } from "./set-pick";
 import { bodyOrder, launcherLead, resumeVariant } from "./body-order";
+import { isAgentId, type AgentId } from "../agents/id";
+
+const locationOptions: Record<AgentId, { homeGuard: boolean; externalSessions: boolean; prefetchThreads: boolean }> = {
+  claude: { homeGuard: false, externalSessions: true, prefetchThreads: false },
+  codex: { homeGuard: true, externalSessions: false, prefetchThreads: true },
+};
 
 // spawnFrom closes the launcher before it resolves a `{vidar}` cwd, so its rejection ("Vidar Folder
 // Unknown", vidar-path.ts) has no menu left to land in; every click here goes through this so the
@@ -84,7 +90,8 @@ export function openLocations(t: AgentType, anchor: HTMLElement, locations: Loca
       hoverOpen(h, 1, open);
       h.addEventListener("click", (e) => { e.stopPropagation(); open(); });
     }
-    if (agentKind(t.id) === "codex") {
+    const kind = agentKind(t.id);
+    if (isAgentId(kind) && locationOptions[kind].homeGuard) {
       // Codex Bare also refuses Vidar's folder and its parents (bare/mod.rs refuse_vidar_cwd): the
       // Bare body rows under Home dim once the resolved folder is known to hit that rule.
       void codexBareRefusesHome().then((r) => { bareRefused = r; }, (err) => console.error("codex bare home check:", err));
@@ -125,7 +132,8 @@ export function openLocations(t: AgentType, anchor: HTMLElement, locations: Loca
   if (falconAt !== null && !isGateway(t.id) && roots.find((r) => r.id === falconAt) === t) {
     appendHostedRow(launcherSub);
   }
-  if (agentKind(t.id) === "claude" && !isGateway(t.id)) {
+  const kind = agentKind(t.id);
+  if (isAgentId(kind) && locationOptions[kind].externalSessions && !isGateway(t.id)) {
     // live Claude sessions outside Vidar, pulled in — Claude-only
     // because discovery rides Claude Code's own session registry
     const active = menuRow(launcherSub, "Active");
@@ -162,7 +170,8 @@ async function codexRefusesHome(): Promise<boolean> {
 async function codexBareRefusesHome(): Promise<boolean> {
   const cwd = await resolveDefaultCwd();
   const root = depsReport()?.root ?? (await loadDeps())?.root;
-  return !!cwd && !!root && codexBareRefusesCwd(cwd, root, rel("bridge").split("/")[0]);
+  if (!cwd || !root) return false;
+  return refusesBareCwd(cwd, root, rel("bridge").split("/")[0]);
 }
 
 /** Close the launcher, resolve a location (folder picker or Home), launch there. Null does nothing,
@@ -219,11 +228,12 @@ function openBodies(t: AgentType, rendered: AgentType | undefined, bare: AgentTy
   // Resume serves the Rendered variant the launcher leads with (Bare Rendered when it leads, or
   // when it is the only one shown)
   const resumeRow = resumeVariant([...(rendered ? [rendered] : []), ...bare], launcherLead());
-  if (resumeRow && (agentKind(t.id) === "claude" || agentKind(t.id) === "codex")) {
+  const kind = agentKind(t.id);
+  if (resumeRow && isAgentId(kind)) {
     // Claude: the transcript store and session registry; Codex: thread/list (codex-recent.ts)
     const resume = bodyRow("Resume", loc.cwd);
     resume.classList.add("has-sub");
-    if (agentKind(t.id) === "codex") prefetchCodexRecent(resumeRow, loc); // warm the list before Resume is hovered
+    if (locationOptions[kind].prefetchThreads) prefetchCodexRecent(resumeRow, loc); // warm the list before Resume is hovered
     const open = () => void openRecent(t, resumeRow, loc, resume);
     hoverOpen(resume, 2, open);
     resume.addEventListener("click", (e) => { e.stopPropagation(); open(); });
@@ -311,7 +321,7 @@ async function adopt(t: AgentType, s: ExternalSession, row: HTMLButtonElement) {
     const rules = await prepareRules({ ...t, profile: undefined });
     createSession({
       rules,
-      agent: "claude",
+      agent: agentKind(t.id),
       shell: t.shell,
       cwd: r.cwd,
       // the configured Claude args are for a fresh session; resume is its own form

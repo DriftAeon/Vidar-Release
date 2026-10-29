@@ -32,6 +32,14 @@ use super::env::{apply_env_plan, EnvPlan};
 use super::{FlowPermissionPayload, FlowRunNodeStatus};
 use crate::bare::Env;
 
+/// The agent module this adapter runs (adapter tier of the agent-literal ratchet).
+const CODEX_MODULE: &str = "codex";
+
+/// The agent this adapter speaks for: Flow dispatches on it, never on a fallthrough.
+pub(super) fn agent() -> crate::agent_spec::Agent {
+    crate::agent_spec::parse(CODEX_MODULE).expect("the codex module id is an agent id")
+}
+
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Same 4 Hz live-text throttle as the Claude runner.
 const THROTTLE: Duration = Duration::from_millis(250);
@@ -58,11 +66,18 @@ pub(super) struct Rpc {
     mcp_lists: HashMap<u64, String>,
     /// Per-server list timeouts from the pre-spawn config check.
     list_timeouts: codex_mcp::ListTimeouts,
+    /// The vault's rendered runes, sent as `developerInstructions` on `thread/start`.
+    instructions: Option<String>,
 }
 
 impl Rpc {
     pub(super) fn with_list_timeouts(list_timeouts: codex_mcp::ListTimeouts) -> Self {
         Rpc { list_timeouts, ..Rpc::default() }
+    }
+
+    pub(super) fn with_instructions(mut self, instructions: Option<String>) -> Self {
+        self.instructions = instructions;
+        self
     }
 }
 
@@ -72,11 +87,10 @@ struct ServerRequest {
     params: Value,
 }
 
-/// Production's runner spec: every Codex node runs on Flow's own Bare home, `flow-codex` (run
-/// 2026-10-19-codex-primary U2; W2-L2d), never the user's default `~\.codex` nor a rune set's
-/// home, with a fresh control token for its config's `vidar_drive` server.
-pub(super) fn spec(cwd: &str) -> Result<RunnerSpec, String> {
-    super::bare::codex_spec(&super::bare::mint_ctl_token()?, cwd)
+/// Production's runner spec: the node runs on the home its Rune Vault builds (`bare/flow_vault.rs`),
+/// with a fresh control token for the vault config's `vidar_drive` server.
+pub(super) fn spec(cwd: &str, vault: &str, tab: &str) -> Result<RunnerSpec, String> {
+    super::bare::codex_spec(&super::bare::mint_ctl_token()?, cwd, vault, tab)
 }
 
 /// Spawns `node <js> app-server` under a Job Object. On the Bare home (`bare`: its `node` and
@@ -177,6 +191,9 @@ fn thread_params(rpc: &Rpc) -> Value {
     });
     if let Some(model) = &rpc.model {
         params["model"] = Value::String(model.clone());
+    }
+    if let Some(text) = &rpc.instructions {
+        params["developerInstructions"] = Value::String(text.clone());
     }
     params
 }

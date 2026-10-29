@@ -7,16 +7,24 @@ import type { ReplyDoneDetail } from "./reply-events";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 import { paneShell } from "./pane-shell";
-import { getFocusedSession, renderedBody, renderedSessionId, type FocusedSession } from "./sessions/lookup";
+import { getFocusedSession, renderedBody, renderedSessionId, sessionLaunchInfo, type FocusedSession } from "./sessions/lookup";
+import { respawnVaultTabs, tabVaultSession } from "./sessions/vault-tabs";
 import type { VaultEditIo } from "../runes/bare/vault-edit";
 import { tabVaultEditIo } from "../runes/bare/vault-edit-io";
 import { mountBareView, type BareViewHandle } from "../runes/bare/view";
 import { createBareIo } from "../runes/bare/io";
 import { bareViewKey, type VaultIo, type VaultView } from "../runes/bare/cake";
-import { BARE_SCOPE, openKeys, reopen, runeIconKey, setSection, type CardCtx } from "../runes/cards";
+import { setCard, setHead } from "../runes/set-card";
+import { BARE_SCOPE, keySet, openKeys, reopen, runeIconKey, setSection, type CardCtx } from "../runes/cards";
 import type { GenCtx } from "../runes/bare/agent-view";
+import { fileName } from "../runes/bare/row-name";
+import { outsideTool } from "../runes/outside-names";
+import { notCarriedLine } from "../runes/not-carried";
+import { KIND_ICON } from "../runes/kind-icons";
 import { wiredModels } from "../flow/roster";
 import { getPref } from "../prefs";
+import { isAgentId } from "../agents/id";
+import { AGENT_PROFILE } from "../agents/agent-profile";
 import { ensureCodexModels } from "../agents/codex-models";
 import { canLoad, traceRunes } from "../runes/trace";
 import { runeLedger } from "../runes/ledger";
@@ -39,6 +47,7 @@ let drawnKey: string | null = null;
 let pendingReload = false;
 let queued = false;
 let stateEl: HTMLElement;
+let noteEl: HTMLElement | undefined;
 let stripEl: HTMLElement;
 let markEl: HTMLElement;
 let stripTitleEl: HTMLElement;
@@ -50,7 +59,7 @@ let replyListener: ((e: Event) => void) | undefined;
 let keyEl: HTMLElement | undefined;
 // One kept Bare view per agent, row and folder; a run, an open set or a scroll position outlives a
 // refresh, a workbench-tab switch and a hide. Disposed with the Runes view.
-interface BareEntry { handle: BareViewHandle; scrollTop: number; drawKey: string }
+interface BareEntry { handle: BareViewHandle; scrollTop: number; drawKey: string; note: string | null }
 const bareViews = new Map<string, BareEntry>();
 let shownBare: BareEntry | undefined;
 let freshNext = false; // shown again or Refresh pressed: the next Bare draw re-reads the row
@@ -72,9 +81,18 @@ function dropBare() {
 }
 
 /** The ordinary view takes the list: remember the Bare view's scroll position and let it go. */
+/** The Make Variant notice in the pane head: one truncated line at the right, the full text in its tooltip. */
+function showNote(text: string | null) {
+  if (!noteEl) return;
+  noteEl.textContent = text ?? "";
+  noteEl.title = text ?? "";
+  noteEl.hidden = !text;
+}
+
 function leaveBare() {
   if (shownBare && frameEl) shownBare.scrollTop = frameEl.scrollTop;
   shownBare = undefined;
+  showNote(null);
 }
 
 function el(tag: string, cls: string, text?: string): HTMLElement {
@@ -119,13 +137,34 @@ function draw(f: FocusedSession | null, res: RunesLoaded | null, err: string | n
   if (frameEl) frameEl.scrollTop = scroll;
 }
 
+/** One loaded file no rune library owns: its rune kind's icon (a Codex vault or rollout row), else the doc icon, and
+ *  its Title Case file name (`notes.md` → Notes); the path stays in the tooltip. */
+export function outsideRow(path: string, open: (path: string) => void, kind?: string, file = true): HTMLElement {
+  // only a file row is clickable (opens in Document), so only it takes the card hover
+  const row = el(file ? "button" : "div", file ? "runes-blk card runes-outside-row" : "runes-blk runes-outside-row");
+  row.title = path;
+  const tool = outsideTool(path);
+  if (tool) kind = tool.kind;
+  row.append(iconImg(kind && Object.hasOwn(KIND_ICON, kind) ? KIND_ICON[kind] : "doc"), el("span", "runes-rname", tool?.name ?? fileName(path)));
+  if (file) {
+    (row as HTMLButtonElement).type = "button";
+    row.addEventListener("click", () => open(path));
+  } else {
+    row.style.cursor = "default";
+  }
+  return row;
+}
+
 /** The load trace as today's tab draws it: library groups, then the outside files. */
 function traceParts(res: RunesLoaded | null): HTMLElement[] {
   const parts: HTMLElement[] = [];
   if (catalogErr) parts.push(el("div", "runes-err", catalogErr));
   if (catalog) {
     const trace = traceRunes(catalog, res, repoRootOf(catalog));
+    // a Codex trace (rows carry a `source`) drops a library heading with nothing under it; Claude keeps today's heads
+    const dropEmpty = !!res?.files.some((f) => f.source);
     for (const t of trace.libraries) {
+      if (dropEmpty && t.lib.present && !t.lib.error && !t.sets.some(canLoad)) continue;
       const ledger = runeLedger(t, res);
       const group = el("section", "runes-group");
       group.appendChild(el("h3", "runes-group-head", GROUP_NAME[t.lib.key] ?? t.lib.key));
@@ -147,23 +186,14 @@ function traceParts(res: RunesLoaded | null): HTMLElement[] {
     }
     if (trace.outside.length) {
       const group = el("section", "runes-group");
-      const head = el("h3", "runes-group-head");
-      head.title = "Not from a rune library"; // copy-ok: sentence-case tooltip (2026-10-11)
-      head.setAttribute("aria-label", "Not from a rune library"); // copy-ok: same tooltip text
-      head.appendChild(iconImg("grp-findings"));
-      group.appendChild(head);
-      const list = el("ul", "runes-outside");
-      for (const o of trace.outside) {
-        const li = document.createElement("li");
-        const row = el("button", "runes-blk card runes-outside-row") as HTMLButtonElement;
-        row.type = "button";
-        row.title = o.path;
-        row.append(iconImg("doc"), el("span", "runes-rname", o.path.split(/[\\/]/).pop() ?? o.path));
-        row.addEventListener("click", () => ctx.openInDocument(o.path));
-        li.appendChild(row);
-        list.appendChild(li);
-      }
-      group.appendChild(list);
+      const head = setHead("Autos",trace.outside.length, "grp-findings");
+      head.title = "Loaded by the agent itself, not from a rune library"; // copy-ok: sentence-case tooltip
+      const det = setCard("hue-none runes-auto", head);
+      const tray = el("div", "runes-tray");
+      for (const o of trace.outside) tray.appendChild(outsideRow(o.path, ctx.openInDocument, o.kind, o.file));
+      det.appendChild(tray);
+      keySet(det, "auto-imports");
+      group.appendChild(det);
       parts.push(group);
     }
   }
@@ -187,7 +217,8 @@ export function vaultWarningLine(text: string, tabId: string): HTMLElement | nul
   if (dismissedWarns.has(`${tabId}\n${text}`)) return null;
   const row = el("div", "runes-err runes-warn-line");
   row.title = text;
-  const msg = el("span", "runes-warn-text", text);
+  const msg = el("span", "runes-warn-text");
+  msg.append(...notCarriedLine(text));
   const close = document.createElement("button");
   close.type = "button";
   close.className = "cx-ico runes-warn-close";
@@ -251,19 +282,24 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
         cwd: f.cwd,
         profile: "bare",
         traceParts: bareTraceParts(res, f.id, trust),
+        headNote: (text) => { if (e) e.note = text; if (e && shownBare === e) showNote(text); },
         warningLine: (warning) => trust && warning === trust.text ? null : vaultWarningLine(warning, f.id),
         card: ctx,
         gen: () => genModels(f.agent),
         modelsReady: codexModelsReady(f.agent),
         vault: vaultIo(f.id),
         vaultEdit: vaultEditIo(f.id),
+        // a tab launched without a vault has no record to wait for: paint No Vault Session at once
+        retry: !!sessionLaunchInfo(f.id)?.vault,
       },
       createBareIo(),
+      res,
     );
-    e = { handle, scrollTop: 0, drawKey };
+    e = { handle, scrollTop: 0, drawKey, note: null };
     bareViews.set(key, e);
   } else {
     if (e.drawKey !== drawKey) {
+      e.handle.setLoads(res);
       e.handle.setTrace(bareTraceParts(res, f.id, trust));
       e.drawKey = drawKey;
     }
@@ -275,6 +311,7 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
     }
   }
   shownBare = e;
+  showNote(e.note);
   // the View / Modify switch sits on the Key's last line, at the right, with Lock before it
   if (keyEl && e.handle.modeButton.parentNode !== keyEl) {
     keyEl.querySelectorAll(".runes-mode, .runes-lock").forEach((b) => b.remove());
@@ -285,7 +322,7 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
 /** The Rune Vault calls for tab `tab`: its session record, the vault at the hash it loaded, and the Lock button. */
 function vaultIo(tab: string): VaultIo {
   return {
-    session: () => invoke("rune_vault_session", { tab }),
+    session: () => tabVaultSession(tab),
     read: (id, hash) => invoke("rune_vault_read", { id, hash }) as Promise<VaultView>,
     lock: (id, expectHash) => invoke("rune_vault_lock", { id, by: "button", expectHash }),
   };
@@ -294,7 +331,7 @@ function vaultIo(tab: string): VaultIo {
 /** Modify's vault writes for tab `tab` (src/runes/bare/vault-edit.ts): the current vault, the edit, the Make Variant
  *  move of its session record, and a fresh respawn of its Rendered body (the /clear route; a Raw tab has none). */
 function vaultEditIo(tab: string): VaultEditIo {
-  return tabVaultEditIo(tab, async () => { await renderedBody(tab)?.respawnFresh(); });
+  return tabVaultEditIo(tab, async () => { await renderedBody(tab)?.respawnFresh(); }, (vault) => respawnVaultTabs(vault, tab));
 }
 
 async function refresh(reloadCatalog: boolean) {
@@ -326,7 +363,7 @@ async function refresh(reloadCatalog: boolean) {
   }
   // a Codex tab whose folder the user's config does not trust has an offer; the chat reads it the same way (transport.ts)
   let trust: TrustOffer | null = null;
-  if (f?.profile === "bare" && f.agent === "codex" && my === seq && viewEl) {
+  if (f?.profile === "bare" && isAgentId(f.agent) && AGENT_PROFILE[f.agent].trustOffer && my === seq && viewEl) {
     try { trust = (await invoke("codex_trust_offer", { id: f.id })) ?? null; } catch { trust = null; }
   }
   if (my !== seq || !viewEl) return; // a newer query or disposal owns the view
@@ -390,7 +427,9 @@ export function mountRunesView(parent: HTMLElement, openInDocument: (path: strin
     freshNext = true;
     void refresh(true);
   });
-  shell.head.append(stateEl, stripEl, refreshBtn);
+  noteEl = el("span", "runes-head-note");
+  noteEl.hidden = true;
+  shell.head.append(stateEl, stripEl, noteEl, refreshBtn);
   listEl = el("div", "runes-list");
   // the frame holds the scrolling list and, under it, the pinned key strip
   const scrollEl = el("div", "runes-scroll");
@@ -405,7 +444,8 @@ export function mountRunesView(parent: HTMLElement, openInDocument: (path: strin
   document.addEventListener("vidar-focus", focusListener);
   // a finished turn of the focused tab: its session and loads may be new (Rendered tabs fire it)
   replyListener = (e) => {
-    if (visible && (e as CustomEvent<ReplyDoneDetail>).detail?.id === getFocusedSession()?.id) requestRefresh();
+    // fresh: the first message locked the vault (agent.rs lock_first_send), so the Bare view re-reads it for Locked
+    if (visible && (e as CustomEvent<ReplyDoneDetail>).detail?.id === getFocusedSession()?.id) { freshNext = true; requestRefresh(); }
   };
   document.addEventListener("vidar-reply-done", replyListener);
   return shell.root;

@@ -1,5 +1,4 @@
 // Settings > Modules: one list editor for the three existing module surfaces.
-import { invoke } from "../ipc";
 import { BACKEND_ICON_MAP, iconImg, type ColorIcon } from "../icon-img";
 import { titleWords } from "../format";
 import { resolveModuleState } from "../modules/state";
@@ -12,7 +11,7 @@ import { setWorkbenchTabVisibility, type Tab } from "../panels/workbench";
 import { setToolVisibility, syncToolOrder } from "../panels/toolbench";
 import { BUILTIN_TOOL_MODULES } from "../tools/registry";
 import { getFocusedSession } from "../panels/sessions";
-import { isGateway } from "../launcher/agent-kind";
+import { mcpFocus, mcpFocusKey, mcpFocusRead } from "../panels/mcp-focus";
 import pickerIcon from "../assets/picker.png";
 import type { McpRack } from "../panels/rack";
 import { backendLookupName, dedupeRackServers, rackServerId, reconcileRackOrder } from "../panels/rack-modules";
@@ -42,21 +41,6 @@ let statusGeneration = 0;
 /** The rack shows when either agent module is on (a Claude-free set still has Codex). */
 function rackAvailable(): boolean {
   return moduleOn("claude") || moduleOn("codex");
-}
-
-/** Same reader the rack panel uses for this focus: a Codex tab's own config, else Claude's, with the tab's profile. */
-function focusedRead(): { key: string; read: () => Promise<McpRack> } {
-  const s = getFocusedSession();
-  const profile = (s?.agent === "claude" || s?.agent === "codex") && s.profile ? s.profile : null;
-  if (s?.agent === "codex" && moduleOn("codex")) {
-    return { key: JSON.stringify(["codex", s.id, profile, s.rowKey ?? null]),
-      read: () => invoke("read_codex_mcp_servers", { tab: s.id, profile, row: s.rowKey ?? null }) };
-  }
-  const project = s?.agent === "claude" && !isGateway(s.art) && s.cwd ? s.cwd : null;
-  // a profiled (Bare) Claude tab reads the combination home its own session runs on
-  const tab = s?.agent === "claude" && profile ? s.id : null, row = tab ? s?.rowKey ?? null : null;
-  return { key: JSON.stringify(["claude", project, profile, tab, row]),
-    read: () => invoke("read_mcp_servers", { project, profile, tab, row }) };
 }
 
 function groups(): Group[] {
@@ -250,20 +234,22 @@ async function loadRack() {
     render();
     return;
   }
-  const focus = focusedRead();
-  if (focus.key !== rackProject) {
-    rackProject = focus.key;
+  // the rack panel's own derivation; a row whose module is off reads as the default row
+  const focus = mcpFocus(getFocusedSession(), moduleOn);
+  const focusKey = mcpFocusKey(focus);
+  if (focusKey !== rackProject) {
+    rackProject = focusKey;
     rackEntries = [];
     render();
   }
   try {
-    const rack = await focus.read();
+    const rack: McpRack = await mcpFocusRead(focus);
     if (mine !== readGeneration) return;
     const servers = dedupeRackServers(rack.servers);
     const order = reconcileRackOrder(getPref("order.rack") ?? [], servers);
     rackEntries = [
       ...servers.map((server) => ({
-        id: rackServerId(server), key: rackServerId(server), label: titleWords(server.name),
+        id: rackServerId(server), key: rackServerId(server), label: titleWords(server.name) || server.name,
         level: "optional" as const, icon: BACKEND_ICON_MAP.get(backendLookupName(server.name)),
       })),
       { id: "rack:lmstudio", key: "lmstudio", label: "LM Studio", level: "optional", icon: "lmstudio" },
@@ -307,7 +293,7 @@ export function registerModuleRows() {
       const host = document.createElement("div");
       host.className = "module-settings__groups";
       root.append(status, host);
-      const focusKey = focusedRead().key;
+      const focusKey = mcpFocusKey(mcpFocus(getFocusedSession(), moduleOn));
       if (focusKey !== rackProject) {
         rackProject = focusKey;
         rackEntries = [];

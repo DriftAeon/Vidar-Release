@@ -32,3 +32,12 @@ test("neither variable: empty output", () => {
 test("missing context file: empty output", () => {
   assert.equal(buildOutput({ FALCON_SESSION: "f" }, ROOT, () => { throw new Error("ENOENT"); }), "");
 });
+
+test("isMain matches the hook path with and without the verbatim prefix", async () => {
+  const { isMain } = await import("../plugins/vidar-app/hooks/session-start.mjs");
+  const url = new URL("../plugins/vidar-app/hooks/session-start.mjs", import.meta.url).href;
+  const plain = (await import("node:url")).fileURLToPath(url);
+  assert.equal(isMain(plain, url), true);
+  assert.equal(isMain("\\\\?\\" + plain, url), true);
+  assert.equal(isMain(plain + ".other", url), false);
+});

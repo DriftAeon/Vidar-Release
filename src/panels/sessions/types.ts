@@ -1,6 +1,7 @@
 // Tab record and launch types shared by sessions.ts and its sessions/* modules;
 // sessions.ts re-exports the public ones, so importers are unchanged.
 import type { Terminal } from "@xterm/xterm";
+import type { AgentId } from "../../agents/id";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import type { RenderedBody } from "../rendered";
@@ -119,7 +120,7 @@ export interface LaunchOpts {
 // "gemini" is a terminal-only kind: no Rendered adapter, no resume source;
 // every Codex/Claude special case below compares literally, so it takes the generic path.
 // "pi" is the same terminal-only kind as gemini.
-export type SessionAgent = "claude" | "codex" | "gemini" | "pi" | "shell";
+export type SessionAgent = AgentId | "gemini" | "pi" | "shell";
 
 /** A frontend-only page shown as a tab (openPageTab). `mount` paints into the
  *  tab's `.page-host` and returns its teardown, called when the tab closes. */

@@ -1,4 +1,4 @@
-// Notion facets, bands and items (src/notion/facets.ts, model.ts; plan D3, D4): chip types and placement, the
+// Notion facets, bands and items (src/notion/facets.ts, model.ts): chip types and placement, the
 // 12-facet cap, the group rule and its tones, "None" for empty values, the top-level bands, error copy and
 // the partial-note plural.
 import test from "node:test";

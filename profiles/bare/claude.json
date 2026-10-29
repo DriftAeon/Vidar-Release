@@ -1,9 +1,9 @@
 {
-  "$comment": "Bare launch profile for the Raw Claude tab (plan Design 1-5, 7, 8) and, through `rendered`, the Falcon-hosted Rendered Bare tab (P5). Read by src-tauri/src/bare/ at every bare spawn and by Falcon (src-falcon/src/claude.rs bare_spawn) and the sidecar at every hosted one. Placeholders: {{root}} = the Vidar install root, {{home}} = this install's agent home (%LOCALAPPDATA%\\Vidar\\homes\\<install-root-key>, src-tauri/src/bare/home_path.rs), {{payload}} = this folder's `payload` file, or for a row naming rune sets the payload built from `setsPayload` into {{home}}\\layer\\payload-<hash12>.md (src-tauri/src/bare/layer.rs), all absolute at spawn. Plugins, `--allowedTools` and `--permission-mode` are not here: they come from the session's Rune Vault (stock runes vidar-app, gate, drive-allow, mode-auto; src-tauri/src/bare/claude_line.rs), so `plugins` stays empty. `assets` is what tools/sandbox/check-zip.ps1 requires in the release zip.",
+  "$comment": "Bare launch profile for the Raw Claude tab and, through `rendered`, the Falcon-hosted Rendered Bare tab (P5). Read by src-tauri/src/bare/ at every bare spawn and by Falcon (src-falcon/src/claude.rs bare_spawn) and the sidecar at every hosted one. Placeholders: {{root}} = the Vidar install root, {{home}} = this install's agent home (%LOCALAPPDATA%\\Vidar\\homes\\<install-root-key>, src-tauri/src/bare/home_path.rs), {{payload}} = this folder's `payload` file, or for a row naming rune sets the payload built from `setsPayload` into {{home}}\\layer\\payload-<hash12>.md (src-tauri/src/bare/layer.rs), all absolute at spawn. Plugins, `--allowedTools` and `--permission-mode` are not here: they come from the session's Rune Vault (stock runes vidar-app, gate, drive-allow, mode-auto; src-tauri/src/bare/claude_line.rs), so `plugins` stays empty. `assets` is what tools/sandbox/check-zip.ps1 requires in the release zip.",
   "id": "bare",
   "agent": "claude",
   "binary": { "name": "claude.exe", "resolve": "allowlisted Path" },
-  "verifiedVersion": "2.1.310",
+  "verifiedVersion": "2.1.312",
   "host": { "name": "pwsh.exe", "args": ["-NoProfile", "-Command"] },
   "args": [
     "--setting-sources", "user",
@@ -43,7 +43,7 @@
   },
   "plugins": [],
   "rendered": {
-    "$comment": "The Falcon-hosted Rendered Bare tab (plan P5). Falcon builds the env from the allowlist plus `overlay` above plus this `overlay`; `plugins` stays empty (the sidecar throws without the block): a vault's plugin runes reach the sidecar by name through Falcon (`plugin_names`, admitted as {{root}}\\plugins\\<name>), never vidar.json pluginDirs. CLAUDE_CODE_ENABLE_FUNCTION_HOOKS keeps the gate's hooks module on in a cold config dir.",
+    "$comment": "The Falcon-hosted Rendered Bare tab. Falcon builds the env from the allowlist plus `overlay` above plus this `overlay`; `plugins` stays empty (the sidecar throws without the block): a vault's plugin runes reach the sidecar by name through Falcon (`plugin_names`, admitted as {{root}}\\plugins\\<name>), never vidar.json pluginDirs. CLAUDE_CODE_ENABLE_FUNCTION_HOOKS keeps the gate's hooks module on in a cold config dir.",
     "plugins": [],
     "overlay": {
       "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"

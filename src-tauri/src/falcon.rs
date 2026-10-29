@@ -430,6 +430,18 @@ fn read_registry(paths: &FalconPaths) -> Result<FalconRegistry, String> {
     serde_json::from_str(&text).map_err(|error| format!("falcon registry is unreadable: {error}"))
 }
 
+/// Read hosted session liveness without taking the shared control connection.
+#[cfg(not(falcon_shell))]
+pub(crate) fn hosted_sessions() -> Result<Vec<(String, bool)>, String> {
+    let registry = read_registry(&FalconPaths::new(crate::paths::root()))?;
+    let mut connection = Connection::open(&registry)?;
+    let payload = connection.request(2, Op::List, Duration::from_secs(2))?.applied("list")?;
+    let sessions: Vec<protocol::SessionSummary> = serde_json::from_value(
+        payload.get("sessions").cloned().ok_or("list reply has no sessions")?
+    ).map_err(|error| format!("invalid falcon session list: {error}"))?;
+    Ok(sessions.into_iter().map(|s| (s.session, s.exited.is_some())).collect())
+}
+
 // Shared by `falcon/handoff.rs` and `falcon/dock.rs` (both via `super::`).
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -1087,7 +1099,7 @@ mod tests {
 
     /// Cross-process contract: every op this client sends, built from
     /// the host's types, against the frame the hand-built `json!` literals
-    /// produced at 4a4a0ff. An already-running older host keeps serving a
+    /// produced before the typed frames. An already-running older host keeps serving a
     /// swapped Vidar, so names, casing, omission, `null` and number types must
     /// not move. Vidar-only: exact key order depends on its `preserve_order`.
     ///

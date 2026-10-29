@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agent;
+mod agent_spec;
 mod bare;
 mod bang;
 mod bridge;
@@ -179,6 +180,7 @@ fn main() {
             bare::kit::bare_kit_create,
             bare::kit::bare_kit_item_create,
             bare::kit::bare_library_files,
+            bare::library_delete::bare_library_delete,
             bare::sets_list::bare_sets_list,
             bare::manifest::bare_launch,
             bare::vault::rune_vault_list,
@@ -189,7 +191,6 @@ fn main() {
             bare::vault::rune_vault_session,
             bare::vault::rune_vault_defaults,
             bare::vault::rune_vault_default_set,
-            bare::vault::rune_vault_session_move,
             bare::vault::rune_vault_library_runes,
             lab::lab_item,
             agent::agent_send,
@@ -353,7 +354,7 @@ fn main() {
             voice_slots::write::voice_slots_pick,
             config::save_wakeword,
             flow::flow_run_node,
-            flow::permission::flow_permission_modes,
+            flow::permission::flow_node_permissions,
             flow::flow_answer_permission,
             flow::flow_cancel_node,
             flow::flow_cancel_run,
@@ -415,9 +416,10 @@ fn main() {
             }
         })
         .setup(|app| {
+            #[cfg(not(test))] bare::start_login_sweep();
             let handle = app.app_handle().clone();
             // Before any window or launch: Bare rows and the retired home-wide lists become Rune
-            // Vaults; vidar.json last (run 2026-10-25-rune-vault, L4c).
+            // Vaults; vidar.json last.
             bare::vault::migrate::run_at_startup();
             bridge::ensure_dirs();
             bridge::sweep_review_artefacts();

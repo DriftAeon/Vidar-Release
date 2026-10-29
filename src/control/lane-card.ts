@@ -4,7 +4,7 @@
 import { DASH } from "../format";
 
 /** The spawn card's Text row, and the Flow approval's Request row: the whole text, never cut.
- *  An approval card shows exactly the bytes that will be sent or run (W2-8, user 2026-10-21);
+ *  An approval card shows exactly the bytes that will be sent or run;
  *  the card's value area scrolls (`.ask-value`, `.nm-pre`) instead. */
 export function cardText(text: string): string {
   return text;

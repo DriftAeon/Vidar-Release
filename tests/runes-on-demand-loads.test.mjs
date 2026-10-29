@@ -4,7 +4,8 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
 const { vaultModify } = await import("../src/runes/bare/view-vault.ts");
-test("A recall member is visible in its vault set and cannot be switched as a slot", () => {
+// Its switch now sends the member op: tests/runes-vault-recall-off.test.mjs.
+test("A recall member is visible in its vault set with its switch enabled", () => {
   const set = { library: "kit", set: "kit" };
   const view = { vault: { id: "daily", runesets: [{ source: set }], runes: [], lockedUtc: null },
     runes: [{ set, library: "kit", id: "tip", kind: "fact", activate: "recall",
@@ -13,8 +14,10 @@ test("A recall member is visible in its vault set and cannot be switched as a sl
   const root = document.createElement("div");
   root.append(...vaultModify({ view, removed: [], pending: null, busy: false,
     card: { openInDocument: () => {}, note: () => {} },
-    trackOpen: () => {}, edit: () => assert.fail("recall member switched"),
+    trackOpen: () => {}, edit: () => {},
     pick: async () => {} }));
   assert.ok(root.querySelector('[data-id="tip"]'));
-  assert.equal(root.querySelector('[data-id="tip"] .runes-bare-switch').disabled, true);
+  const check = root.querySelector('[data-id="tip"]').previousElementSibling;
+  assert.equal(check.className, "runes-check");
+  assert.equal(check.disabled, false);
 });

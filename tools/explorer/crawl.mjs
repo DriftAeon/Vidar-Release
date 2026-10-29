@@ -1,4 +1,4 @@
-// No-model navigation crawl (plan L17): breadth-first over tabs, menus, links and nav buttons in the
+// No-model navigation crawl: breadth-first over tabs, menus, links and nav buttons in the
 // attested card sandbox. Every press goes through the `act` verb, so the run log and console cursor
 // behave as they do for an agent. Findings: <run>/findings.jsonl (goal and episode "crawl").
 // Usage: node tools/explorer/crawl.mjs --run <dir> [--port 9333] [--max 150]

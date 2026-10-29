@@ -3,13 +3,10 @@
    buttons are the house .ws-btn with the green .ws-add primary. This file holds only the view's layout
    and the disabled floors the reused rows lack. */
 .runes-bare { display: flex; flex-direction: column; gap: var(--space-16); }
-/* set cards after the libraries keep the libraries' 4px rhythm, not the view's 16px section gap (user, 2026-10-22) */
+/* set cards after the libraries keep the libraries' 4px rhythm, not the view's 16px section gap */
 .runes-bare > :is(.runes-group, .runes-card) + .runes-card { margin-top: calc(var(--space-4) - var(--space-16)); }
 .runes-bare[aria-busy="true"] { cursor: progress; }
 .runes-bare-note { font-size: var(--font-12); color: var(--fg-dim); }
-/* View head: the loaded/total token estimate of the On runes. */
-.runes-cost { display: inline-flex; align-items: center; gap: var(--space-8); }
-.runes-cost-label { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg-dim); }
 .runes-cond .runes-stale { margin-right: var(--space-4); }
 .runes-bare-center { display: flex; justify-content: center; gap: var(--space-8); padding: var(--space-24) 0; }
 /* the button above set cards sits one card gap (--space-4) from them, not in the empty row's centring band */
@@ -22,17 +19,18 @@
 .runes-bare .rp-source:disabled { opacity: 0.5; cursor: default; }
 .runes-bare .rp-source:disabled:hover:not([aria-pressed="true"]) { background: var(--bg-panel); color: var(--fg-dim); }
 .runes-bare .ws-btn:disabled { opacity: 0.5; cursor: default; }
-/* clickable source rows read as buttons: a 1px border tinted from the set hue (no side bar); hover strengthens it */
-.runes-bare .rp-source[data-kind]:not(.is-ro):not([aria-pressed="true"]) { border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); }
+/* clickable source rows read as buttons: a 1px border in the full set hue (the 55% mix made every
+   hue read alike); a row with no hue keeps the muted mix, and hover lifts it to --fg-dim */
+.runes-bare .rp-source[data-kind]:not(.is-ro):not([aria-pressed="true"]) { border-color: var(--set-hue, color-mix(in srgb, var(--fg-dim) 55%, var(--border))); }
 .runes-bare .rp-source[data-kind]:not(.is-ro):not([aria-pressed="true"]):hover:not(:disabled) { border-color: var(--set-hue, var(--fg-dim)); }
 .runes-bare .rp-source[data-kind]:not(.is-ro):focus-visible { border-color: var(--accent); }
 
 /* Generating: one line per source */
 /* heading labels between rune rows: plain text, not clickable, spacing above and no rule. Sub-labels stay plain; the
-   top-level categories collapse as nested set heads (.runes-cat, folder icon, dim mono row count; user, 2026-10-24),
-   which replaced the bold inset category label of 2026-10-23 */
+   top-level categories collapse as nested set heads (.runes-cat, folder icon, dim mono row count),
+   which replaced the bold inset category label */
 .runes-cat > .runes-set-head .runes-sn { font-family: var(--font-title); }
-.runes-cat > .runes-set-head .runes-sc { font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--fg-dim); }
+.runes-cat > .runes-set-head .runes-sc { font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--set-ink); }
 .runes-bare-label { margin-top: var(--space-8); padding-left: var(--space-4); font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); pointer-events: none; user-select: none; }
 .runes-bare-label.sub { margin-top: var(--space-4); padding-left: var(--space-12); font-family: var(--font-ui); font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--fg-dim); }
 .runes-tray > .runes-bare-label:first-child { margin-top: 0; }
@@ -72,6 +70,22 @@
   animation: rg-sweep 1600ms linear infinite; /* motion: indeterminate progress sweep, continuous by definition */
 }
 .runes-gen-card[data-state="retrying"]::after { background: var(--approval-amber); }
+/* Grouped list: kind band > source frame > chunk cards, hue as the Runes
+   hue-none set (neutral). A twin card is the second copy of a chunk spanning sources: dashed edge, no sweep. */
+.runes-gen-stack { display: flex; flex-direction: column; gap: var(--space-8); }
+.runes-gen-kind { --gen-hue: var(--fg-dim); border-radius: var(--radius-4); background: var(--bg); overflow: hidden; }
+.runes-gen-kind-head { display: grid; grid-template-columns: var(--space-16) minmax(0, 1fr); gap: var(--space-8); align-items: center; padding: var(--space-4) var(--space-12); background: color-mix(in srgb, var(--gen-hue) 16%, var(--bg-panel)); }
+.runes-gen-kind-name { font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); }
+.runes-gen-ico { display: flex; }
+.runes-gen-ico img, .runes-gen-ico svg { width: var(--space-12); height: var(--space-12); flex: none; }
+.runes-gen-src { --gen-frame: color-mix(in srgb, var(--gen-hue) 26%, var(--bg-panel)); margin: var(--space-4) var(--space-4) 0; border: var(--border-w) solid var(--gen-frame); border-radius: var(--radius-4); background: var(--bg); overflow: hidden; }
+.runes-gen-kind-head + .runes-gen-src { margin-top: var(--space-8); }
+.runes-gen-kind > .runes-gen-src:last-child { margin-bottom: var(--space-8); }
+.runes-gen-src-head { padding: var(--space-4) var(--space-12); background: var(--gen-frame); }
+.runes-gen-src-name { display: block; font-family: var(--font-mono); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runes-gen-src-tray { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-8) var(--space-4); }
+.runes-gen-card.is-twin { border-style: dashed; }
+.runes-gen-card.is-twin::after { content: none; }
 @keyframes rg-spin { to { transform: rotate(360deg); } }
 @keyframes rg-sweep { from { left: -30%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) {
@@ -88,11 +102,11 @@
 .runes-warn-close { flex: none; margin-left: auto; cursor: pointer; }
 
 /* View rows: the ticked shared items, read-only; the fill is a 7% accent tint over --bg, about 60% darker than the old
-   14% over --bg-panel (Cobalt #121a25, was #1d2d41; user, 2026-10-23: too light to read), and the path lifted 30% toward
-   --fg (Cobalt 7.0:1), then taken 20% toward --bg (user, 2026-10-24: the path reads too loud beside the name);
+   14% over --bg-panel (Cobalt #121a25, was #1d2d41: too light to read), and the path lifted 30% toward
+   --fg (Cobalt 7.0:1), then taken 20% toward --bg (the path reads too loud beside the name);
    the .runes-blk edge, no hover change */
 .runes-bare .rp-source.is-ro > .rp-path { color: color-mix(in srgb, color-mix(in srgb, var(--fg) 30%, var(--fg-dim)) 80%, var(--bg)); }
-.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: color-mix(in srgb, var(--accent) 7%, var(--bg)); border-color: color-mix(in srgb, var(--set-hue, var(--fg-dim)) 55%, var(--border)); color: var(--fg); overflow-wrap: anywhere; }
+.runes-bare .rp-source.is-ro, .runes-bare .rp-source.is-ro:hover { cursor: default; background: color-mix(in srgb, var(--accent) 7%, var(--bg)); border-color: var(--set-hue, color-mix(in srgb, var(--fg-dim) 55%, var(--border))); color: var(--fg); overflow-wrap: anywhere; }
 /* a View row that opens (details.rp-item > summary): the same row, no marker, a pointer, the hue border on hover and the accent on focus */
 .runes-bare summary.rp-source.is-ro { list-style: none; cursor: pointer; }
 .runes-bare summary.rp-source.is-ro::-webkit-details-marker { display: none; }
@@ -125,11 +139,11 @@
 .rp-source:focus-visible { outline: none; border-color: var(--accent); }
 /* skill, agent and hook file rows (row-name.ts): bold name left, the full path right as dim mono subtext; the path
    truncates with an ellipsis first, the name never does. Rune rows keep the plain mono text above. */
-/* those rows pad 4 8, half the rune rows' 8 12 (user, 2026-10-23: they don't need as much) */
+/* those rows pad 4 8, half the rune rows' 8 12 (they don't need as much) */
 .rp-source:has(> .rp-name) { display: flex; align-items: baseline; gap: var(--space-12); padding: var(--space-4) var(--space-8); }
 .rp-source > .rp-name { flex: none; font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); white-space: nowrap; }
 .rp-source > .rp-path { flex: 1 1 auto; min-width: 0; text-align: right; font-family: var(--font-mono); font-size: var(--font-12); color: color-mix(in srgb, var(--fg-dim) 80%, var(--bg)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rp-actions { display: flex; gap: var(--space-8); }
+.rp-actions { display: flex; align-items: center; gap: var(--space-8); }
 .runes-bare .runes-module-item { width: 100%; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
 .runes-bare .runes-module-item:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
 .runes-bare .runes-module-item:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
@@ -137,7 +151,32 @@
 .runes-bare .runes-module-item:disabled { cursor: default; opacity: 0.5; }
 .runes-bare .runes-module-item.is-dim { opacity: 0.5; }
 .runes-bare .rp-source.is-dim { opacity: 0.5; }
-/* Activate looks, user picks 2026-10-25 (mock runes-activate-cards R3 and P2). Recall: dimmed at rest, a read one
+/* Modify's checkbox (check-box.ts), left of each rune bar and first in each head. On and partly on: --accent fill, --bg tick or dash; off: --bg box, --border-strong edge. */
+.runes-check {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  width: var(--space-16); height: var(--space-16); padding: 0; margin: 0; color: var(--bg); background: var(--bg);
+  border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-2); cursor: pointer;
+}
+.runes-check-mark { display: block; flex: none; width: var(--space-12); height: var(--space-12); stroke: currentColor; }
+.runes-check:is([aria-checked="true"], [aria-checked="mixed"]) { background: var(--accent); border-color: var(--accent); }
+.runes-check:hover:not(:disabled) { border-color: var(--accent); }
+.runes-check:is([aria-checked="true"], [aria-checked="mixed"]):hover:not(:disabled) { border-color: var(--fg); }
+.runes-check:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.runes-check:active:not(:disabled) { background: var(--bg-selected); }
+.runes-check:is([aria-checked="true"], [aria-checked="mixed"]):active:not(:disabled) { background: color-mix(in srgb, var(--accent) 90%, var(--bg)); }
+.runes-check:disabled { opacity: var(--opacity-dim); cursor: default; }
+.runes-check-slot { display: block; width: var(--space-16); height: var(--space-16); }
+/* Line-up: checkbox x = card edge + head pad 12 = tray pad 4 + row pad 8; the icon column spans the bar's edge, pad and
+   Kind slot (1 + 4 + 24) with its icon centred over the Kind slot, so a head's title starts where the rune names do:
+   16 + 8 + 29 + 8 = 61 past the checkbox on both. */
+.runes-set-head.has-check { grid-template-columns: var(--space-16) calc(var(--border-w) + var(--space-4) + var(--row-24)) minmax(0, 1fr) auto auto; }
+.runes-set-head.has-check > .runes-scp { padding-left: calc(var(--border-w) + var(--space-4)); justify-content: center; }
+/* a group nested in a card (Modules) sits 4 + 1 in: its head pad gives that back so its checkbox stays on the line */
+.runes-set > .runes-set > .runes-set-head.has-check { padding-left: calc(var(--space-12) - var(--space-4) - var(--border-w)); }
+.runes-row { display: flex; align-items: flex-start; gap: var(--space-8); padding-left: var(--space-8); }
+.runes-row > .runes-rn { flex: 1 1 auto; min-width: 0; }
+.runes-row > .runes-check { margin-top: calc((var(--row-24) - var(--space-16)) / 2); } /* centred on the 24px bar; stays by the bar when the card opens */
+/* Activate looks. Recall: dimmed at rest, a read one
    stays as today, full on hover (an is-dim card keeps its own dim); the Activate chip loses its pill. Paths: 15% dim
    (is-dim, 0.5, wins), first glob beside the name, the Activate chip stays. */
 .runes-bare .runes-rn.act-recall:not(.is-read) { opacity: 0.5; }

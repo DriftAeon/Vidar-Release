@@ -1,5 +1,5 @@
 // tools/release/pending.ps1 decides build=yes|no from the mtimes under its $dirs and $files. A compile-time
-// input outside that list (e20a2694 changed only an icons contract) reads "nothing pending" and never
+// input outside that list (a change to only an icons contract) reads "nothing pending" and never
 // ships. This tripwire collects every input the staged build reads and asserts the list covers it.
 import test from "node:test";
 import assert from "node:assert/strict";

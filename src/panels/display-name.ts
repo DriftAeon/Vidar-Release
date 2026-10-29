@@ -2,6 +2,9 @@
 // Document/Display pickers and title bars read cleanly. Files keep the prefix on disk.
 // Never use it for paths, keys, sorting or IPC.
 
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { label } from "../format.ts";
+
 const DATE_PREFIX = /^\d{4}-\d{2}-\d{2}[-_ ](?:\d{4}[-_ ])?/;
 
 export function shownName(fileName: string): string {
@@ -12,14 +15,11 @@ export function shownName(fileName: string): string {
   return rest;
 }
 
-// Upper-cased whole when they appear as a word in a pretty name.
-const ACRONYMS = new Set(["mcp", "ui", "ux", "api", "html", "svg", "png", "css", "json", "url", "id", "pr", "ci", "ts", "js", "llm", "ai", "ue", "pty", "ipc", "sdk", "cli", "md", "gui", "tts", "stt", "vad"]);
-
 /** Picker label: shownName, then the extension dropped, `-`/`_` as spaces, each word capitalised,
  *  known acronyms upper-cased ("mcp-flow-test-mock.html" → "MCP Flow Test Mock"). Display only. */
 export function prettyName(fileName: string): string {
   const base = shownName(fileName).replace(/\.[^.]+$/, "");
   const words = base.split(/[-_\s]+/).filter(Boolean);
   if (!words.length) return fileName;
-  return words.map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))).join(" ");
+  return words.map((w) => label(w)).join(" ");
 }

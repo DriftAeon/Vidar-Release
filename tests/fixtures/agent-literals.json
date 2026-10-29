@@ -1,0 +1,1680 @@
+{
+  "$schema": 3,
+  "$adapters": [
+    "content/local-voice/rewrite_openai.py",
+    "content/packs/claude/voice/rewrite_claude.py",
+    "content/packs/codex/voice/rewrite_codex.py",
+    "src-falcon/src/claude.rs",
+    "src-falcon/src/claude/spawn_args.rs",
+    "src-falcon/src/codex.rs",
+    "src-falcon/src/codex/driver.rs",
+    "src-falcon/src/codex/driver/answers.rs",
+    "src-falcon/src/codex/driver/approvals.rs",
+    "src-falcon/src/codex/driver/history.rs",
+    "src-falcon/src/codex/driver/interrupt.rs",
+    "src-falcon/src/codex/driver/policy.rs",
+    "src-falcon/src/codex/driver/query.rs",
+    "src-falcon/src/codex/driver/requests.rs",
+    "src-falcon/src/codex/driver/turns.rs",
+    "src-tauri/src/bare/claude_dir.rs",
+    "src-tauri/src/bare/claude_launch.rs",
+    "src-tauri/src/bare/claude_line.rs",
+    "src-tauri/src/bare/claude_mcp.rs",
+    "src-tauri/src/bare/claude_profile.rs",
+    "src-tauri/src/bare/codex_builtin.rs",
+    "src-tauri/src/bare/codex_caps.rs",
+    "src-tauri/src/bare/codex_hooks.rs",
+    "src-tauri/src/bare/codex_hosted.rs",
+    "src-tauri/src/bare/codex_mcp.rs",
+    "src-tauri/src/bare/codex_payload.rs",
+    "src-tauri/src/bare/codex_profile.rs",
+    "src-tauri/src/bare/codex_roles.rs",
+    "src-tauri/src/bare/codex_runes_loaded.rs",
+    "src-tauri/src/bare/codex_trust.rs",
+    "src-tauri/src/bare/codex_user_trust.rs",
+    "src-tauri/src/bare/codex_verify.rs",
+    "src-tauri/src/bare/copies_codex.rs",
+    "src-tauri/src/bare/guards_codex.rs",
+    "src-tauri/src/bare/login_link_claude.rs",
+    "src-tauri/src/bare/login_link_codex.rs",
+    "src-tauri/src/claude_auth.rs",
+    "src-tauri/src/claude_login.rs",
+    "src-tauri/src/claude_version.rs",
+    "src-tauri/src/codex_config.rs",
+    "src-tauri/src/codex_cwd.rs",
+    "src-tauri/src/codex_models.rs",
+    "src-tauri/src/codex_threads.rs",
+    "src-tauri/src/flow/claude.rs",
+    "src-tauri/src/flow/codex.rs",
+    "src-tauri/src/flow/codex_mcp.rs",
+    "src-tauri/src/loadout/codex.rs",
+    "src-tauri/src/mcp/codex.rs",
+    "src-tauri/src/rules/codex.rs",
+    "src-tauri/src/rules/import/claude_json.rs",
+    "src-tauri/src/rules/import/codex_home.rs",
+    "src-tauri/src/status/codex.rs",
+    "src/agents/claude-blocks.ts",
+    "src/agents/claude-parse.ts",
+    "src/agents/claude-task-owners.ts",
+    "src/agents/claude.ts",
+    "src/agents/codex-async-ask.ts",
+    "src/agents/codex-diff.ts",
+    "src/agents/codex-history.ts",
+    "src/agents/codex-hosted.ts",
+    "src/agents/codex-items.ts",
+    "src/agents/codex-login.ts",
+    "src/agents/codex-methods.ts",
+    "src/agents/codex-models.ts",
+    "src/agents/codex-permissions.ts",
+    "src/agents/codex-plan-store.ts",
+    "src/agents/codex-progress.ts",
+    "src/agents/codex-requests.ts",
+    "src/agents/codex-review.ts",
+    "src/agents/codex-settings.ts",
+    "src/agents/codex-skills.ts",
+    "src/agents/codex-usage.ts",
+    "src/agents/codex.ts",
+    "src/launcher/codex-recent.ts",
+    "src/launcher/codex-restore.ts",
+    "src/launcher/codex-vidar-cwd.ts",
+    "src/panels/codex-model.ts",
+    "src/panels/loadout-codex.ts",
+    "src/panels/rendered/claude-login.ts",
+    "src/panels/sessions/codex-save.ts",
+    "src/panels/sessions/codex-thread.ts",
+    "src/startup-updates/codex-skew.ts",
+    "src/startup-updates/gemini-launch.ts",
+    "tools/claude-sidecar-bare.mjs",
+    "tools/claude-sidecar-ledger.mjs",
+    "tools/claude-sidecar-mcp-wait.mjs",
+    "tools/claude-sidecar-recover.mjs",
+    "tools/claude-sidecar-seed.mjs",
+    "tools/claude-sidecar-shrink.mjs",
+    "tools/claude-sidecar-statusline.mjs",
+    "tools/claude-sidecar-trust.mjs",
+    "tools/claude-sidecar.mjs"
+  ],
+  "$enums": [
+    "Agent",
+    "AgentDriver",
+    "AgentRuntime",
+    "BareLaunch",
+    "Body",
+    "Client",
+    "Need",
+    "Runner",
+    "RunnerSpec"
+  ],
+  "$ids": [
+    "claude",
+    "codex",
+    "gemini",
+    "pi"
+  ],
+  "$strict": {
+    "src-falcon/src/bridge_golden.rs": 1,
+    "src-falcon/src/claude.rs": 3,
+    "src-falcon/src/claude/spawn_args.rs": 2,
+    "src-falcon/src/codex.rs": 8,
+    "src-falcon/src/codex/driver/interrupt.rs": 1,
+    "src-falcon/src/codex/driver/turns.rs": 2,
+    "src-falcon/src/journal.rs": 2,
+    "src-falcon/src/main.rs": 2,
+    "src-falcon/src/process.rs": 11,
+    "src-falcon/src/protocol.rs": 5,
+    "src-falcon/src/replay.rs": 1,
+    "src-falcon/src/serve.rs": 10,
+    "src-falcon/src/serve/dispatch.rs": 2,
+    "src-falcon/src/serve/spawn.rs": 5,
+    "src-falcon/src/session.rs": 7,
+    "src-falcon/src/session/history.rs": 1,
+    "src-tauri/src/agent.rs": 7,
+    "src-tauri/src/bang.rs": 1,
+    "src-tauri/src/bare/claude_mcp.rs": 3,
+    "src-tauri/src/bare/codex_mcp.rs": 1,
+    "src-tauri/src/bare/env.rs": 1,
+    "src-tauri/src/bare/kit.rs": 15,
+    "src-tauri/src/bare/vault/migrate_durable.rs": 4,
+    "src-tauri/src/bridge/documents.rs": 6,
+    "src-tauri/src/codex_config.rs": 1,
+    "src-tauri/src/codex_cwd.rs": 6,
+    "src-tauri/src/deps.rs": 1,
+    "src-tauri/src/deps/updates/skew.rs": 3,
+    "src-tauri/src/falcon/session_commands.rs": 17,
+    "src-tauri/src/flow.rs": 6,
+    "src-tauri/src/flow/bare.rs": 12,
+    "src-tauri/src/flow/child.rs": 19,
+    "src-tauri/src/flow/codex.rs": 6,
+    "src-tauri/src/flow/codex_mcp.rs": 2,
+    "src-tauri/src/flow/env.rs": 15,
+    "src-tauri/src/flow/permission.rs": 1,
+    "src-tauri/src/loadout.rs": 4,
+    "src-tauri/src/loadout/codex.rs": 2,
+    "src-tauri/src/main.rs": 2,
+    "src-tauri/src/mcp.rs": 3,
+    "src-tauri/src/mcp/codex.rs": 1,
+    "src-tauri/src/paths.rs": 4,
+    "src-tauri/src/pty.rs": 6,
+    "src-tauri/src/pty/handover.rs": 1,
+    "src-tauri/src/recent_meta.rs": 1,
+    "src-tauri/src/release_check.rs": 3,
+    "src-tauri/src/rules/catalog.rs": 1,
+    "src-tauri/src/rules/generate/home.rs": 1,
+    "src-tauri/src/rules/generate/items.rs": 1,
+    "src-tauri/src/rules/generate/run.rs": 7,
+    "src-tauri/src/rules/generate/validate.rs": 3,
+    "src-tauri/src/rules/import/claude_json.rs": 1,
+    "src-tauri/src/rules/import/codex_home.rs": 2,
+    "src-tauri/src/rules/import/local.rs": 16,
+    "src-tauri/src/rules/import/memory.rs": 1,
+    "src-tauri/src/rules/import/sources.rs": 14,
+    "src-tauri/src/rules/import/worktree.rs": 1,
+    "src-tauri/src/rules/loaded.rs": 5,
+    "src-tauri/src/rules/mod.rs": 11,
+    "src-tauri/src/status.rs": 2,
+    "src-tauri/src/swap_button.rs": 2,
+    "src-tauri/src/vidar_worktree.rs": 2,
+    "src-tauri/src/voice_slots/mod.rs": 1,
+    "src/agents/agent-profile.ts": 5,
+    "src/agents/claude.ts": 1,
+    "src/agents/codex-items.ts": 3,
+    "src/agents/codex-login.ts": 1,
+    "src/agents/codex-requests.ts": 1,
+    "src/agents/codex-settings.ts": 2,
+    "src/asks/record.ts": 12,
+    "src/character/behavior.ts": 2,
+    "src/character/home-sphere.ts": 3,
+    "src/config-agents.ts": 10,
+    "src/control/listen.ts": 1,
+    "src/control/open-ask.ts": 4,
+    "src/deps/types.ts": 1,
+    "src/drive/drive.ts": 3,
+    "src/flow/model.ts": 4,
+    "src/flow/palette.ts": 8,
+    "src/flow/roster.ts": 13,
+    "src/flow/runner.ts": 5,
+    "src/flow/store-core.ts": 12,
+    "src/flow/templates.ts": 7,
+    "src/flow/validate.ts": 5,
+    "src/format.ts": 9,
+    "src/ipc-mock.ts": 18,
+    "src/ipc.ts": 1,
+    "src/lab/commands.ts": 2,
+    "src/lab/items.ts": 13,
+    "src/main.ts": 4,
+    "src/modules/registry.ts": 1,
+    "src/onboarding/step-primary.ts": 1,
+    "src/panels/codex-model.ts": 1,
+    "src/panels/index.ts": 2,
+    "src/panels/lab.ts": 4,
+    "src/panels/loadout.ts": 30,
+    "src/panels/mcp-focus.ts": 3,
+    "src/panels/rack-modules.ts": 5,
+    "src/panels/rack.ts": 1,
+    "src/panels/rendered.ts": 1,
+    "src/panels/rendered/api-key-card.ts": 1,
+    "src/panels/rendered/cards.ts": 5,
+    "src/panels/rendered/chain.ts": 1,
+    "src/panels/rendered/claude-login.ts": 6,
+    "src/panels/rendered/events.ts": 4,
+    "src/panels/rendered/host-profile.ts": 5,
+    "src/panels/rendered/login.ts": 2,
+    "src/panels/rendered/model-groups.ts": 1,
+    "src/panels/rendered/notice-actions.ts": 1,
+    "src/panels/rendered/plan-card.ts": 1,
+    "src/panels/rendered/question-form.ts": 2,
+    "src/panels/rendered/transport.ts": 2,
+    "src/panels/runes.ts": 4,
+    "src/panels/sessions.ts": 3,
+    "src/panels/sessions/astra-bridge.ts": 3,
+    "src/panels/sessions/astra-sandbox.ts": 3,
+    "src/panels/sessions/body-kind.ts": 1,
+    "src/panels/sessions/codex-thread.ts": 3,
+    "src/panels/sessions/gateway-art.ts": 1,
+    "src/panels/sessions/lookup.ts": 3,
+    "src/panels/sessions/output.ts": 2,
+    "src/panels/sessions/rendered-body.ts": 7,
+    "src/panels/sessions/tab-order.ts": 1,
+    "src/panels/sessions/tab-strip.ts": 1,
+    "src/panels/sessions/terminal-body.ts": 1,
+    "src/panels/sessions/types.ts": 2,
+    "src/panels/status.ts": 2,
+    "src/panels/voice-map.ts": 1,
+    "src/relay/source-ctl-asks.ts": 1,
+    "src/rules/app-layer.ts": 2,
+    "src/rules/inject.ts": 11,
+    "src/rules/prepare.ts": 4,
+    "src/runes/bare/agent-view.ts": 8,
+    "src/runes/bare/flow.ts": 11,
+    "src/runes/bare/kit-add.ts": 22,
+    "src/runes/bare/module-ticks.ts": 6,
+    "src/runes/bare/set-attach.ts": 2,
+    "src/runes/bare/view-data.ts": 2,
+    "src/runes/bare/view-files.ts": 3,
+    "src/runes/bare/view.ts": 9,
+    "src/runes/cards.ts": 1,
+    "src/runes/trace.ts": 1,
+    "src/settings/agents-read.ts": 4,
+    "src/settings/agents.ts": 11,
+    "src/settings/build/view.ts": 1,
+    "src/settings/modules.ts": 3,
+    "src/settings/voice-rewrite.ts": 12,
+    "src/startup-updates/core.ts": 4,
+    "src/startup-updates/index.ts": 1,
+    "src/voice-mark.ts": 4,
+    "tools/agents/agent-literals.mjs": 24,
+    "tools/agents/key-words.mjs": 10,
+    "tools/agents/ts-keys.mjs": 1,
+    "tools/claude-sidecar-bare.mjs": 5,
+    "tools/claude-sidecar-statusline.mjs": 1,
+    "tools/claude-sidecar-trust.mjs": 1,
+    "tools/claude-sidecar.mjs": 3,
+    "tools/falcon/build.mjs": 14,
+    "tools/gate/gate.mjs": 2,
+    "tools/lib/paths.mjs": 8,
+    "tools/release/pack-index.mjs": 3,
+    "tools/release/zip-audit.mjs": 3,
+    "tools/runes/header.mjs": 2,
+    "tools/runes/targets.mjs": 2,
+    "tools/runes/view/cards.mjs": 5,
+    "tools/runes/view/data.mjs": 2,
+    "tools/runes/view/icons.mjs": 6,
+    "tools/falcon/falcon-slice1.ps1": 10,
+    "tools/release/falcon-build.ps1": 39,
+    "tools/release/falcon-inputs.ps1": 28,
+    "tools/release/falcon-prune.ps1": 22,
+    "tools/release/falcon-refresh.ps1": 4,
+    "tools/release/pending.ps1": 2,
+    "tools/release/push-msg-gate.ps1": 2,
+    "tools/release/release-build.ps1": 5,
+    "tools/release/release-zip.ps1": 16,
+    "tools/sandbox/write-audit.ps1": 3,
+    "content/local-voice/speak.py": 16,
+    "content/local-voice/stt_ab.py": 2,
+    "content/packs/claude/voice/rewrite_claude.py": 1,
+    "content/packs/codex/voice/rewrite_codex.py": 1
+  },
+  "content/local-voice/speak.py": {
+    "tier": "other",
+    "caps": {
+      "codex": 14,
+      "claude": 6
+    }
+  },
+  "content/local-voice/stt_ab.py": {
+    "tier": "other",
+    "caps": {
+      "claude": 3,
+      "codex": 1
+    }
+  },
+  "src-falcon/src/bridge_golden.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-falcon/src/claude/spawn_args.rs": {
+    "tier": "adapter:claude",
+    "caps": {
+      "codex": 2,
+      "claude": 1
+    }
+  },
+  "src-falcon/src/codex.rs": {
+    "tier": "adapter:codex",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-falcon/src/journal.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src-falcon/src/main.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src-falcon/src/process.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-falcon/src/protocol.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 8,
+      "claude": 2
+    }
+  },
+  "src-falcon/src/replay.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 9
+    }
+  },
+  "src-falcon/src/serve.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 3,
+      "codex": 7
+    },
+    "reasons": {
+      "claude": "session and serve code moved out of main.rs carries its caps",
+      "codex": "session and serve code moved out of main.rs carries its caps"
+    }
+  },
+  "src-falcon/src/serve/dispatch.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 3
+    }
+  },
+  "src-falcon/src/serve/probe.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src-falcon/src/serve/spawn.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 15,
+      "claude": 2
+    },
+    "reasons": {
+      "codex": "session and serve code moved out of main.rs carries its caps"
+    }
+  },
+  "src-falcon/src/session.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 10,
+      "codex": 6
+    },
+    "reasons": {
+      "codex": "session and serve code moved out of main.rs carries its caps"
+    }
+  },
+  "src-falcon/src/session/history.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 9
+    }
+  },
+  "src-tauri/src/agent.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 23
+    }
+  },
+  "src-tauri/src/bang.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/bare/claude_launch.rs": {
+    "tier": "adapter:claude",
+    "caps": {
+      "codex": 4
+    }
+  },
+  "src-tauri/src/bare/codex_hosted.rs": {
+    "tier": "adapter:codex",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/bare/copies.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 25
+    }
+  },
+  "src-tauri/src/bare/env.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 4
+    }
+  },
+  "src-tauri/src/bare/flow_vault.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 10,
+      "codex": 11
+    }
+  },
+  "src-tauri/src/bare/guards.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 6,
+      "codex": 10
+    }
+  },
+  "src-tauri/src/bare/home.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 19,
+      "claude": 2
+    }
+  },
+  "src-tauri/src/bare/kit.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 20,
+      "claude": 1
+    }
+  },
+  "src-tauri/src/bare/launch_row.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src-tauri/src/bare/login_link.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "src-tauri/src/bare/login_link_expiry.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/bare/login_link_sweep.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/bare/manifest.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 2
+    }
+  },
+  "src-tauri/src/bare/mod.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 20,
+      "codex": 91
+    }
+  },
+  "src-tauri/src/bare/set_layer.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 9
+    }
+  },
+  "src-tauri/src/bare/vault/migrate.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 9
+    }
+  },
+  "src-tauri/src/bare/vault/migrate_items.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 17
+    }
+  },
+  "src-tauri/src/bare/vault/mod.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 2
+    }
+  },
+  "src-tauri/src/bare/vault/session.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-tauri/src/bare/vault_spawn.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src-tauri/src/bridge/documents.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/codex_models.rs": {
+    "tier": "adapter:codex",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/deps.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 11
+    }
+  },
+  "src-tauri/src/deps/updates/skew.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 12
+    }
+  },
+  "src-tauri/src/falcon/events.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 10
+    }
+  },
+  "src-tauri/src/falcon/ops.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 7
+    }
+  },
+  "src-tauri/src/falcon/session_commands.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 39,
+      "claude": 8
+    }
+  },
+  "src-tauri/src/flow.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src-tauri/src/flow/bare.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 4,
+      "codex": 7
+    }
+  },
+  "src-tauri/src/flow/child.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 6
+    }
+  },
+  "src-tauri/src/flow/env.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 5
+    }
+  },
+  "src-tauri/src/flow/permission.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/loadout.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 4
+    }
+  },
+  "src-tauri/src/main.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 21,
+      "claude": 13
+    }
+  },
+  "src-tauri/src/mcp.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 9,
+      "codex": 2
+    }
+  },
+  "src-tauri/src/paths.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 5,
+      "claude": 1
+    }
+  },
+  "src-tauri/src/pty.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 10
+    }
+  },
+  "src-tauri/src/pty/handover.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/recent_meta.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "src-tauri/src/rules/generate/commands.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-tauri/src/rules/generate/home.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-tauri/src/rules/generate/payload.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 3
+    }
+  },
+  "src-tauri/src/rules/generate/run.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 14,
+      "codex": 15
+    }
+  },
+  "src-tauri/src/rules/generate/validate.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-tauri/src/rules/import/local.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 20,
+      "claude": 6
+    }
+  },
+  "src-tauri/src/rules/import/mod.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-tauri/src/rules/import/sources.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 17
+    }
+  },
+  "src-tauri/src/rules/load_history.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src-tauri/src/rules/loaded.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 3
+    },
+    "reasons": {
+      "claude": "L2a: .claude/rules/<id>.md is the Claude rule path a touch load reads"
+    }
+  },
+  "src-tauri/src/rules/mod.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 6
+    }
+  },
+  "src-tauri/src/rules/rune.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 2
+    }
+  },
+  "src-tauri/src/settings/commands.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 1,
+      "claude": 1
+    }
+  },
+  "src-tauri/src/settings/schema.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src-tauri/src/speak.rs": {
+    "tier": "other",
+    "caps": {
+      "codex": 8,
+      "claude": 10
+    }
+  },
+  "src-tauri/src/status.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 9
+    }
+  },
+  "src-tauri/src/status/recent.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 3
+    }
+  },
+  "src-tauri/src/usage_ledger.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 2
+    }
+  },
+  "src-tauri/src/voice.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "src-tauri/src/voice_slots/mod.rs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/agents/agent-profile.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 7,
+      "codex": 22
+    }
+  },
+  "src/agents/login-tips.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2,
+      "claude": 12
+    }
+  },
+  "src/control/listen.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/control/open-ask.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src/drive/drive.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 8
+    }
+  },
+  "src/flow/roster.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/flow/runner.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src/flow/templates.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src/format.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/ipc-hosts.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 12,
+      "claude": 5
+    }
+  },
+  "src/ipc-mock.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 8,
+      "claude": 13
+    }
+  },
+  "src/ipc.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 21,
+      "claude": 5
+    }
+  },
+  "src/lab/items.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 5,
+      "claude": 3
+    }
+  },
+  "src/launcher/fix-tab.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/launcher/hosted.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 1
+    }
+  },
+  "src/launcher/locations.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 11,
+      "claude": 1
+    }
+  },
+  "src/launcher/menu-rows.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 3,
+      "claude": 3,
+      "gemini": 3,
+      "pi": 3
+    }
+  },
+  "src/launcher/readopt.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 5
+    }
+  },
+  "src/launcher/recent.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2,
+      "claude": 1
+    }
+  },
+  "src/launcher/roster.ts": {
+    "tier": "other",
+    "caps": {
+      "gemini": 2,
+      "codex": 3,
+      "claude": 1
+    }
+  },
+  "src/main.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 9
+    }
+  },
+  "src/modules/registry.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/onboarding/step-runes.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/bundle-version.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/panels/character.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/lab.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 2
+    }
+  },
+  "src/panels/loadout.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 8,
+      "claude": 5
+    }
+  },
+  "src/panels/mcp-focus.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src/panels/rack.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/panels/rendered.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "src/panels/rendered/api-key-card.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 13
+    }
+  },
+  "src/panels/rendered/approval-detail.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 4
+    }
+  },
+  "src/panels/rendered/cards.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "src/panels/rendered/chain.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 5
+    }
+  },
+  "src/panels/rendered/claude-login.ts": {
+    "tier": "adapter:claude",
+    "caps": {
+      "codex": 4
+    }
+  },
+  "src/panels/rendered/events.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 6
+    }
+  },
+  "src/panels/rendered/fix-seam.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/panels/rendered/format.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/rendered/host-payload.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/rendered/lifecycle.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/rendered/notice-actions.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 2
+    }
+  },
+  "src/panels/rendered/transport.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 9,
+      "claude": 1
+    }
+  },
+  "src/panels/runes.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 6
+    }
+  },
+  "src/panels/sessions.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 18
+    }
+  },
+  "src/panels/sessions/astra-bridge.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 9
+    }
+  },
+  "src/panels/sessions/astra-sandbox.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/sessions/gateway-art.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 8
+    }
+  },
+  "src/panels/sessions/hosted.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/panels/sessions/lookup.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 5
+    }
+  },
+  "src/panels/sessions/rendered-body.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 16
+    }
+  },
+  "src/panels/sessions/tab-strip.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 3
+    }
+  },
+  "src/panels/sessions/terminal-body.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/panels/status.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 7
+    }
+  },
+  "src/panels/voice-map.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/prefs-core.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 2,
+      "codex": 6
+    }
+  },
+  "src/relay/source-ctl-asks.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/rules/app-layer.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/rules/inject.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 4,
+      "claude": 2
+    }
+  },
+  "src/runes/bare/agent-view.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 5,
+      "claude": 2
+    }
+  },
+  "src/runes/bare/flow.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 4
+    }
+  },
+  "src/runes/bare/kit-add.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 6
+    }
+  },
+  "src/runes/bare/view-files.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 3
+    }
+  },
+  "src/runes/bare/view.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/runes/cards.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "src/settings/agent-selects.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 10,
+      "claude": 2
+    }
+  },
+  "src/settings/agents.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 12,
+      "claude": 4
+    }
+  },
+  "src/settings/build/view.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2,
+      "claude": 2
+    }
+  },
+  "src/settings/modules.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "src/settings/voice-rewrite.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 12,
+      "codex": 7
+    }
+  },
+  "src/startup-updates/index.ts": {
+    "tier": "other",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "src/voice.ts": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/agents/agent-literals.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 3,
+      "codex": 2
+    }
+  },
+  "tools/agents/third-agent-check.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "tools/bare/codex-hook-probe.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 26,
+      "claude": 1
+    }
+  },
+  "tools/bare/codex-shim.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 8,
+      "claude": 1
+    }
+  },
+  "tools/bare/eval-runes.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 4,
+      "codex": 2
+    }
+  },
+  "tools/bare/guard-probe.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 19,
+      "codex": 32
+    }
+  },
+  "tools/bare/probe-claude.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 148,
+      "codex": 1
+    }
+  },
+  "tools/bare/probe-generate-layout.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 15
+    },
+    "reasons": {
+      "codex": "L1p: Codex-only generate probe (check 11) split from probe-generate.ps1"
+    }
+  },
+  "tools/bare/probe-generate.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 93,
+      "codex": 102
+    },
+    "reasons": {
+      "codex": "L1p: Codex-only generate probe (check 11) split from probe-generate.ps1"
+    }
+  },
+  "tools/bare/probe-pin.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 4
+    }
+  },
+  "tools/bare/probe-runes.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 3,
+      "codex": 15
+    }
+  },
+  "tools/bare/sweep.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 36,
+      "codex": 55
+    }
+  },
+  "tools/bare/verify-pin.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 11
+    }
+  },
+  "tools/codex-schema/dump.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 11
+    }
+  },
+  "tools/codex-schema/manifest.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 4
+    }
+  },
+  "tools/codex-schema/refresh.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 5
+    }
+  },
+  "tools/codex-schema/verify.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 17
+    }
+  },
+  "tools/desks/astra-dispatch.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "tools/desks/codex-lane.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 3
+    }
+  },
+  "tools/desks/codex-meter.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "tools/desks/codex-notify.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 2
+    }
+  },
+  "tools/desks/gemini-review.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "gemini": 14
+    }
+  },
+  "tools/drive/drive-input.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1,
+      "function Object() { [native code] }": 1
+    }
+  },
+  "tools/drive/verbs/look.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 9
+    }
+  },
+  "tools/explorer/core-goals.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 4,
+      "codex": 4
+    }
+  },
+  "tools/falcon/build.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 6,
+      "codex": 1
+    }
+  },
+  "tools/falcon/falcon-slice1.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 23
+    }
+  },
+  "tools/icons/slot.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/lab/arms.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 4
+    }
+  },
+  "tools/lab/codex.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 16,
+      "claude": 1
+    }
+  },
+  "tools/lab/isolate.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/lab/mcp.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 13
+    }
+  },
+  "tools/lab/run.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "codex": 36,
+      "claude": 7
+    }
+  },
+  "tools/lib/paths.mjs": {
+    "tier": "other",
+    "caps": {
+      "codex": 1
+    }
+  },
+  "tools/local/local-router.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "tools/mcp/hosted-add.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 33,
+      "codex": 46
+    }
+  },
+  "tools/mcp/vidar-drive/tools.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/measure/agent-ledger.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/measure/comply/comply.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 9
+    }
+  },
+  "tools/measure/context-economy.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "tools/measure/repeat-calls.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/measure/run-cost.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 2,
+      "codex": 6
+    }
+  },
+  "tools/measure/skill-repeats.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/measure/transcript-stats.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 5
+    }
+  },
+  "tools/notion/mcp-add.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 4
+    }
+  },
+  "tools/release/clean-env.ps1": {
+    "tier": "other",
+    "caps": {
+      "pi": 1
+    }
+  },
+  "tools/release/falcon-build.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 47,
+      "codex": 50
+    }
+  },
+  "tools/release/falcon-inputs.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 18,
+      "codex": 16
+    }
+  },
+  "tools/release/pending.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "tools/release/push-msg-gate.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/release/release-build.ps1": {
+    "tier": "other",
+    "caps": {
+      "codex": 12
+    }
+  },
+  "tools/release/release-zip.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 17,
+      "codex": 7
+    }
+  },
+  "tools/release/scrub.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "tools/release/zip-audit.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 2
+    }
+  },
+  "tools/runes/targets.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/runes/view/cards.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 3,
+      "codex": 1
+    }
+  },
+  "tools/runes/view/data.mjs": {
+    "tier": "other",
+    "caps": {
+      "claude": 3
+    }
+  },
+  "tools/sandbox/write-audit.ps1": {
+    "tier": "other",
+    "caps": {
+      "claude": 1,
+      "codex": 1
+    }
+  },
+  "tools/ui/lint-copy.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 1
+    }
+  },
+  "tools/usage/window-report.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 5
+    }
+  },
+  "tools/vendor/guard-vendor-write.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 17
+    }
+  },
+  "tools/vendor/vendor-env.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 6
+    }
+  },
+  "tools/vendor/vendor-prepare.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "claude": 29,
+      "codex": 1,
+      "pi": 1,
+      "gemini": 3
+    }
+  },
+  "tools/voice/chime-preview.mjs": {
+    "tier": "devtool",
+    "caps": {
+      "pi": 1
+    }
+  },
+  "tools/voice/setup-voice.ps1": {
+    "tier": "devtool",
+    "caps": {
+      "pi": 2
+    }
+  }
+}

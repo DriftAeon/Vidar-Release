@@ -1,6 +1,6 @@
 # Slack fixtures
 
-Made-up workspace data for the Slack tab (`docs/projects/slack/inbox-tab-plan.md`). Hosts are
+Made-up workspace data for the Slack tab. Hosts are
 `example.slack.com`; every id (`T0FIXTURE1`, `U0FIXTURE1`…) is invented. No real workspace data.
 
 - `auth-test.json`: an `auth.test` reply; `U0FIXTURE1` is the connected user.

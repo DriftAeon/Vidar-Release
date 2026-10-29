@@ -211,10 +211,22 @@ fn meaning(env: &Envelope, scope: &Scope, errs: &mut Vec<String>) {
         if let Some(j) = env.runes[..i].iter().position(|o| o.id == r.id) {
             errs.push(format!("{at}.id: duplicate id `{}` (also runes[{j}])", r.id));
         }
-        if r.kind != "rule" && r.kind != "fact" {
-            errs.push(format!("{at}.kind: `{}` is not rule or fact", r.kind));
+        if !matches!(r.kind.as_str(), "rule" | "fact" | "procedure") {
+            errs.push(format!("{at}.kind: `{}` is not rule, fact or procedure", r.kind));
         }
-        match r.activate.as_deref().unwrap_or("always") {
+        let procedure = r.kind == "procedure";
+        match r.activate.as_deref().unwrap_or(if procedure { "invoke" } else { "always" }) {
+            "invoke" if procedure => {
+                if r.paths.is_some() {
+                    errs.push(format!("{at}.paths: only allowed when activate is paths"));
+                }
+            }
+            "recall" if procedure => {
+                if r.paths.is_some() {
+                    errs.push(format!("{at}.paths: only allowed when activate is paths"));
+                }
+            }
+            other if procedure => errs.push(format!("{at}.activate: `{other}` is not invoke or recall for a procedure")),
             "paths" => {
                 if r.paths.as_ref().is_none_or(Vec::is_empty) {
                     errs.push(format!("{at}.paths: required and non-empty when activate is paths"));
@@ -305,9 +317,13 @@ fn parse_scoped(reply: &str, scope: &Scope) -> Result<Envelope, Vec<String>> {
     if !errs.is_empty() {
         return Err(errs);
     }
-    let env: Envelope = serde_json::from_value(v).map_err(|e| vec![format!("envelope: {e}")])?;
+    let mut env: Envelope = serde_json::from_value(v).map_err(|e| vec![format!("envelope: {e}")])?;
     meaning(&env, scope, &mut errs);
     if errs.is_empty() {
+        // A procedure with no activate is invoke; set it so the renderer does not write the rule default.
+        for r in env.runes.iter_mut().filter(|r| r.kind == "procedure" && r.activate.is_none()) {
+            r.activate = Some("invoke".into());
+        }
         Ok(env)
     } else {
         Err(errs)
@@ -474,6 +490,29 @@ mod tests {
         r.as_object_mut().unwrap().remove("paths");
         r["activate"] = "sometimes".into();
         assert!(errs(&reply(vec![r], one)).iter().any(|e| e == "runes[0].activate: `sometimes` is not always, recall or paths"));
+    }
+
+    #[test]
+    fn procedure_kind_defaults_to_invoke() {
+        let one = serde_json::json!([{ "heading": "A", "ids": ["a"] }]);
+        let mut p = rune("a", 3);
+        p["kind"] = "procedure".into();
+        let env = parse(&reply(vec![p.clone()], one.clone()), &inputs()).unwrap();
+        assert_eq!(env.runes[0].activate.as_deref(), Some("invoke"));
+        p["activate"] = "recall".into();
+        assert!(parse(&reply(vec![p.clone()], one.clone()), &inputs()).is_ok());
+        p["activate"] = "always".into();
+        assert!(errs(&reply(vec![p.clone()], one.clone())).iter().any(|e| e == "runes[0].activate: `always` is not invoke or recall for a procedure"));
+        // Rule and fact defaults are unchanged, and invoke is not theirs.
+        let mut r = rune("a", 3);
+        assert_eq!(parse(&reply(vec![r.clone()], one.clone()), &inputs()).unwrap().runes[0].activate, None);
+        r["kind"] = "fact".into();
+        assert_eq!(parse(&reply(vec![r.clone()], one.clone()), &inputs()).unwrap().runes[0].activate, None);
+        r["activate"] = "invoke".into();
+        assert!(errs(&reply(vec![r.clone()], one.clone())).iter().any(|e| e == "runes[0].activate: `invoke` is not always, recall or paths"));
+        r["kind"] = "widget".into();
+        r.as_object_mut().unwrap().remove("activate");
+        assert!(errs(&reply(vec![r], one)).iter().any(|e| e == "runes[0].kind: `widget` is not rule, fact or procedure"));
     }
 
     #[test]

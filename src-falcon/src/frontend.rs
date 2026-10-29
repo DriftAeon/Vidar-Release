@@ -1,4 +1,4 @@
-//! The Falcon shell's live frontend (plan 2c/§7, docs/runs/2026-10-04-rendered-cohesion).
+//! The Falcon shell's live frontend.
 //!
 //! `tools/release/falcon-frontend-stage.ps1` copies the built shell frontend into
 //! `<falcon>\frontend\<digest>\` with a `manifest.json` and points

@@ -32,10 +32,11 @@ use std::{
 };
 
 use crate::{
-    claude::{ClaudeDriver, Observed, PermissionState},
+    claude::ClaudeDriver,
     codex::CodexDriver,
     journal::{Body, Journal, JournalError, Snapshot},
     process::Child,
+    session::driver_props::{Observed, PermissionState},
     protocol::{Event, EventBody, Lease, LeaseRefusal, Outcome, SessionSummary},
 };
 
@@ -48,8 +49,13 @@ impl AgentDriver {
     pub fn claude(params: &crate::protocol::SpawnParams) -> Self {
         Self::Claude(ClaudeDriver::new(params))
     }
+    #[cfg(test)]
     pub fn codex(params: &crate::protocol::SpawnParams) -> Self {
         Self::Codex(CodexDriver::new(params))
+    }
+    /// A Codex driver carrying the admitted rune payload for its `thread/start`.
+    pub fn codex_with(params: &crate::protocol::SpawnParams, text: Option<String>) -> Self {
+        Self::Codex(CodexDriver::new(params).with_developer_instructions(text))
     }
     pub fn model(&self) -> Option<String> {
         match self {
@@ -98,7 +104,18 @@ impl AgentDriver {
     /// grace runs out. Hosted Codex denies after the grace without showing
     /// it (refresh doc, Q2).
     pub fn shows_shell_unattended(&self) -> bool {
-        matches!(self, Self::Claude(_))
+        match self {
+            Self::Claude(_) => true,
+            Self::Codex(_) => false,
+        }
+    }
+    /// Whether a resumed conversation replays its history through a barrier
+    /// (hosted Codex reads the thread back; Claude's child does not).
+    pub fn resumes_history(&self) -> bool {
+        match self {
+            Self::Claude(_) => false,
+            Self::Codex(_) => true,
+        }
     }
     /// Background tasks the agent is still running outside any turn. Codex
     /// reports none: its turns are the whole of its work.
@@ -261,13 +278,15 @@ impl AgentDriver {
         }
     }
     pub fn malformed(&self, line: &str) {
-        if let Self::Codex(d) = self {
-            d.malformed(line);
+        match self {
+            Self::Claude(_) => {}
+            Self::Codex(d) => d.malformed(line),
         }
     }
     pub fn stdout_closed(&self) {
-        if let Self::Codex(d) = self {
-            d.stdout_closed();
+        match self {
+            Self::Claude(_) => {}
+            Self::Codex(d) => d.stdout_closed(),
         }
     }
 }
@@ -1098,7 +1117,7 @@ pub fn new_session(
     journal: Journal,
 ) -> Arc<Session> {
     let journal_cursor = AtomicU64::new(journal.last_seq());
-    let resume_history = agent == "codex" && conversation.is_some();
+    let resume_history = driver.resumes_history() && conversation.is_some();
     // A new session starts uncontrolled at revision 0. The spawning client does not get the
     // lease implicitly: it asks, like everyone else, so there is exactly one code path that
     // issues a lease and exactly one journal record shape that records it.
@@ -1150,6 +1169,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|error| error.into_inner())
 }
 
+pub(crate) mod driver_props;
 mod dispatch;
 use dispatch::{PromptQueue, QueuedPrompt};
 mod hydrate;

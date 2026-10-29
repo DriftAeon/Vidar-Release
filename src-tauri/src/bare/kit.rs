@@ -1,6 +1,6 @@
-//! Kit stores each selected item as a rune and slots it in `sets/kit.md`.
+//! Kit stores each selected item as a rune and slots it in `sets/kit.md` (untagged) or `kit-claude.md` / `kit-codex.md`.
 //! New item templates are runes too, but start outside every set.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use super::guards::{self, BareGuard, BareCodexGuard};
 use super::set_layer::{self, SetLayerWrite};
+use crate::agent_spec::{self, Agent};
 use crate::rules::rune;
 
 const LIB: &str = "kit";
@@ -137,8 +138,28 @@ pub(crate) fn check_items(layer: &SetLayerWrite, home: Option<&Path>) -> (SetLay
     (clean, d)
 }
 
-fn kit_md(dir: &Path) -> PathBuf {
-    dir.join("sets").join("kit.md")
+/// The base Kit set (`""`) and its per-agent sets, split by each item's agent tag as the vault migration splits a sidecar.
+fn buckets() -> Vec<&'static str> {
+    std::iter::once("").chain(agent_spec::ALL.iter().map(|a| a.as_str())).collect()
+}
+
+/// The set an item with this agent tag slots into; `None` for a tag that names no agent (the caller skips the item).
+fn bucket_of(agent: Option<&str>) -> Option<&'static str> {
+    match agent {
+        None => Some(""),
+        Some(tag) => agent_spec::parse(tag).map(|a| match a {
+            Agent::Claude => Agent::Claude.as_str(),
+            Agent::Codex => Agent::Codex.as_str(),
+        }),
+    }
+}
+
+fn set_md(dir: &Path, bucket: &str) -> PathBuf {
+    dir.join("sets").join(if bucket.is_empty() { "kit.md".to_string() } else { format!("kit-{bucket}.md") })
+}
+
+fn set_head(bucket: &str) -> String {
+    if bucket.is_empty() { KIT_MD.to_string() } else { format!("---\nname: kit-{bucket}\nkind: set\nscope: [kit]\n---\n") }
 }
 
 /// A failed create can leave only an empty library or its empty sets folder.
@@ -152,12 +173,63 @@ fn header_value(value: &str) -> String {
     crate::rules::import::write::quote(value)
 }
 
-pub(super) fn item_text(scope: &str, kind: &str, id: &str, agent: Option<&str>, source: Option<&str>, guard: Option<&Value>) -> Result<String, String> {
+/// A frontmatter `description`, folded (`>`) or literal (`|`) blocks and wrapped lines flattened to one line.
+fn frontmatter_description(text: &str) -> Option<String> {
+    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text).replace("\r\n", "\n");
+    let mut lines = text.lines();
+    if lines.next()?.trim_end() != "---" { return None; }
+    let mut head = Vec::new();
+    let mut closed = false;
+    for l in lines {
+        if l.trim_end() == "---" { closed = true; break; }
+        head.push(l);
+    }
+    if !closed { return None; }
+    let at = head.iter().position(|l| l.starts_with("description:"))?;
+    let rest = head[at]["description:".len()..].trim();
+    let cont = head[at + 1..].iter().take_while(|l| l.trim().is_empty() || l.starts_with([' ', '\t'])).map(|l| l.trim()).filter(|l| !l.is_empty());
+    let block = rest.starts_with(['>', '|']) && rest.chars().all(|c| ">|+-0123456789".contains(c));
+    let mut parts: Vec<&str> = if block || rest.is_empty() { Vec::new() } else { vec![rest] };
+    parts.extend(cont);
+    unquote_flat(&parts.join(" "))
+}
+
+fn unquote_flat(joined: &str) -> Option<String> {
+    let s = joined.trim();
+    let s = if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
+        s[1..s.len() - 1].replace("\\\"", "\"").replace("\\\\", "\\")
+    } else if s.len() >= 2 && s.starts_with('\'') && s.ends_with('\'') {
+        s[1..s.len() - 1].replace("''", "'")
+    } else {
+        s.to_string()
+    };
+    let flat = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!flat.is_empty()).then_some(flat)
+}
+
+fn toml_description(text: &str) -> Option<String> {
+    let line = text.lines().map(str::trim).find_map(|l| l.strip_prefix("description").map(str::trim_start).and_then(|r| r.strip_prefix('=')))?;
+    unquote_flat(line)
+}
+
+/// The description a source file or folder (SKILL.md, agent .md or .toml) carries, if any.
+pub(super) fn source_description(source: &str, home: Option<&Path>) -> Option<String> {
+    let source = source.replace("{{root}}", &crate::paths::root().to_string_lossy());
+    let path = PathBuf::from(expanded(&source, home));
+    let file = if path.is_dir() { path.join("SKILL.md") } else { path };
+    let text = fs::read_to_string(&file).ok()?;
+    if file.extension().is_some_and(|e| e.eq_ignore_ascii_case("toml")) { toml_description(&text) } else { frontmatter_description(&text) }
+}
+
+pub(super) fn item_text(scope: &str, kind: &str, id: &str, agent: Option<&str>, source: Option<&str>, guard: Option<&Value>, home: Option<&Path>) -> Result<String, String> {
     if !rune::ITEM_KINDS.contains(&kind) { return Err("Unknown Kit item kind".into()); }
     rune::check_id(id).map_err(|_| "Invalid Kit item name".to_string())?;
     let mut text = format!("---\nname: {id}\nkind: {kind}\nscope: [{scope}]\n");
     if let Some(agent) = agent { text.push_str(&format!("agent: {agent}\n")); }
     if let Some(source) = source { text.push_str(&format!("source: {}\n", header_value(source))); }
+    if let Some(description) = source.and_then(|s| source_description(s, home)) {
+        text.push_str(&format!("description: {}\n", header_value(&description)));
+    }
     if let Some(guard) = guard {
         let event = guard.get("event").and_then(Value::as_str).ok_or("Hook has no event")?;
         text.push_str(&format!("event: {}\n", header_value(event)));
@@ -219,8 +291,8 @@ pub(super) fn guard_id(g: &Value) -> String {
 pub(super) fn collect_items(clean: &SetLayerWrite) -> Vec<(&'static str, String, Option<&'static str>, Option<&str>, Option<&Value>)> {
     let mut items = Vec::new();
     for (kind, agent, list) in [
-        ("skill", None, clean.skills.as_ref()), ("agent", Some("claude"), clean.agents.as_ref()),
-        ("skill", Some("codex"), clean.codex_skills.as_ref()), ("agent", Some("codex"), clean.codex_agents.as_ref()),
+        ("skill", None, clean.skills.as_ref()), ("agent", Some(Agent::Claude.as_str()), clean.agents.as_ref()),
+        ("skill", Some(Agent::Codex.as_str()), clean.codex_skills.as_ref()), ("agent", Some(Agent::Codex.as_str()), clean.codex_agents.as_ref()),
     ] {
         for source in list.into_iter().flatten() {
             let name = set_layer::name_of(source);
@@ -228,7 +300,7 @@ pub(super) fn collect_items(clean: &SetLayerWrite) -> Vec<(&'static str, String,
             items.push((kind, slug(name), agent, Some(source.as_str()), None));
         }
     }
-    for (agent, list) in [(Some("claude"), clean.guards.as_ref()), (Some("codex"), clean.codex_guards.as_ref())] {
+    for (agent, list) in [(Some(Agent::Claude.as_str()), clean.guards.as_ref()), (Some(Agent::Codex.as_str()), clean.codex_guards.as_ref())] {
         for guard in list.into_iter().flatten() {
             items.push(("hook", guard_id(guard), agent, None, Some(guard)));
         }
@@ -285,40 +357,61 @@ pub(crate) fn create_at(imports: &Path, layer: &SetLayerWrite, home: Option<&Pat
     create_with(imports, layer, home, &write_new)
 }
 
+/// Reserve an id only for a new item. A matching item left by an earlier Add Kit is reused.
+fn new_item(dir: &Path, used: &mut BTreeSet<String>, kind: &str, base: &str, make: impl Fn(&str) -> Result<String, String>) -> Result<(String, Option<String>), String> {
+    let sub = if kind == "mcp" { "mcp".to_string() } else { format!("{kind}s") };
+    for n in 1.. {
+        let id = if n == 1 { base.to_string() } else { format!("{base}-{n}") };
+        let text = make(&id)?;
+        if !used.contains(&id) {
+            used.insert(id.clone());
+            return Ok((id, Some(text)));
+        }
+        let path = dir.join(&sub).join(format!("{id}.md"));
+        let same = fs::read_to_string(path).ok().and_then(|old| rune::parse(&old).ok())
+            .zip(rune::parse(&text).ok()).is_some_and(|(old, new)| old.kind == new.kind && old.agent == new.agent && old.item == new.item);
+        if same { return Ok((id, None)); }
+    }
+    unreachable!()
+}
+
 fn create_with(imports: &Path, layer: &SetLayerWrite, home: Option<&Path>, write: Writer) -> Result<KitCreated, String> {
     fs::create_dir_all(imports).map_err(|e| format!("Rune imports unavailable: {e}"))?;
     let dir = imports.join(LIB);
     let made_dir = match fs::create_dir(&dir) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            if kit_md(&dir).is_file() {
-                return Ok(KitCreated { created: false, dropped: Vec::new() });
-            }
-            if !dir.is_dir() || !repairable(&dir) {
+            if !dir.is_dir() || !(buckets().iter().any(|b| set_md(&dir, b).is_file()) || repairable(&dir)) {
                 return Err("Library kit already exists without a kit set; Add Kit refused".into());
             }
             false
         }
         Err(e) => return Err(format!("Cannot create {}: {e}", dir.display())),
     };
+    // Sets this Kit already holds are never rewritten; an empty base (an Add Kit with nothing in it) is refilled.
+    let base_text = fs::read_to_string(set_md(&dir, "")).ok();
+    let refill = base_text.as_ref().filter(|t| !t.contains("<?rune ")).cloned();
+    let exists = buckets().iter().any(|b| set_md(&dir, b).is_file());
+    let have: BTreeSet<&str> = buckets().into_iter().filter(|b| set_md(&dir, b).is_file() && !(b.is_empty() && refill.is_some())).collect();
     let (clean, mut dropped) = check_items(layer, home);
     let mut plan = Vec::new();
-    let mut slots = Vec::new();
-    let mut used = BTreeSet::new();
+    let mut slots: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    let mut used = super::item_import::used_ids(&dir);
     for (kind, base, agent, source, guard) in collect_items(&clean) {
-        let mut id = base.clone();
-        let mut n = 2;
-        while !used.insert(id.clone()) {
-            id = format!("{base}-{n}");
-            n += 1;
-        }
-        match item_text(LIB, kind, &id, agent, source, guard) {
-            Ok(text) => {
-                let sub = format!("{}s", kind);
-                plan.push((dir.join(&sub).join(format!("{id}.md")), text));
-                slots.push(format!("<?rune {id}?>\n"));
+        let Some(bucket) = bucket_of(agent) else {
+            dropped.push(Dropped { id: format!("{kind}/{base}"), reason: format!("Agent tag {:?} is unknown; item skipped", agent.unwrap_or_default()) });
+            continue;
+        };
+        if have.contains(bucket) { continue; }
+        match new_item(&dir, &mut used, kind, &base, |id| item_text(LIB, kind, id, agent, source, guard, home)) {
+            Ok((id, text)) => {
+                if let Some(text) = text {
+                    let sub = format!("{}s", kind);
+                    plan.push((dir.join(&sub).join(format!("{id}.md")), text));
+                }
+                slots.entry(bucket).or_default().push(format!("<?rune {id}?>\n"));
             }
-            Err(reason) => dropped.push(Dropped { id: format!("{kind}/{id}"), reason }),
+            Err(reason) => dropped.push(Dropped { id: format!("{kind}/{base}"), reason }),
         }
     }
     if let Some(modules) = &clean.modules {
@@ -331,26 +424,41 @@ fn create_with(imports: &Path, layer: &SetLayerWrite, home: Option<&Path>, write
             for mcp in &bundle.mcp {
                 if tick.off.iter().any(|off| off == &format!("mcp:{}", mcp.name)) { continue; }
                 let base = slug(&format!("{module}-{}", mcp.name));
-                let mut id = base.clone();
-                let mut n = 2;
-                while !used.insert(id.clone()) { id = format!("{base}-{n}"); n += 1; }
+                if let Some(tag) = super::bundles::unknown_tag(mcp) {
+                    dropped.push(Dropped { id: format!("mcp/{base}"), reason: format!("Agent tag {tag:?} in module-bundles.json is unknown; server skipped") });
+                    continue;
+                }
                 let agent = (mcp.agents.len() == 1).then(|| mcp.agents[0].as_str());
-                match mcp_text(LIB, &id, module, &mcp.name, agent) {
-                    Ok(text) => { plan.push((dir.join("mcp").join(format!("{id}.md")), text)); slots.push(format!("<?rune {id}?>\n")); }
-                    Err(reason) => dropped.push(Dropped { id: format!("mcp/{id}"), reason }),
+                let Some(bucket) = bucket_of(agent) else { continue };
+                if have.contains(bucket) { continue; }
+                match new_item(&dir, &mut used, "mcp", &base, |id| mcp_text(LIB, id, module, &mcp.name, agent)) {
+                    Ok((id, text)) => {
+                        if let Some(text) = text { plan.push((dir.join("mcp").join(format!("{id}.md")), text)); }
+                        slots.entry(bucket).or_default().push(format!("<?rune {id}?>\n"));
+                    }
+                    Err(reason) => dropped.push(Dropped { id: format!("mcp/{base}"), reason }),
                 }
             }
             for item in module_items(bundle, tick) {
+                if have.contains("") { continue; }
                 let base = item.id;
-                let mut id = base.clone();
-                let mut n = 2;
-                while !used.insert(id.clone()) { id = format!("{base}-{n}"); n += 1; }
-                match item_text(LIB, item.kind, &id, None, item.source.as_deref(), item.guard.as_ref()) {
-                    Ok(text) => { plan.push((dir.join(format!("{}s", item.kind)).join(format!("{id}.md")), text)); slots.push(format!("<?rune {id}?>\n")); }
-                    Err(reason) => dropped.push(Dropped { id: format!("{}/{id}", item.kind), reason }),
+                match new_item(&dir, &mut used, item.kind, &base, |id| item_text(LIB, item.kind, id, None, item.source.as_deref(), item.guard.as_ref(), home)) {
+                    Ok((id, text)) => {
+                        if let Some(text) = text { plan.push((dir.join(format!("{}s", item.kind)).join(format!("{id}.md")), text)); }
+                        slots.entry("").or_default().push(format!("<?rune {id}?>\n"));
+                    }
+                    Err(reason) => dropped.push(Dropped { id: format!("{}/{base}", item.kind), reason }),
                 }
             }
         }
+    }
+    // A fresh Kit always gets its base set, even empty; later calls write only the sets they fill.
+    if !exists && slots.is_empty() {
+        slots.insert("", Vec::new());
+    }
+    if plan.is_empty() && slots.is_empty() {
+        if made_dir { let _ = fs::remove_dir_all(&dir); }
+        return Ok(KitCreated { created: false, dropped });
     }
     let mut made = Vec::new();
     let result = (|| {
@@ -360,13 +468,17 @@ fn create_with(imports: &Path, layer: &SetLayerWrite, home: Option<&Path>, write
             made.push(path.clone());
         }
         fs::create_dir_all(dir.join("sets")).map_err(|_| "Cannot create Kit set folder".to_string())?;
-        let md = kit_md(&dir);
-        write(&md, &format!("{KIT_MD}{}", slots.concat()))?;
-        made.push(md);
+        for (bucket, list) in &slots {
+            let md = set_md(&dir, bucket);
+            if bucket.is_empty() && refill.is_some() { let _ = fs::remove_file(&md); }
+            write(&md, &format!("{}{}", set_head(bucket), list.concat()))?;
+            made.push(md);
+        }
         Ok::<(), String>(())
     })();
     if let Err(e) = result {
         for path in made { let _ = fs::remove_file(path); }
+        if let Some(old) = &refill { let _ = fs::write(set_md(&dir, ""), old); }
         for sub in ["skills", "agents", "hooks", "mcp", "sets"] { let _ = fs::remove_dir(dir.join(sub)); }
         if made_dir {
             let _ = fs::remove_dir_all(&dir);
@@ -391,9 +503,9 @@ pub(super) fn library_dir(imports: &Path, library: &str) -> Result<PathBuf, Stri
 
 pub(crate) fn item_create_at(imports: &Path, library: &str, agent: &str, kind: &str, name: &str, _home: Option<&Path>) -> Result<LibraryFile, String> {
     rune::check_id(name).map_err(|_| format!("Invalid Name `{name}`: lowercase letters, digits and single hyphens"))?;
-    if !matches!(agent, "claude" | "codex") {
+    let Some(parsed) = agent_spec::parse(agent) else {
         return Err(format!("Agent {agent:?} is not claude or codex"));
-    }
+    };
     let dir = library_dir(imports, library)?;
     let file = match kind {
         "skill" => dir.join("skills").join(format!("{name}.md")),
@@ -409,10 +521,15 @@ pub(crate) fn item_create_at(imports: &Path, library: &str, agent: &str, kind: &
     }
     let parent = file.parent().ok_or("Template has no folder")?;
     fs::create_dir_all(parent).map_err(|_| "Cannot create item rune folder".to_string())?;
-    let agent_key = (agent == "codex" || kind == "agent").then_some(agent);
+    // Claude skills and hooks sit in the untagged base; every Codex item and every agent template is tagged.
+    let tagged = match parsed {
+        Agent::Claude => kind == "agent",
+        Agent::Codex => true,
+    };
+    let agent_key = tagged.then_some(parsed.as_str());
     let mut text = match kind {
-        "hook" => item_text(LIB, kind, name, agent_key, None, Some(&serde_json::json!({"event":"PreToolUse", "run": ["{{root}}/replace-with-hook.mjs"]})))?,
-        _ => item_text(LIB, kind, name, agent_key, Some("{{root}}/replace-with-item-path"), None)?,
+        "hook" => item_text(LIB, kind, name, agent_key, None, Some(&serde_json::json!({"event":"PreToolUse", "run": ["{{root}}/replace-with-hook.mjs"]})), None)?,
+        _ => item_text(LIB, kind, name, agent_key, Some("{{root}}/replace-with-item-path"), None, None)?,
     };
     text.push_str("\nDescribe this item here.\n");
     let mut out = match OpenOptions::new().write(true).create_new(true).open(&file) {

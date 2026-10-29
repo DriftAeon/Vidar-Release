@@ -405,8 +405,14 @@ pub(super) const VIDAR_CLIENT: &str = "vidar";
 /// `last_holder` is set at lease acquisition and survives the release; read
 /// through `summary()` because `session.rs` sits at its module-size line.
 fn vidar_held(session: &Session) -> bool {
-    session.agent == Agent::Claude.as_str()
-        && session.summary().last_holder.as_deref() == Some(VIDAR_CLIENT)
+    let Some(agent) = Agent::from_wire(&session.agent) else {
+        return false;
+    };
+    let tracks_last_holder = match agent {
+        Agent::Claude => true,
+        Agent::Codex => false,
+    };
+    tracks_last_holder &&session.summary().last_holder.as_deref() == Some(VIDAR_CLIENT)
 }
 
 /// A jettison handoff older than this is ignored by the shell too

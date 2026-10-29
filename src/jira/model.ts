@@ -1,3 +1,6 @@
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { label } from "../format.ts";
+
 export const ISSUE_KEYS = ["key", "summary", "status", "statusCategory", "type", "priority", "updated", "url", "typeLevel", "parent"] as const;
 
 export interface Issue {
@@ -32,7 +35,7 @@ export const MAX_TEXT = 200;
 export type Assignee = Filters["assignee"];
 export type FilterState = Filters;
 
-/** Status categories by id (plan D6): the ids do not depend on the site's language. */
+/** Status categories by id: the ids do not depend on the site's language. */
 export const CATEGORIES: [number, string][] = [[2, "To Do"], [4, "In Progress"], [3, "Done"]];
 export const ASSIGNEES: [Assignee, string][] = [["any", "Anyone"], ["me", "Me"], ["none", "Unassigned"]];
 
@@ -116,7 +119,7 @@ export function statusLabel(raw: string): string {
     .map((w, i) => {
       if (/\p{Lu}/u.test(w)) return w;
       if (i > 0 && SMALL_WORDS.has(w)) return w;
-      return w.charAt(0).toUpperCase() + w.slice(1);
+      return label(w);
     })
     .join(" ");
 }

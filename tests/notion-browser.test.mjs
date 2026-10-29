@@ -1,4 +1,4 @@
-// Notion paging and adapter (src/notion/fetch.ts, adapter.ts; plan D1, § Adapter rules): the four paging stops,
+// Notion paging and adapter (src/notion/fetch.ts, adapter.ts): the four paging stops,
 // propsRefused, the generation drop, the stale stamp after the last page, the two-call card load and its
 // cache, the send text, http(s)-only links, and drill-in on data sources only.
 import test from "node:test";

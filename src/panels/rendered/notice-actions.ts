@@ -7,7 +7,9 @@ import { invoke } from "../../ipc";
 import { lucide } from "../../icons";
 import { el } from "./dom";
 import { FIX_UNAVAILABLE, fixAvailable, requestFix } from "./fix-seam";
+import { AGENTS } from "../../agents/descriptor";
 import type { AgentId } from "../../agents/id";
+import { notCarriedLine } from "../../runes/not-carried";
 
 /** What `codex_trust_offer` returns for a tab whose launch folder the user's Codex config does not trust. */
 export interface TrustOffer {
@@ -101,7 +103,7 @@ function askButton(host: NoticeHost, warning: string, folder: string, error: (me
     ASK_LABEL,
     "Opening",
     false,
-    () => requestFix({ agentLabel: host.agent === "codex" ? "Codex" : "Claude", folder, warning }),
+    () => requestFix({ agentLabel: AGENTS[host.agent].name, folder, warning }),
     error,
     ASK_FALLBACK,
   );
@@ -151,7 +153,7 @@ export function trustCard(tabId: string, trust: TrustOffer, reopen?: TrustReopen
   return c.root;
 }
 
-export const VIDAR_CARD_TEXT = "Codex can't run in Vidar's Folder";
+export const VIDAR_CARD_TEXT = "Codex Needs a Non-Vidar Root Workspace";
 export const WORKTREE_LABEL = "Open in Worktree";
 export const WORKTREE_TITLE = "Makes a git worktree of Vidar at HEAD under runtime\\worktrees and opens Codex there; uncommitted changes stay here.";
 const WORKTREE_FAILED = "Couldn't open a worktree: ";
@@ -184,6 +186,7 @@ export function bareNotices(host: NoticeHost, warnings: readonly string[], trust
   }
   for (const w of warnings) {
     const c = card(w);
+    c.text.replaceChildren(...notCarriedLine(w));
     c.acts.appendChild(askButton(host, w, host.cwd, c.error));
     host.append(c.root);
   }

@@ -8,14 +8,13 @@ import type { AgentEvent } from "./protocol";
 import type { CodexProgress } from "./codex-progress";
 import { codexStructured } from "./codex-diff";
 import { asyncAskEvents, asyncAskQuestions } from "./codex-async-ask";
-import { pretty } from "../format";
+import { label, pretty } from "../format";
 
 type Json = Record<string, unknown>;
 
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-const titleWord = (s: string): string => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 /** milliseconds as a short duration: 900ms, 5s, 1.5s, 2m 5s */
 export function shortDuration(ms: number): string {
@@ -55,7 +54,7 @@ function pill(item: Json): { name: string; input: Json } | null {
     case "sleep":
       return { name: "Sleep", input: { duration: shortDuration(typeof item.durationMs === "number" ? item.durationMs : NaN) } };
     case "subAgentActivity":
-      return { name: "Subagent", input: { agent: str(item.agentPath), thread: str(item.agentThreadId), status: titleWord(str(item.kind)) } };
+      return { name: "Subagent", input: { agent: str(item.agentPath), thread: str(item.agentThreadId), status: label(str(item.kind)) } };
     case "functionCallOutput":
       return { name: toolName(item.namespace, str(item.name) || "function"), input: {} };
     default:

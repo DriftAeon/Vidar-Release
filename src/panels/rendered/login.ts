@@ -6,12 +6,12 @@
 // this under Node type stripping.
 
 /** How a logged-out tab gets back in: the Login Card, or (no card) a gateway's key, a new tab where
- *  respawn is refused, or a login outside Vidar. Each agent's profile words the tip (agent-profile.ts
+ *  respawn is refused, or a login outside Vidar. Each agent's profile words the tip (agents/agent-profile.ts
  *  `loginTip`); an agent with one tip ignores it. */
 export type LoginReach = "card" | "gateway" | "refused" | "outside";
 
 /** True for the CLI's reply when it has no credentials: the whole diagnostic at the start, so model
- *  prose that opens with "Not logged in" or quotes it mid-sentence does not count (review 89e6032a). */
+ *  prose that opens with "Not logged in" or quotes it mid-sentence does not count. */
 export function saysNotLoggedIn(text: string): boolean {
   return /^\s*not logged in\s*·\s*please run \/login/i.test(text);
 }
@@ -36,7 +36,7 @@ export interface LoginDeps {
   claude: boolean;
   /** The tab's way back in (claude-login.ts `reach`); unset reads as "card". Picks the tip's wording. */
   reach?: () => LoginReach;
-  /** The agent profile's tip wording (agent-profile.ts `loginTip`). */
+  /** The agent profile's tip wording (agents/agent-profile.ts `loginTip`). */
   tip: (reach: LoginReach) => string;
   /** `true`/`false` from `claude auth status`; `null` when unknown (no claude, odd output, no host command). */
   check: () => Promise<boolean | null>;

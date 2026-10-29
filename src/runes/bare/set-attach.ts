@@ -1,6 +1,7 @@
 // Local item ticks for a vault's copied runeset. Import writes library runes; member edits change only the vault.
 import type { SetSource, VaultOp } from "../../ipc";
 import { setHead } from "../set-card";
+import { KIND_ICON } from "../kind-icons";
 import { btn, el } from "./agent-view";
 import { itemRuneInputs } from "./kit-add";
 import { memberOp } from "./view-vault";
@@ -37,9 +38,8 @@ export function setAttachments(c: SetAttachCtx): HTMLElement[] {
   const files = (c.sources?.files ?? []).filter((f) =>
     f.pickable && (f.kind === "skill" || f.kind === "agent" || f.kind === "hook"));
   const out: HTMLElement[] = [];
-  for (const [kind, name, icon] of [
-    ["skill", "Skills", "skill"], ["agent", "Agents", "agent"], ["hook", "Hooks", "hook"],
-  ] as const) {
+  for (const [kind, name] of [["skill", "Skills"], ["agent", "Agents"], ["hook", "Hooks"]] as const) {
+    const icon = KIND_ICON[kind];
     const offered = files.filter((f) => f.kind === kind);
     if (!offered.length) continue;
     const group = el("details", `runes-set hue-${kind}`);

@@ -61,7 +61,7 @@ export function createCommandCabinet(S: RenderedState, deps: CabinetDeps) {
   function place(p: HTMLElement) {
     const r = button.getBoundingClientRect();
     const barTop = (button.closest<HTMLElement>(".rendered-status") ?? button).getBoundingClientRect().top;
-    const left = Math.max(8, Math.min(r.right - p.offsetWidth, window.innerWidth - p.offsetWidth - 8));
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - p.offsetWidth - 8));
     p.style.left = `${left}px`;
     p.style.maxHeight = `${Math.max(120, Math.min(barTop - 16, CABINET_MAX_H))}px`;
     p.style.top = `${Math.max(8, barTop - p.offsetHeight - 4)}px`;

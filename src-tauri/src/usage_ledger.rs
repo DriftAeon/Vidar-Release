@@ -122,10 +122,16 @@ pub fn from_claude_result(result: &Value, source: &'static str, transcript: bool
 /// no cost). `None` when the output carries no usage object.
 pub fn from_rune_gen(agent: &str, stdout: &[u8], model: &str) -> Option<Entry> {
     let out = String::from_utf8_lossy(stdout);
-    if agent == "claude" {
-        let json: Value = serde_json::from_str(out.trim()).ok().filter(Value::is_object)?;
-        return Some(from_claude_result(&json, "rune-gen", false, Some(model)));
+    match crate::agent_spec::parse(agent)? {
+        crate::agent_spec::Agent::Claude => {
+            let json: Value = serde_json::from_str(out.trim()).ok().filter(Value::is_object)?;
+            Some(from_claude_result(&json, "rune-gen", false, Some(model)))
+        }
+        crate::agent_spec::Agent::Codex => codex_rune_gen(&out, model),
     }
+}
+
+fn codex_rune_gen(out: &str, model: &str) -> Option<Entry> {
     let usage = out
         .lines()
         .map(str::trim)

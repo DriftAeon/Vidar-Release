@@ -1,10 +1,10 @@
-// Loaded-of-total counts, the Always/Paths/Recall order and the token label of the Bare Runes view.
+// Loaded-of-total counts, the Always/Paths/Recall order of the Bare Runes view.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
-const { isLoaded, loadedOfTotal, orderByLoad, tokenLabel } = await import("../src/runes/bare/loaded-count.ts");
+const { isLoaded, loadedOfTotal, orderByLoad } = await import("../src/runes/bare/loaded-count.ts");
 
 const r = (id, activate, section = ["Cat"]) => ({ id, activate, section, path: `C:/r/rules/${id}.md` });
 
@@ -23,8 +23,4 @@ test("order is always, paths, recall, alphabetical, per category", () => {
   ];
   const out = orderByLoad(bricks, (i) => i === 5);
   assert.deepEqual(out.map((b) => b.id), ["gamma", "zeta", "alpha", "beta", "delta", "mid", "omega"]);
-});
-
-test("token label is loaded over total with separators and no tilde", () => {
-  assert.equal(tokenLabel(8691, 13458), "8,691/13,458 Tokens");
 });

@@ -25,8 +25,8 @@ pub fn resolve_for(root: &Path, local_app_data: &Path) -> PathBuf {
 /// The shared login store's folder name beside the homes; a 16-hex root key never collides.
 pub const SHARED: &str = "_shared";
 
-/// `<local app data>\Vidar\homes\_shared`, the one login store for every home beside `home`
-/// (Bare slice 2 A-D1, A-D5). `Some` only when `home`'s parent is a `…\Vidar\homes` folder, so a
+/// `<local app data>\Vidar\homes\_shared`, the one login store for every home beside `home`.
+/// `Some` only when `home`'s parent is a `…\Vidar\homes` folder, so a
 /// test home anywhere else never shares, and a sandbox's own LOCALAPPDATA gets its own store.
 #[cfg_attr(falcon_shell, allow(dead_code))]
 pub fn shared_for(home: &Path) -> Option<PathBuf> {

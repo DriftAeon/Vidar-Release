@@ -13,11 +13,10 @@ use super::{
     AgentRuntime, Host,
 };
 use crate::{
-    claude::Observed,
     journal::{Body, Journal},
     process::{self, ChildOutput},
     protocol::{Agent, EventBody, SessionSummary},
-    session::{self, AgentDriver, Session},
+    session::{self, driver_props::Observed, AgentDriver, Session},
 };
 
 /// A spawned session's summary, plus what a Codex Bare spawn ran (its reply's `codex_bare`).
@@ -31,8 +30,11 @@ pub(super) fn spawn_session(
     agent: Agent,
     params: crate::protocol::SpawnParams,
 ) -> Result<Spawned, String> {
-    if params.gateway.is_some() && agent != Agent::Claude {
-        return Err("gateway requires Claude".into());
+    if params.gateway.is_some() {
+        match agent {
+            Agent::Claude => {}
+            Agent::Codex => return Err("gateway requires Claude".into()),
+        }
     }
     // Reserve before anything runs: the reservation is what makes a duplicate
     // resume fail closed, and it releases itself if this function fails.
@@ -64,7 +66,7 @@ pub(super) fn spawn_session(
         Agent::Claude => AgentDriver::claude(&params),
         Agent::Codex => {
             let text = codex_bare.as_mut().and_then(|b| b.developer_instructions.take());
-            AgentDriver::codex(&params).with_developer_instructions(text)
+            AgentDriver::codex_with(&params, text)
         }
     };
 
@@ -98,7 +100,11 @@ pub(super) fn spawn_session(
     if let Some(sets) = params.sets.as_ref() {
         let _ = session.sets.set(sets.clone());
     }
-    if agent == Agent::Codex {
+    let hosts_app_server = match agent {
+        Agent::Claude => false,
+        Agent::Codex => true,
+    };
+    if hosts_app_server {
         // `CodexRuntime::spawn_request` admitted the profile and built this child's env from it:
         // the echo is Vidar's proof (an older host refuses the profile), the names its manifest,
         // the payload path the admitted canonical one, never the client's string.
@@ -217,7 +223,11 @@ pub(super) fn spawn_session(
 fn start_readers(host: &Arc<Host>, session: Arc<Session>, output: ChildOutput) {
     let ChildOutput { stdout, stderr } = output;
 
-    if matches!(&session.driver, AgentDriver::Codex(driver) if !driver.history_done()) {
+    let history_pending = match &session.driver {
+        AgentDriver::Claude(_) => false,
+        AgentDriver::Codex(driver) => !driver.history_done(),
+    };
+    if history_pending {
         let waiting = Arc::clone(&session);
         let _ = std::thread::Builder::new()
             .name(format!("falcon-history-{}", session.id))
@@ -287,8 +297,8 @@ fn start_readers(host: &Arc<Host>, session: Arc<Session>, output: ChildOutput) {
                     // Hosted Codex hands over only the cards that moved: its
                     // settled cards accumulate over a long session.
                     let states = match &session.driver {
+                        AgentDriver::Claude(_) => session.driver.permission_states(),
                         AgentDriver::Codex(driver) => driver.permission_changes(),
-                        driver => driver.permission_states(),
                     };
                     for (request, state) in states {
                         // The journal stores the state as its wire string, so

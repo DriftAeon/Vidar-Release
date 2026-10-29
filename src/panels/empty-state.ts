@@ -1,4 +1,4 @@
-// The shared empty state (centred stack, user pick 2026-10-21): icon, title, optional note and path, then
+// The shared empty state (centred stack): icon, title, optional note and path, then
 // actions, then an optional alert line. Not Connected (Jira, Slack, Notion) and Not a Git Repository
 // (Changes) draw through it; the CSS is src/styles/empty-state.css. Remote or runtime text goes in through
 // textContent or title only.
@@ -56,7 +56,7 @@ export function goButton(label: string, run: () => void): HTMLButtonElement {
 /** Hide as an icon-only Sheen button; the tooltip names it. */
 export function hideButton(run: () => void): HTMLButtonElement {
   const b = button("ws-btn cx-ico es-ico", run); // copy-ok: class names, not copy
-  b.title = "Hide"; // copy-ok: single-word tooltip, user pick 2026-10-21
+  b.title = "Hide"; // copy-ok: single-word tooltip
   b.setAttribute("aria-label", "Hide");
   b.append(lucide("eye-off"));
   return b;

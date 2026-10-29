@@ -35,9 +35,9 @@
    The cap leaves a --row-32 for the bottom bar (30px) below. Surface look = .rail-surface. */
 #tool-options {
   position: fixed; z-index: 80;
-  top: var(--space-8); right: var(--rail-stripe-w); /* layout.css */
+  top: calc(var(--caption-h, 0px) + var(--space-8)); right: var(--rail-stripe-w); /* layout.css; fixed is viewport-relative, so clear the caption row and DWM's buttons */
   box-sizing: border-box; width: calc(var(--space-32) * 7 + var(--space-16)); /* 240px */
-  max-height: calc(100vh - var(--space-8) - var(--row-32) - var(--space-8));
+  max-height: calc(100vh - var(--caption-h, 0px) - var(--space-8) - var(--row-32) - var(--space-8));
   overflow-y: auto; scrollbar-width: thin;
   padding: var(--space-8);
   display: flex; flex-direction: column;

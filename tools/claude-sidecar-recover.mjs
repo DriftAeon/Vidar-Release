@@ -1,6 +1,6 @@
 // claude-sidecar-recover.mjs: the interrupt window, recovery and resume replay for claude-sidecar.mjs. An interrupt
-// that lands while the CLI waits on a permission can make the SDK throw out of the stream
-// (docs/explore/2026-10-16-jettison-cards.md); a throw inside the window ends the turn and the
+// that lands while the CLI waits on a permission can make the SDK throw out of the stream;
+// a throw inside the window ends the turn and the
 // sidecar rebuilds the query on the same session instead of failing.
 // Imported by claude-sidecar.mjs and bundled beside it (Falcon bundle sidecar\, friend zip tools\).
 //

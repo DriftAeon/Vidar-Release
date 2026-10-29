@@ -1,5 +1,5 @@
-//! src-tauri\src\rules\generate\commands.rs — the `rules_generate*` IPC commands (docs/runs/2026-10-17-rune-generator
-//! `ipc.md`; TS shapes `RulesGenerate*` in `src/ipc.ts`).
+//! src-tauri\src\rules\generate\commands.rs — the `rules_generate*` IPC commands (TS shapes
+//! `RulesGenerate*` in `src/ipc.ts`).
 //! - `rules_generate`: one run, bound to no launcher row (model R5). Reads the ticked files, splits them into chunks
 //!   (`chunk.rs`), builds the generator home (`home.rs`) and runs the tab's agent once per chunk, up to `pipeline::CAP`
 //!   at a time, each call in its own call home under its own Job (`run.rs`, `pipeline.rs`). More than one chunk then
@@ -8,7 +8,8 @@
 //!   (`prepare_envelope`: render, validate) and lands as the library `gen-<runId>` with the set
 //!   `generated-<yyyymmdd>` (`land.rs`); nothing else is written. Progress goes out as
 //!   `rules-generate-progress` events (`progress.rs`). Errors are strings with one prefix:
-//!   `cancelled | timeout | stale: | login: | spawn: | output: | invalid: | busy:`.
+//!   `cancelled | timeout | stale: | login: | spawn: | output: | invalid: | busy: | budget:`.
+//!   `budget:` is a run over `MAX_CHUNKS` chunks (refused before any call) or over `RUN_TOKEN_CAP` tokens (halts the rest).
 //! - `rules_generate_cancel {runId}`: ends every Job of the run while it has not reached commit; a no-op after.
 //! One run at a time app-wide (`busy:`), because two would share the one generator home and the agent's meter.
 //! Cancel and commit meet at one mutex: the commit step flips `committing` under it, and a cancel after that is
@@ -17,6 +18,7 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -34,6 +36,7 @@ use super::render::Meta;
 use super::run::{self, Raw, Spec};
 use super::validate::PayloadCtx;
 use super::{chunk, chunk_text, home, merge, payload, prepare_envelope, Input, Span};
+use crate::agent_spec::Agent;
 use crate::bare::home::Guard;
 use crate::job::Job;
 use crate::rules::import::local::LocalFile;
@@ -280,7 +283,7 @@ fn plan_event(chunks: &[Vec<Span>]) -> ProgressEvent {
                     let n = of(&s.path);
                     let k = seen.iter().filter(|(p, _)| *p == s.path).count() + 1;
                     seen.push((s.path.as_str(), k));
-                    PlanFile { path: s.path.clone(), part: (n > 1).then_some(Part { k, of: n }) }
+                    PlanFile::new(s.path.clone(), (n > 1).then_some(Part { k, of: n }))
                 })
                 .collect(),
         })
@@ -296,9 +299,7 @@ fn check_request(r: &Request) -> Result<(), String> {
     if r.run_id.len() != 8 || !r.run_id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         return Err(format!("invalid: run id `{}` is not 8 lowercase hex", r.run_id));
     }
-    if r.agent != "claude" && r.agent != "codex" {
-        return Err(format!("invalid: agent `{}` is not claude or codex", r.agent));
-    }
+    home::agent_of(&r.agent)?;
     // Both go into an argument (Codex inside a quoted `-c` value): no quote, space or control character.
     if !plain(&r.model, "[]:") {
         return Err(format!("invalid: model `{}` is not a plain model name", r.model));
@@ -336,12 +337,24 @@ fn collect_inputs(home: Option<&Path>, paths: &[String]) -> Result<Vec<Input>, S
 
 /// Keeps an error that already carries a prefix; anything else from the landing code is `invalid:`.
 fn prefixed(e: String) -> String {
-    const KNOWN: [&str; 8] = ["cancelled", "timeout", "stale:", "login:", "spawn:", "output:", "invalid:", "busy:"];
+    const KNOWN: [&str; 9] = ["cancelled", "timeout", "stale:", "login:", "spawn:", "output:", "invalid:", "busy:", "budget:"];
     if KNOWN.iter().any(|k| e.starts_with(k)) {
         e
     } else {
         format!("invalid: {e}")
     }
+}
+
+/// Most chunks one run may split into: 3x the 13 chunk calls of the largest run in `usage-ledger.jsonl`
+/// (14 rune-gen calls, merge included), 2026-10-28.
+pub const MAX_CHUNKS: usize = 42;
+/// Most tokens (ledger input with the cache read taken out, plus output) one run may spend over every call, retries
+/// and merge included: 3x the largest run in the ledger (232,243 tokens, calls grouped by gaps under 10 min), rounded up.
+pub const RUN_TOKEN_CAP: u64 = 700_000;
+
+/// `Some(error)` once `spent` tokens pass `cap`.
+fn over_budget(spent: u64, cap: u64) -> Option<String> {
+    (spent > cap).then(|| format!("budget: {spent} over the {cap} cap"))
 }
 
 /// The merge call's effort when the request names none (older callers). Rust has no model catalog, so the
@@ -440,7 +453,11 @@ fn agent_runes(
 
     let spans = chunk::split(&inputs, chunk::CHUNK_CHARS);
     let n = spans.len();
-    let base_env = run::child_env(ctx.parent_env.iter().cloned(), &req.agent, &run_home.dir);
+    if n > MAX_CHUNKS {
+        return Err(format!("budget: {n} chunks over the {MAX_CHUNKS} cap"));
+    }
+    let spent = AtomicU64::new(0);
+    let base_env = run::child_env(ctx.parent_env.iter().cloned(), run_home.agent, &run_home.dir);
     let (program, lead_args) = (rt.exe)(&req.agent, ctx.root, &base_env)?;
     let totals = Mutex::new(Totals::default());
     let say = |event: ProgressEvent| emit(Event { run_id: req.run_id.clone(), event });
@@ -452,21 +469,24 @@ fn agent_runes(
         }
         let gen_home = home::call(&run_home, name)?;
         home::assert_clean(&gen_home)?;
-        let env = run::child_env(ctx.parent_env.iter().cloned(), &req.agent, &gen_home.dir);
+        let env = run::child_env(ctx.parent_env.iter().cloned(), run_home.agent, &gen_home.dir);
         let (system_path, system_text) = if merge {
             (run_home.merge_skill.as_ref().ok_or("spawn: generator home holds no merge skill copy")?, merge_text.as_str())
         } else {
             (&run_home.skill, skill_text.as_str())
         };
         let mut args = lead_args.clone();
-        let stdin = if req.agent == "claude" {
-            args.extend(run::claude_argv(&req.model, effort, system_path));
-            input
-        } else {
-            args.extend(run::codex_argv(&req.model, effort, &gen_home.cwd));
-            format!("{system_text}\n\n---\n{input}")
+        let stdin = match run_home.agent {
+            Agent::Claude => {
+                args.extend(run::claude_argv(&req.model, effort, system_path));
+                input
+            }
+            Agent::Codex => {
+                args.extend(run::codex_argv(&req.model, effort, &gen_home.cwd));
+                format!("{system_text}\n\n---\n{input}")
+            }
         };
-        let spec = Spec { program: program.clone(), args, env, cwd: gen_home.cwd.clone(), config: Some(gen_home.config.clone()), stdin };
+        let spec = Spec { program: program.clone(), args, env, cwd: gen_home.cwd.clone(), agent: run_home.agent, config: Some(gen_home.config.clone()), stdin };
         let job = Arc::new(Job::new().map_err(|e| format!("spawn: job object not made ({e})"))?);
         slot.register(job.clone())?;
         let ran = (rt.run)(&spec, &job, timeout, &|| slot.stopped());
@@ -479,6 +499,13 @@ fn agent_runes(
         // Logged before classification: a reply that reported an error still spent the tokens.
         if let Some(entry) = crate::usage_ledger::from_rune_gen(&req.agent, &raw.stdout, &req.model) {
             crate::usage_ledger::append(ctx.ledger, &entry);
+            // The same unit as the cap: input without the cache read, plus output.
+            let used = entry.input + entry.output;
+            let total = spent.fetch_add(used, Ordering::SeqCst) + used;
+            if let Some(e) = over_budget(total, RUN_TOKEN_CAP) {
+                // The failure halts the rest: `pipeline::run` records it, then calls `slot.halt`.
+                return Err(e);
+            }
         }
         let reply = run::classify(&req.agent, &raw)?;
         totals.lock().unwrap_or_else(|e| e.into_inner()).add(&reply);
@@ -639,3 +666,7 @@ pub fn rules_generate_cancel(run_id: String) {
 #[cfg(test)]
 #[path = "commands_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "agent_refusal_tests.rs"]
+mod agent_refusal_tests;

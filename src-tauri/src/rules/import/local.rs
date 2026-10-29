@@ -1,5 +1,5 @@
 //! src-tauri\src\rules\import\local.rs — `bare_local_sources {cwd}`: the local files the Bare Runes tab offers
-//! (docs/runs/2026-10-17-bare-runes-flow plan § Design, fold 6-8; TS `BareLocalSources` in `src/ipc.ts`).
+//! (TS `BareLocalSources` in `src/ipc.ts`).
 //! Read-only: nothing here writes. Kinds, in this order:
 //! - rules: `sources::list` (the user and cwd CLAUDE.md / AGENTS.md), then `~\.claude\rules\*.md` and
 //!   `<cwd>\.claude\rules\*.md`; a file whose front matter holds `paths:` starts unticked (`pathScoped`).

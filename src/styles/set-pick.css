@@ -1,4 +1,4 @@
-/* Rune-set pick (run 2026-10-24-runesets-full-stack W4, mock variants A2 and the Workspaces piece).
+/* Rune-set pick.
    Launcher: the Runes icon on a Bare body row opens .sp-inline under it; Settings > Workspaces: the same
    .sp-row ticks in a .ch-det list. Ticked rows read at full strength, unticked rows dim. */
 .sp-row {

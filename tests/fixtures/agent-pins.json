@@ -1,0 +1,91 @@
+{
+  "$schema": 1,
+  "pins": [
+    {
+      "file": "src-tauri/src/bare/env.rs",
+      "anchor": "codex: . get ( \"CODEX_HOME\" ) . map",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ( \"claude-bare\" , \"claude\" , \"raw\" )",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ( \"claude-rendered-bare\" , \"claude\" , \"rendered\" )",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ( \"codex-bare\" , \"codex\" , \"raw\" )",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ( \"codex-rendered-bare\" , \"codex\" , \"rendered\" )",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ) , ( \"claude-bare\" , \"claude\" ,",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ) , ( \"codex-bare\" , \"codex\" ,",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: ) , ( \"codex-rendered-bare\" , \"codex\" ,",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src-tauri/src/bare/vault/migrate.rs",
+      "anchor": "BUILTIN: & [ ( \"claude-rendered-bare\" , \"claude\" ,",
+      "n": 1,
+      "why": "history-data",
+      "test": "live_shape_migrates_into_expected_vaults"
+    },
+    {
+      "file": "src/falcon.ts",
+      "anchor": "next: . rules_file , codex : null ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/launcher/hosted.ts",
+      "anchor": "rulesFromHost: { file , codex : null ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/launcher/locations.ts",
+      "anchor": "codexRefusesHome: ? invoke ( \"codex_cwd_refused\" , { cwd",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/launcher/readopt.ts",
+      "anchor": "readHostedCodexGate: } ) . hostedCodex === true ;",
+      "n": 1,
+      "why": "wire-name"
+    }
+  ]
+}

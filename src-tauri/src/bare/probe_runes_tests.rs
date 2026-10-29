@@ -4,9 +4,9 @@
 //! library. Claude runs `claude -p` on the `prepare` line; Codex runs `codex exec` (`Surface::Exec`,
 //! profile `execArgs`) on the `codex-bare` row admitted from the temp vidar.json. The runner, not
 //! these tests, judges the turn: each writes what it saw (reply, payload, transcript or rollout,
-//! `runeReads`) to VIDAR_PROBE_OUT. Run 2026-10-25-runes-batch, probe lane.
+//! `runeReads`) to VIDAR_PROBE_OUT.
 //!
-//! VIDAR_PROBE_CASE (Claude test; run 2026-10-25-runes-batch, eval lane W2a) names a pinned eval case
+//! VIDAR_PROBE_CASE (both arms) names a pinned eval case
 //! JSON: its runes are slotted with the target's `activate:` rewritten per arm, its scaffold is written
 //! into the scratch cwd, VIDAR_ROOT points at the scratch dir, and the result adds `arm`, `model`,
 //! `timedOut`, `stdout`, `stderr` and `cwdFiles`. Without it the probe runs as before.
@@ -119,6 +119,46 @@ fn refuse(out_json: &Path, why: &str) -> ! {
     panic!("probe case refused: {why}");
 }
 
+fn probe_case(out_json: &Path) -> Option<Case> {
+    match load_case() {
+        None => None,
+        Some(Ok(c)) => Some(c),
+        Some(Err(e)) => refuse(out_json, &e),
+    }
+}
+
+fn case_fixture(row: &str, case: Option<&Case>, out_json: &Path) -> (PathBuf, PathBuf, PathBuf, Vec<String>) {
+    let (scratch, cwd, config, slotted) = match fixture(row, case) {
+        Ok(f) => f,
+        Err(e) if case.is_some() => refuse(out_json, &e),
+        Err(e) => panic!("{e}"),
+    };
+    if let Some(c) = case {
+        if let Err(e) = write_scaffold(&cwd, &c.scaffold.files) {
+            refuse(out_json, &e);
+        }
+    }
+    (scratch, cwd, config, slotted)
+}
+
+fn probe_root<'a>(case: Option<&Case>, scratch: &'a Path, live: &'a Path) -> &'a Path {
+    if case.is_some() { scratch } else { live }
+}
+
+fn add_case_result(result: &mut serde_json::Value, case: Option<&Case>, status: Option<std::process::ExitStatus>, stdout: &str, err: Option<&Path>, cwd: &Path) {
+    let Some(c) = case else { return };
+    let stderr = err.and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    let extra = serde_json::json!({
+        "arm": c.arm,
+        "model": c.model,
+        "timedOut": status.is_none(),
+        "stdout": stdout,
+        "stderr": stderr,
+        "cwdFiles": cwd_files(cwd, &c.scaffold.files),
+    });
+    result.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+}
+
 /// A scaffold key as a relative path: only normal (and `.`) components, at least one name.
 fn scaffold_rel(rel: &str) -> Result<PathBuf, String> {
     let p = Path::new(rel);
@@ -222,18 +262,26 @@ fn host_line(line: &str, prompt: &str, model: Option<&str>) -> String {
     format!("{line}{model} -p {}", ps_quote(prompt))
 }
 
-/// A fresh scratch folder (earlier probes' removed) with `cwd\`, a temp library holding the real
+/// A fresh scratch folder (probe folders over an hour old removed) with `cwd\`, a temp library holding the real
 /// rune files slotted in set `probe-runes`, and a temp vidar.json whose row `row` names it. With a
 /// case, its runes are copied (the target rewritten per arm) and `case_slots` slotted; without one,
 /// `RUNES`. Returns (scratch, cwd, config, slotted).
 fn fixture(row: &str, case: Option<&Case>) -> Result<(PathBuf, PathBuf, PathBuf, Vec<String>), String> {
+    // Only stale probe folders go: another test process (a parallel worktree's `cargo test`) may be
+    // mid-fixture in a fresh one, and deleting it fails that run with os error 3.
+    let stale = std::time::Duration::from_secs(3600);
     for e in std::fs::read_dir(std::env::temp_dir()).unwrap().flatten() {
         let n = e.file_name().to_string_lossy().into_owned();
-        if n.starts_with("vidar-runes-probe-") && e.path().is_dir() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > stale);
+        if n.starts_with("vidar-runes-probe-") && e.path().is_dir() && old {
             let _ = std::fs::remove_dir_all(e.path());
         }
     }
-    let scratch = std::env::temp_dir().join(format!("vidar-runes-probe-{}", std::process::id()));
+    // Unique per call, not per process: two fixtures (threads or processes) never share a scratch root.
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let scratch = std::env::temp_dir().join(format!("vidar-runes-probe-{}-{nanos}-{n}", std::process::id()));
     let cwd = scratch.join("cwd");
     std::fs::create_dir_all(&cwd).unwrap();
     // No launchable set in the checkout's library holds both kinds (it ships no
@@ -276,7 +324,20 @@ fn fixture(row: &str, case: Option<&Case>) -> Result<(PathBuf, PathBuf, PathBuf,
         "agents": [{ "key": row, "sets": [{ "set": SET }] }],
     });
     std::fs::write(&config, cfg.to_string()).unwrap();
+    seed_stock_templates(&scratch);
     Ok((scratch, cwd, config, slotted))
+}
+
+/// The checkout's stock vault templates copied into the scratch root: a Custom vault refuses without its
+/// agent's floor template (`vault::floored_custom`), and the scratch root is where the store sits.
+fn seed_stock_templates(scratch: &Path) {
+    let from = crate::paths::rune_templates_dir_in(&crate::paths::root());
+    let to = crate::paths::rune_templates_dir_in(scratch);
+    std::fs::create_dir_all(&to).unwrap();
+    for id in ["stock-claude", "stock-codex"] {
+        let name = format!("{id}.json");
+        std::fs::copy(from.join(&name), to.join(&name)).unwrap_or_else(|e| panic!("stock template {name}: {e}"));
+    }
 }
 
 /// Whether a home index entry is one a probe wrote: its sets name a temp `vidar-runes-probe-` library
@@ -404,25 +465,12 @@ fn scanned(log: Option<&Path>) -> (Vec<String>, Vec<String>) {
 #[ignore]
 fn probe_runes_runs_one_real_bare_turn_with_a_recall_set() {
     let out_json = PathBuf::from(std::env::var("VIDAR_PROBE_OUT").expect("VIDAR_PROBE_OUT"));
-    let case = match load_case() {
-        None => None,
-        Some(Ok(c)) => Some(c),
-        Some(Err(e)) => refuse(&out_json, &e),
-    };
+    let case = probe_case(&out_json);
     let prompt = match &case {
         Some(c) => c.prompt.clone(),
         None => std::env::var("VIDAR_PROBE_PROMPT").expect("VIDAR_PROBE_PROMPT"),
     };
-    let (scratch, cwd, config, slotted) = match fixture(ROW, case.as_ref()) {
-        Ok(f) => f,
-        Err(e) if case.is_some() => refuse(&out_json, &e),
-        Err(e) => panic!("{e}"),
-    };
-    if let Some(c) = &case {
-        if let Err(e) = write_scaffold(&cwd, &c.scaffold.files) {
-            refuse(&out_json, &e);
-        }
-    }
+    let (scratch, cwd, config, slotted) = case_fixture(ROW, case.as_ref(), &out_json);
 
     // As the launcher sends until L3a: the row's sets as the pick, which becomes a Custom vault (L2a).
     let pick = row_pick(&config, ROW);
@@ -430,11 +478,8 @@ fn probe_runes_runs_one_real_bare_turn_with_a_recall_set() {
     let _entries = ProbeEntries::new(home::resolve().expect("home"), &scratch);
     let mut launch = prepare("bare", &opts).expect("prepare");
     // A case session's VIDAR_ROOT is the scratch dir, so a write task never reaches the live checkout.
-    let root = match &case {
-        Some(_) => scratch.to_string_lossy().into_owned(),
-        None => crate::paths::root().to_string_lossy().into_owned(),
-    };
-    let env = tab_env(&launch.env, &root, case.as_ref().is_some_and(|c| c.unset_tab));
+    let root = crate::paths::root();
+    let env = tab_env(&launch.env, &probe_root(case.as_ref(), &scratch, &root).to_string_lossy(), case.as_ref().is_some_and(|c| c.unset_tab));
     let names: Vec<String> = env.iter().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
     launch.write_manifest("runes-probe", names.iter().map(String::as_str)).expect("manifest");
     let config_dir = PathBuf::from(launch.env.get("CLAUDE_CONFIG_DIR").expect("CLAUDE_CONFIG_DIR"));
@@ -468,21 +513,7 @@ fn probe_runes_runs_one_real_bare_turn_with_a_recall_set() {
         "sets": [SET],
         "slotted": slotted,
     });
-    if let Some(c) = &case {
-        let stderr = err.as_deref().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
-        let extra = serde_json::json!({
-            "arm": c.arm,
-            "model": c.model,
-            "timedOut": status.is_none(),
-            "stdout": reply,
-            "stderr": stderr,
-            "cwdFiles": cwd_files(&cwd, &c.scaffold.files),
-        });
-        let obj = result.as_object_mut().unwrap();
-        for (k, v) in extra.as_object().unwrap() {
-            obj.insert(k.clone(), v.clone());
-        }
-    }
+    add_case_result(&mut result, case.as_ref(), status, &reply, err.as_deref(), &cwd);
     crate::fsx::atomic_write(&out_json, result.to_string().as_bytes()).expect("probe result");
     let Some(status) = status else { panic!("probe timed out after {} s", limit.as_secs()) };
     println!("probe reply ({status}): {}", reply.trim());
@@ -492,9 +523,10 @@ fn probe_runes_runs_one_real_bare_turn_with_a_recall_set() {
 #[test]
 #[ignore]
 fn probe_runes_runs_one_real_codex_exec_turn_with_a_recall_set() {
-    let prompt = std::env::var("VIDAR_PROBE_PROMPT").expect("VIDAR_PROBE_PROMPT");
     let out_json = PathBuf::from(std::env::var("VIDAR_PROBE_OUT").expect("VIDAR_PROBE_OUT"));
-    let (scratch, cwd, config, slotted) = fixture(CODEX_ROW, None).unwrap_or_else(|e| panic!("{e}"));
+    let case = probe_case(&out_json);
+    let prompt = case.as_ref().map(|c| c.prompt.clone()).unwrap_or_else(|| std::env::var("VIDAR_PROBE_PROMPT").expect("VIDAR_PROBE_PROMPT"));
+    let (scratch, cwd, config, slotted) = case_fixture(CODEX_ROW, case.as_ref(), &out_json);
 
     // The row is admitted as pty.rs admits a Raw Codex row, but from the temp vidar.json.
     let row = admit_row_key(Some(CODEX_ROW.into()), Some("bare"), Some(&config)).expect("admit").expect("row key");
@@ -505,7 +537,8 @@ fn probe_runes_runs_one_real_codex_exec_turn_with_a_recall_set() {
     let cwd_text = cwd.to_string_lossy().into_owned();
     let _entries = ProbeEntries::new(home::resolve().expect("home"), &scratch);
     let mut launch = prepare_codex_for(Surface::Exec, "bare", &root, &home::resolve().expect("home"), std::env::vars_os(), &Ambient::from_env(), &home::Guard::from_vidar_env(), &probes, &opts, Some(&cwd_text)).expect("prepare");
-    let env = tab_env(&launch.env, &root.to_string_lossy(), false);
+    // Prepare stays keyed to the install root; only the tab sees the case's scratch root.
+    let env = tab_env(&launch.env, &probe_root(case.as_ref(), &scratch, &root).to_string_lossy(), case.as_ref().is_some_and(|c| c.unset_tab));
     let names: Vec<String> = env.iter().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
     launch.write_manifest("runes-probe", names.iter().map(String::as_str)).expect("manifest");
 
@@ -520,14 +553,19 @@ fn probe_runes_runs_one_real_codex_exec_turn_with_a_recall_set() {
     args.extend(["-o".to_string(), last.to_string_lossy().into_owned(), prompt]);
     let out = scratch.join("reply.out");
     let start = std::time::SystemTime::now();
-    let status = run(&launch.program, &args, &cwd, env, &out, None, Duration::from_secs(300)).unwrap_or_else(|| panic!("probe timed out after 300 s"));
+    let err = case.as_ref().map(|_| scratch.join("reply.err"));
+    let limit = Duration::from_secs(case.as_ref().and_then(|c| c.timeout_sec).unwrap_or(300));
+    let status = run(&launch.program, &args, &cwd, env, &out, err.as_deref(), limit);
+    if case.is_none() && status.is_none() {
+        panic!("probe timed out after {} s", limit.as_secs());
+    }
     let output = std::fs::read_to_string(&out).unwrap_or_default();
     let reply = std::fs::read_to_string(&last).unwrap_or_else(|_| output.clone());
     let rollout = newest_jsonl(&launch.codex_home.join("sessions"), start);
     let (rune_reads, reads) = scanned(rollout.as_deref());
-    let result = serde_json::json!({
+    let mut result = serde_json::json!({
         "agent": "codex",
-        "status": status.code(),
+        "status": status.and_then(|s| s.code()),
         "reply": reply,
         "output": output,
         "payload": payload,
@@ -539,7 +577,9 @@ fn probe_runes_runs_one_real_codex_exec_turn_with_a_recall_set() {
         "sets": [SET],
         "slotted": slotted,
     });
+    add_case_result(&mut result, case.as_ref(), status, &output, err.as_deref(), &cwd);
     crate::fsx::atomic_write(&out_json, result.to_string().as_bytes()).expect("probe result");
+    let Some(status) = status else { panic!("probe timed out after {} s", limit.as_secs()) };
     println!("probe reply ({status}): {}", reply.trim());
     assert!(status.success(), "codex exec exited {status}");
 }
@@ -549,6 +589,24 @@ fn rune_text(kind: &str, activate: Option<&str>, description: Option<&str>) -> S
     let a = activate.map(|a| format!("activate: {a}\n")).unwrap_or_default();
     let d = description.map(|d| format!("description: {d}\n")).unwrap_or_default();
     format!("---\nname: sample-rune\nkind: {kind}\nscope: [vidar]\n{a}{d}---\n# Sample\n\nBody.\n")
+}
+
+/// The vault step of prepare, without a spawn or a model call: the fixture's pick builds a Custom vault
+/// on each agent's stock floor in the scratch root.
+#[test]
+fn probe_fixture_builds_a_floored_custom_vault_for_both_agents() {
+    if !crate::paths::runes_dir().exists() {
+        eprintln!("skipped: the repo runes/ library is not in this tree (not shipped)");
+        return;
+    }
+    let (scratch, _cwd, config, _slotted) = fixture(ROW, None).expect("fixture");
+    let pick = row_pick(&config, ROW);
+    let opts = LaunchOpts { row_key: Some(ROW), config: Some(&config), custom_sets: Some(&pick), ..Default::default() };
+    for agent in [Agent::Claude, Agent::Codex] {
+        let v = vault_for(&scratch, &opts, agent).unwrap_or_else(|e| panic!("{}: {e}", agent.as_str())).expect("vault");
+        assert!(!v.id.is_empty(), "{} vault id", agent.as_str());
+    }
+    let _ = std::fs::remove_dir_all(&scratch);
 }
 
 #[test]
@@ -599,6 +657,26 @@ fn probe_case_refuses_scaffold_paths_that_leave_the_cwd() {
     assert_eq!(scaffold_rel("./package.json").unwrap(), PathBuf::from("package.json"));
     let json = r#"{"runes":["a"],"target":"a","arm":"off","prompt":"p","scaffold":{"files":{"../escape.md":"x"}}}"#;
     assert!(parse_case(json).unwrap_err().contains("scaffold"));
+}
+
+#[test]
+fn probe_case_codex_refuses_escaping_scaffold_before_a_model_turn() {
+    let dir = std::env::temp_dir().join(format!("vidar-codex-case-refusal-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let case_file = dir.join("case.json");
+    let out_file = dir.join("result.json");
+    std::fs::write(&case_file, r#"{"runes":["paths-scan-tracked-only"],"target":"paths-scan-tracked-only","arm":"recall","prompt":"do not run","scaffold":{"files":{"../escape.md":"x"}}}"#).unwrap();
+    let child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["probe_runes_runs_one_real_codex_exec_turn_with_a_recall_set", "--ignored", "--nocapture", "--test-threads=1"])
+        .env("VIDAR_PROBE_CASE", &case_file)
+        .env("VIDAR_PROBE_OUT", &out_file)
+        .output()
+        .unwrap();
+    assert!(!child.status.success());
+    let result: serde_json::Value = serde_json::from_slice(&std::fs::read(&out_file).unwrap()).unwrap();
+    assert!(result["error"].as_str().unwrap().contains("scaffold path"));
+    assert_eq!(result.as_object().unwrap().len(), 1);
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

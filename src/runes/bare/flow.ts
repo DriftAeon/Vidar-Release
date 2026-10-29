@@ -47,7 +47,8 @@ export interface RulesGenerated {
 }
 export interface BareFlowIo {
   kitCreate?(a: { layer: ItemRuneInputs }): Promise<{ created: boolean; dropped: { id: string; reason: string }[] }>;
-  kitItemCreate?(a: { library: string; agent: "claude" | "codex"; kind: "skill" | "agent" | "hook"; name: string }): Promise<unknown>;
+  kitSets?(): Promise<{ library?: string; set: string }[]>;
+  kitItemCreate?(a: { library: string; agent: AgentId; kind: "skill" | "agent" | "hook"; name: string }): Promise<unknown>;
   itemsImport(a: { library: string; layer: ItemRuneInputs }): Promise<ImportedItems>;
   localSources(cwd: string): Promise<BareLocalSources>;
   moduleBundles?(): Promise<BareModuleBundles>;
@@ -61,8 +62,8 @@ export const defaultTicks = (files: readonly BareLocalFile[]): Set<string> =>
   new Set(files.filter((f) => f.ticked && f.pickable).map((f) => f.path));
 export const agentFiles = (files: readonly BareLocalFile[], codex: boolean): BareLocalFile[] =>
   files.filter((f) => codex
-    ? f.agent === "codex" || (f.kind === "hook" && f.agent == null && f.codexSupported === true)
-    : f.agent !== "codex");
+    ? f.agent === "codex"
+    :f.agent !== "codex");
 export const codexTicks = (files: readonly BareLocalFile[]): Set<string> =>
   new Set(files.filter((f) =>
     (f.kind === "rules" && f.pickable && /(^|[\\/])agents\.md$/i.test(f.path)) ||
@@ -85,6 +86,7 @@ export function classifyGenError(raw: string): { state: Exclude<GenState, "done"
   if (s.startsWith("login:")) return { state: "login", error: after("login:") };
   if (s.startsWith("busy:")) return { state: "busy", error: after("busy:") };
   if (s.startsWith("invalid:")) return { state: "rejected", error: after("invalid:").split("\n").slice(0, 5).join("\n") };
+  if (s.startsWith("budget:")) return { state: "failed", error: `Stopped at the Budget Cap: ${after("budget:")}` };
   if (s.startsWith("spawn:")) return { state: "failed", error: after("spawn:") };
   if (s.startsWith("output:")) return { state: "failed", error: after("output:") };
   return { state: "failed", error: s };

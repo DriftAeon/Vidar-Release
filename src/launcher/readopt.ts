@@ -5,9 +5,11 @@
 // the Falcon row. A webview reload is the other boot: the tabs go, but this process's Rust views
 // (`falcon_hosted_held`) and their attachment stay, so those come back too, moved onto new tabs
 // (docs/projects/falcon/falcon-idle-reap.md §Decision 1). Held and relaunch adopts share one loop
-// in `falcon_list` order; held views get no priority. No runtime imports, so the predicates
-// are testable under plain node.
+// in `falcon_list` order; held views get no priority. The one runtime import is agents/id.ts
+// (itself import-free), so the predicates are testable under plain node.
 import type { FalconHeldView, FalconSessionSummary } from "../ipc";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { AGENT_IDS, isAgentId } from "../agents/id.ts";
 import type { AgentId } from "../agents/id";
 
 /** Client name Vidar negotiates with (src-tauri/src/falcon.rs `CLIENT_NAME`). */
@@ -18,22 +20,31 @@ const VIDAR_CLIENT = "vidar";
    neither re-adopted nor adopted as Codex, and Codex tabs stay in-process. Held here because this
    module has no runtime imports and every reader (readopt, launcher/hosted.ts, rendered-body)
    can import it. */
-let hostedCodex = false;
+let hostedGateEnabled = false;
+const hostedEnabled: Record<AgentId, () => boolean> = {
+  claude: () => true,
+  codex: () => hostedGateEnabled,
+};
+const hostedRefusal: Record<AgentId, string | null> = {
+  claude: null,
+  codex: "Codex session: turn falcon.hostedCodex on in vidar.json and restart Vidar to open it.",
+};
+const fallbackAgent: AgentId = AGENT_IDS.find((id) => hostedRefusal[id] === null)!;
 
 /** The gate's value from vidar.json's `falcon` key: on only for `{ "hostedCodex": true }`. */
 export function readHostedCodexGate(falcon: unknown): boolean {
   return !!falcon && typeof falcon === "object" && (falcon as { hostedCodex?: unknown }).hostedCodex === true;
 }
 export function setHostedCodexGate(on: boolean): void {
-  hostedCodex = on;
+  hostedGateEnabled = on;
 }
 export function hostedCodexOn(): boolean {
-  return hostedCodex;
+  return hostedGateEnabled;
 }
 
 /** The agent an adopted session's tab runs: Codex only with the gate on, else Claude (today's). */
 export function adoptAgent(s: Pick<FalconSessionSummary, "agent">): AgentId {
-  return hostedCodex && s.agent === "codex" ? "codex" : "claude";
+  return isAgentId(s.agent) && hostedEnabled[s.agent]() ? s.agent : fallbackAgent;
 }
 
 /** Why a session cannot be adopted as its own agent, or null when it can. Gate off, a Codex
@@ -41,14 +52,12 @@ export function adoptAgent(s: Pick<FalconSessionSummary, "agent">): AgentId {
  *  adopt path (Falcon row, Dock, readopt) refuses it instead (review-fix C3). */
 export function adoptRefusal(s: Pick<FalconSessionSummary, "agent">): string | null {
   if (s.agent === adoptAgent(s)) return null;
-  return s.agent === "codex"
-    ? "Codex session: turn falcon.hostedCodex on in vidar.json and restart Vidar to open it."
-    : `Unknown agent "${s.agent}": Vidar cannot open this session.`;
+  return isAgentId(s.agent) ? hostedRefusal[s.agent] : `Unknown agent "${s.agent}": Vidar cannot open this session.`;
 }
 
 /** Claude always; Codex only with the gate on. */
 function readoptable(agent: string): boolean {
-  return agent === "claude" || (hostedCodex && agent === "codex");
+  return isAgentId(agent) && hostedEnabled[agent]();
 }
 
 /** Live, unattached, Claude (or Codex, gate on), and last driven by Vidar. A host built before

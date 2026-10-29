@@ -1,7 +1,7 @@
 // Runes trace (pure, no DOM): which sets and runes a tab loaded, from the catalog and the tab's
 // loaded files. Path match is case-insensitive, backslash-normalised equality of a set's `targetAbs`
 // with a loaded path; transcript paths are only compared, never opened.
-import type { RuneLibrary, RuneSet, RunesCatalog, RunesLoaded } from "./types";
+import type { RuneLibrary, RuneSet, RunesCatalog, RunesLoaded, RunesLoadedFile } from "./types";
 
 /** null = unknown (no transcript to trace against). */
 export type SetState = "Loaded" | "On Touch" | "Not Loaded" | "Via Plugin Hook" | null;
@@ -25,13 +25,22 @@ export interface OutsideFile {
   path: string;
   /** The path relative to the repo root when under it, else the path as loaded. */
   label: string;
+  /** Whether this row names a file that the document view can open. */
+  file: boolean;
+  /** A Codex row's lowercased memoryType: a rune kind (`skill`, `mcp`; a vault rune or a rollout Skill) picks its
+   *  kind icon, anything else (`agents.md`, `developer`) keeps the doc icon. Absent on Claude transcript rows. */
+  kind?: string;
 }
+
+/** Rollout developer and skill rows name injected content; only AGENTS.md names a file. */
+const isFileRow = (f: RunesLoadedFile): boolean =>
+  f.source !== "vault" && (f.source !== "rollout" || f.memoryType.toLowerCase() === "agents.md");
 
 export interface RunesTrace {
   /** True when a transcript was read; set states are null otherwise (plugin sets excepted). */
   known: boolean;
   libraries: TracedLibrary[];
-  /** Loaded files no set targets: listed under "Not from a Rune Library". */
+  /** Loaded files no set targets: listed under "Autos". */
   outside: OutsideFile[];
 }
 
@@ -70,6 +79,22 @@ export function traceRunes(catalog: RunesCatalog, loaded: RunesLoaded | null, re
     return s.tier === 2 ? "On Touch" : "Not Loaded";
   };
 
+  // A Codex `vault` row is `<library>/<id>`: a member of the session's vault, never an outsider. Its id
+  // also claims the rollout `Skill` row of the same name (the vault skill Codex listed).
+  const vaultIds = new Map<string, Set<string>>();
+  for (const f of files) {
+    if (f.source !== "vault") continue;
+    const cut = f.path.indexOf("/");
+    if (cut <= 0) continue;
+    const lib = f.path.slice(0, cut);
+    const ids = vaultIds.get(lib) ?? new Set<string>();
+    ids.add(f.path.slice(cut + 1));
+    vaultIds.set(lib, ids);
+  }
+  const vaultMember = (id: string): boolean => [...vaultIds.values()].some((ids) => ids.has(id));
+  const isMember = (f: RunesLoadedFile): boolean =>
+    f.source === "vault" || (f.source === "rollout" && f.memoryType.toLowerCase() === "skill" && vaultMember(f.path));
+
   const libraries = catalog.libraries.map((lib): TracedLibrary => {
     const sets = sortSets(lib.sets).map((set) => {
       if (set.targetAbs) targeted.add(normPath(set.targetAbs));
@@ -77,7 +102,7 @@ export function traceRunes(catalog: RunesCatalog, loaded: RunesLoaded | null, re
     });
     const setsOf = new Map<string, string[]>();
     const runeLoaded = new Map<string, boolean | null>();
-    for (const r of lib.runes) runeLoaded.set(r.id, known ? false : null);
+    for (const r of lib.runes) runeLoaded.set(r.id, known ? vaultIds.get(lib.key)?.has(r.id) ?? false : null);
     for (const t of sets) {
       for (const m of t.set.members) {
         const held = setsOf.get(m.id) ?? [];
@@ -94,10 +119,11 @@ export function traceRunes(catalog: RunesCatalog, loaded: RunesLoaded | null, re
   const seen = new Set<string>();
   for (const f of files) {
     const n = normPath(f.path);
-    if (targeted.has(n) || seen.has(n)) continue;
+    if (targeted.has(n) || seen.has(n) || isMember(f)) continue;
     seen.add(n);
     const label = root && n.startsWith(root) ? f.path.slice(root.length).replace(/\\/g, "/") : f.path;
-    outside.push({ path: f.path, label });
+    // a Codex row's memoryType is a rune kind (`skill`, `mcp`) or a rollout label (`Skill`, `AGENTS.md`)
+    outside.push({ path: f.path, label, file: isFileRow(f), ...(f.source ? { kind: f.memoryType.toLowerCase() } : {}) });
   }
   return { known, libraries, outside };
 }

@@ -1,5 +1,4 @@
-//! src-tauri\src\bare\agent_homes.rs — one agent home per set combination, for both agents (run
-//! 2026-10-24-runesets-full-stack, W2 L6; both agents since fold W2-pre L2h). A launch's sets
+//! src-tauri\src\bare\agent_homes.rs — one agent home per set combination, for both agents. A launch's sets
 //! (`library/set`, an absent library read as the config's `rulesLibrary`, lowercased, sorted,
 //! deduped) hash to `<home>\<agent dir>\<hash12>\`: `codex-homes` for Codex, `claude-homes` for
 //! Claude. Each agent's index (`<home>\codex-homes.json`, `<home>\claude-homes.json`) maps each hash
@@ -9,9 +8,11 @@
 //! legacy home; a Falcon-hosted Codex spawn runs on its combination's home too, which Falcon admits
 //! by path (`codex_payload::admit_codex_home`).
 //!
-//! Live owners (plan F2): a home's owners are the launch manifests under `<home>\manifests` whose
+//! Live owners: a home's owners are the launch manifests under `<home>\manifests` whose
 //! own-agent field (`homes.codexHome`, `homes.claudeConfig`) names it, live while the recording
-//! Vidar (`vidarPid`) runs or, for a hosted one (`falconSession`), while any `falcon.exe` runs. An
+//! Vidar (`vidarPid`) runs or, for a hosted one (`falconSession`), while Falcon lists its session
+//! as not exited. If listing fails, the host incarnation tag decides liveness (an id without a
+//! tag: while any `falcon.exe` runs). An
 //! in-flight launch holds the home lock, and its manifest is written before the lock drops. A
 //! manifest that cannot be read leaves owners unknown. A prune removes only a combination home
 //! unused for 14 days, with no transcript (Codex rollouts, Claude `projects`) and no owner.
@@ -24,38 +25,12 @@ pub(crate) use crate::falcon::Agent;
 
 const PRUNE_AFTER_MS: u64 = 14 * 24 * 60 * 60 * 1000;
 
-/// What differs per agent: folder, index file, the manifest field naming a launch's home, the
-/// transcript folders that keep a home from a prune, and the word errors use.
-struct Kind {
-    dir: &'static str,
-    index: &'static str,
-    owner_field: &'static str,
-    /// A home holding any file under these keeps its transcripts and is never pruned.
-    transcripts: &'static [&'static str],
-    label: &'static str,
-}
-
-const CODEX: Kind = Kind {
-    dir: "codex-homes",
-    index: "codex-homes.json",
-    owner_field: "/homes/codexHome",
-    transcripts: &["sessions", "archived_sessions"],
-    label: "Codex",
-};
-
-const CLAUDE: Kind = Kind {
-    dir: "claude-homes",
-    index: "claude-homes.json",
-    owner_field: "/homes/claudeConfig",
-    transcripts: &["projects"],
-    label: "Claude",
-};
+/// What differs per agent (folder, index file, owner field, transcript folders, label) is the
+/// `AgentSpec` table in `agent_spec.rs`.
+type Kind = crate::agent_spec::AgentSpec;
 
 fn kind(agent: Agent) -> &'static Kind {
-    match agent {
-        Agent::Codex => &CODEX,
-        Agent::Claude => &CLAUDE,
-    }
+    crate::agent_spec::spec(agent)
 }
 
 /// One index entry: the combination's refs, its folder relative to the Bare home, last use (ms).
@@ -99,7 +74,7 @@ pub(super) struct Picked {
 }
 
 fn index_path(k: &Kind, home_dir: &Path) -> PathBuf {
-    home_dir.join(k.index)
+    home_dir.join(k.homes_index)
 }
 
 fn read_index(k: &Kind, home_dir: &Path) -> Option<Index> {
@@ -163,12 +138,12 @@ pub(super) fn adopt(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, hash:
 /// Codex spawn picks the same way and hands a combination home to its host
 /// (`SpawnParams.codex_home`). A legacy home outside the Bare home takes every launch. `_config` is
 /// unread since the seed went (fold W2 L2b); the parameter stays for the callers on master.
-#[cfg_attr(not(test), allow(dead_code))] // spawns pick by vault (`pick_vault`) since run 2026-10-25-rune-vault L2a
+#[cfg_attr(not(test), allow(dead_code))] // spawns pick by vault (`pick_vault`)
 pub(super) fn pick(agent: Agent, home_dir: &Path, legacy: &Path, _config: &Path, row: Option<&RowSets>) -> Picked {
     pick_refs(agent, home_dir, legacy, row.map(refs).unwrap_or_default())
 }
 
-/// The home a spawn on vault `vault_id` runs on (run 2026-10-25-rune-vault, L2a): the combination of
+/// The home a spawn on vault `vault_id` runs on: the combination of
 /// one ref, `vault:<id>`, hashed as any combination (`<agent dir>\<hash12>`); `None` (a test's
 /// no-vault spawn) is the empty combination, the legacy home.
 pub(super) fn pick_vault(agent: Agent, home_dir: &Path, legacy: &Path, vault_id: Option<&str>) -> Picked {
@@ -185,11 +160,11 @@ fn pick_refs(agent: Agent, home_dir: &Path, legacy: &Path, refs: Vec<String>) ->
     let hash = hex(&Sha256::digest(refs.join("\n").as_bytes()))[..12].to_string();
     let index = index_of(k, home_dir);
     let combo = Some((hash.clone(), refs));
-    let own = format!("{}/{hash}", k.dir);
+    let own = format!("{}/{hash}", k.homes_dir);
     match index.get(&hash) {
         Some(e) if e.dir.eq_ignore_ascii_case(&legacy_rel) => Picked { dir: legacy.to_path_buf(), combo, rel: legacy_rel },
         // A re-keyed entry (the vault migration maps `vault:<id>` onto the row's old combination
-        // folder, run 2026-10-25-rune-vault L2g) keeps its folder; only one under the agent's dir.
+        // folder) keeps its folder; only one under the agent's dir.
         Some(e) => match in_agent_dir(k, &e.dir) {
             Some(rel) => Picked { dir: under(home_dir, &rel), combo, rel },
             None => Picked { dir: under(home_dir, &own), combo, rel: own },
@@ -204,11 +179,11 @@ fn pick_refs(agent: Agent, home_dir: &Path, legacy: &Path, refs: Vec<String>) ->
 fn in_agent_dir(k: &Kind, dir: &str) -> Option<String> {
     let parts: Vec<&str> = dir.split(['/', '\\']).collect();
     let (first, rest) = parts.split_first()?;
-    if !first.eq_ignore_ascii_case(k.dir) || rest.is_empty() {
+    if !first.eq_ignore_ascii_case(k.homes_dir) || rest.is_empty() {
         return None;
     }
     let plain = |p: &str| !p.is_empty() && p != "." && p != ".." && !p.contains(':');
-    rest.iter().all(|p| plain(p)).then(|| std::iter::once(k.dir).chain(rest.iter().copied()).collect::<Vec<_>>().join("/"))
+    rest.iter().all(|p| plain(p)).then(|| std::iter::once(k.homes_dir).chain(rest.iter().copied()).collect::<Vec<_>>().join("/"))
 }
 
 impl Picked {
@@ -224,7 +199,7 @@ pub(super) fn record(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, lega
     let k = kind(agent);
     let Some((hash, sets)) = &picked.combo else { return Ok(()) };
     if !picked.on_legacy(legacy) {
-        for d in [home_dir.join(k.dir), picked.dir.clone()] {
+        for d in [home_dir.join(k.homes_dir), picked.dir.clone()] {
             if std::fs::symlink_metadata(&d).is_ok_and(|m| m.file_type().is_symlink() || is_reparse(&m)) {
                 return Err(format!("{} home {} is a link or junction; spawn refused", k.label, d.display()));
             }
@@ -262,10 +237,36 @@ fn norm(p: &str) -> String {
 
 /// The live owners of `agent_home`, from the launch manifests under `<home>\manifests`.
 pub(super) fn owners(agent: Agent, home_dir: &Path, agent_home: &Path) -> Owners {
-    owners_with(agent, home_dir, agent_home, &crate::procs::is_alive, &|| crate::procs::snapshot().values().any(|r| r.exe == "falcon.exe"))
+    owners_with(agent, home_dir, agent_home, &crate::procs::is_alive, &|| Hosts {
+        tags: falcon_incarnations(),
+        sessions: crate::falcon::hosted_sessions().ok(),
+    })
 }
 
-pub(super) fn owners_with(agent: Agent, home_dir: &Path, agent_home: &Path, alive: &dyn Fn(u32) -> bool, falcon_up: &dyn Fn() -> bool) -> Owners {
+pub(super) struct Hosts {
+    tags: Vec<String>,
+    sessions: Option<Vec<(String, bool)>>,
+}
+
+/// The incarnation tag of every running `falcon.exe`: its creation time's low 32 bits as 8 hex
+/// digits, the tag the host puts in each session id (`src-falcon/src/session.rs` `session_id`,
+/// `Registry::for_incarnation(process_created_100ns)`).
+fn falcon_incarnations() -> Vec<String> {
+    crate::procs::snapshot()
+        .iter()
+        .filter(|(_, r)| r.exe == "falcon.exe")
+        .filter_map(|(pid, _)| crate::procs::creation_time(*pid))
+        .map(|t| format!("{:08x}", t & 0xffff_ffff))
+        .collect()
+}
+
+/// The host incarnation tag of a Falcon session id `s<8 hex>-<generation>`; `None` for another shape.
+fn incarnation(session: &str) -> Option<&str> {
+    let tag = session.strip_prefix('s')?.split_once('-')?.0;
+    (tag.len() == 8 && tag.bytes().all(|b| b.is_ascii_hexdigit())).then_some(tag)
+}
+
+pub(super) fn owners_with(agent: Agent, home_dir: &Path, agent_home: &Path, alive: &dyn Fn(u32) -> bool, hosts: &dyn Fn() -> Hosts) -> Owners {
     let field = kind(agent).owner_field;
     let dir = home_dir.join("manifests");
     let entries = match std::fs::read_dir(&dir) {
@@ -274,7 +275,7 @@ pub(super) fn owners_with(agent: Agent, home_dir: &Path, agent_home: &Path, aliv
         Err(_) => return Owners::Unknown,
     };
     let want = norm(&agent_home.to_string_lossy());
-    let mut falcon: Option<bool> = None;
+    let mut running: Option<Hosts> = None;
     let mut unknown = false;
     for e in entries {
         let Ok(e) = e else { unknown = true; continue };
@@ -291,10 +292,19 @@ pub(super) fn owners_with(agent: Agent, home_dir: &Path, agent_home: &Path, aliv
             continue;
         }
         let pid = v.get("vidarPid").and_then(serde_json::Value::as_u64).and_then(|p| u32::try_from(p).ok());
-        let hosted = v.get("falconSession").is_some_and(|s| s.is_string());
-        let live = match hosted {
-            true => *falcon.get_or_insert_with(falcon_up),
-            false => pid.is_none_or(alive),
+        let live = match v.get("falconSession").and_then(serde_json::Value::as_str) {
+            Some(session) => {
+                let running = running.get_or_insert_with(hosts);
+                match &running.sessions {
+                    Some(sessions) => sessions.iter().any(|(id, exited)| id == session && !exited),
+                    None => match incarnation(session) {
+                        Some(tag) => running.tags.iter().any(|h| h.eq_ignore_ascii_case(tag)),
+                        // An id without the tag: live while any host runs.
+                        None => !running.tags.is_empty(),
+                    },
+                }
+            }
+            None => pid.is_none_or(alive),
         };
         if live {
             return Owners::Live;
@@ -333,7 +343,7 @@ pub(super) fn prune_with(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, 
     let mut warnings = Vec::new();
     let mut gone = Vec::new();
     for (hash, e) in &index {
-        if e.dir != format!("{}/{hash}", k.dir) || now_ms.saturating_sub(e.last_used) < PRUNE_AFTER_MS {
+        if e.dir != format!("{}/{hash}", k.homes_dir) || now_ms.saturating_sub(e.last_used) < PRUNE_AFTER_MS {
             continue;
         }
         // A re-keyed `vault:<id>` entry on the same folder (L2g) keeps it while that entry is in use.
@@ -346,7 +356,7 @@ pub(super) fn prune_with(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, 
             gone.push(hash.clone());
             continue;
         }
-        if !plain(&home_dir.join(k.dir)) || !plain(&dir) || has_transcripts(k, &dir) || owners_of(&dir) != Owners::None {
+        if !plain(&home_dir.join(k.homes_dir)) || !plain(&dir) || has_transcripts(k, &dir) || owners_of(&dir) != Owners::None {
             continue;
         }
         match std::fs::remove_dir_all(&dir) {
@@ -385,17 +395,17 @@ pub(super) fn listed(agent: Agent, home_dir: &Path, legacy: &Path) -> Vec<(PathB
     };
     let mut out = vec![(legacy.to_path_buf(), sets_of(&legacy_rel).unwrap_or_default())];
     let plain = |d: &Path| std::fs::symlink_metadata(d).is_ok_and(|m| m.is_dir() && !is_reparse(&m));
-    if !plain(&home_dir.join(k.dir)) {
+    if !plain(&home_dir.join(k.homes_dir)) {
         return out;
     }
     for e in index.values() {
         // One plain segment under the agent dir: a hash folder, or the older combination folder a
         // vault re-key (or a hand migration) left its entry pointing at.
-        let Some(name) = e.dir.replace('\\', "/").strip_prefix(&format!("{}/", k.dir)).map(str::to_string) else { continue };
+        let Some(name) = e.dir.replace('\\', "/").strip_prefix(&format!("{}/", k.homes_dir)).map(str::to_string) else { continue };
         if name.is_empty() || name.contains('/') || name == "." || name == ".." {
             continue;
         }
-        let dir = under(home_dir, &format!("{}/{name}", k.dir));
+        let dir = under(home_dir, &format!("{}/{name}", k.homes_dir));
         let seen = out.iter().any(|(d, _)| d.to_string_lossy().replace('\\', "/").eq_ignore_ascii_case(&dir.to_string_lossy().replace('\\', "/")));
         if !seen && plain(&dir) {
             out.push((dir, sets_of(&e.dir).unwrap_or_else(|| e.sets.clone())));
@@ -497,7 +507,7 @@ mod tests {
         assert_ne!(raw.dir, t.legacy());
         record(C, &lock, &t.home(), &t.legacy(), &c, &raw).unwrap();
         assert!(raw.dir.is_dir());
-        let index = read_index(&CODEX, &t.home()).unwrap();
+        let index = read_index(kind(Agent::Codex), &t.home()).unwrap();
         assert_eq!(index.len(), 2);
         assert!(index.values().any(|e| e.dir == "codex-home"));
         assert!(!t.home().join("claude-homes.json").exists(), "a Codex record wrote the Claude index");
@@ -511,7 +521,7 @@ mod tests {
         assert_eq!(pick(C, &t.home(), &t.legacy(), &c, Some(&row(&[]))).dir, t.legacy());
         let lock = home::lock(&t.home(), home::LOCK_WAIT).unwrap();
         record(C, &lock, &t.home(), &t.legacy(), &c, &pick(C, &t.home(), &t.legacy(), &c, None)).unwrap();
-        assert!(read_index(&CODEX, &t.home()).is_none(), "the empty combination wrote the index");
+        assert!(read_index(kind(Agent::Codex), &t.home()).is_none(), "the empty combination wrote the index");
     }
 
     #[test]
@@ -531,9 +541,9 @@ mod tests {
         assert_eq!((l[0].0.clone(), l[0].1.clone()), (t.legacy(), vec!["lib/core".to_string()]));
         assert_eq!((l[1].0.clone(), l[1].1.clone()), (raw.dir.clone(), vec!["lib/other".to_string()]));
         // An entry naming any other folder, or a folder that is gone, is skipped.
-        let mut index = read_index(&CODEX, &t.home()).unwrap();
+        let mut index = read_index(kind(Agent::Codex), &t.home()).unwrap();
         index.insert("evil".into(), Entry { sets: vec!["x/y".into()], dir: "..\\elsewhere".into(), last_used: 0 });
-        write_index(&CODEX, &t.home(), &index).unwrap();
+        write_index(kind(Agent::Codex), &t.home(), &index).unwrap();
         std::fs::remove_dir_all(&raw.dir).unwrap();
         assert_eq!(listed(C, &t.home(), &t.legacy()).len(), 1);
     }
@@ -549,20 +559,32 @@ mod tests {
         index.insert("ffff00000000".to_string(), Entry { sets: vec!["lib/b".into()], dir: rel.replace('/', "\\"), last_used: 0 });
         index.insert("deep".to_string(), Entry { sets: vec!["x/y".into()], dir: format!("{rel}/nested"), last_used: 0 });
         index.insert("dots".to_string(), Entry { sets: vec!["x/y".into()], dir: format!("{DIR}/.."), last_used: 0 });
-        write_index(&CODEX, &t.home(), &index).unwrap();
+        write_index(kind(Agent::Codex), &t.home(), &index).unwrap();
         let l = listed(C, &t.home(), &t.legacy());
         assert_eq!(l.iter().map(|(d, _)| d.clone()).collect::<Vec<_>>(), vec![t.legacy(), other], "{l:?}");
         assert_eq!(l[1].1, ["lib/a"]);
     }
 
     fn manifest(home: &Path, name: &str, field: &str, agent_home: &Path, pid: u32, hosted: bool) {
+        manifest_in(home, name, field, agent_home, pid, hosted.then_some("s1"));
+    }
+
+    fn manifest_in(home: &Path, name: &str, field: &str, agent_home: &Path, pid: u32, session: Option<&str>) {
         let dir = home.join("manifests");
         std::fs::create_dir_all(&dir).unwrap();
         let mut v = serde_json::json!({ "vidarPid": pid, "homes": { field: agent_home.to_string_lossy() } });
-        if hosted {
-            v["falconSession"] = "s1".into();
+        if let Some(s) = session {
+            v["falconSession"] = s.into();
         }
         std::fs::write(dir.join(name), v.to_string()).unwrap();
+    }
+
+    fn no_host() -> Hosts {
+        Hosts { tags: Vec::new(), sessions: None }
+    }
+
+    fn host_2a() -> Hosts {
+        Hosts { tags: vec!["0000002a".into()], sessions: None }
     }
 
     #[test]
@@ -570,18 +592,56 @@ mod tests {
         let t = Tmp::new("owners");
         let dir = t.home().join(DIR).join("abc");
         let alive = |p: u32| p == 7;
-        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &|| false), Owners::None);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &no_host), Owners::None);
         manifest(&t.home(), "a.json", "codexHome", &t.legacy(), 7, false);
         manifest(&t.home(), "b.json", "codexHome", &dir, 8, false);
-        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &|| false), Owners::None);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &no_host), Owners::None);
         manifest(&t.home(), "c.json", "codexHome", &dir, 9, true);
-        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &|| false), Owners::None);
-        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &|| true), Owners::Live);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &no_host), Owners::None);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &host_2a), Owners::Live, "a session id with no incarnation counts while any host runs");
         manifest(&t.home(), "d.json", "codexHome", &dir, 7, false);
-        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &|| false), Owners::Live);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &no_host), Owners::Live);
         std::fs::remove_file(t.home().join("manifests").join("d.json")).unwrap();
         std::fs::write(t.home().join("manifests").join("e.json"), "{not json").unwrap();
-        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &|| false), Owners::Unknown);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &no_host), Owners::Unknown);
+    }
+
+    /// Route (a) of the skill leak: a hosted manifest from an
+    /// earlier Falcon host kept every home it named owned while any later host ran, so a skill the
+    /// vault dropped was never removed. A session lives only on the host incarnation in its id.
+    #[test]
+    fn a_hosted_manifest_owns_its_home_only_while_its_own_host_runs() {
+        let t = Tmp::new("owners-incarnation");
+        let dir = t.home().join(DIR).join("abc");
+        let alive = |_: u32| false;
+        manifest_in(&t.home(), "old.json", "codexHome", &dir, 9, Some("s725c03c6-00000011"));
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &host_2a), Owners::None, "a dead host's session held the home");
+        manifest_in(&t.home(), "new.json", "codexHome", &dir, 9, Some("s0000002a-00000003"));
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &host_2a), Owners::Live);
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &no_host), Owners::None);
+    }
+
+    #[test]
+    fn hosted_manifest_requires_a_listed_unexited_session() {
+        let t = Tmp::new("owners-hosted-session");
+        let dir = t.home().join(DIR).join("abc");
+        let alive = |_: u32| false;
+        let session = "s0000abcd-00000001";
+        let listed = || Hosts {
+            tags: vec!["0000abcd".into()],
+            sessions: Some(vec![(session.into(), false)]),
+        };
+        manifest_in(&t.home(), "hosted.json", "codexHome", &dir, 9, Some("s0000abcd-00000002"));
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &listed), Owners::None);
+        manifest_in(&t.home(), "hosted.json", "codexHome", &dir, 9, Some(session));
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &listed), Owners::Live);
+        let exited = || Hosts {
+            tags: vec!["0000abcd".into()],
+            sessions: Some(vec![(session.into(), true)]),
+        };
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &exited), Owners::None);
+        let failed = || Hosts { tags: vec!["0000abcd".into()], sessions: None };
+        assert_eq!(owners_with(C, &t.home(), &dir, &alive, &failed), Owners::Live);
     }
 
     #[test]
@@ -609,7 +669,7 @@ mod tests {
         assert!(picks[1].is_dir(), "a live-owned home was pruned");
         assert!(!picks[2].exists(), "an unused ownerless home stayed");
         assert!(picks[3].is_dir(), "a home with unknown owners was pruned");
-        assert_eq!(read_index(&CODEX, &t.home()).unwrap().len(), 3);
+        assert_eq!(read_index(kind(Agent::Codex), &t.home()).unwrap().len(), 3);
         assert!(t.legacy().parent().unwrap().is_dir());
     }
 
@@ -627,7 +687,7 @@ mod tests {
         assert_eq!(p.dir, t.claude_legacy());
         assert_eq!(p.rel, "claude-config");
         record(Agent::Claude, &lock, &t.home(), &t.claude_legacy(), &c, &p).unwrap();
-        let index = read_index(&CLAUDE, &t.home()).unwrap();
+        let index = read_index(kind(Agent::Claude), &t.home()).unwrap();
         assert_eq!(index.len(), 1);
         assert_eq!(index.values().next().unwrap().dir, "claude-config");
         assert!(t.home().join("claude-homes.json").is_file());
@@ -673,13 +733,13 @@ mod tests {
         std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
         std::fs::write(&transcript, "{}").unwrap();
         let alive = |p: u32| p == 7;
-        let owners_of = |d: &Path| owners_with(Agent::Claude, &t.home(), d, &alive, &|| false);
+        let owners_of = |d: &Path| owners_with(Agent::Claude, &t.home(), d, &alive, &no_host);
         let later = crate::fsx::now_ms() + PRUNE_AFTER_MS + 1;
         assert!(prune_with(Agent::Claude, &lock, &t.home(), later, &owners_of).is_empty());
         assert!(picks[0].is_dir(), "a home with a live Claude manifest was pruned");
         assert!(!picks[1].exists(), "a Codex manifest field held a Claude home");
         assert!(picks[2].is_dir(), "a home with a transcript was pruned");
-        assert_eq!(read_index(&CLAUDE, &t.home()).unwrap().len(), 2);
+        assert_eq!(read_index(kind(Agent::Claude), &t.home()).unwrap().len(), 2);
     }
 
     /// The `vault:<id>` key the vault migration writes for `id` (L4c, L2g).
@@ -701,7 +761,7 @@ mod tests {
         assert_eq!((p.dir.clone(), p.rel.clone()), (old.dir.clone(), old.rel.clone()));
         // The spawn's record keeps the folder and the old entry stays; nothing moves.
         record(C, &lock, &t.home(), &t.legacy(), &c, &p).unwrap();
-        let mut index = read_index(&CODEX, &t.home()).unwrap();
+        let mut index = read_index(kind(Agent::Codex), &t.home()).unwrap();
         let old_key = old.combo.clone().unwrap().0;
         assert_eq!(index[&key].dir, old.rel);
         assert_eq!(index[&old_key].dir, old.rel);
@@ -711,7 +771,7 @@ mod tests {
         assert_eq!(shown, vec![(old.dir.clone(), vec!["vault:codex-rendered".to_string()])]);
         // A prune spares the folder while the vault entry is in use, though the old one is stale.
         index.get_mut(&old_key).unwrap().last_used = 0;
-        write_index(&CODEX, &t.home(), &index).unwrap();
+        write_index(kind(Agent::Codex), &t.home(), &index).unwrap();
         let later = index[&key].last_used + PRUNE_AFTER_MS / 2;
         assert!(prune_with(C, &lock, &t.home(), later, &|_| Owners::None).is_empty());
         assert!(old.dir.is_dir(), "a re-keyed home in use was pruned");
@@ -736,6 +796,6 @@ mod tests {
             assert_eq!(p.rel, own(id), "{id}: {dir}");
             assert_eq!(p.dir, t.home().join(DIR).join(vault_key(C, &t, id)), "{id}: {dir}");
         }
-        assert_eq!(in_agent_dir(&CODEX, "Codex-Homes\\x\\y"), Some(format!("{DIR}/x/y")));
+        assert_eq!(in_agent_dir(kind(Agent::Codex), "Codex-Homes\\x\\y"), Some(format!("{DIR}/x/y")));
     }
 }

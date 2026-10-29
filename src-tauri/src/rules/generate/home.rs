@@ -1,4 +1,4 @@
-//! src-tauri\src\rules\generate\home.rs — the generator homes (plan D1, W0 result): where the rune generator's
+//! src-tauri\src\rules\generate\home.rs — the generator homes: where the rune generator's
 //! agent runs, holding the login and nothing else. `<Bare home>\gen-claude\` and `gen-codex\` sit inside this
 //! install's agent home (`bare::home::resolve`, `%LOCALAPPDATA%\Vidar\homes\<install key>`), so the private ACL of
 //! `homes\` covers them. A run clears the folder once (`build_run`: `skill.md`, `merge-skill.md`) and gives each
@@ -17,6 +17,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::agent_spec::{parse, spec, Agent, ALL};
+
 pub const CONFIG: &str = "config";
 pub const USER_HOME: &str = "user-home";
 pub const WORK: &str = "work";
@@ -25,7 +27,15 @@ pub const MERGE_SKILL_COPY: &str = "merge-skill.md";
 /// The folder under `gen-<agent>` that holds one home per call.
 pub const CALLS: &str = "calls";
 /// Instruction files an agent loads without being asked.
-pub const INSTRUCTION_FILES: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
+/// Codex also loads this one in place of its `AGENTS.md`.
+const OVERRIDE_FILE: &str = "AGENTS.override.md";
+
+/// Every instruction file any agent loads without being asked: each `AgentSpec` `instructions_file` and the override.
+pub fn instruction_files() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = ALL.iter().map(|a| spec(*a).instructions_file).collect();
+    names.push(OVERRIDE_FILE);
+    names
+}
 
 /// How the generator home got its login.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +47,7 @@ pub enum Placed {
 /// One call's generator home.
 #[derive(Debug)]
 pub struct GenHome {
+    pub agent: Agent,
     /// `<Bare home>\gen-<agent>`.
     pub dir: PathBuf,
     /// `CLAUDE_CONFIG_DIR` or `CODEX_HOME`.
@@ -50,26 +61,25 @@ pub struct GenHome {
 
 /// The folder name under the Bare home.
 pub fn dir_name(agent: &str) -> Result<&'static str, String> {
-    match agent {
-        "claude" => Ok("gen-claude"),
-        "codex" => Ok("gen-codex"),
-        other => Err(format!("invalid: agent `{other}` is not claude or codex")),
-    }
+    agent_of(agent).map(|a| spec(a).gen_dir)
 }
 
-/// The Bare home's credential for `agent`: `(folder, file)`.
-fn credential(agent: &str) -> (&'static str, &'static str) {
-    if agent == "claude" {
-        ("claude-config", ".credentials.json")
-    } else {
-        ("codex-home", "auth.json")
-    }
+/// The one parse of a generator request's agent string: an unknown agent is refused here, never handed the other
+/// agent's path.
+pub fn agent_of(agent: &str) -> Result<Agent, String> {
+    parse(agent).ok_or_else(|| format!("invalid: agent `{agent}` is not claude or codex"))
+}
+
+/// The Bare home's credential for `agent`: `(folder, file)`, the first shared-login file of its config folder.
+fn credential(agent: Agent) -> (&'static str, &'static str) {
+    let s = spec(agent);
+    (s.config_dir, s.logins[0])
 }
 
 /// One run's shared part of the generator home: the skill copies every call home reads (`build_run`).
 #[derive(Debug)]
 pub struct RunHome {
-    pub agent: &'static str,
+    pub agent: Agent,
     /// `<Bare home>\gen-<agent>`.
     pub dir: PathBuf,
     /// The Bare home (its lock guards the hand-back).
@@ -84,12 +94,14 @@ pub struct RunHome {
 /// Clears `<bare_home>\gen-<agent>` once and writes `skill.md` and, when given, `merge-skill.md` into it; the
 /// calls then take their own homes with `call`.
 pub fn build_run(agent: &str, bare_home: &Path, run_id: &str, skill_text: &str, merge_skill_text: Option<&str>) -> Result<RunHome, String> {
-    let name = dir_name(agent)?;
+    let agent = agent_of(agent)?;
+    let name = spec(agent).gen_dir;
     check_name("run id", run_id)?;
     let (folder, file) = credential(agent);
-    let Some(source) = super::login_back::source(bare_home, agent, folder, file) else {
+    let id = agent.as_str();
+    let Some(source) = super::login_back::source(bare_home, id, folder, file) else {
         let own = bare_home.join(folder).join(file);
-        return Err(format!("login: no {agent} login at {}; log in on a Bare {agent} tab first", own.display()));
+        return Err(format!("login: no {id} login at {}; log in on a Bare {id} tab first", own.display()));
     };
     let dir = bare_home.join(name);
     if dir.exists() {
@@ -107,7 +119,7 @@ pub fn build_run(agent: &str, bare_home: &Path, run_id: &str, skill_text: &str, 
         }
         None => None,
     };
-    Ok(RunHome { agent: if agent == "claude" { "claude" } else { "codex" }, dir, bare_home: bare_home.to_path_buf(), source, skill, merge_skill })
+    Ok(RunHome { agent, dir, bare_home: bare_home.to_path_buf(), source, skill, merge_skill })
 }
 
 /// After a call, success or failure: its login goes back over the run's source when the CLI refreshed it into a
@@ -142,13 +154,12 @@ pub fn call(run: &RunHome, name: &str) -> Result<GenHome, String> {
     }
     let placed = place_credential(run.agent, &run.source, &config.join(file))?;
     let write = |path: &Path, text: &str| std::fs::write(path, text).map_err(|e| format!("spawn: {} not written ({e})", path.display()));
-    if run.agent == "claude" {
-        write(&config.join("settings.json"), "{}")?;
-    } else {
-        write(&config.join("config.toml"), "cli_auth_credentials_store = \"file\"\n")?;
+    match run.agent {
+        Agent::Claude => write(&config.join("settings.json"), "{}")?,
+        Agent::Codex => write(&config.join("config.toml"), "cli_auth_credentials_store = \"file\"\n")?,
     }
     building.0 = None;
-    Ok(GenHome { dir, config, cwd, skill: Some(run.skill.clone()), placed })
+    Ok(GenHome { agent: run.agent, dir, config, cwd, skill: Some(run.skill.clone()), placed })
 }
 
 /// Removes every call home of the run. `TerminateJobObject` returns before the processes are gone, so a folder
@@ -171,10 +182,11 @@ fn check_name(what: &str, name: &str) -> Result<(), String> {
 }
 
 /// Hard-links `source` to `target`, copying when the link fails.
-fn place_credential(agent: &str, source: &Path, target: &Path) -> Result<Placed, String> {
+fn place_credential(agent: Agent, source: &Path, target: &Path) -> Result<Placed, String> {
     match std::fs::hard_link(source, target) {
         Ok(()) => Ok(Placed::Link),
         Err(_) => {
+            let agent = agent.as_str();
             std::fs::copy(source, target).map_err(|e| format!("login: {agent} login not placed in the generator home ({e})"))?;
             Ok(Placed::Copy)
         }
@@ -193,15 +205,48 @@ impl Drop for BuildGuard {
     }
 }
 
-/// Refuses a home or cwd that holds an instruction file (checked right before the spawn).
+/// Refuses a call home that holds anything but its allow-list, or sits under an instruction file (checked right
+/// before the spawn): the config dir holds only the agent's login files and the one config file `call` wrote, the
+/// cwd nothing, and no ancestor of the cwd holds an instruction file the agent would walk up to and load.
 pub fn assert_clean(home: &GenHome) -> Result<(), String> {
-    assert_dirs_clean([home.config.as_path(), home.cwd.as_path()])
+    assert_allowed(home.agent, &home.config, &home.cwd)
 }
 
-/// `assert_clean` over bare folders: the real runner calls it right before `cmd.spawn()`.
+/// The one file `call` writes beside the credential.
+fn config_file(agent: Agent) -> &'static str {
+    match agent {
+        Agent::Claude => "settings.json",
+        Agent::Codex => "config.toml",
+    }
+}
+
+/// The allow-list check for `agent`'s config dir and work cwd, then the ancestor walk from the cwd's parent up.
+pub fn assert_allowed(agent: Agent, config: &Path, cwd: &Path) -> Result<(), String> {
+    let allowed = |name: &str| spec(agent).logins.contains(&name) || name == config_file(agent);
+    let entries = std::fs::read_dir(config).map_err(|e| format!("spawn: generator config {} not readable ({e})", config.display()))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !allowed(&name) {
+            return Err(format!("spawn: generator home holds {name}"));
+        }
+    }
+    if let Some(entry) = std::fs::read_dir(cwd).map_err(|e| format!("spawn: generator cwd {} not readable ({e})", cwd.display()))?.flatten().next() {
+        return Err(format!("spawn: generator home holds {}", entry.file_name().to_string_lossy()));
+    }
+    for ancestor in cwd.ancestors().skip(1) {
+        for name in instruction_files() {
+            if ancestor.join(name).exists() {
+                return Err(format!("spawn: generator home sits under {name} in {}", ancestor.display()));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The instruction-file check over bare folders: the real runner calls it right before `cmd.spawn()`.
 pub fn assert_dirs_clean<'a>(dirs: impl IntoIterator<Item = &'a Path>) -> Result<(), String> {
     for dir in dirs {
-        for name in INSTRUCTION_FILES {
+        for name in instruction_files() {
             if dir.join(name).exists() {
                 return Err(format!("spawn: generator home holds {name}"));
             }

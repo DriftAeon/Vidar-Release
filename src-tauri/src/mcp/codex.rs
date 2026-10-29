@@ -52,20 +52,21 @@ fn rack_from(home: Home, read: Result<Option<CodexConfig>, String>) -> McpRack {
 pub async fn read_codex_mcp_servers(
     app: AppHandle,
     tab: Option<String>,
+    falcon_session: Option<String>,
     profile: Option<String>,
     row: Option<String>,
 ) -> Result<McpRack, String> {
-    tauri::async_runtime::spawn_blocking(move || read_codex_mcp_servers_row_now(&app, tab, profile, row))
+    tauri::async_runtime::spawn_blocking(move || read_codex_mcp_servers_row_now(&app, tab, falcon_session, profile, row))
         .await
         .map_err(|e| e.to_string())
 }
 
 pub(super) fn read_codex_mcp_servers_now(app: &AppHandle, tab: Option<String>, profile: Option<String>) -> McpRack {
-    read_codex_mcp_servers_row_now(app, tab, profile, None)
+    read_codex_mcp_servers_row_now(app, tab, None, profile, None)
 }
 
-fn read_codex_mcp_servers_row_now(app: &AppHandle, tab: Option<String>, profile: Option<String>, row: Option<String>) -> McpRack {
-    read_codex_mcp_servers_home(codex_config::home_for_row(app, tab.as_deref(), profile.as_deref(), row.as_deref()))
+fn read_codex_mcp_servers_row_now(app: &AppHandle, tab: Option<String>, falcon_session: Option<String>, profile: Option<String>, row: Option<String>) -> McpRack {
+    read_codex_mcp_servers_home(codex_config::home_for_row(app, tab.as_deref(), falcon_session.as_deref(), profile.as_deref(), row.as_deref()))
 }
 
 fn read_codex_mcp_servers_home(home: Home) -> McpRack {

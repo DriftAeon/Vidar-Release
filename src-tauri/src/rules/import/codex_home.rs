@@ -1,5 +1,5 @@
 //! src-tauri\src\rules\import\codex_home.rs — what a Codex home (`CODEX_HOME`, else `~\.codex`) offers the
-//! Bare Runes tab beside Claude's files (run 2026-10-19-codex-primary, plan-p2 D1-D3 and Revisions).
+//! Bare Runes tab beside Claude's files.
 //! Read-only, and an allow-list: only these names are touched, nothing else in the home is opened.
 //! Hook discovery reads hooks.json with a size cap and serializes only event, matcher, program and an opaque pick reference.
 //! - `AGENTS.override.md` / `AGENTS.md`: stat only here (`sources::list` offers the one Codex reads); with an
@@ -188,7 +188,7 @@ pub fn hooks(env: &LocalEnv) -> Vec<LocalFile> {
         let shown = format!("{} · {} · Command Hook", event, matcher.as_deref().unwrap_or("*"));
         let supported = crate::bare::guards::codex_unsupported(&event, matcher.as_deref()).is_none();
         let guard = Guard { event: event.clone(), matcher, run: Vec::new(), source: Some(source.clone()) };
-        LocalFile { path: format!("{}#{event}:{source}", path.display()), shown, ticked: false, guard: Some(guard), codex_supported: Some(supported), ..file(env, &path, "hook") }
+        codex(LocalFile { path: format!("{}#{event}:{source}", path.display()), shown, ticked: false, guard: Some(guard), codex_supported: Some(supported), ..file(env, &path, "hook") })
     }).collect()
 }
 
@@ -346,6 +346,7 @@ mod tests {
         let selected = rows.iter().find(|f| f.guard.as_ref().is_some_and(|g| g.event == "PreToolUse")).unwrap();
         assert!(selected.pickable && selected.shown == "PreToolUse · Bash · Command Hook");
         assert_eq!(selected.codex_supported, Some(true));
+        assert!(rows.iter().all(|f| f.agent == Some("codex")),"Codex home hooks are Codex rows");
         assert_eq!(rows.iter().find(|f| f.guard.as_ref().is_some_and(|g| g.event == "Notification")).unwrap().codex_supported, Some(false));
         let serialized = serde_json::to_string(&got).unwrap();
         assert!(!serialized.contains("sk-secret-1") && !serialized.contains("exit 7") && !serialized.contains("$token"), "{serialized}");

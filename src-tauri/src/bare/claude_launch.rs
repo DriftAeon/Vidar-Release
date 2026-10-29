@@ -51,6 +51,8 @@ struct ClaudeHome {
     vault: Option<super::vault::Vault>,
     /// Plugins, allowed tools and mode, from the vault only.
     floor: Floor,
+    /// The vault's model rune, written as settings.json `model` and sent as the spawn's model.
+    model: Option<String>,
 }
 
 /// The home steps both Claude prepares run (fold W2 L2a): the row's sets resolved for Claude
@@ -87,7 +89,7 @@ fn prepare_home(
     if let Some(skill) = recall_skill::write(root, home_dir, guard, &loadout.recall_skill)? {
         loadout.skills.insert(0, skill.to_string_lossy().into_owned());
     }
-    let mut warnings: Vec<String> = loadout.unsupported.iter().map(|u| format!("{} {} Not Carried by Claude: {}", u.kind, u.item, u.reason)).collect();
+    let mut warnings: Vec<String> = loadout.unsupported.iter().map(|u| set_loadout::not_carried(crate::falcon::Agent::Claude, u)).collect();
     let mut raw_groups = Vec::new();
     let mut script_items = Vec::new();
     for g in &loadout.guard_items {
@@ -104,7 +106,7 @@ fn prepare_home(
     home::prepare_dirs(home_dir, &p.home_dirs)?;
     // Sources read and hashed before the lock (fold 4: LOCK_WAIT is 5 s).
     let plan = copies::plan_for(Agent::Claude, &loadout.skills, &loadout.agents, Some(home_dir));
-    let items = manifest::LaunchItems::claude(&plan, &set_guards, servers.iter().map(|s| s.name.clone()).collect(), loadout.shadow.clone());
+    let items = manifest::LaunchItems::with_guards(&plan, &set_guards, servers.iter().map(|s| s.name.clone()).collect(), loadout.shadow.clone());
     let lock = home::lock(home_dir, home::LOCK_WAIT)?;
     agent_homes::record(Agent::Claude, &lock, home_dir, &legacy, &config, &picked)?;
     let pruned = agent_homes::prune(Agent::Claude, &lock, home_dir, crate::fsx::now_ms());
@@ -114,7 +116,7 @@ fn prepare_home(
         false => {
             let mut login_dirs = p.home_dirs.clone();
             login_dirs.push(picked.rel.clone());
-            login_link::sync_claude(home_dir, &config_dir, &login_dirs, &lock)?
+            login_link_claude::sync_claude(home_dir, &config_dir, &login_dirs, &lock)?
         }
     };
     let git = identity::write(&lock, home_dir, guard);
@@ -143,11 +145,13 @@ fn prepare_home(
         ask: loadout.permissions.ask.clone(),
         mode: loadout.permissions.mode.clone(),
         output_style: loadout.output_style.clone(),
+        model: loadout.model.clone(),
     };
     home::generate_settings_with(&under(root, &p.settings_template), &settings, root, home_dir, guard, &copied.hooks, &extras)?;
     mirror_claude_seen(&config_dir, home_dir, opts.claude_json);
     if !on_legacy {
-        if let Err(e) = home::seed_claude_json(&legacy.join(".claude.json"), &config_dir.join(".claude.json")) {
+        let seeded = home::seed_claude_json(&legacy.join(".claude.json"), &config_dir.join(".claude.json"));
+        if let Err(e) = seeded {
             log_mirror_skip(home_dir, &e);
         }
     }
@@ -169,6 +173,7 @@ fn prepare_home(
         has_row: text.is_some(),
         vault,
         floor,
+        model: loadout.model,
     })
 }
 
@@ -183,8 +188,8 @@ const DRIVE_PLUGIN: &str = "vidar-app";
 /// entry already rides settings.json `permissions.allow`.
 const DRIVE_TOOLS: &str = "mcp__plugin_vidar_drive";
 
-/// What the session's Rune Vault carries for the Claude floor (run 2026-10-25-rune-vault L2b; model
-/// R1): nothing here comes from the profile, so dropping a stock rune drops its effect.
+/// What the session's Rune Vault carries for the Claude floor:
+/// nothing here comes from the profile, so dropping a stock rune drops its effect.
 #[derive(Default)]
 struct Floor {
     /// Plugin rune folders (`<root>\plugins\<name>`) and their names, vault order.
@@ -253,7 +258,7 @@ pub fn prepare_with(
     check_isolation(&p)?;
     check_config_in_home(&p, root, home_dir)?;
     let (root_s, home_s) = (root.to_string_lossy().into_owned(), home_dir.to_string_lossy().into_owned());
-    let ClaudeHome { p, lock, legacy: _, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited, has_row: _, vault, floor } =
+    let ClaudeHome { p, lock, legacy: _, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited, has_row: _, vault, floor, model: _ } =
         prepare_home(p, root, home_dir, inherited, ambient, guard, opts)?;
     let raw_plugins = floor.raw_plugins();
     // Raw has no first-message hook, so it locks its vault at spawn.
@@ -276,9 +281,8 @@ pub fn prepare_with(
     let claude = (probes.find)(&env, &p.binary.name).ok_or_else(|| format!("{} is not on the allowlisted Path; bare spawn refused", p.binary.name))?;
     let version = (probes.version)(&claude, &env);
     let warning = match &version {
-        Some(v) if *v == p.verified_version => None,
-        Some(v) => Some(format!("Claude {v} differs from the verified {}; launching anyway. Verify: node tools/bare/verify-pin.mjs", p.verified_version)),
-        None => Some(format!("Claude version unreadable (verified {}); launching anyway", p.verified_version)),
+        Some(v) => (*v != p.verified_version).then(|| format!("Claude {v} Differs from the Verified {} - Launching Anyway. Verify: node tools/bare/verify-pin.mjs", p.verified_version)),
+        None => Some(format!("Claude Version Unreadable (Verified {}) - Launching Anyway", p.verified_version)),
     };
 
     let plugin_dirs: Vec<String> = raw_plugins.iter().map(|(dir, _)| dir.clone()).collect();
@@ -380,7 +384,7 @@ pub fn prepare_hosted_with(
     // The lock is held only while the home is written: the manifest is create-new with a unique
     // name, so the host round-trip that follows needs no lock (a second bare spawn must not wait
     // on it).
-    let ClaudeHome { p, lock, legacy, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited: _, has_row, vault, floor } =
+    let ClaudeHome { p, lock, legacy, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited: _, has_row, vault, floor, model } =
         prepare_home(p, root, home_dir, inherited, ambient, guard, opts)?;
     let plugin_names = floor.plugin_names(root)?;
     let seed = SessionSeed::new(root, Agent::Claude, "rendered", vault.as_ref(), &loadout_hash);
@@ -428,6 +432,7 @@ pub fn prepare_hosted_with(
         mcp_file: mcp.file,
         claude_config_dir: Some(config_dir),
         plugin_names,
+        model,
         manifest: m,
         file_stamp,
         manifests_dir: home_dir.join("manifests"),
@@ -456,10 +461,12 @@ pub(super) fn check_claude_config_dir(dir: &Path, overlay_dir: &Path, home_dir: 
     }
     let hash12 = |s: &str| s.len() == 12 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
     let name = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    match &config[home.len()..] {
-        [d, _] if d == "claude-homes" && hash12(name) => Ok(()),
-        _ => Err(format!("Claude config dir {} is not the profile's own or a combination folder under claude-homes; spawn refused", dir.display())),
-    }
+    let homes_dir = crate::agent_spec::spec(Agent::Claude).homes_dir;
+    let combo = match &config[home.len()..] {
+        [d, _] => d == homes_dir && hash12(name),
+        _ => false,
+    };
+    combo.then_some(()).ok_or_else(|| format!("Claude config dir {} is not the profile's own or a combination folder under claude-homes; spawn refused", dir.display()))
 }
 
 #[cfg(test)]

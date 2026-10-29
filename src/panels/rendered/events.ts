@@ -4,11 +4,10 @@
 import { invoke } from "../../ipc";
 import type { AgentEvent, Effort, PermissionMode, PlanView, Usage } from "../../agents/protocol";
 import { EFFORT_LEVELS, isPermissionMode } from "../../agents/protocol";
-import { getPref, setPref } from "../../prefs";
-import { codexModelsPref } from "../../agents/codex-settings";
+import { getPref } from "../../prefs";
 import { hostHas } from "./host-profile";
-import { AGENT_PROFILE } from "./agent-profile";
-import { titleCase, prettyModel } from "../../format";
+import { AGENT_PROFILE } from "../../agents/agent-profile";
+import { label, prettyModel } from "../../format";
 import type { AgentTransport } from "./transport";
 import { turnSubtype } from "./format";
 import { el } from "./dom";
@@ -171,7 +170,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
           S.mode = ev.permissionMode; // init/resume truth
         }
         if (!S.switchPending) sl.mode = modeLabel(ev.permissionMode || S.mode);
-        if (ev.cwd) sl.dir = titleCase(ev.cwd.split(/[\\/]/).filter(Boolean).pop() ?? sl.dir);
+        if (ev.cwd) sl.dir = label(ev.cwd.split(/[\\/]/).filter(Boolean).pop() ?? sl.dir);
         S.pillVersion = ev.version;
         if (ev.model) S.pillModel = ev.model;
         renderAgentPill(ev.cwd || opts.cwd);
@@ -212,7 +211,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
           sealGroup();
           S.turnGroups = [];
           const noun = AGENT_PROFILE[opts.agent].resumeNoun; // both profile nouns pluralise with "s"
-          const word = titleCase(ev.count === 1 ? noun.replace(/s$/, "") : noun);
+          const word = label(ev.count === 1 ? noun.replace(/s$/, "") : noun);
           restoredBlock(`${ev.count} ${word}`, !!ev.truncated);
           follow.jump(); // a replayed history lands at the end, no glide
           S.stick = true;
@@ -298,14 +297,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
       }
       case "models": {
         S.models = ev.models;
-        if (opts.agent === "claude" && ev.models.length) {
-          const next = ev.models.map((m) => ({ value: m.value, label: m.label, resolved: m.resolved }));
-          if (JSON.stringify(getPref("claudeModels")) !== JSON.stringify(next)) setPref("claudeModels", next);
-        } else if (opts.agent === "codex" && ev.models.length && !ev.partial) {
-          // Settings › Agents reads it; the tab's own picker stays session-only
-          const next = codexModelsPref(ev.models);
-          if (JSON.stringify(getPref("codexModels")) !== JSON.stringify(next)) setPref("codexModels", next);
-        }
+        AGENT_PROFILE[opts.agent].saveModels(ev.models, !!ev.partial);
         // no settings hint left the pill on "Ready" while the picker ticks the row Default
         // resolves to: show that model, as a hint (first-run smoke 2026-10-08, finding 7)
         const byDefault = sl.model === "Ready" ? ev.models.find((m) => m.value === "default")?.resolved : undefined;

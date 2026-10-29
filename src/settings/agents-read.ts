@@ -3,6 +3,8 @@
 
 import { invalidateConfig, loadConfig, type AgentType } from "../config";
 import { attributeOverlay, migrateOverlay, overlayAgents, type OverlayHit } from "../config-agents";
+import { AGENTS } from "../agents/descriptor";
+import { AGENT_IDS } from "../agents/id";
 import { builtinAgents, PLAIN_KEYS } from "../launcher/roster";
 import { gatewayModuleRows, moduleOn } from "../modules/registry";
 import { offModuleKeys } from "../launcher/roster-shown";
@@ -11,7 +13,7 @@ import type { OverlayEntry } from "./agents-edit";
 // The Type select of a custom row: tab kind by `id` (roster.ts agentKind). A row whose id is not
 // one of these (gateway module ids resolve to `claude` but are not editable here) is shown read-only, so a first edit can never silently rewrite its id.
 export const TYPES: [string, string][] = [
-  ["claude", "Claude"], ["codex", "Codex"], ["gemini", "Gemini"], ["pi", "Pi"], ["shell", "Terminal"],
+  ...AGENT_IDS.map((id): [string, string] => [id, AGENTS[id].name]), ["gemini", "Gemini"], ["pi", "Pi"], ["shell", "Terminal"],
 ];
 export const TYPE_IDS = new Set(TYPES.map(([id]) => id));
 // Fields a representable custom row may carry; anything else set makes it read-only.
@@ -70,7 +72,7 @@ export interface BuiltinView {
 /** Built-in rows whose agent module is off (not shipped, dependency missing): the page lists none of
  *  them, as the + menu does not. Claude, Codex and the gateway modules are the agent modules. */
 export function offKeys(): Set<string> {
-  const ids = new Set(["claude", "codex", ...gatewayModuleRows().map((m) => m.id)]);
+  const ids = new Set<string>([...AGENT_IDS, ...gatewayModuleRows().map((m) => m.id)]);
   return offModuleKeys(builtinAgents(), ids, moduleOn);
 }
 

@@ -81,8 +81,8 @@ pub(crate) fn resolve_hook_ref(g: &Value, home: Option<&Path>, stored: &[Value])
             .cloned()
             .ok_or_else(|| "Stored hook rune changed or is gone; refresh the Runes tab; set layer not saved".to_string());
     }
-    let codex = crate::rules::import::sources::live_codex_home(home).ok_or("Codex home is unavailable; set layer not saved")?;
-    crate::rules::import::codex_home::resolve_hook_at(&codex, event, matcher, source)
+    let live = crate::rules::import::sources::live_codex_home(home).ok_or("Codex home is unavailable; set layer not saved")?;
+    crate::rules::import::codex_home::resolve_hook_at(&live, event, matcher, source)
 }
 
 /// Whether `set` is a plain set name: not empty, no `/ \ :` and no `..`.

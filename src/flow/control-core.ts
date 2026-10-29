@@ -57,7 +57,7 @@ function parseGraph(raw: unknown, deps: PrepareDeps): FlowGraph {
   const r = object(raw, "graph", ["name", "nodes", "edges"]);
   const nodes: FlowNode[] = array(r.nodes, "nodes").map((item, i) => {
     const at = `nodes[${i}]`;
-    const n = object(item, at, ["id", "kind", "title", "subtitle", "x", "y", "model", "fields", "fieldSpecs", "inputs", "outputs", "addons"]);
+    const n = object(item, at, ["id", "kind", "title", "subtitle", "x", "y", "model", "fields", "fieldSpecs", "inputs", "outputs", "addons", "vault"]);
     for (const axis of ["x", "y"]) {
       if (n[axis] !== undefined && (typeof n[axis] !== "number" || !Number.isFinite(n[axis]))) throw new Error(`bad ${at}.${axis}: expected a number`);
     }
@@ -68,13 +68,15 @@ function parseGraph(raw: unknown, deps: PrepareDeps): FlowGraph {
       ...(out.kind === undefined ? {} : { kind: out.kind as "text" | "select" | "number" }),
       ...(spec.options === undefined ? {} : { options: strings(spec.options, `${s}.options`) }),
     }));
+    // A node's permissions come from its vault: an agent-sent allowlist addon is dropped, never honoured.
     const addons = n.addons === undefined ? undefined : entries(n.addons, `${at}.addons`, ["kind", "label", "value"], ["kind", "label", "value"]).map(({ out, at: a }) => ({
       kind: string(out.kind, `${a}.kind`) as FlowNode["addons"] extends (infer T)[] ? T : never,
       label: string(out.label, `${a}.label`), value: string(out.value, `${a}.value`),
-    }));
+    })).filter((addon) => (addon.kind as string) !== "permission-allowlist");
     return { id: string(n.id, `${at}.id`), kind: string(n.kind, `${at}.kind`) as FlowNode["kind"], title: string(n.title, `${at}.title`),
       ...(n.subtitle === undefined ? {} : { subtitle: string(n.subtitle, `${at}.subtitle`) }), x: 0, y: 0,
       ...(n.model === undefined ? {} : { model: string(n.model, `${at}.model`) }),
+      ...(n.vault === undefined ? {} : { vault: string(n.vault, `${at}.vault`) }),
       fields, ...(fieldSpecs === undefined ? {} : { fieldSpecs }), inputs: strings(n.inputs, `${at}.inputs`), outputs: strings(n.outputs, `${at}.outputs`),
       ...(addons === undefined ? {} : { addons: addons as FlowNode["addons"] }) };
   });

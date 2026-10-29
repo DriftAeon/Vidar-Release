@@ -156,6 +156,21 @@ fn the_create_command_floors_every_custom_vault_and_refuses_without_an_agent_or_
 }
 
 #[test]
+fn a_grok_agent_is_refused_at_every_vault_boundary_and_nothing_is_written() {
+    let t = root("grok");
+    assert!(session::adopt(&t.0, "grok", "t-g", "s-g-0001", &[kit_set()]).unwrap_err().contains("\"grok\""));
+    assert!(super::floored_custom(&t.0, "grok", &[kit_set()], &[]).unwrap_err().contains("\"grok\""));
+    assert!(super::create_at(&t.0, None, None, &[kit_set()], &[], Some("grok")).is_err());
+    assert!(std::fs::read_dir(crate::paths::rune_vaults_dir_in(&t.0)).map_or(true, |mut d| d.next().is_none()), "a vault was written for grok");
+}
+
+#[test]
+fn adopt_keeps_each_known_agents_body() {
+    let t = root("bodies");
+    assert_eq!(session::adopt(&t.0, "claude", "t-a", "s-a-0001", &[kit_set()]).unwrap().body, "rendered");
+}
+
+#[test]
 fn the_pre_pick_survives_a_relaunch_through_the_defaults_file() {
     let t = TempDir::new("defaults");
     assert!(super::read_defaults(&t.0).is_empty());

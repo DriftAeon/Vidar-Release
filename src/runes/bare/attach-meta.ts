@@ -3,8 +3,9 @@
 import type { BodyOpts, CardRune } from "../cards";
 import type { BareGuard, BareModuleBundles, BareModuleMcp } from "./flow";
 import { fileName } from "./row-name";
+import { label } from "../../format";
 
-const TC = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+const TC = (w: string): string => label(w);
 
 /** Pure: the single-line `key: value` fields between a file's leading `---` lines. A `>` / `|` block joins its indented
  *  lines with spaces, a `- item` list joins with commas; `#` lines are skipped; a leading BOM is ignored. */

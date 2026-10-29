@@ -54,8 +54,11 @@ export function pageSnapshot(port, delta = true) {
   const candidates = [...doc.querySelectorAll(`${ELEMENTS},${LANDMARKS}`)];
   const interactive = new Set(doc.querySelectorAll(ELEMENTS));
   const visible = (el) => {
-    for (let p = el; p; p = p.parentElement) {
+    let child = null;
+    for (let p = el; p; child = p, p = p.parentElement) {
       if (p.hasAttribute("inert") || p.getAttribute("aria-hidden") === "true") return false;
+      // A closed <details> hides everything but its first <summary>, yet the hidden nodes still report rects.
+      if (child && p.tagName === "DETAILS" && !p.open && child !== [...p.children].find((c) => c.tagName === "SUMMARY")) return false;
       const css = win.getComputedStyle(p);
       if (css.display === "none" || css.visibility === "hidden" || css.visibility === "collapse") return false;
     }

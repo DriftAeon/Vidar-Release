@@ -17,21 +17,19 @@ import { placeBelow } from "../panels/dropdown";
 /** Default value a freshly-added addon starts with — never empty for `retries` (an empty value
  *  would fail validate.ts's "v1 addon has a value" check the moment it's added, §4.2/§7). */
 const ADDON_DEFAULT_VALUE: Record<V1AddonKind, string> = {
-  "permission-allowlist": "",
   "system-prompt": "",
   cwd: "",
   retries: "0",
 };
 
-/** Menu-item tooltip where the limit is worth stating (was the mock's " — cap 3" sub-line; moved
- *  to the tooltip by docs/runs/2026-10-01-descriptor-text/plan.md); the rest have none. */
+/** Menu-item tooltip where the limit is worth stating (a sub-line there would
+ *  crowd the menu); the rest have none. */
 const ADDON_MENU_TITLE: Partial<Record<V1AddonKind, string>> = { retries: "Max 3 Attempts" };
 
 /** Modifier-chip colours: the mock's own hexes, which are the *old* `.flow-addon-*` colours the
  *  brief names ("old .flow-addon-* colours") re-mapped from the legacy kind names (rule/skill/hook/
  *  permission) onto the current v1 kind names (system-prompt/cwd/retries/permission-allowlist). */
 const CHIP_COLOR: Record<V1AddonKind, string> = {
-  "permission-allowlist": "#8f96a3",
   "system-prompt": "#6f8fae",
   cwd: "#a97fc9",
   retries: "#c65f74",
@@ -69,11 +67,6 @@ function refreshCanvasAddons(node: FlowNode): void {
 }
 
 function chipLabel(kind: V1AddonKind, value: string): string {
-  if (kind === "permission-allowlist") {
-    return value
-      ? value.split(",").map((s) => s.trim()).filter(Boolean).join(", ")
-      : "—";
-  }
   if (kind === "retries") return `${fieldLabel(kind)} ${value || "0"}`;
   const v = value || "—";
   return v.length > 28 ? `${v.slice(0, 28)}…` : v;

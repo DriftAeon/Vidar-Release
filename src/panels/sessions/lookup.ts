@@ -68,8 +68,8 @@ export function noteRawCodexSpawn(id: string, ms = Date.now()): void {
   rawSpawnMs.set(id, ms);
 }
 
-type RolloutFetch = (cwd: string, profile: string | null, tab: string | null) => Promise<RolloutThread[]>;
-const fetchRollouts: RolloutFetch = (cwd, profile, tab) => invoke("codex_rollout_threads", { cwd, profile, tab });
+type RolloutFetch = (cwd: string, profile: string | null, tab: string | null, falconSession?: string | null) => Promise<RolloutThread[]>;
+const fetchRollouts: RolloutFetch = (cwd, profile, tab, falconSession) => invoke("codex_rollout_threads", { cwd, profile, tab, falconSession: falconSession ?? null });
 
 /** Re-resolve every live Raw Codex tab's thread from its own home's rollouts (codex-thread.ts
  *  pickRawThreads). One read per (home, cwd). A read that fails leaves its tabs on their launch
@@ -92,7 +92,7 @@ export async function refreshRawCodexThreads(fetch: RolloutFetch = fetchRollouts
   await Promise.all([...new Set(raws.map((t) => rolloutKey(t.profile, t.cwd, t.row)))].map(async (key) => {
     const t = raws.find((r) => rolloutKey(r.profile, r.cwd, r.row) === key)!;
     try {
-      rollouts.set(key, await fetch(t.cwd, t.profile, t.row ?? null));
+      rollouts.set(key, await fetch(t.cwd, t.profile, t.row ?? null, (t.row && sessions.get(t.row)?.falconSession) || null));
     } catch (e) {
       console.error("codex rollout threads:", e);
     }
@@ -183,7 +183,7 @@ export async function falconTabPairs(scope: FalconTabScope = "full"): Promise<Fa
 /** Full per-tab snapshot for the drive hook (window.__vidarDrive.state(), main.ts):
  *  everything `driveSend`/`driveAnswer`'s caller needs to pick a tab, plus which one
  *  is active. `renderedDrive` is the companion — a rendered tab's own chips and
- *  pending cards, kept separate because merging it in is main.ts's job (plan). */
+ *  pending cards, kept separate because merging it in is main.ts's job. */
 export function driveSnapshot(): {
   activeId: string | null;
   tabs: { id: string; title: string; agent: SessionAgent; body: SessionBody; cwd: string | null; hosted: boolean; sessionId: string | null; falconSession: string | null; active: boolean }[];

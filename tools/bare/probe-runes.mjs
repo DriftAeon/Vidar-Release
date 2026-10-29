@@ -1,4 +1,4 @@
-// Probe-runes: one headless Bare turn that proves the rune pointer read and the inline markers (run 2026-10-25-runes-batch).
+// Probe-runes: one headless Bare turn that proves the rune pointer read and the inline markers.
 //
 // Usage: node tools/bare/probe-runes.mjs --agent claude|codex
 //
@@ -14,7 +14,7 @@
 //           read below. The runner then judges the turn itself, never the model's self-report:
 //             read     the transcript holds a Read of vidar-runes/<RULE>.md (and `runeReads` names it)
 //             answer   the reply carries facts only RULE's body holds, and the payload carries only its pointer
-//             markers  a NOTE, never a FAIL (rune markers stay, user pick 2026-10-25): marker text is quoted
+//             markers  a NOTE, never a FAIL (rune markers stay): marker text is quoted
 //                      only when the model is asked to quote its instructions; reports whether the payload
 //                      has markers, the reply quotes any, and the payload's first-list items survive
 //           Prints PASS/FAIL/NOTE per check. Exit 0 no FAIL, 1 a FAIL.
@@ -113,7 +113,7 @@ export function judge(result, transcriptText, agent = "claude") {
 
   const payload = result.payload ?? "";
   const reply = flat(result.reply ?? "");
-  const pointer = payload.includes(`Read ${RULE}.md in skill vidar-runes`);
+  const pointer = payload.includes(`read ${RULE}.md in skill vidar-runes`);
   const inline = FACTS.some((f) => payload.includes(f));
   const missing = FACTS.filter((f) => !reply.includes(flat(f)));
   out.push(["answer", pointer && !inline && !missing.length ? "PASS" : "FAIL", !pointer ? "payload carries no pointer to the rule" : inline ? "payload carries the rule body inline" : missing.length ? `reply lacks ${missing.join(", ")}` : `reply holds ${FACTS.join(", ")}`]);

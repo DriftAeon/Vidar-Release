@@ -1,5 +1,5 @@
 //! src-tauri\src\bare\codex_roles.rs — one Claude agent `.md` (`bareAgents`) turned into a Codex role
-//! file (`<CODEX_HOME>\agents\<name>.toml`, read by Codex 0.163 agent-roles; run 2026-10-19-codex-primary r7).
+//! file (`<CODEX_HOME>\agents\<name>.toml`, read by Codex 0.163 agent-roles).
 //! - `name` is the frontmatter `name`, trimmed, case kept (upstream only wants it non-empty); it is the
 //!   file name too, so it must be a plain file name, and it may not be a built-in role (`default`,
 //!   `explorer`, `worker`, any case). `nickname_candidates = ["<name>"]` only when upstream accepts the

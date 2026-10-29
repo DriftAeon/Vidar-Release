@@ -9,6 +9,7 @@
 // Fetched on first expand and on Refresh; no polling.
 
 import { invoke } from "../ipc";
+import { label } from "../format";
 import { iconImg } from "../icon-img";
 import { summarizeBackend, type BackendStatus } from "./backend-status";
 import { text } from "./rack-row";
@@ -58,7 +59,7 @@ async function viaProxy(candidates: ProxyCandidate[], lmUp: boolean): Promise<HT
     const b = backends.find((x) => x.name === "local-llm");
     if (!b) continue;
     const { live, parts, title } = summarizeBackend(b);
-    return line("sub", live && lmUp ? "mod-dot-ok" : "mod-dot-off", [`Via ${c.name.charAt(0).toUpperCase()}${c.name.slice(1)}`, ...parts].join(" · "), title);
+    return line("sub", live && lmUp ? "mod-dot-ok" : "mod-dot-off", [`Via ${label(c.name)}`, ...parts].join(" · "), title);
   }
   return null; // no proxy fronting it is a normal setup, not a note
 }

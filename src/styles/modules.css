@@ -101,7 +101,7 @@
 .item-btn-list { display: flex; flex-direction: column; gap: var(--space-4); }
 .item-btn {
   display: flex; align-items: center; gap: var(--space-8); min-height: var(--row-28); /* was 12: dot read as a separate item (2026-10-05) */
-  padding: 0 var(--space-6); /* half of 12, user 2026-10-04 */
+  padding: 0 var(--space-6); /* half of 12 */
   text-align: left; cursor: default;
   background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: var(--font-13);
   font-weight: var(--weight-regular); line-height: var(--line-20);

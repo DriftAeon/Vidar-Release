@@ -18,7 +18,8 @@ const dom = setupDom({ stubs: {
   "launcher/roster": `export const agentKind = () => "claude"; export const launcherTypes = []; export const variantsOf = new Map();
     export const shownRoots = () => []; export const shownVariants = () => [];
     export function spawnFrom(...a) { globalThis.__rc.spawns.push(a); return Promise.resolve("tab"); }`,
-  "launcher/codex-recent": `export async function openCodexRecent() {}`,
+  "launcher/codex-recent": `export async function openCodexRecent() {}
+    export function drawCapped(sub, list, draw, place) { list.forEach(draw); place(); }`,
   "launcher/workspaces": "export const workspaces = [];",
   "launcher/menu-rows": `export function twoLineRow(parent, label, sub, title) {
       const b = document.createElement("button"); b.textContent = label;

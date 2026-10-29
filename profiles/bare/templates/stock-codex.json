@@ -7,6 +7,10 @@
     { "library": "stock", "id": "bare-identity-codex" },
     { "library": "stock", "id": "vidar-drive" },
     { "library": "stock", "id": "vidar-control" },
-    { "library": "stock", "id": "drive-allow" }
+    { "library": "stock", "id": "codex-imagegen" },
+    { "library": "stock", "id": "codex-openai-docs" },
+    { "library": "stock", "id": "codex-review-agent" },
+    { "library": "stock", "id": "codex-skill-creator" },
+    { "library": "stock", "id": "codex-skill-installer" }
   ]
 }

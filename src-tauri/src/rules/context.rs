@@ -151,7 +151,7 @@ mod tests {
             return;
         }
         let none = render_with(&RenderCtx::bare(BTreeSet::new()));
-        assert_eq!(none.text, "\n# Bare Set\n\n## Kept\n\n- Global fact — Global fact that every set recalls. Read global-fact.md in skill vidar-runes\n\n");
+        assert_eq!(none.text, "\n# Bare Set\n\n## Kept\n\n- Global fact that every set recalls: read global-fact.md in skill vidar-runes (Global fact)\n\n");
         assert_eq!(none.warnings.len(), 1, "{:?}", none.warnings);
         assert!(none.warnings[0].contains("`hook-rule`") && none.warnings[0].contains("guard-x.mjs"));
 

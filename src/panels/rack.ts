@@ -15,7 +15,7 @@ import { DASH, firstLine, label, titleWords } from "../format";
 import { renderLmStudioDetail } from "./lmstudio";
 import { detailRow, rackRow, text } from "./rack-row";
 import { skillLabel } from "./skill-label";
-import { mcpFocus } from "./mcp-focus";
+import { mcpFocus, mcpFocusRead, type McpFocus } from "./mcp-focus";
 import { applyOrder, enableReorder } from "./reorder";
 import { getFocusedSession, type FocusedSession } from "./sessions";
 import { getPref, setPref } from "../prefs";
@@ -210,7 +210,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   signal?.addEventListener("abort", dispose, { once: true });
   if (signal?.aborted) dispose();
 
-  const rebuild = async (next: string | null, nextProfile: string | null, nextAgent: string | null,
+  const rebuild = async (next: string | null, nextProfile: string | null, nextAgent: McpFocus["agent"],
     nextTab: string | null, nextRow: string | null, mine: number, hidden: Set<string>) => {
   if (disposed) return;
   menu?.close();
@@ -227,9 +227,9 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   let failed = false;
   try {
     // a rail drawer (`only`) shows the focused Codex tab's own row, like the rail button that opened it
-    rack = nextAgent === "codex" && !opts.lmStudioOnly
-      ? await invoke("read_codex_mcp_servers", { tab: nextTab, profile: nextProfile, row: nextRow })
-      : await invoke("read_mcp_servers", { project: next, profile: nextProfile, tab: nextTab, row: nextRow });
+    rack = await mcpFocusRead({
+      agent: opts.lmStudioOnly ? null : nextAgent, tab: nextTab, project: next, profile: nextProfile, row: nextRow,
+    });
   } catch (e) {
     failed = true;
     // the command itself failing is the one case worth shouting about — an
@@ -255,7 +255,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
   if (only) rack.servers = rack.servers.filter(only);
   if (exclude) rack.servers = rack.servers.filter((s) => !exclude(s));
   if (lmOnly) rack.servers = [];
-  available = new Map(rack.servers.map((s) => [rackServerId(s), titleWords(s.name)]));
+  available = new Map(rack.servers.map((s) => [rackServerId(s), titleWords(s.name) || s.name]));
   if (lmOnly || (!only && !exclude)) available.set("rack:lmstudio", "LM Studio");
   rack.servers = rack.servers.filter((s) => !hidden.has(rackServerId(s)));
   // The left-bar rack (index.ts passes `exclude`) lists no server rows: every server has its own
@@ -302,7 +302,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
     let toolsLoaded = false;
     const { row, name, detail } = rackRow({
       key: rackServerId(s),
-      nameParts: [...(serverIcon ? [iconImg(serverIcon)] : []), text("rack-label", titleWords(s.name))],
+      nameParts: [...(serverIcon ? [iconImg(serverIcon)] : []), text("rack-label", titleWords(s.name) || s.name)],
       onOpen: () => {
         if (!toolsLoaded) void loadTools().then(loadBackends);
       },

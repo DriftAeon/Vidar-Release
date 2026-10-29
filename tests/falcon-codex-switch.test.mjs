@@ -17,7 +17,7 @@ const h = setupDom({ stubs: {
 } });
 const transport = await import("../src/panels/rendered/transport.ts");
 rig.real = { createFalconAdoptTransport: transport.createFalconAdoptTransport, falconAgentTransport: transport.falconAgentTransport };
-const { AGENT_PROFILE } = await import("../src/panels/rendered/agent-profile.ts");
+const { AGENT_PROFILE } = await import("../src/agents/agent-profile.ts");
 const { HostedCodexAdapter } = await import("../src/agents/codex-hosted.ts");
 const { CodexAdapter } = await import("../src/agents/codex.ts");
 const { attachRenderedBody, codexHostCapabilities, codexMayHost } = await import("../src/panels/sessions/rendered-body.ts");

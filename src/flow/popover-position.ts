@@ -12,8 +12,7 @@
 // popover.ts's repositionPopover alongside redrawEdges; viewport.ts's applyWorldTransform and a
 // ResizeObserver on the canvas both schedule that frame).
 //
-// Connector geometry matches the approved mock (round 4, flow-popover-connectors.html, variant
-// 3): a GAP-px gap between node and card, a CONNECTOR_LEN-px line overlapping a few px into the
+// Connector geometry: a GAP-px gap between node and card, a CONNECTOR_LEN-px line overlapping a few px into the
 // card. The connector stays at the node header even when the card moves up, no arrowhead.
 
 import { S, NODE_W } from "./state";

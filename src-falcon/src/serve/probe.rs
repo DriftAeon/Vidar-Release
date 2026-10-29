@@ -125,10 +125,12 @@ pub fn probe_session(
 pub(super) fn prepare_client_op(protocol: u32, op: &mut Op) -> Result<(), String> {
     if protocol == PROTOCOL_V1 {
         if let Op::Spawn(params) = op {
-            match params.agent {
-                None | Some(Agent::Claude) => params.agent = None,
-                Some(Agent::Codex) => {
-                    return Err("refusing to send a Codex spawn through protocol v1".into())
+            if let Some(agent) = params.agent {
+                match agent {
+                    Agent::Claude => params.agent = None,
+                    Agent::Codex => {
+                        return Err("refusing to send a Codex spawn through protocol v1".into())
+                    }
                 }
             }
         }

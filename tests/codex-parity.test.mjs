@@ -6,7 +6,7 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 setupDom();
 const { CodexAdapter } = await import("../src/agents/codex.ts");
 const { createStatusBar, modeLabel } = await import("../src/panels/rendered/status-bar.ts");
-const { AGENT_PROFILE } = await import("../src/panels/rendered/agent-profile.ts");
+const { AGENT_PROFILE } = await import("../src/agents/agent-profile.ts");
 const { createPalette } = await import("../src/panels/rendered/palette.ts");
 const { createEvents } = await import("../src/panels/rendered/events.ts");
 

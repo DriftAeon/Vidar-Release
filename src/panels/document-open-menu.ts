@@ -13,6 +13,7 @@
 
 import "./document-open-menu.css";
 import { getPref, setPref } from "../prefs";
+import { titleWords } from "../format";
 import { prettyName } from "./display-name";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
@@ -34,7 +35,7 @@ export interface OpenMenuHooks {
   onOpen(path: string): void;
   /** the path of the open document, if any */
   openPath(): string | undefined;
-  /** the × on the button face: close the open document (user, 2026-10-22) */
+  /** the × on the button face: close the open document */
   onClear(): void;
 }
 
@@ -115,7 +116,7 @@ function clearControl(): HTMLSpanElement {
   x.tabIndex = 0;
   x.title = "Clear";
   x.setAttribute("aria-label", "Clear");
-  x.appendChild(lucide("x", "icn")); // grey line glyph: the red colour close reads as delete (user, 2026-10-22)
+  x.appendChild(lucide("x", "icn")); // grey line glyph: the red colour close reads as delete
   const fire = (e: Event) => { e.preventDefault(); e.stopPropagation(); hooks?.onClear(); };
   x.addEventListener("click", fire);
   x.addEventListener("keydown", (e) => {
@@ -127,7 +128,7 @@ function clearControl(): HTMLSpanElement {
 
 function updateButtonLabel() {
   if (!btn) return;
-  // title left (ellipsised), no count and no chevron: the box reads as the button (2026-10-04; count dropped, user 2026-10-22)
+  // title left (ellipsised), no count and no chevron: the box reads as the button
   const label = document.createElement("span");
   label.className = "doc-open-name";
   label.textContent = openDoc ? prettyName(openDoc.name) : " "; // blank keeps the height, like Display
@@ -186,8 +187,7 @@ function orderKey(key: string): string {
 /** "Docs · falcon-notes" → "Falcon Notes"; "Runs" and "Inbox" pass through. */
 function folderLabel(key: string): string {
   if (key.startsWith("Docs · ")) {
-    return key.slice("Docs · ".length).split(/[-_\s]+/).filter(Boolean)
-      .map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+    return titleWords(key.slice("Docs · ".length));
   }
   return key;
 }

@@ -19,9 +19,9 @@ pub(crate) enum Home {
 
 /// The Codex home a tab reads: its Rune Vault session record, then its live session's; with
 /// neither, a Bare profile reads its own legacy home.
-pub(crate) fn home_for_row(app: &AppHandle, tab: Option<&str>, profile: Option<&str>, _row: Option<&str>) -> Home {
+pub(crate) fn home_for_row(app: &AppHandle, tab: Option<&str>, falcon_session: Option<&str>, profile: Option<&str>, _row: Option<&str>) -> Home {
     resolve(
-        tab.and_then(|id| recorded_home(&crate::paths::root(), id))
+        tab.and_then(|id| recorded_home(&crate::paths::root(), id, falcon_session))
             .or_else(|| tab.and_then(|id| app.state::<crate::agent::AgentManager>().codex_home(id))),
         profile,
         crate::bare::codex_home_for_profile,
@@ -29,10 +29,16 @@ pub(crate) fn home_for_row(app: &AppHandle, tab: Option<&str>, profile: Option<&
     )
 }
 
-fn recorded_home(root: &Path, tab: &str) -> Option<PathBuf> {
-    crate::bare::vault::session::find(root, tab, None, None).ok().flatten()
-        .filter(|r| r.agent == "codex")
-        .map(|r| PathBuf::from(r.home))
+/// The Codex home a session record names, found Falcon session first (a re-adopted tab has a new tab id
+/// while its records keep the old one), then tab id (`session::find`).
+pub(crate) fn recorded_home(root: &Path, tab: &str, falcon_session: Option<&str>) -> Option<PathBuf> {
+    let record = crate::bare::vault::session::find(root, tab, falcon_session, None).ok().flatten()?;
+    // The record's agent id parses once; an unknown id is no Codex record, never a Codex one.
+    let agent = crate::agent_spec::parse(&record.agent)?;
+    match agent {
+        crate::agent_spec::Agent::Codex => Some(PathBuf::from(record.home)),
+        crate::agent_spec::Agent::Claude => None,
+    }
 }
 
 /// Live session first; else a set Bare profile resolves its own home (Err means not
@@ -209,72 +215,6 @@ fn is_program_file(arg: &str) -> bool {
     [".ps1", ".js", ".mjs", ".cjs", ".py", ".exe", ".cmd", ".bat"]
         .iter()
         .any(|ext| lower.ends_with(ext))
-}
-
-/// One user MCP server a Flow Codex node may carry per spawn: its name and URL, nothing else.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct UrlServer {
-    pub(crate) name: String,
-    pub(crate) url: String,
-}
-
-/// Why a user server stays out of a per-spawn carry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Dropped {
-    /// Headers, a bearer token, env or a command (any key shaped like one).
-    Secrets,
-    /// The URL names a login (`user:pass@host`).
-    UrlLogin,
-}
-
-/// The user's MCP servers split for a per-spawn carry (Flow, run 2026-10-19-codex-primary U2).
-#[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct UrlOnly {
-    pub(crate) pass: Vec<UrlServer>,
-    pub(crate) dropped: Vec<(String, Dropped)>,
-}
-
-/// A server key that carries, or points at, a credential or a process: headers
-/// (`http_headers`, `env_http_headers`), a bearer token (`bearer_token`, `bearer_token_env_var`),
-/// env (`env`, `env_vars`) or a command (`command`, `args`, `cwd`).
-fn carries_secrets(key: &str) -> bool {
-    let k = key.to_ascii_lowercase();
-    k.contains("header") || k.contains("bearer") || k.starts_with("env") || matches!(k.as_str(), "command" | "args" | "cwd")
-}
-
-/// True when the URL's authority holds a `user[:pass]@` part.
-fn url_has_login(url: &str) -> bool {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-    authority.contains('@')
-}
-
-/// Pure: the root `[mcp_servers]` of a Codex config.toml, split into URL-only servers (passed
-/// as name + URL) and servers that stay out (by name and reason). A disabled server, or one with
-/// neither a URL nor a command, is skipped silently. Reads key names, the URL and `enabled`
-/// only; never a header, token or env value, and the parser's excerpt never leaves here.
-pub(crate) fn url_only_servers(text: &str) -> Result<UrlOnly, String> {
-    let root = toml::from_str::<Table>(text).map_err(|_| "Invalid Codex config.toml".to_string())?;
-    let mut out = UrlOnly::default();
-    for (name, value) in table(&root, "mcp_servers").into_iter().flatten() {
-        let Some(server) = value.as_table() else { continue };
-        if server.get("enabled").and_then(Value::as_bool) == Some(false) {
-            continue;
-        }
-        if server.keys().any(|k| carries_secrets(k)) {
-            out.dropped.push((name.clone(), Dropped::Secrets));
-            continue;
-        }
-        let Some(url) = string(server, "url") else { continue };
-        if url_has_login(url) {
-            out.dropped.push((name.clone(), Dropped::UrlLogin));
-            continue;
-        }
-        out.pass.push(UrlServer { name: name.clone(), url: url.to_owned() });
-    }
-    out.pass.sort_by(|a, b| a.name.cmp(&b.name));
-    out.dropped.sort();
-    Ok(out)
 }
 
 fn table<'a>(parent: &'a Table, key: &str) -> Option<&'a Table> {
@@ -478,66 +418,35 @@ env_http_headers = { Authorization = "env-header-secret-value" }
             &home.to_string_lossy(), "loadout",
         );
         crate::bare::vault::session::write(&root, &record).unwrap();
-        assert_eq!(super::recorded_home(&root, "tab-vault"), Some(home));
+        assert_eq!(super::recorded_home(&root, "tab-vault", None), Some(home.clone()));
+        // A re-adopted tab: a new tab id, found by the record's Falcon session.
+        assert_eq!(super::recorded_home(&root, "tab-new", None), None);
+        let mut hosted = crate::bare::vault::session::record(
+            "codex", "hosted", "tab-old",
+            crate::bare::vault::session::VaultPin { id: vault.id.clone(), hash: vault.hash.clone() },
+            &home.to_string_lossy(), "loadout",
+        );
+        hosted.falcon_session = Some("fs-1".into());
+        crate::bare::vault::session::write(&root, &hosted).unwrap();
+        assert_eq!(super::recorded_home(&root, "tab-new", Some("fs-1")), Some(home.clone()));
+        assert_eq!(super::recorded_home(&root, "tab-new", Some("fs-other")), None);
         assert!(vault.runesets.is_empty() && vault.runes.is_empty(), "the row's alpha did not enter the session vault");
         let _ = std::fs::remove_dir_all(root);
     }
 
-    /// Flow's per-spawn carry: a URL-only server passes; headers, a bearer token, env or a
-    /// command keep a server out by name, and no secret value reaches the result.
     #[test]
-    fn url_only_servers_pass_and_secret_carriers_stay_out() {
-        let text = r#"
-[mcp_servers.wiki]
-url = "https://example.test/mcp?x=1"
-startup_timeout_sec = 20
-[mcp_servers.headed]
-url = "https://h.test/mcp"
-http_headers = { Authorization = "Bearer sk-header-secret" }
-[mcp_servers.envheaded]
-url = "https://h.test/mcp"
-env_http_headers = { X = "SOME_VAR" }
-[mcp_servers.bearer]
-url = "https://b.test/mcp"
-bearer_token_env_var = "TOKEN_VAR"
-[mcp_servers.rawbearer]
-url = "https://b.test/mcp"
-bearer_token = "sk-bearer-secret"
-[mcp_servers.stdio]
-command = "node"
-args = ["s.mjs"]
-[mcp_servers.envd]
-url = "https://e.test/mcp"
-env = { K = "sk-env-secret" }
-[mcp_servers.login]
-url = "https://user:sk-url-secret@l.test/mcp"
-[mcp_servers.off]
-url = "https://off.test/mcp"
-enabled = false
-[mcp_servers.empty]
-tool_timeout_sec = 5
-"#;
-        let got = url_only_servers(text).unwrap();
-        assert_eq!(got.pass, vec![UrlServer { name: "wiki".into(), url: "https://example.test/mcp?x=1".into() }]);
-        let dropped: Vec<(&str, Dropped)> = got.dropped.iter().map(|(n, d)| (n.as_str(), *d)).collect();
-        assert_eq!(
-            dropped,
-            vec![
-                ("bearer", Dropped::Secrets),
-                ("envd", Dropped::Secrets),
-                ("envheaded", Dropped::Secrets),
-                ("headed", Dropped::Secrets),
-                ("login", Dropped::UrlLogin),
-                ("rawbearer", Dropped::Secrets),
-                ("stdio", Dropped::Secrets),
-            ]
+    fn an_unknown_agent_record_selects_no_home() {
+        let root = std::env::temp_dir().join(format!("vidar-codex-grok-home-{}-{}", std::process::id(), crate::fsx::now_ms()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vault = crate::bare::vault::store::Store::open(&root).create("Chosen", None, &[], &[]).unwrap();
+        let record = crate::bare::vault::session::record(
+            "grok", "raw", "tab-grok",
+            crate::bare::vault::session::VaultPin { id: vault.id.clone(), hash: vault.hash.clone() },
+            "C:\\h\\grok", "loadout",
         );
-        let debug = format!("{got:?}");
-        for secret in ["sk-header-secret", "sk-bearer-secret", "sk-env-secret", "sk-url-secret", "SOME_VAR", "TOKEN_VAR"] {
-            assert!(!debug.contains(secret), "{secret} leaked: {debug}");
-        }
-        assert!(url_only_servers("[x").unwrap_err() == "Invalid Codex config.toml");
-        assert_eq!(url_only_servers("model = \"m\"").unwrap(), UrlOnly::default());
+        crate::bare::vault::session::write(&root, &record).unwrap();
+        assert_eq!(super::recorded_home(&root, "tab-grok", None), None);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

@@ -22,8 +22,7 @@ window.HTMLElement.prototype.releasePointerCapture = () => {};
 const SRC = new URL("../src/", import.meta.url).href;
 const STUBS = {
   ipc: "export function invoke() { return Promise.resolve(null); }",
-  "panels/sessions/astra-bridge": `export function armAstra() {} export function armBlocker() { return null; }
-    export function disarmAstra() {} export function isArmed() { return false; }`,
+  "panels/sessions/astra-bridge": `export function disarmAstra() {}`,
   "panels/sessions/codex-save": "export function saveCodexTabs() {}",
   "panels/sessions/pair": "export function forgetPair() {}",
   "panels/sessions/gateway-art": "export function mayActAsPlainClaude() { return true; }",

@@ -252,7 +252,7 @@ test("host history envelopes identify a resumed thread and replay before live ou
 });
 
 // ---- Codex Bare opens hosted (F1 2b) ----
-const { AGENT_PROFILE, codexHostShape } = await import("../src/panels/rendered/agent-profile.ts");
+const { AGENT_PROFILE, codexHostShape } = await import("../src/agents/agent-profile.ts");
 const bareCaps = ["codex_turns", "codex_bare"];
 const check = (over) => ({ hostedCodex: true, capabilities: bareCaps, rulesFile: null, profile: "bare", ...over });
 

@@ -1,8 +1,8 @@
-/* Onboarding shell (mock onboarding-shell-modules S1, Footer Bar): a full-window overlay over #main and the
+/* Onboarding shell: a full-window overlay over #main and the
    right column, so the left bar stays drawn. The stage holds the step and the title label on the seam; the
    bar under it holds Back (left), the step dots (centre, the current one stretched) and Skip / Next (right).
    Next is the only green button (.ws-btn.ws-add, decision-pair.css). The scrim is the Doors Over the Room
-   one (primary-agent-variants B), made opaque (user, 2026-10-24): nothing behind it shows through. */
+   one (doors over the room), made opaque: nothing behind it shows through. */
 .onboarding-shell {
   grid-column: 2 / -1; grid-row: 1 / -1;
   position: relative; z-index: 5;

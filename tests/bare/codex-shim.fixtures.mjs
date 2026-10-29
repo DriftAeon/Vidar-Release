@@ -1,6 +1,6 @@
 // Codex PreToolUse payload fixtures for tests/bare/codex-shim.test.mjs.
-// REAL_* are the three payloads captured in the user's signed-in probe run (2026-10-19,
-// docs/runs/2026-10-19-codex-primary/reports/p1w0-live.md), verbatim except the user folder name (tests/no-machine-paths.test.mjs forbids the real one). Keys: cwd hook_event_name model
+// REAL_* are the three payloads captured in a signed-in live probe run (2026-10-19),
+// verbatim except the user folder name (tests/no-machine-paths.test.mjs forbids the real one). Keys: cwd hook_event_name model
 // permission_mode session_id tool_input tool_name tool_use_id transcript_path turn_id. The shell tool is `Bash`;
 // apply_patch carries its patch text in tool_input.command. Builders below reuse that shape with another cwd/text.
 

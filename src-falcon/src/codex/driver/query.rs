@@ -2,7 +2,7 @@
 //! response; the stdout reader consumes the reply without publishing a line.
 
 use super::{lock, CodexDriver};
-use crate::{claude::COMMAND_TIMEOUT, process::WriteStatus, protocol::Outcome};
+use crate::{process::WriteStatus, protocol::Outcome, session::driver_props::COMMAND_TIMEOUT};
 use serde_json::{json, Value};
 use std::{collections::HashMap, sync::mpsc};
 
@@ -68,8 +68,8 @@ impl CodexDriver {
 mod tests {
     use super::*;
     use crate::{
-        claude::Observed,
         protocol::{Agent, SpawnParams},
+        session::driver_props::Observed,
     };
     use std::{sync::Arc, time::Duration};
 

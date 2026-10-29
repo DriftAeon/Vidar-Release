@@ -8,8 +8,8 @@ import { invoke } from "../ipc";
 import type { FlowGraph, FlowNode } from "./model";
 import type { FlowRun, FlowRunNodeState, FlowRunStatus, FlowNodeEvent } from "./run";
 import { OUTPUT_CAP_MARKER, resolveHandoffText } from "./run";
-import { backendOfModel } from "./runner";
-import { modeFor, resolveNodeModes, type NodeModes } from "./permission-mode";
+import { backendOfModel, agentOfModel } from "./runner";
+import { resolveNodeGrants, type NodeGrants } from "./permission-mode";
 import { S, notifyPendingApprovalsChanged } from "./state";
 import { topoSort } from "./topo";
 import { renderPrompt, shouldRetry, nextAttemptNumber, settleTerminal, completedRunStatus } from "./render";
@@ -87,13 +87,14 @@ interface RunEngineState {
    *  retry never happens after a denied permission, so an
    *  attempt the user explicitly denied a tool on must not be retried and asked again). */
   deniedAttempts: Set<string>;
-  /** Per-node permission mode, resolved once for the run (the bus card's value, or looked up at start). */
-  modes: Promise<NodeModes>;
+  /** Per-node vault grant (vault, mode, allows, hash), resolved once for the run (the bus card's value, or looked up at start). */
+  grants: Promise<NodeGrants>;
 }
 
-/** One lookup of the user's mode per agent node; the bus card calls it before showing, the canvas at start. */
-export function resolveRunModes(graph: FlowGraph): Promise<NodeModes> {
-  return resolveNodeModes(graph, (models) => invoke("flow_permission_modes", { models }), backendOfModel);
+/** One `flow_node_permissions` lookup per run: each agent node's vault, mode, allows and hash. The bus
+ *  card calls it before showing, the canvas at start. A refused vault rejects. */
+export function resolveRunGrants(graph: FlowGraph): Promise<NodeGrants> {
+  return resolveNodeGrants(graph, (nodes) => invoke("flow_node_permissions", { nodes }), agentOfModel);
 }
 
 /** Call when a permission is answered `allow:false`. Called from run-view.ts's answerPermission
@@ -167,10 +168,6 @@ async function runNode(rs: RunEngineState, nodeId: string, attempt: number): Pro
   // hardcoding a path here means it tracks the actual checkout, not a literal src/flow/engine.ts
   // was shipped with.
   const cwd = addonValue(node, "cwd") ?? "";
-  const allowlist = (addonValue(node, "permission-allowlist") ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
 
   setCurrentAttempt(rs.run.id, nodeId, attempt);
   setNodeState(rs.run, nodeId, {
@@ -184,6 +181,8 @@ async function runNode(rs: RunEngineState, nodeId: string, attempt: number): Pro
   persistRun(rs.run);
 
   try {
+    const grant = (await rs.grants)[nodeId];
+    if (!grant) throw new Error(`No vault grant for node ${nodeId}`);
     await invoke("flow_run_node", {
       runId: rs.run.id,
       nodeId,
@@ -192,8 +191,8 @@ async function runNode(rs: RunEngineState, nodeId: string, attempt: number): Pro
       model: node.model ?? "",
       prompt,
       cwd,
-      toolAllowlist: allowlist,
-      permissionMode: modeFor(await rs.modes, nodeId),
+      vault: grant.vault,
+      vaultHash: grant.hash,
     });
     // A cancel that raced this invoke — it was still pending when cancelRun ran,
     // so flow_cancel_run's session snapshot missed this node's just-spawned child. The child is
@@ -441,7 +440,7 @@ function finishRun(rs: RunEngineState, status: FlowRunStatus): void {
  *  control-approved graph is already the reviewed snapshot and keeps its identity. Starts the
  *  first agent node in chain order. Returns the new `FlowRun` (already
  *  persisted once, before any node starts). */
-export function startRun(graph: FlowGraph, reserved = false, modes?: NodeModes): FlowRun {
+export function startRun(graph: FlowGraph, reserved = false, grants?: NodeGrants): FlowRun {
   if (controlStartReserved && !reserved) throw new Error("flow busy");
   if (liveRuns.size > 0) throw new Error("flow busy");
   ensureAdapterSubscribed();
@@ -466,7 +465,7 @@ export function startRun(graph: FlowGraph, reserved = false, modes?: NodeModes):
     upstreamOutputs: {},
     canceled: false,
     deniedAttempts: new Set(),
-    modes: modes ? Promise.resolve(modes) : resolveRunModes(snapshot),
+    grants: grants ? Promise.resolve(grants) : resolveRunGrants(snapshot),
   };
   liveRuns.set(run.id, rs);
   markRunHeld(run.id);

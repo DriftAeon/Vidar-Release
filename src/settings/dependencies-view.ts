@@ -1,7 +1,7 @@
 // The Dependencies page, the view half: paints the catalog against the last detect
 // report. Pure DOM over `root`; no IPC, no clipboard, no state module. Every click goes out through
 // `actions`, so the page (dependencies.ts) owns side effects and tests can drive this with stubs.
-// Grouped by state (user pick, 2026-10-21): each problem is a card with its fix inside, everything
+// Grouped by state: each problem is a card with its fix inside, everything
 // working folds into a two-column Ready list.
 import type { DepCatalog, DepEntry, DepReport, DepStatus } from "../deps/types";
 import type { ColorIcon } from "../icon-img";
@@ -114,8 +114,13 @@ function button(doc: Document, cls: string, label: string, onClick: () => void):
 /** Startup offers share this page's rows and buttons inside the existing card look. */
 export function renderStartupUpdateRows(
   root: HTMLElement, updates: CliUpdate[], busy: CliUpdateBusy | null, error: string | null,
-  actions: { update(u: CliUpdate): void; skip(u: CliUpdate): void; blocked?(u: CliUpdate): string | null },
+  actions: {
+    update(u: CliUpdate): void; skip(u: CliUpdate): void; blocked?(u: CliUpdate): string | null;
+    /** Update All: shown when given. `running` is true while its batch works through the list. */
+    updateAll?(): void;
+  },
   labels: { heading: string; main: string } = { heading: "CLI Updates", main: "Update" },
+  running = false,
 ): void {
   const doc = root.ownerDocument;
   root.textContent = "";
@@ -129,9 +134,9 @@ export function renderStartupUpdateRows(
     const head = el(doc, "div", "deps-head");
     head.appendChild(el(doc, "span", "deps-label", u.label));
     const controls = el(doc, "div", "deps-route");
-    const update = button(doc, "deps-update", busy?.id === u.id && busy.label === "Updating…" ? busy.label : labels.main, () => actions.update(u));
+    const update = button(doc, "deps-update ws-primary", busy?.id === u.id && busy.label === "Updating…" ? busy.label : labels.main, () => actions.update(u));
     const skip = button(doc, "deps-skip", busy?.id === u.id && busy.label === "Saving…" ? busy.label : "Skip", () => actions.skip(u));
-    update.disabled = skip.disabled = busy !== null;
+    update.disabled = skip.disabled = busy !== null || running;
     // A CLI with an open tab: updating would replace the binary under it, so Update waits.
     const blocked = actions.blocked?.(u) ?? null;
     if (blocked) update.disabled = true;
@@ -143,6 +148,14 @@ export function renderStartupUpdateRows(
   }
   body.appendChild(rows);
   if (error) body.appendChild(el(doc, "div", "deps-error", error));
+  if (actions.updateAll && updates.length) {
+    const all = button(doc, "deps-update-all ws-primary", running ? "Updating All…" : "Update All", () => actions.updateAll?.());
+    // Nothing to start: a job is running, or every CLI waits on an open tab.
+    all.disabled = busy !== null || running || updates.every((u) => !!actions.blocked?.(u));
+    const foot = el(doc, "div", "swap-confirm-actions");
+    foot.appendChild(all);
+    body.appendChild(foot);
+  }
   root.appendChild(body);
 }
 
@@ -200,7 +213,7 @@ function refreshButton(doc: Document, icon: DepIcon, onClick: () => void): HTMLB
   return iconButton(doc, "deps-recheck", icon("refresh-cw"), "Recheck", onClick);
 }
 
-/** A glyph box for a mark that is not a colour icon (Voice Slots' mic, the update arrow). */
+/** A glyph box for a mark that is not a colour icon (the update arrow). */
 function mark(doc: Document, icon: DepIcon, name: LucideName, label?: string): HTMLElement {
   const m = el(doc, "span", "deps-mark");
   m.appendChild(icon(name));
@@ -209,6 +222,14 @@ function mark(doc: Document, icon: DepIcon, name: LucideName, label?: string): H
     m.setAttribute("aria-label", label);
     m.title = label;
   } else m.setAttribute("aria-hidden", "true");
+  return m;
+}
+
+/** A decorative colour icon in the same box as the state marks (Voice Slots' grey mic). */
+function colorMark(doc: Document, color: DepColorIcon, name: ColorIcon): HTMLElement {
+  const m = el(doc, "span", "deps-mark");
+  m.appendChild(color(name));
+  m.setAttribute("aria-hidden", "true");
   return m;
 }
 
@@ -470,7 +491,7 @@ export function renderDependencies(
   voice.setAttribute("data-link", "voice-slots");
   voice.title = "Used by Dictation, Wake Word, Speak Rewrite and Speak";
   voice.append(
-    mark(doc, icon, "mic"),
+    colorMark(doc, color, "mic"),
     el(doc, "span", "deps-label", "Voice Slots"),
     iconButton(doc, "deps-open deps-open-voice-slots deps-site", icon("square-arrow-out-up-right"), "Open Voice Slots", () => actions.openVoiceSlots()),
   );

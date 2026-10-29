@@ -120,5 +120,6 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | notion-page.svg | fluent-color/svg/ic_fluent_document_24_color.svg | Fluent Color, MIT; Notion default page icon |
 | person.svg | fluent-color/svg/ic_fluent_person_24_color.svg | Fluent Color, MIT |
 | people-community.svg | fluent-color/svg/ic_fluent_people_community_24_color.svg | Fluent Color, MIT |
+| scales.svg | noto-emoji/svg/emoji_u2696.svg | Noto Emoji, Apache-2.0 |
 
 Loaded by `src/icon-img.ts` (`iconImg(name)`).

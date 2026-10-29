@@ -1,7 +1,8 @@
-// A Flow Claude stage's sidecar extras (run 2026-10-19-codex-primary, W3e2; flow/claude_mcp.rs builds the argv):
-// `--flow-payload bare --root <root>` sends the Bare profile's static payload text as systemPrompt.append, and
-// `--mcp-servers <json>` becomes options.mcpServers with exactly type and url. With neither arg the SDK options
-// are what they were (every other caller, Falcon's Rendered tabs among them, passes neither).
+// A Flow Claude stage runs on its node's vault home (flow/claude.rs builds the argv):
+// `--flow --profile bare --root <root> --home <home> [--payload] [--set-plugin] [--mcp-file]`, the same mapping a Bare
+// tab gets (claude-sidecar-bare.mjs bareOptions), without Falcon. The stage keeps `canUseTool` and the
+// `--permission-mode` it was given; the old `--flow-payload` and `--mcp-servers` args are gone, and an argv that still
+// carries them is IGNORED like any unknown arg (the sidecar reads only the flags it knows).
 //
 // Offline: the sidecar runs as a child against a stub SDK that records the options it was given, laid out as a
 // Vidar root in a temp dir with USERPROFILE/HOME inside it. Nothing outside the temp dir is read or written.
@@ -14,7 +15,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { flowMcpServers, flowOptions, flowPayload } from "../tools/claude-sidecar-bare.mjs";
+import * as bareModule from "../tools/claude-sidecar-bare.mjs";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 const SIDECAR_FILES = ["claude-sidecar.mjs", "claude-sidecar-shrink.mjs", "claude-sidecar-statusline.mjs", "claude-sidecar-seed.mjs", "claude-sidecar-bare.mjs", "claude-sidecar-recover.mjs", "claude-sidecar-ledger.mjs", "claude-sidecar-trust.mjs"];
@@ -23,7 +24,7 @@ const STUB = `
 import { writeFileSync } from "node:fs";
 export async function getSessionMessages() { return []; }
 export function query({ options }) {
-  writeFileSync(process.env.STUB_OPTIONS, JSON.stringify(options));
+  writeFileSync(process.env.STUB_OPTIONS, JSON.stringify({ ...options, hasCanUseTool: typeof options.canUseTool === "function" }));
   async function* run() { yield { type: "system", subtype: "init", session_id: "s", permissionMode: "auto" }; }
   const it = run();
   return {
@@ -47,15 +48,19 @@ function fixture() {
   for (const p of ["vidar-app", "gate"]) mkdirSync(join(root, "plugins", p), { recursive: true });
   writeFileSync(join(root, "vidar.json"), JSON.stringify({ statuslineMirror: false }));
   mkdirSync(join(root, "userprofile"));
-  return root;
+  const home = join(root, "agent-home");
+  mkdirSync(join(home, "claude-config"), { recursive: true });
+  return { root, home };
 }
 
-function run(root, extra = []) {
+function run(f, extra = [], { mode = "auto", home = true } = {}) {
+  const { root } = f;
   const userprofile = join(root, "userprofile");
-  const args = [join(root, "tools", "claude-sidecar.mjs"), "--cwd", root, "--model", "claude-opus-5-5", "--permission-mode", "auto",
+  const args = [join(root, "tools", "claude-sidecar.mjs"), "--cwd", root, "--model", "claude-opus-5-5", "--permission-mode", mode,
     "--claude", join(root, "claude.exe"), ...extra];
   const env = { ...process.env, USERPROFILE: userprofile, HOME: userprofile, STUB_OPTIONS: join(root, "options.json") };
   delete env.ANTHROPIC_MODEL;
+  delete env.CLAUDE_CONFIG_DIR;
   const child = spawn(process.execPath, args, { cwd: root, env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
   let stdout = "";
   let stderr = "";
@@ -68,90 +73,76 @@ function run(root, extra = []) {
   });
 }
 
+const flowArgs = (f) => ["--flow", "--profile", "bare", "--root", f.root, "--home", f.home];
 const options = (root) => JSON.parse(readFileSync(join(root, "options.json"), "utf8"));
-const SERVERS = { proxy: { type: "http", url: "http://127.0.0.1:8765/mcp" }, events: { type: "sse", url: "https://events.example/sse" } };
 
-test("the payload and carried servers map into the SDK options; neither arg leaves them unchanged", async () => {
-  const root = fixture();
+test("a Flow stage maps the profile onto the SDK options and keeps canUseTool and its mode", async () => {
+  const f = fixture();
   try {
-    let r = await run(root);
+    const r = await run(f, flowArgs(f));
     assert.equal(r.code, 0, `sidecar exited ${r.code}\n${r.stderr}`);
-    const plain = options(root);
-    assert.equal(plain.systemPrompt, undefined);
-    assert.equal(plain.mcpServers, undefined);
-    assert.deepEqual(plain.settingSources, ["user"]); // the fixture home trusts no folder (sidecar-trust.test.mjs)
+    const o = options(f.root);
+    const payload = readFileSync(join(f.root, "profiles", "bare", "payload.md"), "utf8");
+    assert.deepEqual(o.systemPrompt, { type: "preset", preset: "claude_code", append: payload });
+    assert.deepEqual(o.settingSources, ["user"]);
+    assert.equal(o.hasCanUseTool, true);
+    assert.equal(o.permissionMode, "auto");
+    assert.equal(o.model, "claude-opus-5-5");
+    assert.equal(o.mcpServers, undefined);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
 
-    r = await run(root, ["--flow-payload", "bare", "--root", root, "--mcp-servers", JSON.stringify(SERVERS)]);
+test("--permission-mode wins over a home defaultMode of plan or bypass", async () => {
+  const f = fixture();
+  try {
+    for (const defaultMode of ["plan", "bypassPermissions"]) {
+      writeFileSync(join(f.home, "claude-config", "settings.json"), JSON.stringify({ permissions: { defaultMode } }));
+      const r = await run(f, flowArgs(f), { mode: "default" });
+      assert.equal(r.code, 0, `sidecar exited ${r.code}\n${r.stderr}`);
+      const o = options(f.root);
+      assert.equal(o.permissionMode, "default", `home ${defaultMode} must not replace the launch mode`);
+      assert.deepEqual(o.settingSources, ["user"]);
+      assert.equal(o.hasCanUseTool, true);
+    }
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("a stage's --mcp-file becomes one strict MCP set", async () => {
+  const f = fixture();
+  try {
+    mkdirSync(join(f.home, "layer"));
+    const file = join(f.home, "layer", "mcp-0123456789ab.json");
+    const servers = { plugin_vidar_drive: { command: "node", args: ["drive.mjs"] }, proxy: { type: "http", url: "http://127.0.0.1:8765/mcp" } };
+    writeFileSync(file, JSON.stringify({ mcpServers: servers }));
+    const r = await run(f, [...flowArgs(f), "--mcp-file", file]);
     assert.equal(r.code, 0, `sidecar exited ${r.code}\n${r.stderr}`);
-    const flow = options(root);
-    const payload = readFileSync(join(root, "profiles", "bare", "payload.md"), "utf8");
-    assert.deepEqual(flow.systemPrompt, { type: "preset", preset: "claude_code", append: payload });
-    assert.deepEqual(flow.mcpServers, SERVERS);
-    // Everything else is Flow's own: permission mode, model, setting sources, plugins, allowed tools.
-    const { systemPrompt, mcpServers, ...rest } = flow;
-    assert.deepEqual(rest, plain);
-    assert.equal(flow.permissionMode, "auto");
-    assert.equal(flow.model, "claude-opus-5-5");
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-test("the flow args are refused with a launch profile, and a bad server list fails the sidecar", async () => {
-  const root = fixture();
-  try {
-    const home = join(root, "agent-home");
-    mkdirSync(join(home, "claude-config"), { recursive: true });
-    let r = await run(root, ["--falcon", "--profile", "bare", "--root", root, "--home", home, "--flow-payload", "bare"]);
-    assert.equal(r.code, 1);
-    assert.match(r.stdout, /flow stage: a launch profile carries no flow arguments/);
-    r = await run(root, ["--mcp-servers", JSON.stringify({ k: { type: "stdio", command: "node" } })]);
-    assert.equal(r.code, 1);
-    assert.match(r.stdout, /flow stage: MCP server k is not http or sse/);
-  } finally { rmSync(root, { recursive: true, force: true }); }
-});
-
-test("flowOptions is {} with neither arg, and omits an empty server list", () => {
-  const never = (m) => assert.fail(m);
-  assert.deepEqual(flowOptions({ profile: "bare", payload: undefined, servers: undefined, root: undefined }, never), {});
-  assert.deepEqual(flowOptions({ servers: "{}" }, never), {});
-  const seen = [];
-  assert.deepEqual(flowOptions({ servers: "[" }, (m) => seen.push(m)), {});
-  assert.deepEqual(seen, ["flow stage: --mcp-servers is not JSON"]);
-});
-
-test("a Flow stage's --mcp-file joins the user's servers in one strict set; it needs a Flow payload", () => {
-  const root = fixture();
-  try {
-    const home = join(root, "agent-home");
-    mkdirSync(join(home, "layer"), { recursive: true });
-    const file = join(home, "layer", "mcp-0123456789ab.json");
-    const drive = { command: "node", args: ["drive.mjs"], env: {} };
-    writeFileSync(file, JSON.stringify({ mcpServers: { plugin_vidar_drive: drive } }));
-    const never = (m) => assert.fail(m);
-    const argv = ["--mcp-file", file, "--home", home];
-    const o = flowOptions({ payload: "bare", servers: JSON.stringify(SERVERS), root }, never, argv);
-    assert.deepEqual(o.mcpServers, { ...SERVERS, plugin_vidar_drive: drive });
+    const o = options(f.root);
+    assert.deepEqual(o.mcpServers, servers);
     assert.equal(o.strictMcpConfig, true);
-    assert.equal(o.systemPrompt.append, readFileSync(join(root, "profiles", "bare", "payload.md"), "utf8"));
-    const seen = [];
-    assert.deepEqual(flowOptions({ servers: JSON.stringify(SERVERS) }, (m) => seen.push(m), argv), {});
-    assert.deepEqual(seen, ["flow stage: an MCP file needs a launch profile or a Flow payload"]);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
-test("flowMcpServers keeps type and url only and refuses the rest", () => {
-  assert.deepEqual(flowMcpServers(JSON.stringify({ a: { type: "http", url: "https://x", extra: 1 } })), { a: { type: "http", url: "https://x" } });
-  assert.throws(() => flowMcpServers("[]"), /JSON object/);
-  assert.throws(() => flowMcpServers("{"), /not JSON/);
-  assert.throws(() => flowMcpServers(JSON.stringify({ plugin_vidar_drive: { type: "http", url: "https://x" } })), /bad MCP server name/);
-  assert.throws(() => flowMcpServers(JSON.stringify({ a: { type: "http", url: "file:///x" } })), /no http\(s\) url/);
-});
-
-test("flowPayload is the profile's static payload text and refuses a relative root", () => {
-  const root = fixture();
+test("an argv still carrying --flow-payload or --mcp-servers has them ignored", async () => {
+  const f = fixture();
   try {
-    const p = flowPayload({ profile: "bare", root });
-    assert.equal(p.append, readFileSync(join(root, "profiles", "bare", "payload.md"), "utf8"));
-    assert.throws(() => flowPayload({ profile: "bare", root: "relative" }), /absolute/);
-    assert.throws(() => flowPayload({ profile: "lean", root }), /unknown launch profile/);
-  } finally { rmSync(root, { recursive: true, force: true }); }
+    const r = await run(f, [...flowArgs(f), "--flow-payload", "bare", "--mcp-servers", JSON.stringify({ k: { type: "stdio", command: "node" } })]);
+    assert.equal(r.code, 0, `sidecar exited ${r.code}\n${r.stderr}`);
+    assert.equal(options(f.root).mcpServers, undefined);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("--flow needs a profile; a profile without --flow or --falcon is still refused", async () => {
+  const f = fixture();
+  try {
+    let r = await run(f, ["--flow"]);
+    assert.equal(r.code, 1);
+    assert.match(r.stdout, /a Flow stage needs a launch profile/);
+    r = await run(f, ["--profile", "bare", "--root", f.root, "--home", f.home]);
+    assert.equal(r.code, 1);
+    assert.match(r.stdout, /a launch profile needs --falcon/);
+  } finally { rmSync(f.root, { recursive: true, force: true }); }
+});
+
+test("the old Flow mappings are gone from the bare module", () => {
+  for (const name of ["flowOptions", "flowPayload", "flowMcpServers"]) assert.equal(bareModule[name], undefined, name);
 });

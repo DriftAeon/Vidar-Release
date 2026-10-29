@@ -35,6 +35,22 @@ test("The panel reads a Bare tab's pinned vault, without a row content read", as
     "rune_set_toggle", "bare_set_layer_write"].includes(cmd)));
 });
 
+test("A finished turn on the focused Bare tab re-reads its vault, so a first-message lock shows Locked", async () => {
+  // E1 run 3 case 7: the vault locked at the first send, the view kept "Lock" until a tab switch
+  const reads = () => dom.ipc.invoked.filter((cmd) => cmd === "rune_vault_read").length;
+  const before = reads();
+  dom.ipc.answers.rune_vault_read = { vault: { ...vault, lockedUtc: "2026-10-28T07:24:48Z" }, runes: [], warnings: [], drift: [] };
+  document.dispatchEvent(new window.CustomEvent("vidar-reply-done", { detail: { id: "t1", agent: "claude", cwd: "C:/proj" } }));
+  await settle();
+  assert.ok(reads() > before, "the reply re-reads the vault");
+  assert.equal(parent.querySelector(".runes-lock:not([hidden]) span")?.textContent.trim(), "Locked");
+  const after = reads();
+  document.dispatchEvent(new window.CustomEvent("vidar-reply-done", { detail: { id: "other", agent: "claude", cwd: "C:/proj" } }));
+  await settle();
+  assert.equal(reads(), after, "another tab's reply reads nothing");
+  dom.ipc.answers.rune_vault_read = { vault, runes: [], warnings: [], drift: [] };
+});
+
 test("Switching focus away removes the Bare view", async () => {
   globalThis.__focus = raw;
   document.dispatchEvent(new window.CustomEvent("vidar-focus"));

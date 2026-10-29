@@ -1,6 +1,8 @@
-// Pure rack identities and saved-order migration. rack.ts adopts these in Wave 5.
+// Pure rack identities and saved-order migration. rack.ts adopts these.
 
 import icons from "../../contracts/icons.json" with { type: "json" };
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { titleWords } from "../format.ts";
 
 export interface RackServerIdentity {
   name: string;
@@ -75,12 +77,8 @@ export function dedupeRackServers<T extends RackServerIdentity>(servers: readonl
 
 /** Rail button label: camelCase, `-` and `_` split into Title Case words; OpenAI stays one word. */
 export function serverTitle(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((w) => (w.toLowerCase() === "openai" ? "OpenAI" : w[0].toUpperCase() + w.slice(1)))
-    .join(" ");
+  // OpenAI stays here, not in the format.ts table: the agent-literal strict ratchet refuses a new "openai" key there.
+  return titleWords(name).split(" ").map((w) => (w.toLowerCase() === "openai" ? "OpenAI" : w)).join(" ");
 }
 
 /** The :8399 proxy's config key and address; either one maps a row to the Proxy MCP button. */

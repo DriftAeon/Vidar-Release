@@ -1,4 +1,4 @@
-//! The Issues tab's five commands (plan § D6). The token crosses IPC once, on Connect, straight
+//! The Issues tab's five commands. The token crosses IPC once, on Connect, straight
 //! into a `Token`; no command returns it. Every request re-reads vidar.json, re-runs
 //! `validate_settings` and checks the site binding (vidar.json's host equals the credential's
 //! `Comment`) before any header is built, so an edited vidar.json cannot send the token to
@@ -17,7 +17,7 @@ use super::jql::{self, Filters};
 use super::vault::{self, CredVault, Saved, Vault};
 use crate::net::deadline::{self, Elapsed};
 
-/// The whole `jira_issues` budget (plan § D4): WinHTTP's own timeouts cannot interrupt a blocked
+/// The whole `jira_issues` budget: WinHTTP's own timeouts cannot interrupt a blocked
 /// call, so the reply is awaited against this and the worker abandoned past it.
 pub const DEADLINE: Duration = Duration::from_secs(20);
 

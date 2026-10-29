@@ -19,10 +19,10 @@ const S = {
   // --no: never download; without node_modules npx would fetch the deprecated npm `tsc` package (2.0.4).
   tsc: ['tsc', 'npx --no -- tsc --noEmit'],
   test: ['npm test', 'npm test'],
-  // The drift test reads main.rs's generate_handler! list, so a Rust-only commit needs it too (9c2698f7 missed it).
+  // The drift test reads main.rs's generate_handler! list, so a Rust-only commit needs it too.
   ipcDrift: ['ipc drift test', 'node --test --experimental-strip-types tests/ipc-commands.test.mjs'],
-  // 09633468 staged only src-tauri files, skipped npm test, and the tree scans went red for every later lane.
-  treeScans: ['tree scans', 'node --test tests/no-machine-paths.test.mjs tests/paths-contract.test.mjs'],
+  // A commit staging only src-tauri files skipped npm test, and the tree scans then went red for every later commit.
+  treeScans: ['tree scans', 'node --test tests/no-machine-paths.test.mjs tests/paths-contract.test.mjs tests/agent-literals.test.mjs tests/agent-ids-parity.test.mjs'],
   build: ['npm build', 'npm run build'],
   checkTauri: ['cargo check tauri', 'cargo check --manifest-path src-tauri/Cargo.toml'],
   checkFalcon: ['cargo check falcon', 'cargo check --manifest-path src-falcon/Cargo.toml'],
@@ -44,11 +44,21 @@ function staged() {
   return (r.stdout || '').split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
+// `git commit -- <paths>` runs the hook with a temporary GIT_INDEX_FILE; spawned test commands must not inherit it
+// (release-build.test.mjs then sees another dirty set). staged() above keeps the inherited env: it reads that index.
+export function stepEnv(base = process.env) {
+  const env = { ...base };
+  delete env.GIT_INDEX_FILE;
+  return env;
+}
+
 export function plan(f = staged()) {
   if (tier === 'full') return [S.build, S.runes, S.cook, S.docsIndex, S.test, S.testTauri, S.testFalcon, S.checkFalcon];
   const web = (p) => /\.(ts|tsx|js|mjs|cjs|css|html)$/.test(p) && (p.startsWith('src/') || !p.includes('/'));
   const needWeb = f.some(web);
-  const needTest = f.some((p) => p.startsWith('tests/') || (p.startsWith('tools/') && p.endsWith('.mjs')));
+  // A tools .ps1 or a content .py is scanned for agent keys, so staging one runs npm test and the tree scans.
+  const keyed = f.some((p) => /^(tools\/.*\.ps1|content\/.*\.py)$/.test(p));
+  const needTest = keyed || f.some((p) => p.startsWith('tests/') || (p.startsWith('tools/') && p.endsWith('.mjs')));
   const needTauri = f.some((p) => p.startsWith('src-tauri/'));
   // Falcon imports from src-tauri; unsure which files, so any src-tauri change checks it too.
   const needFalcon = needTauri || f.some((p) => p.startsWith('src-falcon/'));
@@ -63,7 +73,8 @@ export function plan(f = staged()) {
   if (f.some((p) => /^docs.(explore.)?INDEX.md$/.test(p))) steps.push(S.docsIndex);
   if (needTest) steps.push(S.test);
   else if (f.includes('src-tauri/src/main.rs') || f.includes('src/ipc-hosts.ts')) steps.push(S.ipcDrift);
-  if (!needTest && f.some((p) => /^(src-tauri|src-falcon|profiles)\//.test(p))) steps.push(S.treeScans);
+  // The agent-literal ratchet reads src/**/*.ts, so a src-only commit (no tests/ file) runs the tree scans too.
+  if (keyed || (!needTest && (needWeb || f.some((p) => /^(src-tauri|src-falcon|profiles)\//.test(p))))) steps.push(S.treeScans);
   if (needTauri) steps.push(S.checkTauri);
   if (needFalcon) steps.push(S.checkFalcon);
   return steps;
@@ -78,7 +89,7 @@ if (!steps.length) process.exit(0);
 const t0 = Date.now();
 for (const [name, cmd, hint] of steps) {
   const t = Date.now();
-  const r = spawnSync(cmd, { cwd: root, shell: true, encoding: 'utf8', maxBuffer: 1 << 28 });
+  const r = spawnSync(cmd, { cwd: root, shell: true, env: stepEnv(), encoding: 'utf8', maxBuffer: 1 << 28 });
   const secs = ((Date.now() - t) / 1000).toFixed(1);
   const ok = r.status === 0;
   console.log(`${name.padEnd(20)} ${ok ? 'pass' : 'FAIL'} ${secs}s`);

@@ -1,6 +1,5 @@
-/* ---- Changes tab (panels/changes.ts, changes/view.ts): Variant A, Two Groups (mock
-   changes-panel-mock.html, user 2026-10-15). Status letters and +/- counts take the --git-* tokens;
-   file glyphs the mock's tint map. Compact buttons share the bench's .wb-actions button look
+/* ---- Changes tab (panels/changes.ts, changes/view.ts): two groups. Status letters and +/- counts take the --git-* tokens;
+   file glyphs take a tint map. Compact buttons share the bench's .wb-actions button look
    (workbench.css); the Revert All confirm uses the decision pair (decision-pair.css). */
 .changes-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
 .changes-pane [hidden] { display: none; }

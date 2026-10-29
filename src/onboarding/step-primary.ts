@@ -3,6 +3,8 @@
 // whose agent is not installed is drawn disabled; a side the release set does not list is not drawn.
 // A click opens that agent's setup view (path, login, version where known) and "Use X" writes
 // `primaryAgent` the way Settings does (patch_settings), then moves on. Login is never a gate.
+import { AGENTS } from "../agents/descriptor";
+import { AGENT_IDS } from "../agents/id";
 import { effectivePrimary, primaryAsked, primaryChoices, type PrimaryAgent } from "../agents/primary";
 import { loadConfig, onSettingsChanged } from "../config";
 import { CATALOG, depsReport, onDepsChange } from "../deps/state";
@@ -12,11 +14,7 @@ import { moduleListed, onModulesChange } from "../modules/registry";
 import { knownUpdates, onKnownUpdates } from "../startup-updates/known";
 import { registerStep, type StepCtx } from "./steps";
 
-const AGENTS: readonly { id: PrimaryAgent; label: string }[] = [
-  { id: "claude", label: "Claude" },
-  { id: "codex", label: "Codex" },
-];
-const LABEL: Record<PrimaryAgent, string> = { claude: "Claude", codex: "Codex" };
+const LABEL = Object.fromEntries(AGENT_IDS.map((id) => [id, AGENTS[id].name])) as Record<PrimaryAgent, string>;
 
 const LEAN = 54; // hover leans the seam to 54 / 46 toward the hovered side
 const STEP = 70; // after a click the chosen side holds 70 / 30
@@ -62,7 +60,7 @@ function setupCard(id: PrimaryAgent): HTMLElement {
 registerStep({
   id: "primary",
   title: "Primary Agent",
-  hideTitle: true, // user, 2026-10-24: the label crossed the seam and added nothing
+  hideTitle: true, // the label crossed the seam and added nothing
   mount(body: HTMLElement, ctx: StepCtx) {
     const root = el("div", "ob-primary");
     body.appendChild(root);
@@ -72,7 +70,7 @@ registerStep({
     let error = "";
     let disposed = false;
 
-    const listed = (): PrimaryAgent[] => AGENTS.filter((a) => moduleListed(a.id)).map((a) => a.id);
+    const listed = (): PrimaryAgent[] => AGENT_IDS.filter((id) => moduleListed(id));
 
     function seam(p: number | null): void {
       ctx.setSeam(p);

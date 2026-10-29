@@ -129,7 +129,7 @@ export function subpageItems(blocks: unknown[]): Item[] {
   return out;
 }
 
-/** The fallback page link for an id with no url seen yet (plan § IPC: www.notion.so/<32hex>). */
+/** The fallback page link for an id with no url seen yet (www.notion.so/<32hex>). */
 export const fallbackUrl = (id: string) => `https://www.notion.so/${id.replace(/-/g, "").toLowerCase()}`;
 
 /** Kinds whose message is a full sentence shown under the title; the rest carry a Rust text as a tooltip. */

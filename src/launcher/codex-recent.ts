@@ -9,8 +9,38 @@ import { spawnFrom } from "./roster";
 import { openColumn, placeColumn } from "./columns";
 import { twoLineRow } from "./menu-rows";
 import { ago } from "./ago";
+import { lucide } from "../icons";
 import { cachedList } from "./recent-cache";
 
+
+/** Rows shown before the Show More chevron; the list Rust returns is longer (display-only cap). */
+const RESUME_CAP = 6;
+
+/** Draw `list` into the Resume column `sub`: the newest RESUME_CAP rows, then, when there are more,
+ *  a chevron row that expands the rest in place (and collapses it again). `place` re-measures the
+ *  column; an expanded list scrolls inside the room left on screen. */
+export function drawCapped<T>(sub: HTMLElement, list: readonly T[], draw: (item: T) => void, place: () => void): void {
+  let expanded = false;
+  const render = () => {
+    sub.innerHTML = "";
+    sub.style.maxHeight = "";
+    for (const item of expanded ? list : list.slice(0, RESUME_CAP)) draw(item);
+    if (list.length > RESUME_CAP) {
+      const more = document.createElement("button");
+      more.className = "launcher-more";
+      // a chevron despite the no-chevron rule: this one toggles the Resume cap
+      more.appendChild(lucide("chevron-down", "icn"));
+      more.classList.toggle("is-open", expanded);
+      more.title = more.ariaLabel = expanded ? "Show Less" : "Show More";
+      more.addEventListener("click", () => { expanded = !expanded; render(); });
+      sub.appendChild(more);
+    }
+    place();
+    const top = parseFloat(sub.style.top) || 0;
+    sub.style.maxHeight = `${Math.max(120, window.innerHeight - top - 8)}px`;
+  };
+  render();
+}
 
 // The list and the held-thread refresh share one fetch per launcher opening (recent-cache): the
 // Codex agent column starts them early (prefetchCodexRecent), Resume reuses the same promises.
@@ -49,7 +79,7 @@ export async function openCodexRecent(
     } catch (e) {
       if (stale() || sub.classList.contains("hidden")) return;
       sub.innerHTML = "";
-      console.error("codex threads:", e);
+      console.error("thread list:", e);
       note("Can't Read Threads", "launcher-note launcher-note-err");
       placeColumn(depth, anchor);
       return;
@@ -62,15 +92,17 @@ export async function openCodexRecent(
   if (stale() || sub.classList.contains("hidden")) return;
   sub.innerHTML = "";
   if (!list.length) note(DASH);
-  for (const r of list) {
-    const inVidar = codexThreadHolder(r.id) !== null;
+  const draw = (r: CodexThreadRow) => {
+    const holder = codexThreadHolder(r.id);
+    const inVidar = Boolean(holder);
     const age = `${ago(r.ageSecs)} · ${r.model ? prettyModel(r.model) : r.id.slice(0, 8)}`;
     const why = inVidar ? "open in Vidar" : age;
     const b = twoLineRow(sub, r.label, why, `${r.cwd}\n${r.id}`);
-    if (inVidar) { b.classList.add("inert"); continue; }
+    if (inVidar) { b.classList.add("inert"); return; }
     b.addEventListener("click", () => {
       void spawnFrom({ ...rendered, model: r.model || rendered.model, cwd: undefined }, { label: loc.label, cwd: r.cwd || loc.cwd }, undefined, r.id); // the vault comes from the thread's session record (spawnFrom, rune_vault_session); no title: createSession mints a themed name
     });
-  }
-  placeColumn(depth, anchor);
+  };
+  if (!list.length) return placeColumn(depth, anchor);
+  drawCapped(sub, list, draw, () => placeColumn(depth, anchor));
 }

@@ -27,7 +27,7 @@ function commitResolves(hash) {
   }
 }
 
-// Evidence counts when it exists on disk or sits under a git-ignored path (docs/runs/ is
+// Evidence counts when it exists on disk or sits under a git-ignored path (the runs folder is
 // gitignored, so a fresh worktree lacks it); a missing non-ignored path still fails.
 function evidenceOk(p) {
   if (existsSync(join(ROOT, p))) return true;

@@ -43,22 +43,15 @@
   ],
   "entries": [
     {
-      "path": "src-tauri/src/bare/vault/migrate.rs",
-      "code": 1206,
-      "status": "owed",
-      "seams": "",
-      "note": "Rune Vault migration plan; split and durable seams already extracted (migrate_split.rs, migrate_durable.rs)"
-    },
-    {
       "path": "tools/bare/probe-claude.ps1",
       "code": 839,
       "status": "owed",
       "seams": "",
-      "note": "P1 probe pack for the bare-mode run: one harness, one fixture per probe; test tooling, not app code (bare-mode 2026-10-13)"
+      "note": "Probe pack for bare mode: one harness, one fixture per probe; test tooling, not app code"
     },
     {
       "path": "tools/falcon/falcon-slice1.ps1",
-      "code": 762,
+      "code": 761,
       "status": "parked",
       "seams": "",
       "note": "churn nil"

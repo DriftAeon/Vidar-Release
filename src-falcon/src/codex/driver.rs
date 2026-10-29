@@ -1,10 +1,10 @@
 //! Host-owned app-server initialization and thread readiness.
 
 use crate::{
-    claude::{Observed, PermissionState},
     journal::{Body, CodexRecord},
     process::{Child, WriteStatus},
     protocol::{Outcome, SpawnParams},
+    session::driver_props::{Observed, PermissionState},
 };
 use serde_json::{json, Value};
 use std::{
@@ -12,17 +12,6 @@ use std::{
     sync::{Condvar, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
-
-impl crate::session::AgentDriver {
-    /// A Codex driver carrying the admitted rune payload for its `thread/start`; Claude drivers
-    /// are returned unchanged.
-    pub fn with_developer_instructions(self, text: Option<String>) -> Self {
-        match self {
-            Self::Codex(d) => Self::Codex(d.with_developer_instructions(text)),
-            other => other,
-        }
-    }
-}
 
 mod answers;
 mod approvals;
@@ -69,8 +58,8 @@ pub struct CodexDriver {
     cwd: String,
     requested_model: Option<String>,
     resume: Option<String>,
-    /// The admitted rune payload, sent as `developerInstructions` on every `thread/start`.
-    /// `thread/resume` ignores it, so it is never added there.
+    /// The admitted rune payload, sent as `developerInstructions` on every `thread/start`
+    /// and `thread/resume` (Codex 0.164.0's resume params accept it).
     developer_instructions: Option<String>,
     permission_mode: String,
     policy: Mutex<PromptPolicy>,
@@ -143,7 +132,7 @@ impl CodexDriver {
         self
     }
 
-    /// `thread/start` params: the mode's policy, plus the payload when one was admitted.
+    /// `thread/start` (and `thread/resume`) params: the mode's policy, plus the payload when one was admitted.
     fn start_params(&self, mode: &str) -> Result<serde_json::Map<String, Value>, String> {
         let mut params = policy::thread_params(&self.cwd, mode, self.requested_model.as_deref())?;
         if let Some(text) = self.developer_instructions.as_ref() {
@@ -236,11 +225,7 @@ impl CodexDriver {
         });
 
         let (method, params) = if let Some(thread) = self.resume.as_deref() {
-            let mut params = policy::thread_params(
-                &self.cwd,
-                &self.permission_mode,
-                self.requested_model.as_deref(),
-            )?;
+            let mut params = self.start_params(&self.permission_mode)?;
             params.insert("threadId".into(), Value::String(thread.to_string()));
             params.insert("excludeTurns".into(), Value::Bool(true));
             ("thread/resume", params)

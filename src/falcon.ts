@@ -3,6 +3,8 @@ import { invoke } from "./ipc";
 import type { FalconSessionSummary } from "./ipc";
 import { createFalconAdoptTransport, createRenderedBody, type RenderedBody } from "./panels/rendered";
 import { withDetachNote } from "./panels/rendered/detach-note";
+import { isAgentId } from "./agents/id";
+import { adoptRefusal } from "./launcher/readopt";
 import { isPermissionMode, type PermissionMode } from "./agents/protocol";
 import { firstLine, prettyModel } from "./format";
 import { applyThemeAttr } from "./theme";
@@ -170,6 +172,13 @@ async function detachBody(): Promise<void> {
 
 async function adopt(session: HostedSession, draft?: string, detached = false): Promise<void> {
   if (switching || session.exited !== null) return;
+  // An unknown agent is refused, never opened as Claude. Codex is not gated here: this window
+  // never reads the hostedCodex gate, and it has always opened a hosted Codex session as Codex.
+  const agent = session.agent;
+  if (!isAgentId(agent)) {
+    showStatus(adoptRefusal(session) ?? `Unknown agent "${agent}": Vidar cannot open this session.`, true);
+    return;
+  }
   switching = true;
   picker.disabled = true;
   showStatus(`Opening ${displayName(session)}...`);
@@ -177,7 +186,7 @@ async function adopt(session: HostedSession, draft?: string, detached = false): 
     await detachBody();
     selected = session;
     const next = createRenderedBody({
-      tabId: "falcon-shell", tabName: session.tab_name ?? null, host: "falcon-shell", agent: session.agent === "codex" ? "codex" : "claude", cwd: session.cwd,
+      tabId: "falcon-shell", tabName: session.tab_name ?? null, host: "falcon-shell", agent, cwd: session.cwd,
       model: session.model, effort: null, permissionMode: mode(session.permission_mode),
       // a gateway or bare session's /clear respawns under the same gateway or profile, not plain
       // Claude (the shell itself refuses a profiled spawn: it has no home to prepare)
@@ -276,7 +285,7 @@ async function loadSessions(preferred?: string): Promise<boolean> {
     // The shell renders Claude and hosted Codex sessions (a durable transport picks the hosted
     // Codex adapter); any other agent stays unlisted. Only a gated-on Vidar starts hosted Codex,
     // so with the gate off the list is today's. The summary always carries `agent`.
-    const sessions = (payload.sessions ?? []).filter((session) => session.agent === "claude" || session.agent === "codex");
+    const sessions = (payload.sessions ?? []).filter((session) => isAgentId(session.agent));
     picker.replaceChildren();
     if (!sessions.length) {
       picker.append(new Option("No Hosted Sessions", ""));

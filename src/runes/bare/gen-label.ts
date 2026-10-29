@@ -1,5 +1,6 @@
 // src\runes\bare\gen-label.ts — the readable name of a generated rune library (moved out of view.ts, which
-// re-exports it, to keep that module under its size line; run 2026-10-20-rune-sets, W4).
+// re-exports it, to keep that module under its size line).
+import { label } from "../../format";
 import { nameLabel } from "./row-name";
 
 const GEN_PRODUCE = ["Apple", "Pear", "Plum", "Peach", "Cherry", "Grape", "Lemon", "Lime", "Mango", "Melon", "Fig", "Kiwi",
@@ -18,10 +19,9 @@ export function genLabel(library: string): string | null {
   if (!m) return null;
   const toks = m[1].split("-").filter(Boolean);
   if (toks.length < 2 || toks[toks.length - 1] !== "bare") return null;
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const [agent, ...rest] = toks.slice(0, -1);
   const produce = GEN_PRODUCE[parseInt(m[2], 16) % GEN_PRODUCE.length];
-  return ["Runes", cap(agent), "Bare", ...rest.map(cap), produce].join("-");
+  return ["Runes", label(agent), "Bare", ...rest.map((t) => label(t)), produce].join("-");
 }
 
 /** How a library name reads: a generated one by genLabel, any other in Title Case (nameLabel;

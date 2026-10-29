@@ -7,7 +7,7 @@
   "tags": ["settings", "drag"],
   "realModel": false,
   "core": false,
-  "source": ["099c3d69"],
+  "source": [],
   "steps": [
     { "intent": "open Settings and find the MCP Servers list" },
     { "intent": "drag a row, release it over the wrong spot, then drag it again to the right spot" },

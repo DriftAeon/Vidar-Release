@@ -99,7 +99,7 @@
 .flow-addon-menu-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 /* shift+drag-on-empty-canvas selection rectangle, in canvas (screen) space */
 .flow-marquee { position: absolute; border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; }
-/* Ports: a flattened downward triangle, 14x5 px (approved mock flow-edges-mock.html), in a 22x10
+/* Ports: a flattened downward triangle, 14x5 px, in a 22x10
    hit box. The span's box is the single source for where an edge meets the port (edges.ts's
    portCenter reads its offsets), so the triangle must stay centred in it: span width even (22),
    svg at left 4px, width 14 -> both centred on the span's midpoint, which with the card's
@@ -117,7 +117,7 @@
 .flow-port polygon { fill: var(--kind); stroke: var(--kind); stroke-width: 1; stroke-linejoin: round; }
 .flow-port-in:not(.connected) polygon { fill: var(--bg); }
 .flow-port:hover svg { transform: scale(1.35); filter: brightness(1.4); }
-/* Flow text buttons wear the Sheen `.ws-btn` face (user 2026-10-22); the icon buttons Save and Tidy keep the flat look. */
+/* Flow text buttons wear the Sheen `.ws-btn` face; the icon buttons Save and Tidy keep the flat look. */
 .flow-tidy-btn, .flow-save-btn { font-size: var(--font-11); padding: var(--space-2) var(--space-6); background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-3); color: var(--fg-dim); cursor: pointer; } /* pre-existing legacy tokens, grandfathered (lint:ui) */
 .flow-tidy-btn:hover, .flow-save-btn:hover { color: var(--fg); border-color: var(--accent); }
 .flow-save-btn:disabled:hover, .flow-tidy-btn:disabled:hover { color: var(--fg-dim); border-color: var(--border); }
@@ -133,7 +133,7 @@
 /* ---- flow toolbar:
    flow picker + New, the run selector, Run · Cancel, a spacer, then ADD (filled green). No Pause
    (shelved — engine.ts has cancel only, not a real hold) and no Tidy: neither appears in the
-   approved mock's toolbar row. Reset Layout lives on the canvas itself, not this row (above).
+   the toolbar row. Reset Layout lives on the canvas itself, not this row (above).
    `.flow-node.invalid` marks a node validate.ts rejects. */
 .flow-toolbar {
   display: flex; align-items: center; gap: var(--space-8); position: relative; /* no padding, fill or rule: the pane shell (.wb-pane-head) owns the head; #workbench insets 10px so the picker lines up with the tab icons (2026-10-04) */
@@ -174,8 +174,8 @@
 .flow-palette-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .flow-palette-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .flow-palette-sep { height: 1px; background: var(--border); margin: var(--space-4) 0; }
-/* Flow picker (mock state 1's `<select>` + New button): New is a plain house button — the mock
-   has no dedicated class or override for it (`<button>New</button>`), so `.flow-picker-new` joins
+/* Flow picker (`<select>` + New button): New is a plain house button with no dedicated class
+   or override (`<button>New</button>`), so `.flow-picker-new` joins
    no sibling selector here; it reads correctly off the `:where(button)` floor above as-is. New's
    inline name field (instead of window.prompt) swaps in for New: the field plus Create,
    which shares New's look off the same floor. */
@@ -279,8 +279,8 @@
 /* Denied is the Deny button's red, outlined like its siblings. */
 .flow-run-badge.flow-run-denied { color: var(--deny-red); border-color: var(--deny-red); }
 /* Status mark (idle/running/ok): a rounded square, replacing the text pill for these three
-   statuses only (mock round 2, flow-details-mockups.html §00 — check in a rounded square, idle
-   unfilled, running a pulsing amber square; brief item 1). `.flow-run-mark` overrides the pill's
+   statuses only (check in a rounded square, idle
+   unfilled, running a pulsing amber square). `.flow-run-mark` overrides the pill's
    sizing; the status class on top of it (below) sets the fill/border per state. */
 .flow-run-badge.flow-run-mark {
   width: 14px; height: 14px; padding: 0; border-radius: var(--radius-3);

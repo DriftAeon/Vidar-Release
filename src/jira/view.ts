@@ -229,7 +229,7 @@ export function buildView(h: Handlers): View {
     slot.append(renderTypeIcon(typeIcon(group.level, group.label)));
     const label = el("span", "br-band-label");
     label.textContent = group.label;
-    headEl.title = group.issues.length === 1 ? "1 Issue" : `${group.issues.length} Issues`; // count in the tooltip, not the band (user, 2026-10-22)
+    headEl.title = group.issues.length === 1 ? "1 Issue" : `${group.issues.length} Issues`; // count in the tooltip, not the band
     headEl.append(slot, label);
     const fold = el("div", "jx-fold");
     fold.inert = closed;

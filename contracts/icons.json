@@ -123,7 +123,8 @@
     "notion-database": {"source":"fluent-color/svg/ic_fluent_book_database_24_color.svg","note":"Notion default database icon"},
     "notion-page": {"source":"fluent-color/svg/ic_fluent_document_24_color.svg","note":"Notion default page icon"},
     "person": {"source":"fluent-color/svg/ic_fluent_person_24_color.svg"},
-    "people-community": {"source":"fluent-color/svg/ic_fluent_people_community_24_color.svg"}
+    "people-community": {"source":"fluent-color/svg/ic_fluent_people_community_24_color.svg"},
+    "scales": {"source":"noto-emoji/svg/emoji_u2696.svg"}
   },
   "tools": {
     "Thought": "thought",

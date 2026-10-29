@@ -313,7 +313,7 @@ fn a_multi_chunk_run_lands_the_merged_library_with_summed_cost_and_ordered_event
     let events = events.into_inner().unwrap();
     assert!(events.iter().all(|e| e.run_id == RUN));
     let events: Vec<ProgressEvent> = events.into_iter().map(|e| e.event).collect();
-    let file = |path: &str| PlanFile { path: path.into(), part: None };
+    let file = |path: &str| PlanFile::new(path.into(), None);
     let plan = ProgressEvent::Plan { chunks: vec![PlanChunk { files: vec![file(PATH), file(PATH_A)] }, PlanChunk { files: vec![file(PATH_B)] }] };
     assert_eq!(events.first(), Some(&plan));
     assert_eq!(events[events.len() - 2..], [ProgressEvent::Merge { state: MergeState::Running }, ProgressEvent::Merge { state: MergeState::Done }]);
@@ -346,6 +346,40 @@ fn a_merge_that_fails_twice_lands_the_chunks_unmerged_with_the_warning() {
     let events: Vec<ProgressEvent> = events.into_inner().unwrap().into_iter().map(|e| e.event).collect();
     let merge_states: Vec<MergeState> = events.iter().filter_map(|e| if let ProgressEvent::Merge { state } = e { Some(*state) } else { None }).collect();
     assert_eq!(merge_states, [MergeState::Running, MergeState::Failed]);
+}
+
+#[test]
+fn a_preflight_over_max_chunks_is_refused_before_any_spawn() {
+    let fx = Fx::new("over-chunks");
+    // Three files under the 256 KiB read cap, together well past MAX_CHUNKS chunks.
+    let text: String = (0..5_000).map(|n| format!("Rule number {n:06} is stated here ok.\n")).collect();
+    let paths: Vec<String> = (1..=3).map(|k| format!(r"~\.claude\big{k}.md")).collect();
+    for k in 1..=3 {
+        std::fs::write(fx.home.join(".claude").join(format!("big{k}.md")), &text).unwrap();
+    }
+    assert!(3 * text.len() > (MAX_CHUNKS + 1) * chunk::CHUNK_CHARS);
+    let slot = Slot::new();
+    let spawned = AtomicUsize::new(0);
+    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| {
+        spawned.fetch_add(1, Ordering::SeqCst);
+        Ok(claude_raw(&reply()))
+    };
+    let req = Request { paths, ..request("claude") };
+    let err = fx.with(|ctx| generate_at(ctx, &slot, &runner(&claude_exe, &run), &req, &silent)).unwrap_err();
+    assert!(err.starts_with("budget: ") && err.contains(&format!("over the {MAX_CHUNKS} cap")), "{err}");
+    assert_eq!(spawned.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn a_run_over_the_token_cap_stops_with_the_budget_error() {
+    let fx = Fx::new("over-tokens");
+    let slot = Slot::new();
+    let run = |_: &Spec, _: &Job, _: Duration, _: &(dyn Fn() -> bool + Sync)| {
+        let out = json!({ "type": "result", "is_error": false, "result": reply(), "usage": { "input_tokens": RUN_TOKEN_CAP, "output_tokens": 5 } });
+        Ok(Raw { exit: Some(0), stdout: out.to_string().into_bytes(), ..Raw::default() })
+    };
+    let err = fx.with(|ctx| generate_at(ctx, &slot, &runner(&claude_exe, &run), &request("claude"), &silent)).unwrap_err();
+    assert_eq!(err, format!("budget: {} over the {RUN_TOKEN_CAP} cap", RUN_TOKEN_CAP + 5));
 }
 
 #[test]

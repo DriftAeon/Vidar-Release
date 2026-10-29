@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { chooseReadout, isCssSurface, matchingToken, parseColor, tokenMap } from '../src/tools/eyedropper-readout.ts';
 import { frameShields, sampleLoop } from '../src/tools/eyedropper-sampling.ts';
+import { pickFreeze } from '../src/tools/pick-freeze.ts';
 
 test('picking uses sampled pixels and keeps shell CSS values supplementary', () => {
   const pixel = [12, 34, 56];
@@ -107,4 +108,64 @@ test('native requests serialize and a result from before disarm cannot repaint a
     assert.equal(received.length, 1);
     assert.equal(received[0].pick, true);
   } finally { loop.stop(); }
+});
+
+test('a successful pick freezes native polling; a second pick re-samples once and freezes again', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const points = [];
+  const loop = sampleLoop(async (point) => { points.push(point); return null; }, () => {});
+  try {
+    loop.start();
+    await tick();
+    assert.equal(loop.frozen, false);
+    loop.pick({ clientX: 5, clientY: 6 });
+    await tick();
+    assert.equal(loop.frozen, true);
+    const calls = points.length;
+    t.mock.timers.tick(1000);
+    await tick();
+    assert.equal(points.length, calls, 'no polling while frozen');
+    loop.pick({ clientX: 50, clientY: 60 });
+    await tick();
+    assert.deepEqual(points.at(-1), { clientX: 50, clientY: 60 });
+    assert.equal(points.length, calls + 1);
+    assert.equal(loop.frozen, true);
+    t.mock.timers.tick(1000);
+    await tick();
+    assert.equal(points.length, calls + 1);
+    loop.stop();
+    assert.equal(loop.frozen, false, 'disarm clears the freeze');
+    loop.start();
+    await tick();
+    assert.equal(loop.frozen, false);
+  } finally { loop.stop(); }
+});
+
+test('a failed pick keeps polling instead of freezing', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let fail = false, calls = 0;
+  const loop = sampleLoop(async () => { calls++; if (fail) throw new Error('x'); return null; }, () => {});
+  try {
+    loop.start();
+    await tick();
+    fail = true;
+    loop.pick({ clientX: 1, clientY: 1 });
+    await tick();
+    assert.equal(loop.frozen, false);
+    const before = calls;
+    t.mock.timers.tick(75);
+    await tick();
+    assert.equal(calls, before + 1);
+  } finally { loop.stop(); }
+});
+
+test('region ref freeze: tracking until a pick, a second pick holds again, reset tracks', () => {
+  const f = pickFreeze();
+  assert.equal(f.tracking, true);
+  f.pick();
+  assert.equal(f.tracking, false);
+  f.pick();
+  assert.equal(f.tracking, false);
+  f.reset();
+  assert.equal(f.tracking, true);
 });

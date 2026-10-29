@@ -28,7 +28,7 @@ pub struct ItemsImported {
 }
 
 /// Every id a library already uses, from its item files' stems.
-fn used_ids(dir: &Path) -> BTreeSet<String> {
+pub(super) fn used_ids(dir: &Path) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for sub in fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| e.path().is_dir()) {
         for f in fs::read_dir(sub.path()).into_iter().flatten().flatten() {
@@ -66,7 +66,7 @@ pub(crate) fn import_at(imports: &Path, library: &str, layer: &SetLayerWrite, ho
         }
     };
     for (kind, base, agent, source, guard) in kit::collect_items(&clean) {
-        match taken(&base, kind, &|id| kit::item_text(library, kind, id, agent, source, guard)) {
+        match taken(&base, kind, &|id| kit::item_text(library, kind, id, agent, source, guard, home)) {
             Ok(Some((path, text, id))) => plan.push((path, text, ImportedRune { library: library.into(), id, kind: kind.into() })),
             Ok(None) => {}
             Err(reason) => dropped.push(Dropped { id: format!("{kind}/{base}"), reason }),
@@ -92,7 +92,7 @@ pub(crate) fn import_at(imports: &Path, library: &str, layer: &SetLayerWrite, ho
                 }
             }
             for item in kit::module_items(bundle, tick) {
-                match taken(&item.id, item.kind, &|id| kit::item_text(library, item.kind, id, None, item.source.as_deref(), item.guard.as_ref())) {
+                match taken(&item.id, item.kind, &|id| kit::item_text(library, item.kind, id, None, item.source.as_deref(), item.guard.as_ref(), home)) {
                     Ok(Some((path, text, id))) => plan.push((path, text, ImportedRune { library: library.into(), id, kind: item.kind.into() })),
                     Ok(None) => {}
                     Err(reason) => dropped.push(Dropped { id: format!("{}/{}", item.kind, item.id), reason }),

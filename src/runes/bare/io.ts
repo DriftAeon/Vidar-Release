@@ -12,6 +12,7 @@ export function createBareIo(
 ): BareFlowIo {
   return {
     kitCreate: (a) => invoke("bare_kit_create", a) as ReturnType<NonNullable<BareFlowIo["kitCreate"]>>,
+    kitSets: () => invoke("bare_sets_list") as ReturnType<NonNullable<BareFlowIo["kitSets"]>>,
     kitItemCreate: (a) => invoke("bare_kit_item_create", a),
     localSources: (cwd) => invoke("bare_local_sources", { cwd }) as ReturnType<BareFlowIo["localSources"]>,
     itemsImport: (a) => invoke("bare_items_import", a) as ReturnType<BareFlowIo["itemsImport"]>,

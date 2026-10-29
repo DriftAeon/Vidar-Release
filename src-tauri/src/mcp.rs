@@ -600,17 +600,29 @@ pub async fn list_mcp_tools_stdio(
     tab: Option<String>,
 ) -> Result<Vec<McpTool>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let rack = if scope == "codex" {
-            codex::read_codex_mcp_servers_now(&app, tab, profile)
-        } else {
-            let home = rack_home(&app, profile.as_deref(), tab.as_deref(), None);
-            read_mcp_servers_now(None, profile, home)
-        };
+        let rack = rack_of_scope(&app, &scope, tab, profile);
         let s = resolve_listable(rack.servers, &name, &scope, project.as_deref())?;
         list_mcp_tools_stdio_blocking(&s.target, &s.args, s.cwd().as_deref())
     })
     .await
     .map_err(|e| format!("tools task failed: {e}"))?
+}
+
+/// The rack a server scope reads, by the one parser: an agent's own scope (`"codex"`) reads that
+/// agent's config. The other scopes (`user`, `local`, `project`) are Claude's and parse to no agent;
+/// a scope naming no server in the rack it reads is refused by `resolve_listable` ("not listed"),
+/// never read from Codex's config.
+fn rack_of_scope(app: &tauri::AppHandle, scope: &str, tab: Option<String>, profile: Option<String>) -> McpRack {
+    use crate::agent_spec::{self, Agent};
+    let default_rack = |tab: Option<String>, profile: Option<String>| {
+        let home = rack_home(app, profile.as_deref(), tab.as_deref(), None);
+        read_mcp_servers_now(None, profile, home)
+    };
+    let Some(agent) = agent_spec::parse(scope) else { return default_rack(tab, profile) };
+    match agent {
+        Agent::Codex => codex::read_codex_mcp_servers_now(app, tab, profile),
+        Agent::Claude => default_rack(tab, profile),
+    }
 }
 
 impl McpServer {
@@ -810,6 +822,15 @@ pub(crate) mod tests {
     use super::*;
     use std::io::{ErrorKind, Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn only_the_codex_scope_reads_codex_config_and_grok_is_refused() {
+        assert_eq!(crate::agent_spec::parse("codex"), Some(crate::agent_spec::Agent::Codex));
+        for s in ["user", "local", "project", "grok", "Codex", ""] {
+            assert_eq!(crate::agent_spec::parse(s), None, "{s}");
+        }
+        assert!(resolve_listable(Vec::new(), "x", "grok", None).is_err());
+    }
 
     /// One-shot loopback server that answers its first request with a 302 to `location`.
     /// Returns its origin (`http://127.0.0.1:<port>`).

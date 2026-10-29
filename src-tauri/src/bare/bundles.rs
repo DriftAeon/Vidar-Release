@@ -7,6 +7,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::guards::BareGuard;
+use crate::agent_spec;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -131,6 +132,11 @@ pub struct Resolved {
     pub mcp: Vec<Mcp>,
 }
 
+/// The first agent tag of `m` that names no agent: such a server is skipped, never handed to an agent.
+pub(crate) fn unknown_tag(m: &Mcp) -> Option<&str> {
+    m.agents.iter().map(String::as_str).find(|a| agent_spec::parse(a).is_none())
+}
+
 fn item_name(path: &str) -> String {
     Path::new(path).file_name().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_else(|| path.to_lowercase())
 }
@@ -174,9 +180,6 @@ pub fn validate(b: &Bundles) -> Result<(), String> {
             if entry.http.as_ref().is_some_and(|h| h.url.trim().is_empty()) || entry.stdio.as_ref().is_some_and(|s| s.command.trim().is_empty()) {
                 return Err(format!("{module} MCP {:?} has an empty endpoint", entry.name));
             }
-            if entry.agents.iter().any(|a| a != "claude" && a != "codex") {
-                return Err(format!("{module} MCP {:?} has an unknown agent", entry.name));
-            }
             if matches!(&entry.reads, Reads::All(s) if s != "*") {
                 return Err(format!("{module} MCP {:?} reads must be a list or *", entry.name));
             }
@@ -208,6 +211,10 @@ pub fn load(root: &Path) -> (Bundles, Vec<String>) {
 pub fn resolve(set_modules: &SetModules, bundles: &Bundles, agent: &str) -> (Resolved, Vec<String>) {
     let mut result = Resolved::default();
     let mut warnings = Vec::new();
+    let Some(agent) = agent_spec::parse(agent) else {
+        warnings.push(format!("Unknown agent {agent:?} for module bundles; nothing resolved"));
+        return (result, warnings);
+    };
     for (module, tick) in set_modules {
         let Some(bundle) = bundles.bundles.get(module) else {
             warnings.push(format!("Unknown module {module:?} in set layer; skipped"));
@@ -222,7 +229,11 @@ pub fn resolve(set_modules: &SetModules, bundles: &Bundles, agent: &str) -> (Res
         }
         let excluded: BTreeSet<&str> = tick.off.iter().filter(|s| known.contains(*s)).map(String::as_str).collect();
         for m in &bundle.mcp {
-            if !excluded.contains(format!("mcp:{}", m.name).as_str()) && (m.agents.is_empty() || m.agents.iter().any(|a| a == agent))
+            if let Some(tag) = unknown_tag(m) {
+                warnings.push(format!("Module {module:?} server {:?} names unknown agent {tag:?} in module-bundles.json; skipped", m.name));
+                continue;
+            }
+            if !excluded.contains(format!("mcp:{}", m.name).as_str()) && (m.agents.is_empty() || m.agents.iter().any(|a| agent_spec::parse(a) == Some(agent)))
                 && !result.mcp.iter().any(|old| old.name.eq_ignore_ascii_case(&m.name)) { result.mcp.push(m.clone()); }
         }
         for s in &bundle.skills {
@@ -294,5 +305,41 @@ mod tests {
         assert!(w.iter().any(|s| s.contains("Unknown module")) && w.iter().any(|s| s.contains("unknown off item")));
         let (r, _) = resolve(&ticks, &b, "claude");
         assert!(r.mcp.iter().any(|m| m.name == "slack"), "{:?}", r.mcp);
+    }
+
+    fn mcp(name: &str, agents: &[&str]) -> Mcp {
+        Mcp { name: name.into(), http: Some(Http { url: "https://example.test".into(), oauth: None }), stdio: None, agents: agents.iter().map(|a| a.to_string()).collect(), reads: Reads::All("*".into()), optional: false }
+    }
+
+    fn catalog_of(servers: Vec<Mcp>) -> (Bundles, SetModules) {
+        let bundle = Bundle { mcp: servers, ..Default::default() };
+        (Bundles { version: 1, bundles: [("m".to_string(), bundle)].into() }, [("m".to_string(), ModuleTick::default())].into())
+    }
+
+    #[test]
+    fn a_grok_tagged_server_is_skipped_with_a_warning_for_every_agent() {
+        let (b, ticks) = catalog_of(vec![mcp("g", &["grok"]), mcp("both", &["claude", "grok"]), mcp("any", &[])]);
+        validate(&b).unwrap();
+        for agent in ["claude", "codex"] {
+            let (r, w) = resolve(&ticks, &b, agent);
+            assert_eq!(r.mcp.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["any"], "{agent}");
+            assert_eq!(w.len(), 2, "{w:?}");
+            assert!(w.iter().all(|s| s.contains("\"grok\"") && s.contains("module-bundles.json")), "{w:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_agent_asking_to_resolve_gets_nothing() {
+        let (b, ticks) = catalog_of(vec![mcp("any", &[])]);
+        let (r, w) = resolve(&ticks, &b, "grok");
+        assert!(r.mcp.is_empty() && w.len() == 1, "{w:?}");
+    }
+
+    #[test]
+    fn each_known_agent_keeps_its_own_servers() {
+        let (b, ticks) = catalog_of(vec![mcp("c", &["claude"]), mcp("x", &["codex"]), mcp("any", &[])]);
+        let names = |agent: &str| resolve(&ticks, &b, agent).0.mcp.into_iter().map(|m| m.name).collect::<Vec<_>>();
+        assert_eq!(names("claude"), ["c", "any"]);
+        assert_eq!(names("codex"), ["x", "any"]);
     }
 }

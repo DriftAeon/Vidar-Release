@@ -1,4 +1,4 @@
-//! N-R tests (plan § Tests): every command against `transport::fake::Fake`, an in-memory store
+//! Notion tests: every command against `transport::fake::Fake`, an in-memory store
 //! and a fresh pacer on a fake clock. Nothing here reaches Notion or Credential Manager.
 
 use super::*;

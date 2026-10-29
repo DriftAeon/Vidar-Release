@@ -1,4 +1,4 @@
-// The staged Falcon frontend manifest contract (plan 2c), as written by
+// The staged Falcon frontend manifest contract, as written by
 // tools/release/falcon-frontend-stage.ps1. The fixture is shared with the Rust side
 // (src-falcon/src/frontend.rs #[test] reads tests/fixtures/falcon-frontend-manifest.json).
 // Digest choice, frozen: SHA-256 of "<path>|<sha256>" lines joined with "\n", NO trailing newline.

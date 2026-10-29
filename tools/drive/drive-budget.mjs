@@ -36,11 +36,18 @@ function readBudget(file) {
 
 // Atomic replace: write a sibling temp file, then rename over the record, so a
 // reader never sees a half-written file. The read-modify-write in stepBudget is
-// not locked: two concurrent drives may share one decrement.
+// not locked: two concurrent drives may share one decrement. Windows refuses the
+// rename (EPERM/EACCES/EBUSY) while another handle (Defender, an indexer) briefly
+// holds the target, so it retries a few times before giving up.
 function writeBudget(file, state) {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state));
-  fs.renameSync(tmp, file);
+  for (let attempt = 0; ; attempt++) {
+    try { fs.renameSync(tmp, file); return; } catch (e) {
+      if (attempt >= 5 || !["EPERM", "EACCES", "EBUSY"].includes(e.code)) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * (attempt + 1));
+    }
+  }
 }
 
 function liveRecord(file, now) {

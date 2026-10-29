@@ -49,8 +49,8 @@ test("Loadout and MCP Rack stay empty for gateway tabs (wrapper fence is invisib
   const loadout = readFileSync(new URL("../src/panels/loadout.ts", import.meta.url), "utf8");
   // the rack's (and rail's) focus derivation lives in mcp-focus.ts
   const focus = readFileSync(new URL("../src/panels/mcp-focus.ts", import.meta.url), "utf8");
-  assert.match(loadout, /focused\.agent !== "claude" \|\| isGateway\(focused\.art\)/);
-  assert.match(focus, /claude = s\?\.agent === "claude"/);
-  assert.match(focus, /project: claude && !isGateway\(s!\.art\)/);
+  assert.match(loadout, /claude: \{\s*[^}]*skips: \(s\) => isGateway\(s\.art\)/);
+  assert.match(focus, /claude: \{\s*ownConfig: false, profiledOwnTab: true, projectScoped: true/);
+  assert.match(focus, /project: row\?\.projectScoped && !isGateway\(s!\.art\)/);
 });
 

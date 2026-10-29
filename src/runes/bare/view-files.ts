@@ -6,7 +6,7 @@ import { generatable } from "./view-data";
 import type { ColorIcon } from "../../icon-img";
 
 const KIND_HEAD: [BareFileKind, string][] = [
-  ["rules", "Rules"], ["memory", "Memories"], ["skill", "Skills"], ["agent", "Agents"], ["hook", "Hooks"], ["mcp", "MCP Servers"],
+  ["rules", "Rules"], ["memory", "Memories"], ["skill", "Skills"], ["agent", "Agents"], ["hook", "Hooks"], ["mcp", "MCPs"],
 ];
 const TIP_FILES_CODEX = "Codex Bare loads rules, memories, skills, agents and hosted MCP servers.";
 const FILE_HEAD_ICON: Partial<Record<BareFileKind, ColorIcon>> = { rules: "rules", memory: "memory-card" };
@@ -43,7 +43,7 @@ export function filesView(a: FilesViewArgs): HTMLElement[] {
   for (const [kind, name] of KIND_HEAD) {
     const kindFiles = files.filter((f) => f.kind === kind);
     if (!kindFiles.length) continue;
-    const group = el("details", `runes-set hue-${kind === "skill" || kind === "agent" || kind === "hook" ? kind : "none"}`);
+    const group = el("details", `runes-set hue-${kind === "skill" || kind === "agent" || kind === "hook" ? kind : kind === "rules" ? "rule" : "none"}`);
     group.dataset.kind = kind;
     a.trackOpen(group, "file:" + kind, true);
     group.appendChild(setHead(name, kindFiles.filter((f) => a.ticked.has(f.path)).length,

@@ -311,13 +311,13 @@ pub fn runes_dir() -> PathBuf {
 // else `<CODEX_HOME or ~\.codex>\runes`. Never creates either folder. Twin: tools/lib/paths.mjs.
 pub fn global_runes_dir() -> Option<PathBuf> {
     let home = home()?;
-    let codex = crate::rules::codex::codex_home_from(std::env::var_os("CODEX_HOME"), Some(home.clone()));
-    global_runes_dir_in(&home, codex)
+    let fallback = crate::rules::codex::codex_home_from(std::env::var_os("CODEX_HOME"), Some(home.clone()));
+    global_runes_dir_in(&home, fallback)
 }
 pub fn global_runes_dir_in(home: &Path, codex_home: Option<PathBuf>) -> Option<PathBuf> {
-    let claude = home.join(".claude");
-    if claude.is_dir() {
-        return Some(claude.join("runes"));
+    let first = home.join(".claude");
+    if first.is_dir() {
+        return Some(first.join("runes"));
     }
     codex_home.map(|c| c.join("runes"))
 }

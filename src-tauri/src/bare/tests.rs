@@ -357,7 +357,7 @@ fn the_raw_bare_profile_output_is_unchanged_by_the_rendered_block() {
     assert_eq!(names(&bare.env), names(&launch.env));
 }
 
-// ---- Row rune sets (Bare slice 1, W1) ----
+// ---- Row rune sets ----
 
 /// A temp rune library and a vidar.json stand-in naming it by absolute path.
 struct RowFx {
@@ -427,10 +427,10 @@ impl RowFx {
     }
 }
 
-/// What the vault migration (plan § Migration step 2) does to a legacy `<set>.layer.json` sidecar, run
+/// What the vault migration does to a legacy `<set>.layer.json` sidecar, run
 /// by the fixture before each spawn: each item becomes an item rune `sc-<set>-<n>` in the library,
 /// slotted into the set (L2a: a vault loads item runes only; nothing rides beside runes). A sidecar
-/// rewritten with fewer items drops the extra slots. `outputStyle` has no rune kind and is not carried.
+/// rewritten with fewer items drops the extra slots. `outputStyle` becomes an output-style rune.
 fn migrate_sidecars(lib: &Path) {
     use serde_json::Value;
     let Ok(rd) = std::fs::read_dir(lib.join("sets")) else { return };
@@ -491,6 +491,10 @@ fn migrate_sidecars(lib: &Path) {
                 runes.push(("permissions", h));
             }
         }
+        // An output style; `outputStyleBody` (fixture only) is the rune's body, after the header's `---`.
+        if let Some(s) = v["outputStyle"].as_str() {
+            runes.push(("styles", format!("style: {s}\n---\n{}", v["outputStyleBody"].as_str().unwrap_or_default())));
+        }
         let mut slots = String::new();
         for (n, (folder, h)) in runes.iter().enumerate() {
             // The id carries the item's content, so a changed sidecar is a changed runeset: a new Custom
@@ -500,7 +504,8 @@ fn migrate_sidecars(lib: &Path) {
             let id = format!("sc-{set}-{n}-{:06x}", std::hash::Hasher::finish(&hasher) & 0xff_ffff);
             let kind = crate::rules::rune::KINDS.iter().find(|(f, _)| f == folder).unwrap().1;
             std::fs::create_dir_all(lib.join(folder)).unwrap();
-            std::fs::write(lib.join(folder).join(format!("{id}.md")), format!("---\nname: {id}\nkind: {kind}\nscope: [global]\n{h}---\n")).unwrap();
+            let (head, body) = h.split_once("---\n").unwrap_or((h.as_str(), ""));
+            std::fs::write(lib.join(folder).join(format!("{id}.md")), format!("---\nname: {id}\nkind: {kind}\nscope: [global]\n{head}---\n{body}")).unwrap();
             slots += &format!("\n<?rune {id}?>\n");
         }
         let prefix = format!("<?rune sc-{set}-");
@@ -1108,7 +1113,7 @@ fn a_row_payload_keeps_a_hook_claim_only_when_a_set_guard_carries_it() {
     assert!(hosted.manifest.payload.warnings.is_empty(), "{:?}", hosted.manifest.payload.warnings);
 }
 
-// ---- Guard copies (Bare slice 1, W3; set guards in the combination home since fold W2 L2a) ----
+// ---- Guard copies (set guards live in the combination home) ----
 
 impl RowFx {
     /// A script under the fixture's temp dir (never a machine path); returns its absolute path.
@@ -2384,7 +2389,7 @@ fn a_codex_profile_with_shared_login_refuses() {
     assert!(load_codex_profile(&t.0.join("root"), "bare").is_ok(), "an absent sharedLogin refused");
 }
 
-// ---- Codex Bare row sets and skills (run 2026-10-17-bare-runes-flow, C1) ----
+// ---- Codex Bare row sets and skills ----
 
 impl RowFx {
     fn codex(&self, home: &Path, key: &str) -> Result<CodexLaunch, String> {
@@ -2515,7 +2520,7 @@ fn a_codex_row_key_must_name_a_codex_bare_row() {
     }
     assert!(admit_row_key(Some("codex-bare-review".into()), Some("bare"), cfg).is_ok());
     assert!(admit_row_key(Some("codex-rendered-bare".into()), Some("bare"), cfg).is_ok(), "a label-only overlay refused");
-    // A Codex Bare key on a spawn whose own profile is not `bare` refuses (review d13bc628).
+    // A Codex Bare key on a spawn whose own profile is not `bare` refuses.
     for key in ["codex-rendered-bare", "codex-bare-review"] {
         let e = admit_row_key(Some(key.into()), Some("lean"), cfg).unwrap_err();
         assert_eq!(e, format!("Row {key:?} is not a Codex Bare row; Bare spawn refused"));
@@ -2624,15 +2629,15 @@ fn codex_warning_follows_the_pin_and_the_accepted_verdicts() {
     let none = AcceptedMap::new();
     assert_eq!(codex_warning(Some("0.162.1"), "0.162.1", &none), None);
     let differs = codex_warning(Some("0.163.0"), "0.162.1", &none).unwrap();
-    assert_eq!(differs, "Codex 0.163.0 differs from the verified 0.162.1; launching anyway");
+    assert_eq!(differs, "Codex 0.163.0 Differs from the Verified 0.162.1 - Launching Anyway");
     assert_eq!(codex_warning(Some("0.163.0"), "0.162.1", &accepted(&[("0.163.0", "0.162.1", true)])), None);
     let changed = codex_warning(Some("0.163.0"), "0.162.1", &accepted(&[("0.163.0", "0.162.1", false)])).unwrap();
-    assert_eq!(changed, "Codex 0.163.0 changed its protocol since the verified 0.162.1; launching anyway");
+    assert_eq!(changed, "Codex 0.163.0 Changed Its Protocol Since the Verified 0.162.1 - Launching Anyway");
     // An entry recorded against an older pin never counts, whichever verdict it holds.
     for same in [true, false] {
         assert_eq!(codex_warning(Some("0.163.0"), "0.162.1", &accepted(&[("0.163.0", "0.161.0", same)])).unwrap(), differs);
     }
-    assert_eq!(codex_warning(None, "0.162.1", &accepted(&[("0.163.0", "0.162.1", true)])).unwrap(), "Codex version unreadable (verified 0.162.1); launching anyway");
+    assert_eq!(codex_warning(None, "0.162.1", &accepted(&[("0.163.0", "0.162.1", true)])).unwrap(), "Codex Version Unreadable (Verified 0.162.1) - Launching Anyway");
 }
 
 #[test]
@@ -2888,7 +2893,7 @@ fn a_tui_prepare_on_a_profile_without_raw_args_refuses_before_the_home() {
     assert!(!home.exists(), "the home was touched");
 }
 
-// ---- Hosted Codex Bare (run 2026-10-19-codex-primary, F2a) ----
+// ---- Hosted Codex Bare ----
 
 impl RowFx {
     /// A hosted Codex Bare prepare on `home` in `cwd`; `asked` collects every name `find` was asked for.
@@ -3015,6 +3020,41 @@ fn a_hosted_codex_record_warns_on_an_unverified_version_or_no_pwsh() {
     assert_eq!(launch.bare_warnings(), vec![both]);
 }
 
+/// The hosted Rendered spawn (Falcon runs Codex) starts the same `verify.mjs` run the in-process
+/// prepare does, on the executable Falcon ran, writing Vidar's accepted file; the pin, an accepted
+/// version and a Path without node start none. (2026-10-28: "Differs from the Verified" with no
+/// `codex-accepted.json` ever written, because only `prepare_codex`/`prepare_codex_tui` verified.)
+#[test]
+fn a_hosted_codex_record_on_a_new_version_starts_the_verify() {
+    let fx = RowFx::new("codex-hosted-verify");
+    let work = fx.t.0.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let asked = std::cell::RefCell::new(Vec::new());
+    codex_hosted::TEST_TRUST.with(|t| t.borrow_mut().push(work.to_string_lossy().into_owned()));
+    let mut launch = fx.codex_hosted(&fx.home("v"), "", &work, &asked).unwrap();
+    let accepted_path = fx.t.0.join("state").join("codex-accepted.json");
+    let pin = pinned("codex");
+    let exe = r"C:\npm\codex-win32-x64\codex.exe";
+
+    launch.record_host_with(exe, Some("0.0.1"), Some(r"C:\pwsh\pwsh.exe"), &AcceptedMap::new());
+    let job = launch.verify_job(&accepted_path, &fake_find).expect("a new version starts the verify");
+    assert_eq!(job.codex, exe, "verify.mjs dumps the executable Falcon ran");
+    assert_eq!(job.version, "0.0.1");
+    assert_eq!(job.out, accepted_path);
+    assert_eq!(job.program, PathBuf::from(r"X:\bin").join("node.exe"));
+    assert_eq!(job.script, crate::paths::root().join("tools/codex-schema/verify.mjs"));
+
+    // Already checked against this pin: no second run.
+    std::fs::create_dir_all(accepted_path.parent().unwrap()).unwrap();
+    std::fs::write(&accepted_path, format!(r#"{{"0.0.1": {{"pinned": "{pin}", "same": false}}}}"#)).unwrap();
+    assert!(launch.verify_job(&accepted_path, &fake_find).is_none());
+    // The pin itself, and no node on the profile's Path, start none either.
+    launch.record_host_with(exe, Some(&pin), Some(r"C:\pwsh\pwsh.exe"), &AcceptedMap::new());
+    assert!(launch.verify_job(&fx.t.0.join("none.json"), &fake_find).is_none());
+    launch.record_host_with(exe, Some("0.0.2"), Some(r"C:\pwsh\pwsh.exe"), &AcceptedMap::new());
+    assert!(launch.verify_job(&fx.t.0.join("none.json"), &|_, _| None).is_none());
+}
+
 #[test]
 fn a_hosted_codex_prepare_refuses_an_unknown_profile_and_admits_an_over_12000_payload() {
     let fx = RowFx::new("codex-hosted-refuse");
@@ -3032,7 +3072,7 @@ fn a_hosted_codex_prepare_refuses_an_unknown_profile_and_admits_an_over_12000_pa
     assert_eq!(launch.payload_file.as_deref(), Some(path.as_path()));
 }
 
-// ---- Codex guard hooks (run 2026-10-19-codex-primary, P1 W2) ----
+// ---- Codex guard hooks ----
 
 type Seen = std::rc::Rc<std::cell::RefCell<Vec<(u32, Option<PathBuf>, PathBuf)>>>;
 
@@ -3537,7 +3577,7 @@ fn probe_pin_runs_one_real_raw_bare_turn() {
     assert!(status.success(), "claude -p exited {status}");
 }
 
-// ---- Claude set items and module MCP (run 2026-10-20-rune-sets, W2; homes since fold W2 L2a) ----
+// ---- Claude set items and module MCP ----
 
 impl RowFx {
     /// A rule every set slots (so the payload builds), and `sets` rows' sidecars plus the key's config.
@@ -3717,7 +3757,10 @@ fn claude_rows_with_different_picks_get_two_homes_and_the_same_picks_share_one()
 #[test]
 fn claude_a_sets_permission_and_output_style_land_in_its_settings() {
     let fx = RowFx::new("cl-perm");
-    let v = serde_json::json!({ "permissions": { "allow": ["Bash(git status:*)"], "ask": ["Write"], "mode": "plan" }, "outputStyle": "terse" });
+    let v = serde_json::json!({
+        "permissions": { "allow": ["Bash(git status:*)"], "ask": ["Write"], "mode": "plan" },
+        "outputStyle": "terse", "outputStyleBody": "Answer in one line.\n",
+    });
     fx.plugin_row(&["alpha"], &[("alpha", v)], serde_json::json!([]));
     let home = fx.home("perm");
     let l = fx.raw(&home, "k").unwrap();
@@ -3728,8 +3771,13 @@ fn claude_a_sets_permission_and_output_style_land_in_its_settings() {
     assert!(!s["permissions"]["allow"].as_array().unwrap().iter().any(|a| a == "mcp__plugin_vidar_drive"), "the drive allow is the drive-allow rune's, not the template's");
     assert!(s["permissions"]["ask"].as_array().unwrap().iter().any(|a| a == "Write"));
     assert_eq!(s["permissions"]["defaultMode"], "plan");
-    // `outputStyle` has no rune kind (L1a), so a vault carries none.
-    assert!(s.get("outputStyle").is_none());
+    // The output-style rune names the style in settings and its body is the style file (body-carrying).
+    assert_eq!(s["outputStyle"], "terse");
+    let styles: Vec<PathBuf> = std::fs::read_dir(dir.join("output-styles")).unwrap().flatten().map(|e| e.path()).collect();
+    assert_eq!(styles.len(), 1, "{styles:?}");
+    let file = std::fs::read_to_string(&styles[0]).unwrap();
+    assert!(styles[0].file_name().unwrap().to_string_lossy().starts_with("sc-alpha-"), "{styles:?}");
+    assert!(file.starts_with("---\nname: \"terse\"\n") && file.ends_with("---\n\nAnswer in one line.\n"), "{file}");
     let line = l.args.last().unwrap();
     assert!(line.contains("'--setting-sources' 'user'") && !line.contains("'--settings'"), "{line}");
 }

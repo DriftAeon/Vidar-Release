@@ -1,5 +1,5 @@
-//! src-tauri\src\rules\generate\chunk.rs — splits the generator's inputs into the parts one call reads
-//! (docs/runs/2026-10-18-rune-gen-per-source/plan.md § Input and chunks). A file whose rendered lines fit
+//! src-tauri\src\rules\generate\chunk.rs — splits the generator's inputs into the parts one call reads.
+//! A file whose rendered lines fit
 //! `CHUNK_CHARS` is one unit; a larger one splits at its shallowest heading level, then the next level, then blank
 //! lines, then single lines, never inside a fence (an unclosed fence runs to the end of the file). Units pack
 //! greedily in input order; a unit over the limit (one long line, one long fence) is a chunk of its own.

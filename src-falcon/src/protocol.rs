@@ -1,7 +1,6 @@
 //! Protocol v1: typed frames over the authenticated session pipe.
 //!
-//! One explicit version, not a compatibility framework (plan v3, "IPC
-//! contract"). A mismatch is refused without touching the live host or any
+//! One explicit version, not a compatibility framework. A mismatch is refused without touching the live host or any
 //! hosted session; the stable activation endpoint keeps its own small
 //! slice-0 shape so an incompatible Vidar can still show the Falcon window.
 //!
@@ -80,12 +79,21 @@ pub enum Agent {
     Codex,
 }
 
+#[allow(dead_code)] // ALL and from_wire are read by the Vidar crate, which compiles this file too
 impl Agent {
+    /// Every variant, in declaration order.
+    pub const ALL: [Agent; 2] = [Agent::Claude, Agent::Codex];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
         }
+    }
+
+    /// The wire parse: an exact `as_str` match, else `None`.
+    pub fn from_wire(s: &str) -> Option<Agent> {
+        Agent::ALL.into_iter().find(|a| a.as_str() == s)
     }
 }
 
@@ -1160,6 +1168,15 @@ mod tests {
     fn session_frame_bound_exceeds_the_child_line_cap() {
         // A line Falcon accepted from the child must always re-frame.
         assert!(MAX_SESSION_FRAME > crate::process::LINE_CAP);
+    }
+
+    #[test]
+    fn from_wire_takes_only_exact_ids() {
+        assert_eq!(Agent::from_wire("claude"), Some(Agent::Claude));
+        assert_eq!(Agent::from_wire("codex"), Some(Agent::Codex));
+        for s in ["Claude", "", "grok"] {
+            assert_eq!(Agent::from_wire(s), None);
+        }
     }
 }
 

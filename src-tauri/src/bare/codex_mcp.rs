@@ -159,7 +159,7 @@ impl Tables {
 }
 
 /// A hosted server Codex Bare may carry: the table name and its pinned URL (test fixtures only;
-/// importers match the catalog since run 2026-10-25-kit-from-config C4).
+/// importers match the catalog).
 #[cfg(test)]
 #[derive(Debug)]
 pub struct Hosted {

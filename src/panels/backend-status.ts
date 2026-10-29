@@ -2,6 +2,7 @@
 // is how the tools were last enumerated ("never", "live", "disk", "live, 16/115 allowed",
 // "offline, cache from <iso>, 16/96 allowed"; see mcp.rs): a record, not a health check.
 // The row keeps the state word and the tool count; the rest is hover detail.
+import { label } from "../format";
 
 export interface BackendStatus {
   name: string;
@@ -25,7 +26,7 @@ export function summarizeBackend(b: BackendStatus): BackendSummary {
   const allowed = segs.map((s) => /^(\d+)\/(\d+) allowed$/.exec(s)).find(Boolean);
   const parts: string[] = [];
   if (state === "never") parts.push("Not Listed");
-  else if (!live) parts.push(state.charAt(0).toUpperCase() + state.slice(1));
+  else if (!live) parts.push(label(state));
   if (allowed) parts.push(`${allowed[1]}/${allowed[2]} Tools`);
   if (!b.enabled && state !== "disabled") parts.push("Disabled"); // a disabled listing already says it
   const when = b.lastListTime ? ` at ${b.lastListTime.replace("T", " ").slice(0, 16)}` : "";

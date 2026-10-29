@@ -1,4 +1,4 @@
-//! src-tauri\src\voice_slots\mod.rs — the voice slot resolver (voice slots plan §1, V1). Four
+//! src-tauri\src\voice_slots\mod.rs — the voice slot resolver. Four
 //! model slots (`stt`, `wake`, `rewrite`, `tts`), each filled by an adapter manifest from a
 //! `packs\<id>\pack.json`. No code defaults: a slot is filled only by a pick, either
 //! `voiceSlots.<slot>` in vidar.json or a legacy key present in the raw file; `voiceSlots` wins.

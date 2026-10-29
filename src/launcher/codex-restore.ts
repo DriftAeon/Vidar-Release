@@ -5,6 +5,10 @@
 // back as a fresh thread. No runtime imports, so it is testable under plain node.
 import type { CodexTabRecord } from "../prefs-core";
 import type { SetRef } from "../ipc";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { isAgentId, type AgentId } from "../agents/id.ts";
+
+const savesRenderedTabs: Record<AgentId, boolean> = { claude: false, codex: true };
 
 const MODES: readonly string[] = ["default", "acceptEdits", "plan"];
 
@@ -39,7 +43,7 @@ export function snapshotCodexTabs(
   const out: CodexTabRecord[] = [];
   for (const id of order) {
     const t = tabs.get(id);
-    if (!t || t.agent !== "codex" || t.body !== "rendered") continue;
+    if (!t || !isAgentId(t.agent) || !savesRenderedTabs[t.agent] || t.body !== "rendered") continue;
     out.push({
       ...(t.tabKey ? { tabKey: t.tabKey } : {}),
       threadId: t.turned && t.threadId ? t.threadId : null,

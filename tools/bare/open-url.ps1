@@ -5,7 +5,7 @@
 # This script first swaps its own environment for a fresh logon's (the rule tools/release/clean-env.ps1
 # Get-CleanEnvironment follows: system names, HKCU\Volatile Environment, Machine then User variables),
 # then hands the URL to ShellExecute, so the default browser starts with the real profile.
-# Not explorer.exe "<url>" (bf6bb313 to 2026-10-21): the Claude sign-in URL (~450 characters, state
+# Not explorer.exe "<url>": the Claude sign-in URL (~450 characters, state
 # last; the cmd and pwsh layers pass it intact, measured 2026-10-21) reached the browser without its
 # state parameter, inferred to be explorer parsing its argument as a path (MAX_PATH).
 #

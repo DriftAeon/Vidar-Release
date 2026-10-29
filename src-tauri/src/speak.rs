@@ -204,13 +204,18 @@ impl Source {
         };
         put("--cwd", &self.cwd);
         // Only the two names speak.py accepts; anything else keeps the merged search.
-        let agent = self.agent.clone().filter(|g| g == "claude" || g == "codex");
-        put("--agent", &agent);
-        // CODEX_HOME only means something to a Codex read.
-        let home = if agent.as_deref() == Some("codex") { self.codex_home.clone() } else { None };
-        put("--codex-home", &home);
-        let home = if agent.as_deref() == Some("claude") { self.claude_home.clone() } else { None };
-        put("--claude-home", &home);
+        let agent = self.agent.as_deref().and_then(crate::agent_spec::parse);
+        put("--agent", &agent.map(|g| g.as_str().to_string()));
+        // CODEX_HOME only means something to a Codex read, CLAUDE home to a Claude one.
+        let (codex_home, claude_home) = match agent {
+            None => (None, None),
+            Some(agent) => match agent {
+                crate::agent_spec::Agent::Codex => (self.codex_home.clone(), None),
+                crate::agent_spec::Agent::Claude => (None, self.claude_home.clone()),
+            },
+        };
+        put("--codex-home", &codex_home);
+        put("--claude-home", &claude_home);
         a
     }
 }
@@ -434,6 +439,13 @@ mod source_tests {
 
     fn s(cwd: &str, agent: Option<&str>, home: Option<&str>) -> Source {
         Source { cwd: Some(cwd.into()), agent: agent.map(Into::into), codex_home: home.map(Into::into), claude_home: home.map(Into::into) }
+    }
+
+    #[test]
+    fn an_agent_the_spec_does_not_parse_keeps_the_merged_search() {
+        for bad in ["grok", "Claude", ""] {
+            assert_eq!(s("C:\\p", Some(bad), Some("H")).args(), ["--cwd", "C:\\p"], "{bad:?}");
+        }
     }
 
     #[test]

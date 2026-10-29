@@ -61,7 +61,7 @@ function astraCwds(): string[] | null {
 }
 
 /** Why this tab can't be armed, or null when it can. */
-export function armBlocker(id: string): string | null {
+function armBlocker(id: string): string | null {
   const s = sessions.get(id);
   if (!s?.alive) return "tab is not alive";
   if (s.agent !== "codex") return "only Codex tabs can be Astra";
@@ -80,10 +80,6 @@ export function armAstra(id: string): boolean {
 export function disarmAstra() {
   if (armedId) sessions.get(armedId)?.button.classList.remove("armed");
   armedId = null;
-}
-
-export function isArmed(id: string): boolean {
-  return armedId === id;
 }
 
 /** spawnAstra opens a reviewer only when none is armed yet (one Astra at a time). */

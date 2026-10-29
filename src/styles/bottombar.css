@@ -17,7 +17,7 @@
 /* in the workbench: past its side and bottom padding and #view-sessions' right and bottom padding, so the bar
    runs to the rail's border and flush on the window bottom; 30 tall like #rail-foot (rail.css) and the left
    bar's foot (leftbar.css), so the three top lines sit level (on the 6 padding it left a 6px band under it;
-   a 36 bar read taller than the morning's, user 2026-10-11) */
+   a 36 bar read taller than the morning's) */
 #workbench > #bottombar {
   margin: 0 calc(-1 * (var(--space-10) + var(--space-6))) calc(-1 * (var(--space-8) + var(--space-6))) calc(-1 * var(--space-6)); /* 10 right / 6 left: #workbench's side padding (workbench.css); legacy 6: #view-sessions padding (below) */
 }

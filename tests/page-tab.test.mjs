@@ -41,8 +41,8 @@ const STUBS = {
   "character/events": "export function dispatchCharacterActivity() {} export function dispatchCharacterCompletion() {} export function dispatchCharacterStatus() {}",
   "panels/reply-events": "export function dispatchReplyDone() {}",
   "panels/sessions/astra-bridge": `export const armedId = null; export function armAstra() {} export function bindAstraBridge() {}
-    export function disarmAstra() {} export async function initAstraBridge() {} export function armBlocker() { return null; }
-    export function hasArmedAstra() { return false; } export function isArmed() { return false; }`,
+    export function disarmAstra() {} export async function initAstraBridge() {}
+    export function hasArmedAstra() { return false; }`,
   "panels/sessions/tab-strip": `let deps; let strip;
     export function bindTabStrip(d) { deps = d; }
     export function initTabStrip(s) { strip = s; }

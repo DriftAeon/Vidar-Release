@@ -1,7 +1,7 @@
 //! src-tauri\src\voice_slots\manifest.rs — the slot contract (`contracts\voice-slots.json`), the
 //! `packs\<id>\pack.json` and `voice\<adapter>.json` parse and validation, and the pack scan.
 //! Pure over the directory it is handed: no pins, no probes. A folder or manifest that fails
-//! any rule becomes a `Broken` row naming the file; it is never skipped (plan §2).
+//! any rule becomes a `Broken` row naming the file; it is never skipped.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
@@ -525,7 +525,7 @@ fn check_sha(sha: &Option<String>) -> Result<(), String> {
     }
 }
 
-/// Every rule of plan §2 over one parsed manifest listed under `slot` as `voice/<stem>.json`.
+/// Every manifest rule over one parsed manifest listed under `slot` as `voice/<stem>.json`.
 pub fn validate(m: &Manifest, slot: Slot, stem: &str) -> Result<(), String> {
     let c = contract();
     if m.version != 1 {

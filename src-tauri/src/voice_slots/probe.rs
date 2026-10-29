@@ -63,7 +63,9 @@ pub fn expand_rooted(s: &str, roots: &Roots) -> Result<PathBuf, String> {
 /// root (`{home}`) is pinned.
 pub fn pinnable(path: &Path, roots: &Roots, stock_pack: bool) -> bool {
     if !stock_pack && path.starts_with(&roots.pack) {
-        return true;
+        // First-party packs (claude, codex) are repo content: git tracks them, so rule 2 skips them.
+        // A pack with no checkout behind it (a release install, a user pack) stays pinned.
+        return !git_tracked(path, roots);
     }
     let Ok(rel) = path.strip_prefix(&roots.vidar) else {
         return true;
@@ -72,6 +74,22 @@ pub fn pinnable(path: &Path, roots: &Roots, stock_pack: bool) -> bool {
     [crate::paths::rel("vendor"), voice.join(".venv"), voice.join("models")]
         .iter()
         .any(|fetched| rel.starts_with(fetched))
+}
+
+/// Whether the Vidar checkout's git index tracks `path` (false with no checkout, no git or any error).
+fn git_tracked(path: &Path, roots: &Roots) -> bool {
+    use crate::gitrun::{git, GitOpts};
+    use std::time::Duration;
+    if !roots.vidar.join(".git").exists() {
+        return false;
+    }
+    let Ok(rel) = path.strip_prefix(&roots.vidar) else {
+        return false;
+    };
+    let rel = rel.to_string_lossy().replace('\\', "/");
+    let mut opts = GitOpts::read(Duration::from_secs(5), 4096);
+    opts.ceiling = roots.vidar.parent();
+    git(&roots.vidar, &["ls-files", "--error-unmatch", "--", &rel], &opts).is_ok()
 }
 
 fn is_rooted_arg(arg: &str) -> Result<bool, String> {
@@ -203,5 +221,18 @@ mod tests {
         let at = |s: &str| expand_rooted(s, &roots).unwrap();
         assert!(pinnable(&at("{vidar}/content/local-voice/.venv/Scripts/python.exe"), &roots, true));
         assert!(!pinnable(&at("{vidar}/content/local-voice/listen.py"), &roots, true));
+    }
+
+    #[test]
+    fn git_tracked_first_party_pack_script_is_not_pinned() {
+        let vidar = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
+        if !vidar.join(".git").exists() {
+            return; // shipped tree: no checkout to ask
+        }
+        let pack = vidar.join(crate::paths::rel("packs")).join("claude");
+        let roots = Roots { vidar, pack: pack.clone(), home: None };
+        assert!(!pinnable(&pack.join("voice").join("rewrite_claude.py"), &roots, false));
+        // A file git does not track in the same pack is still pinned.
+        assert!(pinnable(&pack.join("voice").join("untracked-user-script.py"), &roots, false));
     }
 }

@@ -17,6 +17,7 @@ const sources = { memoryDir: null, guardsKey: false, files: [
   file("C:/home/.codex/hooks/check.mjs", "hook", { agent: "codex", guard: { event: "PreToolUse", matcher: "Bash", run: ["node", "C:/home/.codex/hooks/check.mjs"] } }),
 ] };
 const KIT_OP = { op: "addRuneset", ref: { library: "kit", set: "kit" } };
+const KIT_CODEX_OP = { op: "addRuneset", ref: { library: "kit", set: "kit-codex" } };
 
 function mounted(agent, { local = sources, created = true, dropped = [], locked = false, start } = {}) {
   const calls = [];
@@ -25,6 +26,7 @@ function mounted(agent, { local = sources, created = true, dropped = [], locked 
   const view = () => ({ vault: structuredClone(vault), drift: [], runes: [], warnings: [] });
   const io = {
     localSources: async () => local,
+    kitSets: async () => [{ library: "kit", set: "kit" }, { library: "kit", set: "kit-codex" }],
     kitCreate: async (arg) => { calls.push(["kitCreate", arg]); if (created instanceof Error) throw created; return { created, dropped }; },
   };
   const vaultIo = {
@@ -41,7 +43,6 @@ function mounted(agent, { local = sources, created = true, dropped = [], locked 
       if (vault.lockedUtc && a.mode === "unlocked") throw new Error("vault \"v1\" is locked");
       return { ...structuredClone(vault), id: a.mode === "variant" ? "v2" : "v1" };
     },
-    moveTab: async (id) => { calls.push(["moveTab", id]); return true; },
     respawn: async () => { calls.push(["respawn"]); },
   };
   const host = document.createElement("div");
@@ -65,7 +66,7 @@ for (const agent of ["claude", "codex"]) {
     add.click();
     await settle();
     assert.deepEqual(m.calls.map(([name]) => name), ["kitCreate", "edit", "respawn"]);
-    assert.deepEqual(m.calls[1][1], { id: "v1", ops: [KIT_OP], mode: "unlocked" });
+    assert.deepEqual(m.calls[1][1], { id: "v1", ops: agent === "codex" ? [KIT_OP, KIT_CODEX_OP] : [KIT_OP], mode: "unlocked" });
     const layer = m.calls[0][1].layer;
     assert.deepEqual(layer.skills, ["C:/home/.claude/skills/tidy", "C:/home/.codex/skills/review"]);
     assert.deepEqual(layer.agents, ["C:/home/.claude/agents/helper.md"]);
@@ -110,7 +111,7 @@ test("a failed create shows Add Kit Failed and edits no vault", async () => {
   m.dispose();
 });
 
-test("Add Kit on a locked vault sends no edit until Make Variant, which moves the tab and respawns it", async () => {
+test("Add Kit on a locked vault sends no edit until Make Variant, which leaves the tab on its vault", async () => {
   const m = mounted("claude", { locked: true });
   await settle(); await m.modify();
   button(m.host, "Add Kit").click();
@@ -123,7 +124,7 @@ test("Add Kit on a locked vault sends no edit until Make Variant, which moves th
   assert.ok(button(card, "Edit Original"));
   button(card, "Make Variant").click();
   await settle();
-  assert.deepEqual(m.calls.slice(1), [["edit", { id: "v1", ops: [KIT_OP], mode: "variant" }], ["moveTab", "v2"], ["respawn"]]);
+  assert.deepEqual(m.calls.slice(1), [["edit", { id: "v1", ops: [KIT_OP], mode: "variant" }]], "Make Variant neither moves nor respawns the tab");
   assert.ok(!m.host.querySelector(".blk-notice-card"), "the card leaves once the pick lands");
   assert.ok(!m.calls.some(([name]) => name === "rowSetAppend"), "no launcher row is written");
   m.dispose();

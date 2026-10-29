@@ -17,9 +17,8 @@
 //
 // Usage: node claude-sidecar.mjs --cwd <dir> [--model <m>] [--effort <low|medium|high|xhigh|max>]
 //        [--permission-mode <mode>] [--resume <session-id>] --claude <path\to\claude.exe> [--falcon]
-//        [--rules-file <abs path to a built rules .md>] [--flow-payload bare --root <abs root>] [--mcp-servers <JSON>]: Flow, see claude-sidecar-bare.mjs flowOptions
-//        [--gateway <module id> --vendor-preparer <abs vendor-prepare.ps1> --pwsh <abs pwsh.exe>]
-//        [--profile bare --root <abs Vidar root> --home <abs agent home>] [--require-mcp <JSON names>: Flow, see claude-sidecar-mcp-wait.mjs]
+//        [--rules-file <abs path to a built rules .md>] [--gateway <module id> --vendor-preparer <abs vendor-prepare.ps1> --pwsh <abs pwsh.exe>]
+//        [--profile bare --root <abs Vidar root> --home <abs agent home>] [--flow: a Flow stage, no --falcon, gateway allowed] [--require-mcp <JSON names>: Flow, see claude-sidecar-mcp-wait.mjs]
 //
 // --profile (Falcon only, never with --rules-file or --gateway): a Rendered Bare tab. The SDK options
 //   come from the profile (claude-sidecar-bare.mjs), never from vidar.json; Falcon built the env.
@@ -95,7 +94,7 @@ import { homedir } from "node:os";
 import { CAP, bytes, summarizeInput, shrink } from "./claude-sidecar-shrink.mjs";
 import { readVidarConfig, vidarRoot, startStatuslineMirror } from "./claude-sidecar-statusline.mjs";
 import { seededEffort, seededLimits } from "./claude-sidecar-seed.mjs";
-import { bareOptions, bareSettingsModel, flowOptions, setPluginArgs, writeInitOnce } from "./claude-sidecar-bare.mjs";
+import { bareOptions, bareSettingsModel, setPluginArgs, writeInitOnce } from "./claude-sidecar-bare.mjs";
 import { startLedger } from "./claude-sidecar-ledger.mjs";
 import { settingSourcesFor } from "./claude-sidecar-trust.mjs";
 import { createInterruptWindow, forwardInterrupt, replayHistory } from "./claude-sidecar-recover.mjs";
@@ -118,10 +117,9 @@ const falcon = argv.includes("--falcon"); // gates every record in the "falcon" 
 // A gateway re-enters this sidecar through the SAME preparation as Raw tabs.
 // Only identity and nonsecret arguments are on the command line; stdin/stdout remain the SDK stream.
 const gateway = arg("--gateway");
-if (arg("--profile") !== undefined) {
-  if (!falcon) fail("a launch profile needs --falcon");
-  if (gateway) fail("a launch profile carries no gateway");
-}
+const flowStage = argv.includes("--flow"); // a Flow stage: the profile mapping on a vault home, no Falcon, gateway allowed
+if (flowStage && arg("--profile") === undefined) fail("a Flow stage needs a launch profile");
+if (arg("--profile") !== undefined && !flowStage) { if (!falcon) fail("a launch profile needs --falcon"); if (gateway) fail("a launch profile carries no gateway"); }
 if (gateway) {
   const prepare = arg("--vendor-preparer");
   // Falcon resolves pwsh.exe from its own PATH; a bare "pwsh" here would search the session cwd first.
@@ -209,10 +207,9 @@ const profileArg = arg("--profile");
 let bare = null;
 if (profileArg !== undefined) {
   if (arg("--rules-file")) fail("a launch profile carries no rules file");
-  try { bare = bareOptions({ profile: profileArg, root: arg("--root"), home: arg("--home"), payload: arg("--payload"), setPlugins: setPluginArgs(argv) }); }
+  try { bare = bareOptions({ profile: profileArg, root: arg("--root"), home: arg("--home"), payload: arg("--payload"), setPlugins: setPluginArgs(argv), mcpFile: arg("--mcp-file") }); }
   catch (e) { fail(`launch profile: ${e?.message ?? e}`); }
 }
-const flow = flowOptions({ profile: profileArg, payload: arg("--flow-payload"), servers: arg("--mcp-servers"), root: arg("--root") }, fail); // {} unless a Flow stage
 
 /* ---- stdin → prompt queue + control ---- */
 
@@ -468,7 +465,7 @@ const observers = [startStatuslineMirror(bare ? { configDir: bare.configDir } : 
 const options = {
   cwd,
   permissionMode,
-  includePartialMessages: true, ...flow, // a Flow stage's systemPrompt (Bare payload text) and mcpServers
+  includePartialMessages: true,
   settingSources: settingSourcesFor(cwd), // project settings (hooks) only in folders Claude trusted
   canUseTool,
   // Effort is not on the stream; the SDK surfaces it only on hook inputs that
@@ -537,6 +534,7 @@ if (bare) {
   delete options.extraArgs["append-system-prompt-file"]; // a --rules-file path would be a second append
   options.plugins = bare.plugins;
   options.allowedTools = bare.allowedTools;
+  if (bare.mcpServers) Object.assign(options, { mcpServers: bare.mcpServers, strictMcpConfig: true });
 }
 
 // The checked vendor fence and plugin replace configurable Rendered plugin directories, as in Raw.

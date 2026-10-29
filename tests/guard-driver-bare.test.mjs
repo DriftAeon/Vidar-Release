@@ -62,7 +62,7 @@ test("it fails open without FALCON_SESSION, with driver mode off, or without an 
 });
 
 test("the stock guard-driver hook rune wires it as a PreToolUse hook by path with --root, not the template", () => {
-  // Run 2026-10-25-rune-vault L2b: the hook reaches a session only through its vault's stock rune.
+  // The hook reaches a session only through its vault's stock rune.
   const rune = readFileSync(new URL("../profiles/bare/stock-runes/hooks/guard-driver.md", import.meta.url), "utf8").replace(/\r/g, "");
   const field = (k) => rune.match(new RegExp(`^${k}: (.*)$`, "m"))?.[1];
   assert.equal(field("kind"), "hook");
@@ -74,7 +74,7 @@ test("the stock guard-driver hook rune wires it as a PreToolUse hook by path wit
 });
 
 test("the stock mcp-gate hook rune wires the MCP gate as a PreToolUse hook by path, not the template", () => {
-  // Run 2026-10-25-rune-vault L2f: the hook reaches a session only through its vault's stock rune.
+  // The hook reaches a session only through its vault's stock rune.
   const rune = readFileSync(new URL("../profiles/bare/stock-runes/hooks/mcp-gate.md", import.meta.url), "utf8").replace(/\r/g, "");
   const field = (k) => rune.match(new RegExp(`^${k}: (.*)$`, "m"))?.[1];
   assert.equal(field("kind"), "hook");

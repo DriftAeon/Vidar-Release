@@ -6,7 +6,6 @@ Run in a normal terminal (it prompts for the token, so not a `!` line):
 The token is read at a hidden prompt (or SLACK_PROBE_TOKEN for testing), kept in memory only, and never
 printed, logged or written. Output is HTTP status, ok/error codes and counts: no message text, ids or links.
 Refuses: exits 1 with no token, and stops after check 1 if auth.test fails.
-Plan: docs/projects/slack/inbox-tab-plan.md § P0
 #>
 $ErrorActionPreference = 'Stop'
 

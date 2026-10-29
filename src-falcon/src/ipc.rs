@@ -436,7 +436,7 @@ pub(crate) fn create_server_full(
         access |= windows::Win32::Storage::FileSystem::FILE_FLAG_OVERLAPPED;
     }
     // PIPE_REJECT_REMOTE_CLIENTS on both endpoints: a remote client is refused
-    // by the pipe itself, before any frame is read (plan v3, §"IPC contract").
+    // by the pipe itself, before any frame is read.
     let mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS;
     // The kernel buffer is an advisory hint, not the frame bound; a large frame
     // simply takes more round trips through it.

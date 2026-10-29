@@ -7,7 +7,7 @@
   "tags": ["composer"],
   "realModel": false,
   "core": false,
-  "source": ["4e47fc10"],
+  "source": [],
   "steps": [
     { "intent": "open a Claude chat tab" },
     { "intent": "type a short ! line such as '! echo hi' in the composer" },

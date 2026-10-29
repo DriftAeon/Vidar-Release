@@ -50,33 +50,17 @@ test('above threshold: no directive is injected and Stop is never blocked (hando
   expect(s.block).toBeUndefined()
 })
 
-test('SessionStart adds no handoff pointer', async ($, on) => {
-  mock.env(on, { USERPROFILE: HOME })
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  const name = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}-deadbeef.md`
-  memFs(on, { [`${HOME}\\.claude\\context-gate.json`]: CONFIG }, [{ name, mtimeMs: Date.now() }])
-  session(on, 0)
-  on('classic.SessionStart', () => ({}))
-
-  const r: any = await $.classic.SessionStart({
-    session_id: SID, transcript_path: 'x', cwd: CWD, hook_event_name: 'SessionStart', source: 'startup',
-  } as any)
-  expect(r.additionalContext[0]).not.toContain('A handoff from a previous session')
-})
-
-test('SessionStart writes the .mod stand-down marker', async ($, on) => {
+test('the first prompt writes the .mod stand-down marker and no handoff pointer',async ($, on) => {
   mock.env(on, { USERPROFILE: HOME })
   const fs = memFs(on, {})
   session(on, 0)
-  on('classic.SessionStart', () => ({}))
+  on('prompt.submit', ($: any, e: any) => ({ text: e.text, context: e.context }))
 
-  await $.classic.SessionStart({
-    session_id: SID, transcript_path: 'x', cwd: CWD, hook_event_name: 'SessionStart', source: 'startup',
-  } as any)
+  const r = await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } } as any)
   const m = fs.writes.find((w) => norm(w.path).endsWith(`/.claude/context-gate/${SID}.mod`))
   expect(m).toBeDefined()
   expect(m!.text).toBe('')
+  expect(contextOf(r).some((c) => c.includes('handoff'))).toBe(false)
 })
 
 test('session.measure writes no gate.json', async ($, on) => {
@@ -89,21 +73,38 @@ test('session.measure writes no gate.json', async ($, on) => {
   expect(fs.writes.find((x) => x.path.endsWith('.gate.json'))).toBeUndefined()
 })
 
-test('session files: classic index shape and sid8 context', async ($, on) => {
+const SID8 = "This session's id prefix: 0123abcd (names transcripts; it is not a SendMessage address: ListAgents prints that)."
+const isIndex = (p: string) => norm(p).endsWith(`/.claude/session-index/${SID}.json`)
+const isMod = (p: string) => norm(p).endsWith(`/.claude/context-gate/${SID}.mod`)
+
+test('the first prompt writes .mod, index and sid8; the second adds nothing',async ($, on) => {
   mock.env(on, { USERPROFILE: HOME, VIDAR_TAB: 's3-abc' })
   const fs = memFs(on, { [`${HOME}\\.claude\\context-gate.json`]: CONFIG })
   session(on, 0)
-  on('classic.SessionStart', () => ({}))
+  on('prompt.submit', ($: any, e: any) => ({ text: e.text, context: e.context }))
 
-  const r: any = await $.classic.SessionStart({
-    session_id: SID, transcript_path: 'C:\\t.jsonl', cwd: CWD, hook_event_name: 'SessionStart', source: 'startup',
-  } as any)
-  const idx = fs.writes.find((x) => norm(x.path).endsWith(`/.claude/session-index/${SID}.json`))
-  expect(idx).toBeDefined()
-  expect(idx!.text.endsWith('}\n')).toBe(true)
-  const rec = JSON.parse(idx!.text)
+  const r1 = await $.prompt.submit({ text: 'one', wait: false, origin: { kind: 'composer' } } as any)
+  expect(contextOf(r1)).toContain(SID8)
+  const idx = fs.writes.filter((w) => isIndex(w.path))
+  expect(idx.length).toBe(1)
+  expect(idx[0].text.endsWith('}\n')).toBe(true)
+  const rec = JSON.parse(idx[0].text)
   expect(Object.keys(rec)).toEqual(['sessionId', 'cwd', 'source', 'startedAt', 'vidarTab', 'transcript', 'cliVersion'])
-  expect(rec).toMatchObject({ sessionId: SID, cwd: CWD, source: 'startup', vidarTab: 's3-abc', transcript: 'C:\\t.jsonl', cliVersion: null })
-  expect(r.additionalContext[0]).toBe("This session's id prefix: 0123abcd (names transcripts; it is not a SendMessage address: ListAgents prints that).")
-  expect(fs.writes.filter((x) => norm(x.path).endsWith(`/.claude/session-index/${SID}.json`)).length).toBe(1)
+  expect(rec).toMatchObject({ sessionId: SID, cwd: CWD, source: 'prompt.submit', vidarTab: 's3-abc', transcript: null, cliVersion: null })
+  expect(fs.writes.filter((w) => isMod(w.path)).length).toBe(1)
+
+  const r2 = await $.prompt.submit({ text: 'two', wait: false, origin: { kind: 'composer' } } as any)
+  expect(contextOf(r2)).not.toContain(SID8)
+  expect(fs.writes.filter((w) => isIndex(w.path) || isMod(w.path)).length).toBe(2)
+})
+
+test('an index record left on disk (a reload, a resumed session) stops the fallback', async ($, on) => {
+  mock.env(on, { USERPROFILE: HOME })
+  const fs = memFs(on, { [`${HOME}\\.claude\\session-index\\${SID}.json`]: '{}\n' })
+  session(on, 0)
+  on('prompt.submit', ($: any, e: any) => ({ text: e.text, context: e.context }))
+
+  const r = await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } } as any)
+  expect(contextOf(r)).not.toContain(SID8)
+  expect(fs.writes.length).toBe(0)
 })

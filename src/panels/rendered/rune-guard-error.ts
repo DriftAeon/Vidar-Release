@@ -1,13 +1,14 @@
 // The Bare guard's tagged JSON survives both direct Tauri rejection and Falcon's "spawn: " prefix.
-// Its card (C1, run 2026-10-25-rune-vault L3b2) removes the rune from the tab's Rune Vault through `rune_vault_edit`
+// Its card removes the rune from the tab's Rune Vault through `rune_vault_edit`
 // with the vault's lock rules: an open vault is edited, a locked one waits for Make Variant or Edit Original. A rune
-// riding in a placed runeset goes out of the vault's copy of it through the `member` op (L3d).
+// riding in a placed runeset goes out of the vault's copy of it through the `member` op.
 import { invoke, type BareRuneGuardRefusal, type VaultOp } from "../../ipc";
 import { nameLabel } from "../../runes/bare/row-name";
-import { editVault, EDIT_ORIGINAL_LABEL, EDIT_ORIGINAL_RESTART, MAKE_VARIANT_LABEL, type VaultEditIo, type VaultPick } from "../../runes/bare/vault-edit";
+import { editVault, EDIT_ORIGINAL_LABEL, EDIT_ORIGINAL_RESTART, MAKE_VARIANT_LABEL, variantSavedNotice, type VaultEditIo, type VaultPick } from "../../runes/bare/vault-edit";
 import { tabVaultEditIo } from "../../runes/bare/vault-edit-io";
 import { LOCKED_EDIT_TEXT, memberOp } from "../../runes/bare/view-vault";
 import { sessionLaunchInfo } from "../sessions/lookup";
+import { respawnVaultTabs, tabVaultSession } from "../sessions/vault-tabs";
 import { actionButton, card } from "./notice-actions";
 
 export const RUNE_GUARD_REFUSAL_MARKER = "VIDAR_RUNE_GUARD_REFUSAL:";
@@ -32,12 +33,12 @@ export function runeGuardRefusal(error: unknown): BareRuneGuardRefusal | null {
 
 /** The vault tab `tab` spawns on: its session record's, else its launch vault. */
 async function tabVault(tab: string): Promise<string | null> {
-  const rec = await invoke("rune_vault_session", { tab }).catch(() => null);
+  const rec = await tabVaultSession(tab).catch(() => null);
   return rec?.vault.id ?? sessionLaunchInfo(tab)?.vault ?? null;
 }
 
 /** The `removeRune` op for the refused rune when it is a one-off in vault `id`; when it rides in a placed runeset
- *  (the refusal names that runeset), the `member` op that takes it out of the vault's copy of it (L3d). Throws when
+ *  (the refusal names that runeset), the `member` op that takes it out of the vault's copy of it. Throws when
  *  neither holds it. */
 async function removeOps(io: VaultEditIo, id: string, r: BareRuneGuardRefusal): Promise<VaultOp[]> {
   const v = await io.current(id);
@@ -52,10 +53,10 @@ async function removeOps(io: VaultEditIo, id: string, r: BareRuneGuardRefusal): 
 }
 
 /** One guarded rune in a failed Bare spawn: Remove Rune takes it out of the tab's vault, then retries the spawn.
- *  A locked vault turns the card into the Make Variant / Edit Original choice; Make Variant moves the tab to the
- *  new vault and Edit Original edits the locked one; both retry fresh (`retry(true)`: a resume would load the
- *  thread's old vault state), as Modify's choice card respawns. */
-export function runeGuardCard(tab: string, refusal: BareRuneGuardRefusal, retry: (fresh: boolean) => Promise<void>, io: VaultEditIo = tabVaultEditIo(tab)): HTMLElement {
+ *  A locked vault turns the card into the Make Variant / Edit Original choice; Make Variant saves the new vault
+ *  for new sessions and leaves this tab on its own (the card shows the notice, no retry); Edit Original edits the
+ *  locked one and retries fresh (`retry(true)`: a resume would load the thread's old vault state). */
+export function runeGuardCard(tab: string, refusal: BareRuneGuardRefusal, retry: (fresh: boolean) => Promise<void>, io: VaultEditIo = tabVaultEditIo(tab, undefined, (vault) => respawnVaultTabs(vault, tab))): HTMLElement {
   const why = refusal.reason.includes("holds the account name") ? "Holds Your Account Name"
     : refusal.reason.includes("holds the user-profile path") ? "Holds Your Profile Path"
     : refusal.reason.includes("unsubstituted placeholder") ? "Has an Unsubstituted Placeholder"
@@ -79,9 +80,14 @@ export function runeGuardCard(tab: string, refusal: BareRuneGuardRefusal, retry:
       );
       return;
     }
-    if (r.mode === "variant" && !(await io.moveTab(r.vault.id))) throw new Error("Couldn't move this tab to the new vault");
+    if (r.mode === "variant") {
+      // the variant is for new sessions; this tab keeps its vault, so there is nothing to retry
+      c.text.textContent = variantSavedNotice(r.vault.name);
+      c.acts.replaceChildren();
+      return;
+    }
     c.root.remove();
-    await retry(r.mode === "variant" || r.mode === "invalidate");
+    await retry(r.mode === "invalidate");
   };
   c.acts.appendChild(actionButton(REMOVE_RUNE_LABEL, "Removing", true, () => run(), c.error, REMOVE_FAILED));
   return c.root;

@@ -3,9 +3,8 @@
 // ~\.claude\hooks\session-index.mjs (SessionStart) with the same observable behaviour.
 //
 // Event map:
-//   SessionStart (index file + sid8 context) -> classic.SessionStart, which first writes
-//     context-gate\<sessionId>.mod so the still-wired classic hooks stand down for this session.
-//   UserPromptSubmit additionalContext                -> prompt.submit `context`
+//   session setup (.mod, index file, sid8 context)    -> prompt.submit, once per sid, only when
+//     neither file exists; the .mod makes the still-wired classic hooks stand down for the session
 //   Stop {"decision":"block"}                         -> classic.Stop `{ block }` (same semantics)
 //   (new) band                                        -> session.measure, ui.render AbovePrompt
 //
@@ -95,33 +94,49 @@ async function writeIndex($, rec) {
   await $.fs.write(path, JSON.stringify(rec, null, 2) + '\n');
 }
 
+const sid8Text = (sessionId) =>
+  `This session's id prefix: ${sessionId.slice(0, 8)} (names transcripts; it is not a SendMessage address: ListAgents prints that).`;
+
+async function present($, path) {
+  try {
+    await $.fs.read(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // A .catch handler: pass the event on unless the hook already did.
 const passOn = async ($, e, next) => (next.called ? undefined : next(e));
 
 export function register(on) {
-  // startup, resume, clear, compact, fork: the classic SessionStart hook's whole job. Classic
-  // events fire regardless of settings hooks, so this alone writes the index.
-  on('classic.SessionStart', async ($, e, next) => {
-    // Stand-down marker first: the classic context-gate.mjs and session-index.mjs exit when it exists.
+  // The session's one-time setup, on its first prompt: write the context-gate .mod stand-down
+  // marker and the session-index record, and add the sid8 line once. The files are the
+  // once-per-sid key; module state would reset on reload. Not classic.SessionStart:
+  // cc-plugin-sec-default skips person-installed plugins' classic.* events, and Claude Code
+  // warns that the SessionStart hook was skipped.
+  on('prompt.submit', async ($, e, next) => {
+    let extra = null;
     try {
-      const sid = (e && e.session_id) || (await $.session.id()) || '';
-      if (SID_RE.test(sid)) await $.fs.write(joinPath(await claudeDir($), 'context-gate',`${sid}.mod`), '');
-    } catch { /* best effort */ }
-    const result = await next(e);
-    try {
-      const sessionId = (e && e.session_id) || (await $.session.id()) || '';
-      if (!SID_RE.test(sessionId)) return result;
-      const cwd = (e && e.cwd) || (await $.session.cwd());
-      const source = (e && e.source) || '';
-      try {
-        await writeIndex($, indexRecord(sessionId, cwd, source, (await $.env.get('VIDAR_TAB')) ?? null,
-          (e && e.transcript_path) ?? null, (e && e.version) ?? null));
-      } catch { /* index is best effort */ }
-      const text = `This session's id prefix: ${sessionId.slice(0, 8)} (names transcripts; it is not a SendMessage address: ListAgents prints that).`;
-      const base = result || {};
-      return { ...base, additionalContext: [...(base.additionalContext ?? []), text] };
-    } catch { /* never affect the session */ }
-    return result;
+      const sessionId = (await $.session.id()) || '';
+      if (SID_RE.test(sessionId)) {
+        const modPath = joinPath(await claudeDir($), 'context-gate', `${sessionId}.mod`);
+        const indexPath = joinPath(await homeDir($), '.claude', 'session-index', `${sessionId}.json`);
+        if (!(await present($, modPath)) && !(await present($, indexPath))) {
+          let wrote = false;
+          try { await $.fs.write(modPath, ''); wrote = true; } catch { /* best effort */ }
+          try {
+            await writeIndex($, indexRecord(sessionId, await $.session.cwd(), 'prompt.submit',
+              (await $.env.get('VIDAR_TAB')) ?? null, null, null));
+            wrote = true;
+          } catch { /* index is best effort */ }
+          // Nothing on disk means no once-per-sid key: stay silent rather than repeat every prompt.
+          if (wrote) extra = sid8Text(sessionId);
+        }
+      }
+    } catch { /* never affect the prompt */ }
+    if (!extra) return next(e);
+    return next({ ...e, context: [...((e && e.context) ?? []), extra] });
   }).catch(passOn);
 
   // After each turn (and after /clear, /resume, /compact): the band's measurement.

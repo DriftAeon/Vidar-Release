@@ -89,6 +89,17 @@ test("snapshot: off-viewport skips nodes a scroll container can reach", async ()
   assert.ok(flags("Stranded").includes("off-viewport"));
 });
 
+test("snapshot: a control inside a closed details is absent, its summary stays, open shows it", async () => {
+  const html = '<details id="g"><summary>Stock</summary><div><button>State</button></div></details>';
+  const { ctx, doc } = page(html);
+  const names = async () => (await snapshot(ctx)).nodes.map((n) => n.name);
+  const closed = await names();
+  assert.ok(closed.includes("Stock"));
+  assert.ok(!closed.includes("State"));
+  doc.getElementById("g").open = true;
+  assert.ok((await names()).includes("State"));
+});
+
 test("flags: zero-size true and false", () => {
   assert.equal(zeroSize({ w: 0, h: 10 }), true);
   assert.equal(zeroSize({ w: 1, h: 1 }), false);

@@ -11,6 +11,7 @@
 
 import { invoke } from "../ipc";
 import { getPref } from "../prefs";
+import { label } from "../format";
 import { plainRowsControl, plainRowsOn } from "./plain-rows";
 import { loadConfig, onConfigReloaded, onSettingsChanged, type VidarConfig } from "../config";
 import { overlayAgents } from "../config-agents";
@@ -289,7 +290,7 @@ function readOnlyText(v: CustomView, s: Snapshot): string {
     parts.push(`${root ? labelOf(root) : m.under} Variant`);
   }
   if (m.body === "rendered") parts.push("Rendered");
-  if (m.role) parts.push(`Role ${m.role.charAt(0).toUpperCase()}${m.role.slice(1)}`);
+  if (m.role) parts.push(`Role ${label(m.role)}`);
   if (v.off) parts.push("Off In vidar.json");
   if (v.offWith) parts.push(`Off With ${v.offWith}`);
   parts.push("Edit In vidar.json");

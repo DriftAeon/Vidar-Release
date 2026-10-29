@@ -1,4 +1,4 @@
-//! The Jira API token in Windows Credential Manager (plan § D3) through the shared
+//! The Jira API token in Windows Credential Manager through the shared
 //! `credman::CredStore`: `CRED_TYPE_GENERIC`, target `Vidar/Jira/<install-root key>` (the key Bare
 //! homes use, so installs and sandbox roots stay apart), `UserName` = email, `Comment` = the site
 //! host the token was saved for, blob = token as UTF-8. The target name is unchanged from the

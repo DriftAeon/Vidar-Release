@@ -3,7 +3,7 @@
 
 import { renderMarkdownOrText } from "../markdown-build";
 import { pretty } from "./format";
-import { prettyTool, titleCase } from "../../format";
+import { prettyTool, label } from "../../format";
 import { el } from "./dom";
 import { codexChanges, codexDiffLines } from "../../agents/codex-diff";
 
@@ -17,7 +17,7 @@ export function diffSpan(kind: "add" | "del", line: string, tail = "", extra = "
 export function approvalToolLabel(tool: string, input: unknown): string {
   if (tool !== "MCP Elicitation") return tool === "ExitPlanMode" ? "Plan" : prettyTool(tool);
   const server = input && typeof input === "object" ? (input as Record<string, unknown>).serverName : undefined;
-  return typeof server === "string" && server ? `${titleCase(server)} Server` : "MCP";
+  return typeof server === "string" && server ? `${label(server)} Server` : "MCP";
 }
 
 /** the exact thing being approved, in the tool's own terms:

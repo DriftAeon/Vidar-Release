@@ -3,6 +3,10 @@
 // model -> backend map. The strings are flow.rs's `flow_run_node` arms, pinned by
 // tests/flow-runner.test.mjs.
 
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { AGENT_IDS } from "../agents/id.ts";
+import type { AgentId } from "../agents/id";
+
 /** `"sdk"` = the Claude sidecar, `"codex"` = the Codex app-server (flow.rs). */
 export type FlowBackend = "sdk" | "codex";
 
@@ -28,4 +32,18 @@ export function setBackendLookup(fn: (model: string) => FlowBackend | undefined)
  *  every node did before the Codex runner. */
 export function backendOfModel(model: string | undefined): FlowBackend {
   return (model && lookup(model)) || "sdk";
+}
+
+/** The agent a backend runs: the Codex backend is the agent of that name, the Claude sidecar (`sdk`) is the
+ *  one agent no backend is named for (no agent-id literal: `AGENT_IDS` supplies both). An unknown backend throws. */
+export function agentOfBackend(backend: string): AgentId {
+  const named = AGENT_IDS.find((a) => a === backend);
+  if (named) return named;
+  if (backend !== "sdk") throw new Error(`Unknown Flow backend: ${backend}`);
+  return AGENT_IDS.find((a) => (a as string) !== backend)!; // no id is named "sdk": the first id, as inspector.ts read it
+}
+
+/** The agent a model's node runs on. */
+export function agentOfModel(model: string | undefined): AgentId {
+  return agentOfBackend(backendOfModel(model));
 }

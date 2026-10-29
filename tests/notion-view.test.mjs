@@ -1,4 +1,4 @@
-// Notion bench tab view contract (panels/notion.ts, notion/view.ts; plan § Views): the unset notice and Hide,
+// Notion bench tab view contract (panels/notion.ts, notion/view.ts): the unset notice and Hide,
 // the Connect form and the token's life, the top bands and their tooltips, the empty states, the cap and
 // partial notes, drill-in and Back (button and Esc) with focus back on the row, error kinds, remote text as
 // text, refresh on show only when stale and not attempted in 10 min, the busy guard on a repeat show, and

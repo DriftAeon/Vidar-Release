@@ -7,7 +7,7 @@
 
 import { getPref, setPref } from "../prefs";
 
-const DEFAULT_W = 183; // user 2026-10-10: 40px under the 223 in use (Tools moved to the left bar)
+const DEFAULT_W = 183; // 40px under the 223 in use (Tools moved to the left bar)
 const MIN_W = 160;
 const MAX_W = 520;
 

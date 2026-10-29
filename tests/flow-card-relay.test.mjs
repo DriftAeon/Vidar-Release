@@ -14,7 +14,7 @@ setupDom({
     "flow/control-observe": "export const flowStatusLine = () => ''; export const waitForFlow = async () => 'timeout';",
     "flow/file-storage": "export async function initFlowStorage() {}",
     "flow/engine": `export const heldRunIds = () => new Set();
-      export const resolveRunModes = async (g) => Object.fromEntries(g.nodes.filter((n) => n.kind === "agent").map((n) => [n.id, "auto"]));`,
+      export const resolveRunGrants = async (g) => Object.fromEntries(g.nodes.filter((n) => n.kind === "agent").map((n) => [n.id, { vault: "stock-claude", mode: "auto", allow: [], hash: "h" }]));`,
     "control/registry": "export const driveSnapshot = () => ({ tabs: [] }); export const requesterTabId = () => null;",
   },
 });

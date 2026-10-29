@@ -28,8 +28,7 @@ const LAUNCHER_ICONS: VendorMark[] = [
   // PI_V1 from the user's CAS-Icons set, resized to 128 px; the same file also
   // backs the "Pi Playground" desktop shortcut via CAS-Icons\ico\PI_V1.ico.
   { match: /\bpi\b/i, icon: piIcon, tint: "var(--agent-pi)" },
-  // Zero_V8 from the user's CAS-Icons set, resized to 128 px (was V7 via the Display gate,
-  // request 4374b656). No tint: it is the one polychrome mark, deliberately — the row that
+  // Zero_V8 from the user's CAS-Icons set, resized to 128 px. No tint: it is the one polychrome mark, deliberately — the row that
   // opens a model running on this machine should not look like the vendor rows.
   { match: /\blocal\b/i, icon: localIcon },
   // Windows Terminal's own Square44x44 mark (copied from the appx Images dir)

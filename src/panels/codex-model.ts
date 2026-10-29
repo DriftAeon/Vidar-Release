@@ -4,6 +4,7 @@
 // which also dispatches the character status. Rendered Codex tabs report their own model
 // (rendered-body.ts) and are skipped.
 import { invoke } from "../ipc";
+import { tabIdentity } from "./sessions/vault-tabs";
 import { setCodexStatus } from "./status";
 import { getFocusedSession, sessionKind, type FocusedSession } from "./sessions";
 
@@ -16,7 +17,7 @@ export function watchCodexModel(signal: AbortSignal): void {
 
   async function read(tab: FocusedSession): Promise<void> {
     if (document.hidden) return;
-    const limits = await invoke("read_codex_limits", { cwd: tab.cwd, tab: tab.id, profile: tab.profile ?? null, row: tab.rowKey ?? null }).catch(() => null);
+    const limits = await invoke("read_codex_limits", { cwd: tab.cwd, tab: tab.id, falconSession: tabIdentity(tab.id).falconSession, profile: tab.profile ?? null, row: tab.rowKey ?? null }).catch(() => null);
     // A focus change while the native call was in flight makes this stale.
     if (signal.aborted || !limits || target?.id !== tab.id) return;
     // status.ts renders the entry and is the one dispatcher of its character status.

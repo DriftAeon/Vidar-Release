@@ -47,10 +47,11 @@ pub async fn read_codex_limits(
     app: AppHandle,
     cwd: String,
     tab: Option<String>,
+    falcon_session: Option<String>,
     profile: Option<String>,
     row: Option<String>,
 ) -> Option<RolloutLimits> {
-    let home = home_path(crate::codex_config::home_for_row(&app, tab.as_deref(), profile.as_deref(), row.as_deref()))?;
+    let home = home_path(crate::codex_config::home_for_row(&app, tab.as_deref(), falcon_session.as_deref(), profile.as_deref(), row.as_deref()))?;
     tauri::async_runtime::spawn_blocking(move || limits_for(&home, &cwd)).await.ok().flatten()
 }
 
@@ -107,7 +108,7 @@ fn rollout_home(
     match resolve(id) {
         Ok(h) => Ok(Some(h)),
         // bare/mod.rs codex_home_for_profile_with: the row exists, its home was never opened
-        Err(e) if e.starts_with("Bare Codex home ") && e.contains("does not exist yet") => Ok(None),
+        Err(e) if crate::bare::home_unopened(&e) => Ok(None),
         Err(e) => Err(e),
     }
 }
@@ -129,12 +130,9 @@ fn rollout_threads(home: &std::path::Path, cwd: &str) -> Vec<RolloutThread> {
 /// home (its Rune Vault record, `vault::session::find`) reads that home; otherwise the profile's.
 /// Reads rollout names and first lines only; never creates a home. Off the main thread.
 #[tauri::command]
-pub async fn codex_rollout_threads(cwd: String, profile: Option<String>, tab: Option<String>) -> Result<Vec<RolloutThread>, String> {
+pub async fn codex_rollout_threads(cwd: String, profile: Option<String>, tab: Option<String>, falcon_session: Option<String>) -> Result<Vec<RolloutThread>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let recorded = tab.as_deref().map(str::trim).filter(|t| !t.is_empty())
-            .and_then(|t| crate::bare::vault::session::find(&crate::paths::root(), t, None, None).ok().flatten())
-            .filter(|r| r.agent == "codex")
-            .map(|r| std::path::PathBuf::from(r.home));
+        let recorded = recorded_codex_home(&crate::paths::root(), tab.as_deref(), falcon_session.as_deref());
         let home = match recorded {
             Some(h) => Some(h),
             None => rollout_home(profile.as_deref(), crate::bare::codex_home_for_profile, codex_home)?,
@@ -143,6 +141,17 @@ pub async fn codex_rollout_threads(cwd: String, profile: Option<String>, tab: Op
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The Codex home the tab's session record names, Falcon session first, then tab id (`session::find`).
+fn recorded_codex_home(root: &std::path::Path, tab: Option<&str>, falcon_session: Option<&str>) -> Option<PathBuf> {
+    let tab = tab.map(str::trim).unwrap_or("");
+    if tab.is_empty() && falcon_session.is_none_or(str::is_empty) {
+        return None;
+    }
+    crate::bare::vault::session::find(root, tab, falcon_session, None).ok().flatten()
+        .filter(|r| r.agent == "codex")
+        .map(|r| PathBuf::from(r.home))
 }
 
 /// The top-level `model = "..."` of a Codex config.toml (keys before the first table header).
@@ -164,6 +173,24 @@ mod tests {
     use crate::codex_config::Home;
     use crate::rules::codex::codex_home_from;
     use std::path::PathBuf;
+
+    #[test]
+    fn a_rollout_read_finds_a_readopted_tabs_record_by_its_falcon_session() {
+        use crate::bare::vault::{session::{self, VaultPin}, store::Store};
+        let root = std::env::temp_dir().join(format!("vidar-codex-rollout-home-{}-{}", std::process::id(), crate::fsx::now_ms()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vault = Store::open(&root).create("Chosen", None, &[], &[]).unwrap();
+        let mut rec = session::record("codex", "hosted", "tab-old", VaultPin { id: vault.id.clone(), hash: vault.hash.clone() }, "C:\\h\\codex", "loadout");
+        rec.falcon_session = Some("fs-1".into());
+        session::write(&root, &rec).unwrap();
+        let got = |tab: Option<&str>, fs: Option<&str>| super::recorded_codex_home(&root, tab, fs);
+        assert_eq!(got(Some("tab-new"), None), None, "a new tab id alone finds nothing");
+        assert_eq!(got(Some("tab-new"), Some("fs-1")), Some(PathBuf::from("C:\\h\\codex")));
+        assert_eq!(got(None, Some("fs-1")), Some(PathBuf::from("C:\\h\\codex")));
+        assert_eq!(got(Some("tab-old"), None), Some(PathBuf::from("C:\\h\\codex")));
+        assert_eq!(got(Some("tab-new"), Some("fs-other")), None);
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn status_home_path_maps_every_home() {

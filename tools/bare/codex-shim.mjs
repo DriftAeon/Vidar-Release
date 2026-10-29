@@ -12,7 +12,7 @@
 //   Env fallbacks CODEX_SHIM_GUARDS / CODEX_SHIM_OPEN_GUARDS: paths joined with the platform path delimiter.
 //   The guard paths are always given by the caller; nothing is read from ~\.claude by default.
 //
-// Mapping (plan p1-codex-hooks.md Revisions):
+// Mapping:
 //   - Codex's shell tool (Bash, shell, shell_command, local_shell, exec_command) -> `PowerShell`; the command
 //     (a string, or an argv array joined with spaces) lands in tool_input.command.
 //   - apply_patch -> one Write per `*** Add File:` (path + body) and one Edit per `*** Update File:` /

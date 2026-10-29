@@ -21,7 +21,7 @@ test("a pinned vault revision supplies the View card and Modify supplies switche
     vault: { session: async () => ({ vault: { id: "daily", hash: "abc" } }),
       read: async () => view, lock: async () => vault },
     vaultEdit: { current: async () => vault, currentView: async () => view,
-      edit: async () => vault, moveTab: async () => true } },
+      edit: async () => vault } },
   { localSources: async () => ({ files: [], memoryDir: null, guardsKey: false }),
     itemsImport: async () => ({ runes: [], dropped: [] }), generate: async () => ({}),
     generateCancel: async () => null });
@@ -30,9 +30,12 @@ test("a pinned vault revision supplies the View card and Modify supplies switche
     const shown = readRunes(host);
     assert.deepEqual(shown.sets.map((s) => [s.head, s.runes.map((r) => r.id)]),
       [["Kit", ["verdict-first"]]]);
-    assert.equal(host.querySelectorAll(".runes-bare-switch").length, 0);
+    assert.equal(host.querySelectorAll(".runes-bare-switch, .runes-check").length, 0);
     handle.modeButton.click();
     await settle();
-    assert.ok(host.querySelectorAll(".runes-bare-switch").length >= 2);
+    // Modify: a checkbox on the runeset head and one left of each rune bar; no end-of-bar switch chip
+    assert.ok(host.querySelectorAll(".runes-set-head.has-check > .runes-check").length >= 1);
+    assert.ok(host.querySelectorAll(".runes-row > .runes-check").length >= 1);
+    assert.equal(host.querySelectorAll(".runes-bare-switch").length, 0);
   } finally { handle.dispose(); host.remove(); }
 });

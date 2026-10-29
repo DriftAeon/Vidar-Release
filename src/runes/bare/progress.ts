@@ -1,9 +1,10 @@
-// src\runes\bare\progress.ts — pure reducer for the `rules-generate-progress` events of a chunked Create Runes run
-// (run 2026-10-18-rune-gen-per-source, plan § Progress events). No DOM, no IPC: events in, rows out. The result
-// card's Add to Vault op lives here too, with `rune_vault_edit` passed in (run 2026-10-25-rune-vault, L4a).
+// src\runes\bare\progress.ts — pure reducer for the `rules-generate-progress` events of a chunked Create Runes run.
+// No DOM, no IPC: events in, rows out. The result
+// card's Add to Vault op lives here too, with `rune_vault_edit` passed in.
 
 export interface ProgressPart { k: number; of: number }
-export interface ProgressFile { path: string; part: ProgressPart | null }
+/** `kind` is `rules` or `memory` (the plan event's `PlanFile.kind`); an event without it reads as rules. */
+export interface ProgressFile { path: string; part: ProgressPart | null; kind?: string }
 export type ChunkState = "running" | "retrying" | "done" | "failed" | "stopped";
 export type MergeState = "running" | "done" | "failed";
 
@@ -21,8 +22,8 @@ export interface ProgressState { chunks: ChunkEntry[]; merge: MergeState | null;
 
 export const emptyProgress = (): ProgressState => ({ chunks: [], merge: null, mergeStartedAt: null, stopped: false });
 
-/** Pure: the label of a chunk: its files' paths joined ", ", a split file's part as ` - Chunk k of n` (user,
- *  2026-10-25: without it a split file's rows read as duplicates). */
+/** Pure: the label of a chunk: its files' paths joined ", ", a split file's part as ` - Chunk k of n`
+ *  (without it a split file's rows read as duplicates). */
 export const chunkLabel = (files: readonly ProgressFile[]): string =>
   files.map((f) => (f.part ? `${f.path} - Chunk ${f.part.k} of ${f.part.of}` : f.path)).join(", ");
 
@@ -119,4 +120,43 @@ export function progressCards(s: ProgressState): ProgressCard[] {
     const retrying = !merge && r.state === "running" && s.chunks[i].state === "retrying";
     return { ...r, retrying, startedAt: r.state === "running" ? started : null };
   });
+}
+
+/** One chunk card inside a source frame, labelled "Chunk n" (its place in that source). A `twin` is the dashed copy of
+ *  a chunk whose agent call also covers an earlier source: it mirrors the state glyph and shows no count or timer. */
+export interface GroupCard { card: ProgressCard; twin: boolean }
+export interface SourceFrame { path: string; cards: GroupCard[] }
+export interface KindBand { kind: string; name: string; sources: SourceFrame[] }
+export interface GroupedProgress { bands: KindBand[]; merge: ProgressCard | null }
+
+const BAND_ORDER: [string, string][] = [["rules", "Rules"], ["memory", "Memories"]];
+
+/** Pure: the chunk cards grouped kind band, then source frame, then card; Merge apart. Null (draw the flat list) for a
+ *  run of one chunk or a chunk the plan has not named yet. Bands follow the Local Files order (Rules, Memories). A chunk
+ *  covering several sources shows under each: live in the first, twin in the rest. */
+export function groupedProgress(s: ProgressState): GroupedProgress | null {
+  if (s.chunks.length < 2 || s.chunks.some((c) => !c.files || c.files.length === 0)) return null;
+  const cards = progressCards(s);
+  const bands = new Map<string, Map<string, GroupCard[]>>();
+  s.chunks.forEach((c, i) => {
+    const seen = new Set<string>();
+    let first = true;
+    for (const f of c.files ?? []) {
+      if (seen.has(f.path)) continue;
+      seen.add(f.path);
+      const kind = f.kind === "memory" ? "memory" : "rules";
+      const frames = bands.get(kind) ?? new Map<string, GroupCard[]>();
+      bands.set(kind, frames);
+      const list = frames.get(f.path) ?? [];
+      frames.set(f.path, list);
+      const twin = !first;
+      first = false;
+      const card: ProgressCard = { ...cards[i], label: `Chunk ${list.length + 1}`, ...(twin ? { text: "", startedAt: null } : {}) };
+      list.push({ card, twin });
+    }
+  });
+  const out: KindBand[] = BAND_ORDER.filter(([k]) => bands.has(k)).map(([kind, name]) => ({
+    kind, name, sources: [...bands.get(kind)!].map(([path, list]) => ({ path, cards: list })),
+  }));
+  return { bands: out, merge: cards.length > s.chunks.length ? cards[cards.length - 1] : null };
 }

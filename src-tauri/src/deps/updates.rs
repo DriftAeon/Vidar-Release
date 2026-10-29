@@ -138,9 +138,9 @@ fn update(id: &str, version: &str) -> Result<(), String> {
         npm.arg("--prefix").arg(have.exe.parent().ok_or("Missing Install Folder")?);
         npm
     } else {
-        let mut claude = Command::new(&have.exe);
-        claude.arg("update").env("DISABLE_AUTOUPDATER", "1");
-        claude
+        let mut native = Command::new(&have.exe);
+        native.arg("update").env("DISABLE_AUTOUPDATER", "1");
+        native
     };
     process::run(command, deadline).ok_or("Update Failed Or Timed Out")?;
     let after = installed(id, deadline).ok_or("Updated Version Could Not Be Read")?;

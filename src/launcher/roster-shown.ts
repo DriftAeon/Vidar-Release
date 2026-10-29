@@ -6,7 +6,11 @@
 // (saved, else defaultRootOrder, primary agent first) in `orderRoots`; the Falcon row's parent in
 // `falconRowParent`.
 
-import type { AgentId } from "../agents/id";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { AGENT_IDS, PTY_ONLY_IDS, isAgentId } from "../agents/id.ts";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { agentOrder } from "../agents/descriptor.ts";
+import type { AgentId } from "../agents/id.ts";
 
 export interface ShownRow {
   key?: string;
@@ -41,8 +45,9 @@ export function setPrimaryRootSource(fn: () => string | null): void {
   primaryRoot = fn;
 }
 const defaultRootOrder = (): string[] => {
-  const pair = primaryRoot() === "codex" ? ["codex", "claude"] : ["claude", "codex"];
-  return [...pair, "pi", ...gatewayRoots, "gemini", "local", "terminal"];
+  const primary = primaryRoot();
+  const agents = agentOrder(isAgentId(primary) ? primary : null);
+  return [...agents, ...[...PTY_ONLY_IDS].reverse(), ...gatewayRoots, "local", "terminal"];
 };
 
 /** The root id the Falcon row mounts under: the primary agent's root when the launcher shows it,
@@ -50,7 +55,7 @@ const defaultRootOrder = (): string[] => {
  *  the Claude pack). An unknown primary (null) keeps Claude first, as before the setting. */
 export function falconRowParent(primary: string | null, shownRootIds: readonly string[], falconAvailable: boolean): AgentId | null {
   if (!falconAvailable) return null;
-  const order: AgentId[] = primary === "codex" ? ["codex", "claude"] : ["claude", "codex"];
+  const order: AgentId[] = agentOrder(isAgentId(primary) ? primary : null);
   return order.find((id) => shownRootIds.includes(id)) ?? null;
 }
 
@@ -67,7 +72,7 @@ export function setRootOrderSource(fn: () => readonly string[] | undefined): voi
 function savedAsBare(saved: readonly string[], roots: readonly ShownRow[]): readonly string[] {
   const swap = (plain: string, bare: string) => (list: readonly string[]) =>
     list.includes(bare) || !roots.some((r) => r.key === bare) ? list : list.map((s) => (s === plain ? bare : s));
-  return swap("codex", "codex-bare")(swap("claude", "claude-bare")(saved));
+  return AGENT_IDS.reduce<readonly string[]>((list, id) => swap(id, `${id}-bare`)(list), saved);
 }
 
 /** Roots in the saved order (entries are rowIds). A root the saved list does not name goes after
@@ -81,7 +86,7 @@ export function orderRoots<T extends ShownRow>(roots: readonly T[], saved: reado
   const defaults = defaultRootOrder();
   // Claude and Codex rank by their kind, so the Bare root and the plain one share a slot; the rest by key, else id.
   const byDefault = (r: T) => {
-    const i = defaults.indexOf(r.id === "claude" || r.id === "codex" ? r.id : r.key ?? r.id);
+    const i = defaults.indexOf(isAgentId(r.id) ? r.id : r.key ?? r.id);
     return i < 0 ? defaults.length : i;
   };
   return roots

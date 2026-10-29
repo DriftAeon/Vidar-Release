@@ -95,7 +95,7 @@ const DEFAULT_UNUSED_SESSION_GRACE: Duration = Duration::from_secs(300);
 /// + the 300 s idle exit) instead of hours. Ending it keeps the journal and
 /// frees the conversation claim, so a resume by conversation id still works.
 /// `--orphan-session-secs 0` disables it.
-/// 900 s until 2026-10-05; the user cut it to 300 s (a closed Vidar costs a resume, not work).
+/// Kept short at 300 s: a closed Vidar costs a resume, not work.
 const DEFAULT_ORPHAN_SESSION_GRACE: Duration = Duration::from_secs(300);
 
 /// Grace before a Vidar-held orphan ends while a client IS connected: a
@@ -331,8 +331,15 @@ fn run_host(
         .ok_or_else(|| "executable has no parent directory".to_string())?
         .to_path_buf();
     let (runtimes, supported_agents) = assemble_runtimes(
-        claude::ClaudeRuntime::resolve(&bundle_directory, &store),
-        codex::CodexRuntime::resolve(&bundle_directory, &store),
+        protocol::Agent::ALL
+            .into_iter()
+            .map(|agent| {
+                (
+                    agent,
+                    serve::AgentRuntime::resolve(agent, &bundle_directory, &store),
+                )
+            })
+            .collect(),
         &vidar_root,
     )?;
     registry.supported_agents = supported_agents;
@@ -495,39 +502,20 @@ fn required_arg(args: &[String], name: &str) -> Result<String, String> {
 /// fails to resolve is logged and left out of `supported_agents`; the host
 /// refuses to publish its registry only when no runtime resolves at all.
 fn assemble_runtimes(
-    claude_result: Result<claude::ClaudeRuntime, String>,
-    codex_result: Result<codex::CodexRuntime, String>,
+    resolved: Vec<(protocol::Agent, Result<serve::AgentRuntime, String>)>,
     vidar_root: &std::path::Path,
 ) -> Result<(Vec<serve::AgentRuntime>, Vec<String>), String> {
     let mut runtimes = Vec::new();
-    let mut supported = Vec::new();
     let mut failures = Vec::new();
-    match claude_result {
-        Ok(mut runtime) => {
-            // The only root a client's `rules_file` is admitted under: the Vidar
-            // folder this host's own `--registry` names, never a client value.
-            runtime.rules_built = Some(vidar_root.join(claude::RULES_BUILT));
-            supported.push(protocol::Agent::Claude.as_str().into());
-            runtimes.push(serve::AgentRuntime::Claude(runtime));
-        }
-        Err(error) => {
-            eprintln!("falcon: Claude runtime unavailable: {error}");
-            failures.push(format!("Claude: {error}"));
-        }
-    }
-    match codex_result {
-        Ok(runtime) => {
-            // The only root a profiled (Bare) Codex spawn reads its profile from: this host's
-            // own `--registry` folder, never a client value.
-            codex::set_vidar_root(vidar_root);
-            supported.push(protocol::Agent::Codex.as_str().into());
-            runtimes.push(serve::AgentRuntime::Codex(runtime));
-        }
-        Err(error) => {
-            // Bundles without a valid closure stay useful for the other agent,
-            // but must never advertise this one's readiness.
-            eprintln!("falcon: Codex runtime unavailable: {error}");
-            failures.push(format!("Codex: {error}"));
+    for (agent, result) in resolved {
+        match result {
+            Ok(runtime) => runtimes.push(runtime.rooted(vidar_root)),
+            Err(error) => {
+                // Bundles without a valid closure stay useful for the other agent,
+                // but must never advertise this one's readiness.
+                eprintln!("falcon: {} runtime unavailable: {error}", agent.as_str());
+                failures.push(format!("{}: {error}", agent.as_str()));
+            }
         }
     }
     if runtimes.is_empty() {
@@ -536,6 +524,8 @@ fn assemble_runtimes(
             failures.join("; ")
         ));
     }
+    // Each resolved runtime names its own agent, so the list can never drift from the runtimes.
+    let supported = runtimes.iter().map(|r| r.agent().as_str().into()).collect();
     Ok((runtimes, supported))
 }
 
@@ -553,8 +543,10 @@ mod soft_start_tests {
     #[test]
     fn host_with_zero_runtimes_refuses_to_publish() {
         let error = assemble_runtimes(
-            Err("no claude".into()),
-            Err("no codex".into()),
+            crate::protocol::Agent::ALL
+                .into_iter()
+                .map(|agent| (agent, Err(format!("no {}", agent.as_str()))))
+                .collect(),
             std::path::Path::new("."),
         )
         .err()
@@ -564,6 +556,32 @@ mod soft_start_tests {
             error.contains("no claude") && error.contains("no codex"),
             "{error}"
         );
+    }
+}
+
+#[cfg(test)]
+mod agent_value_tests {
+    use crate::protocol::Agent;
+
+    /// The host parses a string agent value exactly: blank, a different case and an
+    /// unknown agent are all refused, never defaulted.
+    #[test]
+    fn string_agent_values_parse_exactly() {
+        let table: [(&str, Option<&str>); 5] = [
+            ("", None),
+            ("claude", Some("claude")),
+            ("codex", Some("codex")),
+            ("grok", None),
+            ("Claude", None),
+        ];
+        for (value, accepted) in table {
+            let wire = Agent::from_wire(value).map(|agent| agent.as_str());
+            assert_eq!(wire, accepted, "from_wire({value:?})");
+            let parsed = serde_json::from_value::<Agent>(serde_json::json!(value))
+                .ok()
+                .map(|agent| agent.as_str());
+            assert_eq!(parsed, accepted, "serde({value:?})");
+        }
     }
 }
 
@@ -582,18 +600,18 @@ mod falcon_client_protocol_tests {
     }
 
     /// `hosted_request` must outlast the host's own
-    /// `claude::COMMAND_TIMEOUT` or a slow-but-alive reply times out
+    /// `COMMAND_TIMEOUT` or a slow-but-alive reply times out
     /// client-side first, dropping the shared control pipe and releasing
     /// every hosted tab's lease. Compares against the live constant (not a
     /// hardcoded copy) so the two can never silently drift apart.
     #[test]
     fn command_request_timeout_exceeds_the_hosts_command_timeout() {
-        use crate::claude::COMMAND_TIMEOUT;
+        use crate::session::driver_props::COMMAND_TIMEOUT;
         use crate::falcon_client::COMMAND_REQUEST_TIMEOUT;
         assert!(
             COMMAND_REQUEST_TIMEOUT > COMMAND_TIMEOUT,
             "COMMAND_REQUEST_TIMEOUT ({COMMAND_REQUEST_TIMEOUT:?}) must exceed the host's \
-             claude::COMMAND_TIMEOUT ({COMMAND_TIMEOUT:?}), or a slow-but-alive command reply \
+             COMMAND_TIMEOUT ({COMMAND_TIMEOUT:?}), or a slow-but-alive command reply \
              times out client-side first and drops the shared control pipe"
         );
     }

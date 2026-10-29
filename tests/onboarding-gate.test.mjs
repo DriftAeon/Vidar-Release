@@ -1,4 +1,4 @@
-// Onboarding gate (plan section 4): the four launcher entry points test onboardingOpen(); createSession
+// Onboarding gate: the four launcher entry points test onboardingOpen(); createSession
 // never does (hosted readopt, Codex restore and Setup Via Agent spawn through it while the overlay is up).
 import test from "node:test";
 import assert from "node:assert/strict";

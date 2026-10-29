@@ -4,8 +4,8 @@
 
 import { EFFORT_LEVELS } from "../../agents/protocol";
 import type { Effort } from "../../agents/protocol";
-import { titleCase } from "../../format";
-import { AGENT_PROFILE } from "./agent-profile";
+import { label } from "../../format";
+import { AGENT_PROFILE } from "../../agents/agent-profile";
 import type { RenderedOpts } from "./opts";
 
 export interface LocalCommandDeps {
@@ -37,7 +37,7 @@ export function createLocalCommand({ opts, noticeBlock, pickModelMenu, setModel,
       const arg = text.slice(7).trim().toLowerCase();
       if (!arg) bar.pickEffortMenu();
       else if ((EFFORT_LEVELS as readonly string[]).includes(arg)) bar.setEffort(arg as Effort);
-      else noticeBlock(`Effort Takes ${EFFORT_LEVELS.map(titleCase).join(", ")}`, "info");
+      else noticeBlock(`Effort Takes ${EFFORT_LEVELS.map((l) => label(l)).join(", ")}`, "info");
       return true;
     }
     return false;

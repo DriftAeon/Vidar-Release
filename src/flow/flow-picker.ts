@@ -1,4 +1,4 @@
-// Flow picker: the toolbar's "which flow" control (mock state 1's left dropdown + New button)
+// Flow picker: the toolbar's "which flow" control (a left dropdown + New button)
 // — lists `S.graphs` by `updatedAt` desc, switches the active graph, and seeds a new flow that is
 // never truly blank (an input -> output pair) under a name the user supplies. Mounting this into
 // panels/flow.ts's toolbar is panels/flow.ts's job; this module only builds the control and
@@ -247,7 +247,7 @@ function addCollapsibleHead(parent: HTMLElement, label: string, collapsed: boole
   parent.append(head);
 }
 
-/** Builds the Flow picker (mock state 1's first control): a button face (active flow's name, caret
+/** Builds the Flow picker: a button face (active flow's name, caret
  *  at the right) and a menu with two sections: Templates on top (every `S.templates` entry; a
  *  click applies an unsaved instance), then User (the saved graphs, newest `updatedAt` first, the
  *  active one marked), collapsible from its header (2026-10-05; this reverses the
@@ -343,7 +343,7 @@ export function buildFlowPicker(onSwitched?: (graph: FlowGraph | null) => void):
   };
 }
 
-/** Builds the New button (mock state 1) plus its inline name field: New swaps itself for a text
+/** Builds the New button plus its inline name field: New swaps itself for a text
  *  field and a Create button, focused on open; Enter or Create makes the flow, Esc (or blurring
  *  out of the pair with the field empty) cancels. `onCreated` lets the caller
  *  update any other toolbar state (run selector, `+` availability) once a flow

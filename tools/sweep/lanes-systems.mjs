@@ -7,6 +7,8 @@
 // contracts/paths.json for sys-writers. Vendor dirs and test files are skipped by the walkers.
 import fs from "node:fs";
 import path from "node:path";
+import { ids } from "../agents/key-words.mjs";
+import { scan } from "../agents/ts-keys.mjs";
 
 const fail = (cmd, error) => ({ ok: false, cmd, error, findings: [] });
 const RELAY_OWNER = "src/relay/source-approvals.ts";
@@ -262,27 +264,28 @@ function sysPopover(ctx) {
 }
 
 /* ---- sys-agent-branch ---- */
+// Delegates to the shared lexical scanner (tools/agents/ts-keys.mjs): an equality test (===, !==, ==, !=) of any
+// expression against a literal that names an agent id (the scanner's id set, aliases included), not just `agent`.
 function sysAgentBranch(ctx) {
-  const findings = [];
-  for (const file of tsFiles(ctx.root)) {
-    if (file.startsWith("src/agents/") || file === "src/panels/rendered/agent-profile.ts") continue;
-    const text = read(ctx.root, file);
-    const seen = new Map();
-    const re = /\bagent\s*(===|!==)\s*["'](\w+)["']/g;
-    let m;
-    while ((m = re.exec(text))) {
-      const norm = `agent ${m[1]} "${m[2]}"`;
-      if (!seen.has(norm)) seen.set(norm, { line: lineOf(text, m.index), n: 0 });
-      seen.get(norm).n++;
-    }
-    for (const [norm, v] of seen) {
-      findings.push({
-        key: `sys-agent-branch:${file}:${norm}`, file, line: v.line, msg: `${norm} outside src/agents/ and agent-profile.ts`,
-        detail: { count: v.n },
-      });
-    }
+  const files = tsFiles(ctx.root)
+    .filter((file) => !file.startsWith("src/agents/") && file !== "src/panels/rendered/agent-profile.ts")
+    .map((path) => ({ path, src: read(ctx.root, path) }));
+  const cmd = "scan src/**/*.ts for an id literal compared with ===, !==, ==, != outside src/agents/ and agent-profile.ts";
+  let entries;
+  try {
+    entries = scan(files, { root: ctx.root, ids: ids(ctx.root), types: false });
+  } catch (e) {
+    return fail(cmd, e.message);
   }
-  return { ok: true, cmd: "scan src/**/*.ts for agent === \"<id>\" outside src/agents/ and agent-profile.ts", findings: sortFindings(findings) };
+  const seen = new Map();
+  for (const e of entries) {
+    if (e.ctx.kind !== "literal" || e.cls !== "S2" || !e.ctx.cmp) continue;
+    const norm = `${e.ctx.cmp.subject.replace(/\s+/g, " ")} ${e.ctx.cmp.op} "${e.tok}"`;
+    const k = `sys-agent-branch:${e.file}:${norm}`;
+    if (!seen.has(k)) seen.set(k, { key: k, file: e.file, line: e.line, msg: `${norm} outside src/agents/ and agent-profile.ts`, detail: { count: 0 } });
+    seen.get(k).detail.count++;
+  }
+  return { ok: true, cmd, findings: sortFindings([...seen.values()]) };
 }
 
 /* ---- sys-dots ---- */

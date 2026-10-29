@@ -177,7 +177,7 @@
 .agent-call-text { font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-calls-empty { color: var(--fg-dim); }
 
-/* finished drawer (variant B, user 2026-10-05): body = description, verdict,
+/* finished drawer: body = description, verdict,
    then the report and the calls list each behind a collapsed fold */
 .agent-drawer[data-done="true"] .agent-drawer-body { max-height: calc(var(--row-32) * 9); }
 .agent-drawer-verdict { color: var(--fg); font-size: var(--font-13); line-height: var(--line-20); font-weight: var(--weight-strong); overflow-wrap: anywhere; }

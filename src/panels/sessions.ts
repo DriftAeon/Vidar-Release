@@ -35,7 +35,7 @@ import { bindHosted, closeHostedTab, closeRenderedLocal, jettisonFromMenu } from
 import { dockBottombar, inBottombar, rescueBottombar } from "./sessions/bottombar-dock";
 
 export type { LaunchOpts, PageSpec, SessionAgent, SessionBody } from "./sessions/types";
-export { armAstra, armBlocker, disarmAstra, hasArmedAstra, isArmed } from "./sessions/astra-bridge";
+export { hasArmedAstra } from "./sessions/astra-bridge";
 export { openSearch } from "./sessions/search-overlay";
 export { noteCharacterOutput } from "./sessions/output";
 export { clearOpenMessage, hasOpenMessage, markMessageOpen } from "./sessions/message-open";

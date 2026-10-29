@@ -145,25 +145,18 @@ pub fn thread_id_in_line(line: &serde_json::Value) -> Option<&str> {
     None
 }
 
-/// A Make Variant answer moves the tab to the variant (run 2026-10-25-rune-vault, L3b2): a new record, the
-/// newest match's copy (by `falcon_session`, then `tab`) pinned to `vault`, so the tab's respawn loads it.
-/// The copy drops `thread_id`: a Resume of the earlier thread still finds the vault that thread loaded.
-/// `None` when no record matches.
-pub fn move_to(root: &Path, tab: &str, falcon_session: Option<&str>, vault: VaultPin) -> Result<Option<Record>, String> {
-    let Some(mut r) = find(root, tab, falcon_session, None)? else { return Ok(None) };
-    r.vault = vault;
-    r.thread_id = None;
-    r.created_utc = crate::runlog::utc_stamp();
-    write(root, &r)?;
-    Ok(Some(r))
-}
-
 /// Adopt with no record (D-g): build or reuse the Custom vault of the host-echoed sets on the agent's
 /// stock floor (`super::floored_custom`), then write the record. A running session never gets the vault pick.
 pub fn adopt(root: &Path, agent: &str, tab: &str, falcon_session: &str, echoed_sets: &[SetSource]) -> Result<Record, String> {
-    let v = super::floored_custom(root, agent, echoed_sets, &[])?;
-    let body = if agent == "claude" { "rendered" } else { "hosted" };
-    let mut r = record(agent, body, tab, VaultPin { id: v.id, hash: v.hash }, "", "");
+    let Some(parsed) = crate::agent_spec::parse(agent) else {
+        return Err(format!("Agent {agent:?} is not claude or codex; vault refused"));
+    };
+    let v = super::floored_custom(root, parsed.as_str(), echoed_sets, &[])?;
+    let body = match parsed {
+        crate::agent_spec::Agent::Claude => "rendered",
+        crate::agent_spec::Agent::Codex => "hosted",
+    };
+    let mut r = record(parsed.as_str(), body, tab, VaultPin { id: v.id, hash: v.hash }, "", "");
     r.falcon_session = Some(falcon_session.to_string());
     write(root, &r)?;
     Ok(r)

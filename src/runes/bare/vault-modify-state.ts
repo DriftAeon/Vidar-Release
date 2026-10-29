@@ -1,10 +1,9 @@
-// src\runes\bare\vault-modify-state.ts — what the Bare view's Modify holds for a tab's Rune Vault (run
-// 2026-10-25-rune-vault, L3b2): the vault as it is now, the runes this Modify took out, and a locked-vault edit
+// src\runes\bare\vault-modify-state.ts — what the Bare view's Modify holds for a tab's Rune Vault: the vault as it is now, the runes this Modify took out, and a locked-vault edit
 // waiting on Make Variant / Edit Original. Every write goes through vault-edit.ts; nothing touches a launcher row.
 import type { VaultOp } from "../../ipc";
 import type { VaultView, VaultViewRune } from "./cake";
 import { addToVaultOps, type GeneratedRef } from "./progress";
-import { addGeneratedToVault, applyVaultEdit, type VaultEditIo, type VaultPick } from "./vault-edit";
+import { addGeneratedToVault, applyVaultEdit, variantSavedNotice, type VaultEditIo, type VaultPick } from "./vault-edit";
 import { LOCKED_EDIT_TEXT, type PendingEdit } from "./view-vault";
 
 const NO_VAULT = "This tab has no vault to edit.";
@@ -15,10 +14,15 @@ export interface VaultModifyState {
   /** Runes this Modify took out, kept so their switches can put them back. */
   removed: VaultViewRune[];
   pending: PendingEdit | null;
+  /** The notice a Make Variant left (`Saved as <name>. New sessions can pick it.`); the view shows it once Modify
+   *  has closed. Opening Modify again clears it. */
+  notice: string | null;
   /** Add Rune's list: the runes this tab's agent can add from its libraries; null while the list is closed. */
   library: VaultViewRune[] | null;
+  /** Warnings the library read carried (`rune_vault_library_runes` `.warnings`); empty while the list is closed. */
+  libraryWarnings: string[];
   /** Opens Add Rune's list with what `load` returns, or closes an open one. Throws. */
-  toggleLibrary(load: () => Promise<VaultViewRune[]>): Promise<void>;
+  toggleLibrary(load: () => Promise<VaultViewRune[] | { runes: VaultViewRune[]; warnings: string[] }>): Promise<void>;
   /** Leaving Modify drops the pending edit, the taken-out list and Add Rune's list. */
   reset(): void;
   /** Reads vault `id` as it is now; null clears it. */
@@ -39,9 +43,14 @@ const same = (a: VaultViewRune, b: VaultViewRune): boolean =>
 
 export function vaultModifyState(io: VaultEditIo | undefined): VaultModifyState {
   const s: VaultModifyState = {
-    now: null, removed: [], pending: null, library: null,
-    reset() { s.pending = null; s.removed = []; s.library = null; },
-    async toggleLibrary(load) { s.library = s.library ? null : await load(); },
+    now: null, removed: [], pending: null, notice: null, library: null, libraryWarnings: [],
+    reset() { s.pending = null; s.removed = []; s.library = null; s.libraryWarnings = []; },
+    async toggleLibrary(load) {
+      if (s.library) { s.library = null; s.libraryWarnings = []; return; }
+      const r = await load();
+      s.library = Array.isArray(r) ? r : r.runes;
+      s.libraryWarnings = Array.isArray(r) ? [] : r.warnings;
+    },
     async read(id) { s.now = id && io ? await io.currentView(id) : null; },
     async edit(ops, keep = [], add, text = LOCKED_EDIT_TEXT) {
       if (!s.now || !io) throw new Error(NO_VAULT);
@@ -53,8 +62,9 @@ export function vaultModifyState(io: VaultEditIo | undefined): VaultModifyState 
     addGenerated: (r) => s.edit(addToVaultOps(r), [], r),
     async pick(p) {
       if (!s.now || !io) throw new Error(NO_VAULT);
-      await applyVaultEdit(io, s.now.vault.id, s.pending?.ops ?? [], p);
+      const r = await applyVaultEdit(io, s.now.vault.id, s.pending?.ops ?? [], p);
       s.reset();
+      s.notice = typeof r === "object" ? variantSavedNotice(r.saved) : null;
     },
     takenOut: (ops) => (s.now?.runes ?? []).filter((r) => ops.some((o) =>
       o.op === "removeRune" ? !r.set && r.library === o.ref.library && r.id === o.ref.id

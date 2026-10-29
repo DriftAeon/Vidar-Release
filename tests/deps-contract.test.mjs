@@ -55,8 +55,14 @@ test("every requires id on BUILTIN_AGENTS and the gateway template exists in the
   assert.ok(tStart >= 0, "roster.ts has no gatewayRows template");
   const tEnd = roster.indexOf("\n}", tStart);
   assert.ok(tEnd > tStart, "gatewayRows not closed by a line-leading }");
-  const body = roster.slice(start, end) + roster.slice(tStart, tEnd);
-  const lists = [...body.matchAll(/requires:\s*\[([^\]]*)\]/g)];
+  // the per-agent rows' `requires` live in ROW_FACTS (launcher/row-facts.ts), also parsed as text
+  const facts = readFileSync(resolve(ROOT, "src/launcher/row-facts.ts"), "utf8");
+  const fStart = facts.indexOf("export const ROW_FACTS");
+  assert.ok(fStart >= 0, "row-facts.ts has no ROW_FACTS");
+  const fEnd = facts.indexOf("\n};", fStart);
+  assert.ok(fEnd > fStart, "ROW_FACTS not closed by a line-leading };");
+  const body = roster.slice(start, end) + roster.slice(tStart, tEnd) + facts.slice(fStart, fEnd);
+  const lists = [...body.matchAll(/(?:requires|Extra):\s*\[([^\]]*)\]/g)];
   assert.ok(lists.length > 0, "no requires on any BUILTIN_AGENTS row: the gating has nothing to check");
   const known = new Set(catalog.deps.map((d) => d.id));
   const packs = resolve(ROOT, "content/packs");
@@ -68,6 +74,22 @@ test("every requires id on BUILTIN_AGENTS and the gateway template exists in the
   for (const [, list] of lists) {
     for (const [, id] of list.matchAll(/["']([^"']+)["']/g)) {
       assert.ok(known.has(id), `requires "${id}" is not a catalog id`);
+    }
+  }
+});
+
+test("every ROW_FACTS requires id exists in the catalog (loaded, not parsed)", async () => {
+  const { ALL_ROWS } = await import("../src/launcher/row-facts.ts");
+  const known = new Set(catalog.deps.map((d) => d.id));
+  const packs = resolve(ROOT, "content/packs");
+  for (const dir of readdirSync(packs)) {
+    const file = resolve(packs, dir, "pack.json");
+    if (!existsSync(file)) continue;
+    for (const d of JSON.parse(readFileSync(file, "utf8")).module?.deps ?? []) known.add(d.id);
+  }
+  for (const rows of ALL_ROWS) {
+    for (const row of Object.values(rows)) {
+      for (const id of row.requires) assert.ok(known.has(id), `${row.key}: requires "${id}" is not a catalog id`);
     }
   }
 });

@@ -1,6 +1,6 @@
 // Orthogonal edge routing: pure geometry, no DOM, no value imports (a leaf, so node --test can
-// load it). Lifted from the approved mock bridge/display/flow-edges-mock.html (variant A, sharp
-// corners); edges.ts feeds it port points and card boxes and writes the resulting `d`.
+// load it). Corners are sharp;
+// edges.ts feeds it port points and card boxes and writes the resulting `d`.
 
 export type Pt = { x: number; y: number };
 /** Card rect in world px. */

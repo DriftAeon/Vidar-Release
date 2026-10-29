@@ -1,4 +1,6 @@
-// Pure text and counting helpers for the left-bar tab rows (feeds and paint). DOM-free, no imports.
+// Pure text and counting helpers for the left-bar tab rows (feeds and paint). DOM-free; imports only format.ts.
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { label } from "../../format.ts";
 
 const SMALL_WORDS = new Set(["a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "for", "by", "vs"]);
 
@@ -13,7 +15,7 @@ export function tabTitleCase(name: string): string {
     if (/[0-9./\\:]/.test(w) || /.[A-Z]/.test(w)) return w;
     const lower = w.toLowerCase();
     if (!isFirst && SMALL_WORDS.has(lower)) return lower;
-    return w[0].toUpperCase() + w.slice(1);
+    return label(w);
   }).join("");
 }
 

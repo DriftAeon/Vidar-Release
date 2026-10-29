@@ -8,8 +8,19 @@ import { backendOfModel, backendOfRunner, setBackendLookup, CODEX_DEFAULT_MODEL 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 test('every backend string maps to a flow.rs match arm', () => {
-  const rs = read('../src-tauri/src/flow.rs');
-  const arms = [...rs.matchAll(/^\s*"([a-z-]+)"\s*=>\s*\w+::spec\(/gm)].map((m) => m[1]);
+  // Dispatch is `agent_of` in flow/bare.rs: the `"sdk"` arm is the Claude sidecar, and any other
+  // backend must parse to the agent a Flow adapter (`agent()` in flow/{claude,codex}.rs) speaks for.
+  const bare = read('../src-tauri/src/flow/bare.rs');
+  const sdk = [...bare.matchAll(/^\s*"([a-z-]+)"\s*=>\s*Some\(super::claude::agent\(\)\)/gm)].map((m) => m[1]);
+  const adapter = (f, fn) => {
+    const rs = read(`../src-tauri/src/flow/${f}.rs`);
+    const m = rs.match(/const [A-Z_]+_MODULE: &str = "([a-z-]+)";/);
+    assert.ok(m && new RegExp(`fn agent\\(\\)[^{]*\\{\\s*crate::agent_spec::parse\\([A-Z_]+_MODULE\\)`).test(rs), `${f}.rs agent()`);
+    return m[1];
+  };
+  assert.match(bare, /agent_spec::parse\(other\)\.filter\(/, 'a non-sdk backend must be an adapted agent id');
+  const arms = [...sdk, adapter('codex')];
+  assert.equal(adapter('claude'), 'claude');
   assert.deepEqual(arms.sort(), ['codex', 'sdk']);
   setBackendLookup((id) => ({ 'claude-sonnet-5': 'sdk', [CODEX_DEFAULT_MODEL]: 'codex' })[id]);
   for (const model of ['claude-sonnet-5', CODEX_DEFAULT_MODEL, 'unknown-model', undefined]) {

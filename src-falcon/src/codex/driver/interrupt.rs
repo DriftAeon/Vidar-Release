@@ -8,7 +8,7 @@
 //! response), there is nothing to interrupt and nothing is written.
 
 use super::{lock, turns, CodexDriver};
-use crate::{claude::COMMAND_TIMEOUT, process::WriteStatus, protocol::Outcome};
+use crate::{process::WriteStatus, protocol::Outcome, session::driver_props::COMMAND_TIMEOUT};
 use serde_json::Value;
 use std::time::Instant;
 
@@ -229,7 +229,7 @@ mod tests {
         assert!(!driver.ends_turn(&json!({"id": start_id, "result": {"turn": {"id": "t1"}}})));
         assert!(matches!(
             driver.observe(&json!({"id": cid, "result": {}})).0,
-            crate::claude::Observed::Consumed
+            crate::session::driver_props::Observed::Consumed
         ));
         assert_eq!(handle.join().unwrap(), (Outcome::Applied, None));
         assert_eq!(
@@ -349,7 +349,7 @@ mod tests {
         let cid = sent[0]["id"].clone();
         assert!(matches!(
             driver.observe(&json!({"id": cid, "result": {}})).0,
-            crate::claude::Observed::Consumed
+            crate::session::driver_props::Observed::Consumed
         ));
         assert_eq!(first.join().unwrap(), (Outcome::Applied, None));
         assert_eq!(second.join().unwrap(), (Outcome::Applied, None));

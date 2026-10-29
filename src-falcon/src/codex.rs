@@ -18,9 +18,9 @@ use serde_json::json;
 use serde_json::Value;
 
 use crate::{
-    claude::sha256_file,
     process::{plain_path, EnvBase, SpawnRequest},
     protocol::{CodexBareSpawn, SpawnParams},
+    session::driver_props::sha256_file,
 };
 
 mod driver;
@@ -66,7 +66,7 @@ pub struct CodexSpawn {
 pub struct BareSpawned {
     pub payload_file: Option<String>,
     /// The admitted payload text: the driver sends it as `developerInstructions` on
-    /// `thread/start` (never on the argv, never on `thread/resume`).
+    /// `thread/start` and `thread/resume` (never on the argv).
     pub developer_instructions: Option<String>,
     pub spawn: CodexBareSpawn,
 }
@@ -99,6 +99,12 @@ struct CodexFile {
 }
 
 impl CodexRuntime {
+    /// The only root a profiled (Bare) Codex spawn reads its profile from: this host's own
+    /// `--registry` folder, never a client value.
+    pub fn bind_root(&mut self, vidar_root: &Path) {
+        set_vidar_root(vidar_root);
+    }
+
     /// The bundle's pinned runtime ([`Self::resolve_pinned`]); when that is missing or fails
     /// its closure check (a release zip ships no store), the user's own installed Codex: the
     /// npm-global native package under `%APPDATA%\npm`, else beside a codex shim on PATH.
@@ -125,17 +131,15 @@ impl CodexRuntime {
                 manifest_path.display()
             )
         })?;
-        let codex = manifest
+        let pin = manifest
             .codex
             .ok_or("this Falcon bundle has no Codex runtime")?;
 
-        if codex.store_id.len() != 64
-            || !codex.store_id.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
+        if pin.store_id.len() != 64 || !pin.store_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err("Codex runtime store id is not a SHA-256 digest".into());
         }
-        let root = store.join("codex").join(&codex.store_id);
-        let declared = declared_files(&codex.files)?;
+        let root = store.join("codex").join(&pin.store_id);
+        let declared = declared_files(&pin.files)?;
         let actual = files_under(&root)?;
         if actual != declared.keys().cloned().collect() {
             return Err(format!(
@@ -154,7 +158,7 @@ impl CodexRuntime {
             }
         }
 
-        let entrypoint = safe_relative(&codex.entrypoint)?;
+        let entrypoint = safe_relative(&pin.entrypoint)?;
         if !declared.contains_key(&entrypoint) {
             return Err("Codex runtime entrypoint is not part of its declared closure".into());
         }
@@ -255,7 +259,7 @@ impl CodexRuntime {
             bare_codex(root, local_app_data, profile, params.codex_home.as_deref(), inherited)?;
 
         // Admitted and read once before anything runs; no length cap, because it rides the
-        // `thread/start` params rather than the argv.
+        // `thread/start` and `thread/resume` params rather than the argv.
         let payload = params
             .payload_file
             .as_deref()
