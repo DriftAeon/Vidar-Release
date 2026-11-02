@@ -92,7 +92,7 @@ import { join, dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { CAP, bytes, summarizeInput, shrink } from "./claude-sidecar-shrink.mjs";
-import { readVidarConfig, vidarRoot, startStatuslineMirror } from "./claude-sidecar-statusline.mjs";
+import { readVidarConfig, startStatuslineMirror } from "./claude-sidecar-statusline.mjs";
 import { seededEffort, seededLimits } from "./claude-sidecar-seed.mjs";
 import { bareOptions, bareSettingsModel, setPluginArgs, writeInitOnce } from "./claude-sidecar-bare.mjs";
 import { startLedger } from "./claude-sidecar-ledger.mjs";
@@ -509,20 +509,7 @@ const pluginDirs = (() => {
     .filter((p) => typeof p === "string" && p.trim())
     .map((p) => ({ type: "local", path: isAbsolute(p) ? p : resolve(root, p) }));
 })();
-// The Vidar app plugin (<root>\plugins\vidar-app) is always on, independent of vidar.json, when the folder
-// exists; its drive tools are auto-allowed by server prefix. Deduped against pluginDirs by resolved path.
-const appPluginDir = (() => {
-  if (bare) return null;
-  const root = vidarRoot();
-  const dir = root ? join(root, "plugins", "vidar-app") : null;
-  return dir && existsSync(dir) ? dir : null;
-})();
-if (appPluginDir) {
-  const key = (p) => resolve(p).toLowerCase();
-  const rest = pluginDirs.filter((p) => key(p.path) !== key(appPluginDir));
-  options.plugins = [{ type: "local", path: appPluginDir }, ...rest];
-  options.allowedTools = [...(options.allowedTools ?? []), "mcp__plugin_vidar_drive"];
-} else if (pluginDirs.length) options.plugins = pluginDirs;
+if (pluginDirs.length) options.plugins = pluginDirs;
 
 // Bare: user settings only (the tab's own CLAUDE_CONFIG_DIR, set by Falcon), the profile's payload
 // (sent as systemPrompt.append, the checked text, not a path the CLI rereads), exactly its rendered

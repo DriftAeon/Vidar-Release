@@ -27,6 +27,21 @@ export interface ModuleContextMenu {
 
 let activeClose: (() => void) | undefined;
 
+/** Arrow/Home/End focus movement over `list`, wrapping at both ends. Returns true when the key
+ *  was one of those four (default prevented), false for any other key. */
+export function menuArrowKey(event: KeyboardEvent, list: HTMLElement[]): boolean {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return false;
+  event.preventDefault();
+  if (!list.length) return true;
+  const index = list.indexOf(document.activeElement as HTMLElement);
+  const next = event.key === "Home" ? 0
+    : event.key === "End" ? list.length - 1
+    : event.key === "ArrowDown" ? (index + 1) % list.length
+    : (index - 1 + list.length) % list.length;
+  list[next]?.focus();
+  return true;
+}
+
 /** Key and focus trap shared by the module menu and the tab menu: a capture-phase outside click,
  *  focus leaving the menu, Escape, Tab, and Arrow/Home/End over `items()` (queried live).
  *  `onClose(restore)` is told whether focus should return to the opener (Escape, or a click
@@ -49,16 +64,8 @@ export function trapMenu(
       onClose(true);
     } else if (event.key === "Tab") {
       onClose(false);
-    } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-      event.preventDefault();
-      const list = items();
-      if (!list.length) return;
-      const index = list.indexOf(document.activeElement as HTMLElement);
-      const next = event.key === "Home" ? 0
-        : event.key === "End" ? list.length - 1
-        : event.key === "ArrowDown" ? (index + 1) % list.length
-        : (index - 1 + list.length) % list.length;
-      list[next]?.focus();
+    } else {
+      menuArrowKey(event, items());
     }
   }
   document.addEventListener("click", onOutside, true);

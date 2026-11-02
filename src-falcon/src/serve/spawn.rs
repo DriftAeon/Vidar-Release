@@ -13,6 +13,8 @@ use super::{
     AgentRuntime, Host,
 };
 use crate::{
+    claude::ClaudeDriver,
+    codex::CodexDriver,
     journal::{Body, Journal},
     process::{self, ChildOutput},
     protocol::{Agent, EventBody, SessionSummary},
@@ -63,10 +65,11 @@ pub(super) fn spawn_session(
 
     let (child, output, env_names) = process::spawn_recording(&request)?;
     let driver = match agent {
-        Agent::Claude => AgentDriver::claude(&params),
+        Agent::Claude => AgentDriver::Claude(ClaudeDriver::new(&params)),
         Agent::Codex => {
+            // The admitted rune payload for the driver's `thread/start`.
             let text = codex_bare.as_mut().and_then(|b| b.developer_instructions.take());
-            AgentDriver::codex_with(&params, text)
+            AgentDriver::Codex(CodexDriver::new(&params).with_developer_instructions(text))
         }
     };
 
@@ -202,7 +205,7 @@ pub(super) fn spawn_session(
             }
             // The admitted config dir is the child's CLAUDE_CONFIG_DIR (`claude::bare_spawn`).
             if params.claude_config_dir.is_some() {
-                if let Some((_, dir)) = request.env.iter().find(|(k, _)| k.eq_ignore_ascii_case("CLAUDE_CONFIG_DIR")) {
+                if let Some((_, dir)) = request.env.iter().find(|(k, _)| k.eq_ignore_ascii_case(agent.home_env())) {
                     let _ = session.claude_config_dir.set(dir.clone());
                 }
             }
@@ -223,18 +226,19 @@ pub(super) fn spawn_session(
 fn start_readers(host: &Arc<Host>, session: Arc<Session>, output: ChildOutput) {
     let ChildOutput { stdout, stderr } = output;
 
-    let history_pending = match &session.driver {
-        AgentDriver::Claude(_) => false,
-        AgentDriver::Codex(driver) => !driver.history_done(),
-    };
-    if history_pending {
-        let waiting = Arc::clone(&session);
-        let _ = std::thread::Builder::new()
-            .name(format!("falcon-history-{}", session.id))
-            .spawn(move || loop {
-                std::thread::sleep(Duration::from_secs(1));
-                if waiting.codex_history_timeout() { break; }
-            });
+    match &session.driver {
+        AgentDriver::Claude(_) => {}
+        AgentDriver::Codex(driver) => {
+            if !driver.history_done() {
+                let waiting = Arc::clone(&session);
+                let _ = std::thread::Builder::new()
+                    .name(format!("falcon-history-{}", session.id))
+                    .spawn(move || loop {
+                        std::thread::sleep(Duration::from_secs(1));
+                        if waiting.codex_history_timeout() { break; }
+                    });
+            }
+        }
     }
 
     let diagnostics = Arc::clone(&session);
@@ -278,7 +282,12 @@ fn start_readers(host: &Arc<Host>, session: Arc<Session>, output: ChildOutput) {
                         return;
                     };
                     let (observed, conversation) = session.driver.observe(&value);
-                    if session.codex_history_line(&value) { return; }
+                    match &session.driver {
+                        AgentDriver::Claude(_) => {}
+                        AgentDriver::Codex(_) => {
+                            if session.codex_history_line(&value) { return; }
+                        }
+                    }
                     // A permission opened with nobody holding the lease has no
                     // one who *can* answer it: a subscriber without a lease
                     // cannot respond, so this is unattended by the contract's

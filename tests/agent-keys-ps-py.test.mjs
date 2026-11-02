@@ -73,9 +73,9 @@ test("ps: comments are skipped", () => {
   assert.deepEqual(PS("# codex\n<# claude\ncodex #>\n$x = 1 # claude\n"), []);
 });
 
-test("ps: harness tier is skipped, write-audit.ps1 is not harness", () => {
+test("ps: harness tier is skipped, write-audit.ps1 included", () => {
   assert.equal(tierOf("tools/sandbox/x.ps1"), "harness");
-  assert.notEqual(tierOf("tools/sandbox/write-audit.ps1"), "harness");
+  assert.equal(tierOf("tools/sandbox/write-audit.ps1"), "harness");
   const es = PS("$x = 'codex'\n", "tools/sandbox/x.ps1");
   assert.equal(es[0].strictness, "skip");
 });
@@ -118,17 +118,19 @@ test("py: comments are skipped", () => {
   assert.deepEqual(PY("# codex\nx = 1  # claude\n"), []);
 });
 
-test("gate: staged tools .ps1 or content .py selects npm test and tree scans", () => {
+test("gate: staged tools .ps1 or content .py selects selected tests and tree scans", () => {
   for (const f of ["tools/foo/x.ps1", "content/foo/x.py"]) {
     const names = plan([f]).map((s) => s[0]);
-    assert.ok(names.includes("npm test"), f);
+    assert.ok(names.some((n) => n.startsWith("npm test") || n.startsWith("tests (")), f);
     assert.ok(names.includes("tree scans"), f);
   }
   assert.deepEqual(plan(["docs/x.md"]), []);
 });
 
-test("gate: spawned steps run without GIT_INDEX_FILE", () => {
-  const env = stepEnv({ GIT_INDEX_FILE: "C:/tmp/index.lock", KEEP: "1" });
-  assert.equal("GIT_INDEX_FILE" in env, false);
+test("gate: spawned steps run without the hook's repo-locating vars", () => {
+  const env = stepEnv({ GIT_INDEX_FILE: "C:/tmp/index.lock", GIT_DIR: "C:/r/.git/worktrees/x", GIT_WORK_TREE: "C:/r",
+    GIT_COMMON_DIR: "C:/r/.git", GIT_ASKPASS: "", KEEP: "1" });
+  for (const k of ["GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) assert.equal(k in env, false, k);
+  assert.equal(env.GIT_ASKPASS, "");
   assert.equal(env.KEEP, "1");
 });

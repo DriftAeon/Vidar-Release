@@ -3,6 +3,9 @@
 // pick) and repaints from the row it returns. The pure parts (names, option lists, prefill, the
 // pick) are exported without DOM for tests.
 import { invoke } from "../ipc";
+import { AGENTS } from "../agents/descriptor";
+import { AGENT_IDS } from "../agents/id";
+import type { AgentId } from "../agents/id";
 import type { VoiceSlotAdapter, VoiceSlotPick, VoiceSlotStatus } from "../ipc-voice";
 import type { LmStatus } from "../panels/lmstudio";
 import { onSettingsChanged } from "../config";
@@ -11,44 +14,39 @@ import { effortSelect, modelSelect } from "./agent-selects";
 import { redraw } from "./live-list";
 import { addSettingRow } from "./registry";
 
-export const CLAUDE_ADAPTER = "claude/claude-p";
-export const CODEX_ADAPTER = "codex/codex-exec";
 export const LM_ADAPTER = "voice-stock/openai-compat";
-export const CLAUDE_PREFILL_MODEL = "claude-sonnet-5-5";
-export const CLAUDE_PREFILL_EFFORT = "low";
-
-const CLAUDE_MODEL_TIP = "Full Claude model id passed to claude -p.";
-const CODEX_MODEL_TIP = "A Codex model id passed to codex exec.";
+const AGENT_MODEL_TIP = "Full model id passed to the selected agent.";
 const LM_MODEL_TIP = "A model LM Studio has downloaded; the first rewrite loads it.";
 
 type Option = { value: string; label: string };
 type LmModelLike = { id: string; kind: string; state: string };
 
 export function adapterName(a: { id: string; label: string }): string {
-  if (a.id === CLAUDE_ADAPTER) return "Claude";
-  if (a.id === CODEX_ADAPTER) return "Codex";
+  const agent = adapterAgent(a.id);
+  if (agent) return AGENTS[agent].name;
   if (a.id === LM_ADAPTER) return "LM Studio";
   return a.label;
 }
 
-/** Same rule as the primary agent (agents/primary.ts, lane b25; duplicated here so the lanes land
- *  apart): Claude when it is shipped and on, else Codex when shipped and on, never a module that is off. */
-const AGENT_MODULE: Record<string, string> = { [CLAUDE_ADAPTER]: "claude", [CODEX_ADAPTER]: "codex" };
+/** An adapter's first path component names its agent module. */
+function adapterAgent(id: string, ids: readonly string[] = AGENT_IDS): AgentId | undefined {
+  return ids.find((agent) => id.startsWith(`${agent}/`)) as AgentId | undefined;
+}
 
 /** The adapter a fresh Speak Rewrite pick starts from; undefined when neither agent is usable. */
-export function defaultAdapter(adapters: readonly VoiceSlotAdapter[], on: (module: string) => boolean): VoiceSlotAdapter | undefined {
-  for (const id of [CLAUDE_ADAPTER, CODEX_ADAPTER]) {
-    const found = adapters.find((a) => a.id === id);
-    if (found && on(AGENT_MODULE[id])) return found;
+export function defaultAdapter(adapters: readonly VoiceSlotAdapter[], on: (module: string) => boolean, ids: readonly string[] = AGENT_IDS): VoiceSlotAdapter | undefined {
+  for (const id of ids) {
+    const found = adapters.find((a) => adapterAgent(a.id, ids) === id);
+    if (found && on(id)) return found;
   }
   return undefined;
 }
 
 /** The select's adapters: an agent adapter whose module is off drops out (unless it is the saved
  *  pick, so the row never hides what is set), and the default adapter leads. */
-export function usableAdapters(adapters: readonly VoiceSlotAdapter[], on: (module: string) => boolean, current = ""): VoiceSlotAdapter[] {
-  const kept = adapters.filter((a) => a.id === current || !AGENT_MODULE[a.id] || on(AGENT_MODULE[a.id]));
-  const lead = defaultAdapter(kept, on);
+export function usableAdapters(adapters: readonly VoiceSlotAdapter[], on: (module: string) => boolean, current = "", ids: readonly string[] = AGENT_IDS): VoiceSlotAdapter[] {
+  const kept = adapters.filter((a) => a.id === current || !adapterAgent(a.id, ids) || on(adapterAgent(a.id, ids)!));
+  const lead = defaultAdapter(kept, on, ids);
   return lead ? [lead, ...kept.filter((a) => a !== lead)] : kept;
 }
 
@@ -68,12 +66,12 @@ export function modelOptions(adapter: VoiceSlotAdapter | undefined, lm: { models
   return adapter.suggestedModels.map((m) => ({ value: m.id, label: m.label ?? m.id }));
 }
 
-/** What a freshly chosen adapter starts with: Claude keeps today's pick, LM Studio a loaded LLM. */
+/** What a freshly chosen adapter starts with: an agent's first suggestion, or LM Studio's loaded LLM. */
 export function prefillPick(adapter: VoiceSlotAdapter, lm: { models?: readonly LmModelLike[] } | null): VoiceSlotPick {
-  if (adapter.id === CLAUDE_ADAPTER || (adapter.id !== LM_ADAPTER && adapter.suggestedModels.length > 0 && adapter.efforts.length > 0)) {
-    const model = adapter.id === CLAUDE_ADAPTER ? CLAUDE_PREFILL_MODEL : adapter.suggestedModels[0].id;
+  if (adapterAgent(adapter.id) && adapter.suggestedModels.length > 0 && adapter.efforts.length > 0) {
+    const model = adapter.suggestedModels[0].id;
     const pick: VoiceSlotPick = { adapter: adapter.id, model };
-    if (adapter.efforts.includes(CLAUDE_PREFILL_EFFORT)) pick.effort = CLAUDE_PREFILL_EFFORT;
+    if (adapter.efforts.includes("low")) pick.effort = "low";
     return pick;
   }
   const pick: VoiceSlotPick = { adapter: adapter.id };
@@ -153,7 +151,7 @@ function rewriteControl(setError: (msg: string) => void): HTMLElement {
     const model = r.model ?? "";
     const effort = r.effort ?? "";
     if (adapter?.modelIds) {
-      const tip = adapter.id === LM_ADAPTER ? LM_MODEL_TIP : adapter.id === CODEX_ADAPTER ? CODEX_MODEL_TIP : CLAUDE_MODEL_TIP;
+      const tip = adapter.id === LM_ADAPTER ? LM_MODEL_TIP : AGENT_MODEL_TIP;
       root.appendChild(modelSelect(model, modelOptions(adapter, lm), (m) => write(buildPick(adapter, m, effort)), tip));
     }
     if (adapter && adapter.efforts.length > 0) {

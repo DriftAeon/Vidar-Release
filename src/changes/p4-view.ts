@@ -1,6 +1,7 @@
 // Changes tab, Perforce side DOM (changes.css): the Git / Perforce switch in the head, a read-only
 // changelist group (the git group head and row classes, no buttons) and the Not Connected icon.
 // Drawn into the pane by changes/view.ts; no state and no IPC here.
+import { el } from "../dom";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 import perforceIcon from "../assets/perforce.png";
@@ -8,12 +9,6 @@ import type { P4Change } from "../ipc";
 import { fileType, p4ActionLetter, p4ChangeLabel, truncatePath } from "./model";
 
 export type Backend = "git" | "p4";
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  return e;
-}
 
 export interface BackendSwitch {
   box: HTMLLabelElement;

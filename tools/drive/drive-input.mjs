@@ -10,7 +10,7 @@ export class Refusal extends Error {
   constructor(message) { super(message); this.exitCode = 2; }
 }
 
-export const EXPLORER_VERBS = ["state", "snapshot", "read", "act", "press", "key", "paste", "send", "shot", "look", "console", "finding"];
+export const EXPLORER_VERBS = ["state", "snapshot", "read", "act", "press", "context", "dblclick", "drag", "key", "paste", "send", "shot", "look", "console", "finding", "select", "fill"];
 
 /** @returns {string|null} the refusal message, or null to proceed. Counts a `send` against VIDAR_DRIVE_TURNS. */
 export function explorerRefusal(cmd, env, port) {
@@ -135,30 +135,48 @@ const trim = (d) => (d ? { role: d.role, name: d.name } : null);
 /** Resolves a ref (`__vidarExplorer.byRef`) or CSS selector, scrolls it into view, hit-tests its centre. */
 export function resolveJs(target) {
   return `(() => { ${DESCRIBE_JS}
-  const t = ${JSON.stringify(target)}; const isRef = /^e\\d+$/.test(t); let el = null;
+  const t = ${JSON.stringify(target)}; const isRef = /^e\\d+$/.test(t); let el = null; let rebound = false;
   if (isRef) el = globalThis.__vidarExplorer?.byRef?.get(t)?.deref() ?? null;
   else el = document.querySelector(t);
+  if (isRef && (!el || !el.isConnected)) { el = globalThis.__vidarExplorer?.relocate?.(t) ?? null; rebound = !!el; }
   if (!el || !el.isConnected) return { found: false, stale: isRef };
   el.scrollIntoView({ block: "center", inline: "center" });
   const r = el.getBoundingClientRect(); const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
   const hit = document.elementFromPoint(x, y);
-  return { found: true, at: { x, y }, ...D(el), hit: { ok: !!hit && r.width > 0 && r.height > 0 && (hit === el || el.contains(hit)), at: { x, y }, got: hit ? D(hit) : null } };
+  return { found: true, at: { x, y }, ...D(el), hit: { ok: !!hit && r.width > 0 && r.height > 0 && (hit === el || el.contains(hit)), at: { x, y }, got: hit ? D(hit) : null, ...(rebound ? { rebound: true } : {}) } };
+})()`;
+}
+
+/** Describes whatever sits at a viewport point (for a drag dropped on x,y). */
+export function describeAtJs(x, y) {
+  return `(() => { ${DESCRIBE_JS}
+  const x = ${Number(x)}, y = ${Number(y)}; const hit = document.elementFromPoint(x, y);
+  return { found: true, at: { x, y }, ...(hit ? D(hit) : { role: "", name: "", cls: "" }), hit: { ok: !!hit, at: { x, y }, got: hit ? D(hit) : null } };
 })()`;
 }
 
 export const focusedJs = () => `(() => { ${DESCRIBE_JS} const el = document.activeElement; return el && el !== document.body ? D(el) : null; })()`;
 
-/** Real mouse press at the target's centre. @returns {{target?, hit:{ok,at,got}, pressed:boolean}} */
-export async function pressTarget(ctx, target) {
+/** Mouse kinds for pressTarget: button, `buttons` mask while down, and the clickCount of each press/release pair. */
+const MOUSE_KINDS = {
+  click: { name: "press", button: "left", buttons: 1, counts: [1] },
+  context: { name: "context", button: "right", buttons: 2, counts: [1] },
+  double: { name: "dblclick", button: "left", buttons: 1, counts: [1, 2] },
+};
+
+/** Real mouse press at the target's centre; `kind` is click (default), context (right button) or double. @returns {{target?, hit:{ok,at,got}, pressed:boolean}} */
+export async function pressTarget(ctx, target, kind = "click") {
+  const k = MOUSE_KINDS[kind];
+  if (!k) throw new Error(`unknown mouse kind ${kind}`);
   await gateRealInput(ctx);
   const r = await ctx.evalJs(resolveJs(target));
   if (r?.stale) throw new Refusal(`stale ref: ${target} (take a fresh snapshot)`);
-  if (!r?.found) throw new Error(`press: no match for ${target}`);
+  if (!r?.found) throw new Error(`${k.name}: no match for ${target}`);
   for (const d of [r, r.hit.got]) {
     const id = d && matchNoPress(d);
     if (id) throw new Refusal(`refused: ${id} is on the no-press list (${r.role} "${r.name}")`);
   }
-  const hit = { ok: r.hit.ok, at: r.hit.at, got: trim(r.hit.got) };
+  const hit = { ok: r.hit.ok, at: r.hit.at, got: trim(r.hit.got), ...(r.hit.rebound ? { rebound: true } : {}) };
   const out = { hit, pressed: false };
   out.target = /^e\d+$/.test(target)
     ? { ref: target, locator: { role: r.role, name: r.name, nth: 0 } }
@@ -166,8 +184,10 @@ export async function pressTarget(ctx, target) {
   if (!hit.ok) return out; // a miss would click whatever sits there; report it instead
   const { x, y } = r.at;
   await ctx.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
-  await ctx.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
-  await ctx.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
+  for (const clickCount of k.counts) {
+    await ctx.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: k.button, buttons: k.buttons, clickCount });
+    await ctx.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: k.button, buttons: 0, clickCount });
+  }
   out.pressed = true;
   return out;
 }

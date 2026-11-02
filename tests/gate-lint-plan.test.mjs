@@ -21,10 +21,10 @@ test('lint-ui covers only src css/ts, not .d.ts', () => {
   assert.ok(!coversUi('docs/a.css'));
 });
 
-test('lint-copy covers src sources, index.html and contracts json', () => {
+test('lint-copy covers src sources, src/pages/index.html and contracts json', () => {
   assert.ok(coversCopy('src/panels/a.ts'));
   assert.ok(coversCopy('src/a.mjs'));
-  assert.ok(coversCopy('index.html'));
+  assert.ok(coversCopy('src/pages/index.html'));
   assert.ok(coversCopy('contracts/paths.json'));
   assert.ok(!coversCopy('src/styles/a.css'));
   assert.ok(!coversCopy('src/a.test.ts'));
@@ -43,7 +43,7 @@ test('lintStep passes each linter only its covered staged paths', () => {
 test('lintStep skips a linter with nothing covered, and the step when neither', () => {
   const [, cmd] = lintStep(['src/styles/a.css']);
   assert.equal(cmd, 'node tools/ui/lint-ui.mjs --staged "src/styles/a.css"');
-  assert.equal(lintStep(['tests/t.mjs', 'src/types.d.ts', 'README.md']), null);
+  assert.equal(lintStep(['docs/t.mjs', 'src/types.d.ts', 'README.md']), null);
 });
 
 function fixture() {

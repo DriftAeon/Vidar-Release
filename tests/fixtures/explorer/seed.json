@@ -15,7 +15,7 @@
   "project": "project",
   "workspace": { "label": "Explorer" },
   "runes": {
-    "note": "Library pieces reused from tests/fixtures/runes-e2e/seed.json: its rulesLibrary (vidar-recall, the recall rune) plus these import libraries, without their row-* sets and without any gen-index. kit is left out (its modules bring MCP servers), and so is the memory library (named after the runes-e2e work folder). No row or workspace holds sets.",
+    "note": "Library pieces reused from tests/fixtures/runes-e2e/seed.json: its rulesLibrary (vidar-recall, the recall rune) plus these import libraries, without their row-* sets and without any gen-index. installed is left out (its modules bring MCP servers), and so is the memory library (named after the runes-e2e work folder). No row or workspace holds sets.",
     "libraries": ["claude-user", "codex-user"]
   }
 }

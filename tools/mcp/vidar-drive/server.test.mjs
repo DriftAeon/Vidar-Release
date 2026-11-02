@@ -7,7 +7,7 @@ import { PassThrough } from "node:stream";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { serve } from "./rpc.mjs";
-import { makeCall } from "./tools.mjs";
+import { makeCall, TOOLS } from "./tools.mjs";
 import { handlers } from "./server.mjs";
 
 const SERVER = fileURLToPath(new URL("./server.mjs", import.meta.url));
@@ -70,6 +70,15 @@ test("MCP spawn without cwd carries the launch cwd", async () => {
   assert.equal(seen.payload.cwd, launch);
   await call("spawn", { agent: "claude", model: "m", text: "hi", cwd: "D:\\x" });
   assert.equal(seen.payload.cwd, "D:\\x");
+});
+
+test("MCP spawn passes vault through and lists it in the schema", async () => {
+  let seen;
+  const fake = async (verb, payload) => { seen = { verb, payload }; return { ok: true, line: "spawned t1 prompted" }; };
+  await makeCall(fake, undefined)("spawn", { agent: "claude", model: "m", text: "hi", vault: "last" });
+  assert.equal(seen.payload.vault, "last");
+  const spawn = TOOLS.find((t) => t.name === "spawn");
+  assert.ok(Object.hasOwn(spawn.inputSchema.properties, "vault"));
 });
 
 test("a call sent while another is pending is answered first", async () => {

@@ -38,7 +38,7 @@ use super::validate::PayloadCtx;
 use super::{chunk, chunk_text, home, merge, payload, prepare_envelope, Input, Span};
 use crate::agent_spec::Agent;
 use crate::bare::home::Guard;
-use crate::job::Job;
+use crate::proc_job::Job;
 use crate::rules::import::local::LocalFile;
 use crate::rules::import::sources;
 
@@ -630,7 +630,7 @@ fn live<R>(cwd: Option<&str>, f: impl FnOnce(&Ctx) -> Result<R, String>) -> Resu
 }
 
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // tauri command: one arg per field the frontend sends
 pub async fn rules_generate(
     app: AppHandle,
     run_id: String,

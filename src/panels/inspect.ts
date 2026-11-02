@@ -18,6 +18,9 @@ const MAX_GAPS = 64;
 const AID_IDS = new Set(["inspect-box", "inspect-chip", "inspect-margin", "inspect-gutter", "inspect-pad", "inspect-gaps"]);
 // Chip holds a copy-result flash briefly so the next hover doesn't erase it.
 let flashUntil = 0;
+// A good copy shows its chip, then leaves inspect as Esc would.
+const COPY_EXIT_MS = 500;
+let exitTimer: number | undefined;
 
 // click alone isn't enough: dblclick opens rename, contextmenu opens the
 // launcher/theme menus, and xterm's right-click handler grabs focus.
@@ -116,7 +119,7 @@ function resolve(start: Element): Region | null {
   if (!own || own === document.body || own === document.documentElement) return null;
   let sel = own.id ? `#${own.id}` : classSelector(own)!;
   if (!own.id) {
-    // one id of context makes class-only regions (.macro-btn, .pin-row) unambiguous
+    // one id of context makes class-only regions (.pin-row) unambiguous
     const anchor = own.parentElement?.closest("[id]");
     if (anchor && anchor.id !== "app") sel = `#${anchor.id} ${sel}`;
   }
@@ -263,9 +266,10 @@ function paint(region: Region | null) {
 
 async function copyRef(region: Region) {
   let msg: string;
+  let ok = true;
   try {
     await navigator.clipboard.writeText(region.ref);
-    msg = "copied ✓ ";
+    msg = "Copied ✓ ";
   } catch {
     // navigator.clipboard is unproven in this WebView2 shell — legacy rescue path
     const ta = document.createElement("textarea");
@@ -274,12 +278,16 @@ async function copyRef(region: Region) {
     ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
-    const ok = document.execCommand("copy");
+    ok = document.execCommand("copy");
     ta.remove();
-    msg = ok ? "copied ✓ " : "copy FAILED — ";
+    msg = ok ? "Copied ✓ " : "Copy Failed — ";
   }
+  if (!active) return;
   flashUntil = performance.now() + 1500;
   showChip(msg + region.ref, region.el.getBoundingClientRect());
+  // a failed copy keeps the tool so the user can retry
+  window.clearTimeout(exitTimer);
+  if (ok) exitTimer = window.setTimeout(exit, COPY_EXIT_MS);
 }
 
 // mouseover, not mousemove: fires once per element entry — per-pixel resolution
@@ -388,6 +396,8 @@ function enter() {
 }
 
 function exit() {
+  window.clearTimeout(exitTimer);
+  exitTimer = undefined;
   if (!active) return;
   active = false;
   freeze.reset();

@@ -52,15 +52,19 @@ pub(super) struct Connection {
     /// The host's negotiate-reply `capabilities` (protocol.rs `CAPABILITIES`).
     /// Empty for an older host and for a connection that did not negotiate.
     pub(super) capabilities: Vec<String>,
+    /// The protocol stamp the host accepted in negotiate (its reply's `protocol`).
+    /// 0 for a connection that did not negotiate.
+    pub(super) protocol: u32,
 }
 
 impl Connection {
     /// A connection over an already-open pipe that has not negotiated, so it
-    /// claims no capabilities.
+    /// claims no capabilities and no protocol.
     pub(super) fn raw(pipe: std::fs::File) -> Self {
         Self {
             pipe,
             capabilities: Vec::new(),
+            protocol: 0,
         }
     }
 
@@ -109,6 +113,15 @@ impl Connection {
                     .collect()
             })
             .unwrap_or_default();
+        // The host echoes the stamp it accepted; a reply without one is taken
+        // at the stamp this client claimed (every host so far echoes it).
+        connection.protocol = reply
+            .payload
+            .as_ref()
+            .and_then(|payload| payload.get("protocol"))
+            .and_then(Value::as_u64)
+            .and_then(|stamp| u32::try_from(stamp).ok())
+            .unwrap_or(protocol);
         Ok(connection)
     }
 

@@ -10,9 +10,9 @@ import { missingSetupAgentMessage, pickSetupRunner } from "../src/deps/setup-pro
 
 const CLAUDE = { id: "claude", kind: "agent", label: "Claude", agent: { setup: { dep: "claude", order: 0 } } };
 const CODEX = { id: "codex", kind: "agent", label: "Codex", agent: { setup: { dep: "codex", order: 1 } } };
-const GEMINI = { id: "gemini", kind: "agent", label: "Gemini", agent: {} };
+const PI = { id: "pi", kind: "agent", label: "Pi", agent: {} };
 // codex listed ahead of claude, so setup order (not list order) has to decide
-const BOTH = [CODEX, GEMINI, CLAUDE];
+const BOTH = [CODEX, PI, CLAUDE];
 
 test("resolver: a saved pick whose module is active wins", () => {
   assert.equal(resolvePrimary("codex", BOTH), "codex");
@@ -21,19 +21,19 @@ test("resolver: a saved pick whose module is active wins", () => {
 
 test("resolver: a saved pick that is not active falls back to the other agent", () => {
   assert.equal(resolvePrimary("codex", [CLAUDE]), "claude");
-  assert.equal(resolvePrimary("claude", [CODEX, GEMINI]), "codex");
+  assert.equal(resolvePrimary("claude", [CODEX, PI]), "codex");
 });
 
 test("resolver: unset with both active is setup order (Claude), so nothing moves for a user who never picks", () => {
   assert.equal(resolvePrimary(undefined, BOTH), "claude");
   assert.equal(resolvePrimary(null, BOTH), "claude");
-  assert.equal(resolvePrimary("gemini", BOTH), "claude", "an invalid hand edit reads as unset");
+  assert.equal(resolvePrimary("pi", BOTH), "claude", "an invalid hand edit reads as unset");
   assert.equal(resolvePrimary(undefined, [CODEX]), "codex");
 });
 
 test("resolver: unset in a codex-only set is Codex, with or without other agents; both shipped keeps Claude", () => {
   assert.equal(resolvePrimary(undefined, [CODEX]), "codex");
-  assert.equal(resolvePrimary(undefined, [GEMINI, CODEX]), "codex");
+  assert.equal(resolvePrimary(undefined, [PI, CODEX]), "codex");
   assert.equal(resolvePrimary("claude", [CODEX]), "codex", "a saved Claude that is off never wins");
   assert.equal(resolvePrimary(undefined, [CLAUDE]), "claude");
   assert.equal(resolvePrimary(undefined, [CODEX, CLAUDE]), "claude");
@@ -53,13 +53,13 @@ test("Settings rows: keyed rows of an off agent module are listed for hiding, cu
 
 test("resolver: none active is null, saved or not", () => {
   assert.equal(resolvePrimary(undefined, []), null);
-  assert.equal(resolvePrimary("codex", [GEMINI]), null);
+  assert.equal(resolvePrimary("codex", [PI]), null);
   assert.equal(resolvePrimary("claude", []), null);
 });
 
 test("choices are the active agents in setup order; asked means the key is present", () => {
   assert.deepEqual(choicesOf(BOTH), ["claude", "codex"]);
-  assert.deepEqual(choicesOf([GEMINI, CODEX]), ["codex"]);
+  assert.deepEqual(choicesOf([PI, CODEX]), ["codex"]);
   let saved;
   let active = BOTH;
   setPrimarySources(() => saved, () => active);
@@ -80,19 +80,19 @@ test("choices are the active agents in setup order; asked means the key is prese
 test("roster: the primary's root leads Claude/Codex by default; a saved order still wins", () => {
   const claude = { key: "claude", id: "claude" };
   const codex = { key: "codex", id: "codex" };
-  const gemini = { key: "gemini", id: "gemini" };
+  const pi = { key: "pi", id: "pi" };
   const terminal = { key: "terminal", id: "shell" };
-  const roots = [terminal, gemini, claude, codex];
+  const roots = [terminal, pi, claude, codex];
   try {
     setPrimaryRootSource(() => null);
-    assert.deepEqual(orderRoots(roots, undefined), [claude, codex, gemini, terminal]);
+    assert.deepEqual(orderRoots(roots, undefined), [claude, codex, pi, terminal]);
     setPrimaryRootSource(() => "codex");
-    assert.deepEqual(orderRoots(roots, undefined), [codex, claude, gemini, terminal]);
-    assert.deepEqual(orderRoots(roots, ["terminal", "claude", "codex"]), [terminal, claude, codex, gemini]);
+    assert.deepEqual(orderRoots(roots, undefined), [codex, claude, pi, terminal]);
+    assert.deepEqual(orderRoots(roots, ["terminal", "claude", "codex"]), [terminal, claude, codex, pi]);
     // a saved order naming neither leaves the pair in primary order behind it
-    assert.deepEqual(orderRoots(roots, ["gemini"]), [gemini, codex, claude, terminal]);
+    assert.deepEqual(orderRoots(roots, ["pi"]), [pi, codex, claude, terminal]);
     setPrimaryRootSource(() => "claude");
-    assert.deepEqual(orderRoots(roots, undefined), [claude, codex, gemini, terminal]);
+    assert.deepEqual(orderRoots(roots, undefined), [claude, codex, pi, terminal]);
   } finally {
     setPrimaryRootSource(() => null);
   }

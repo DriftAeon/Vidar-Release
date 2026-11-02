@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::Ordering;
@@ -22,7 +21,6 @@ use super::env::{
 use super::{FlowPermissionPayload, FlowRunNodeStatus};
 use crate::bare::Env;
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// §4.1/§4.3 step 4: live text events are throttled to at most 4 Hz per node.
 const THROTTLE: Duration = Duration::from_millis(250);
 
@@ -43,12 +41,7 @@ pub(super) fn spec(need: super::bare::Need, vault: &str, tab: &str) -> Result<Ru
 }
 
 fn spec_from(node: crate::bare::flow_vault::ClaudeNode, sidecar: PathBuf) -> RunnerSpec {
-    RunnerSpec::Claude { sidecar, env: Some(node.env), args: node.args, warnings: node.warnings }
-}
-
-/// The Claude agent, named by the one module id this file holds.
-pub(super) fn agent() -> crate::agent_spec::Agent {
-    crate::agent_spec::parse(CLAUDE_MODULE).expect("the claude module id is an agent id")
+    RunnerSpec::Sidecar { sidecar, env: Some(node.env), args: node.args, warnings: node.warnings }
 }
 
 /// Pure: `agent.flow.script` of module `id` in a serialized `modules_list` result.
@@ -387,12 +380,7 @@ fn spawn_sidecar(
 ) -> Result<(Child, Job), String> {
     let mut cmd = sidecar_command(sidecar, node_exe, claude_exe, cwd, model, permission_mode, env_plan, extra_args, bare_env);
     let job = Job::new()?;
-    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-    if let Err(error) = job.assign(&child) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(format!("assign flow job: {error}"));
-    }
+    let child = super::child::spawn_in_job(&mut cmd, &job)?;
     Ok((child, job))
 }
 
@@ -422,7 +410,6 @@ fn sidecar_command(
         .arg(claude_exe)
         .args(extra_args)
         .current_dir(cwd)
-        .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -501,7 +488,7 @@ mod tests {
             config_dir: PathBuf::from(r"C:\H\claude-homes\0123456789ab"),
             warnings: vec!["w".into()],
         };
-        let RunnerSpec::Claude { args, warnings, env, .. } = spec_from(node, PathBuf::from("s.mjs")) else { panic!("a Claude spec") };
+        let RunnerSpec::Sidecar { args, warnings, env, .. } = spec_from(node, PathBuf::from("s.mjs")) else { panic!("a Claude spec") };
         assert_eq!(args[..3], ["--flow", "--profile", "bare"]);
         assert_eq!(args[5], "--home");
         assert_eq!(warnings, ["w"]);

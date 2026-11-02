@@ -4,7 +4,8 @@
 // is the only caller.
 
 import type { Effort } from "../agents/protocol";
-import { driveSnapshot, driveSend, driveOpenTab, hasRenderedAgent, hostedRenderedAgent } from "../drive/drive";
+import { basename } from "../paths";
+import { driveSnapshot, driveSend, driveOpenTab, hasRenderedAgent, hostedRenderedAgent, LaunchVaultFor } from "../drive/drive";
 import { openDocumentPath, documentDirty } from "../panels/document";
 import { revealWorkbench, revealWorkbenchTab } from "../panels/workbench";
 import { activate, sessionContainer, findTabByFalconSession, renderedBody } from "../panels/sessions";
@@ -13,7 +14,7 @@ import { transcriptTail } from "../panels/transcript";
 import { resolveTabRef } from "../tab-names";
 import { resolveRequesterTab, type Requester as ControlRequester } from "./requester";
 
-export { driveSnapshot, hasRenderedAgent, hostedRenderedAgent };
+export { driveSnapshot, hasRenderedAgent, hostedRenderedAgent, LaunchVaultFor };
 
 /** `ctl.read`'s own-tab resolution: a `token` requester, or a
  *  `falcon_session` one Rust found in `falcon.hosted`, already names its tab;
@@ -41,7 +42,7 @@ export async function promptTab(tab: string, text: string): Promise<boolean> {
 
 /** `ctl.spawn`'s Approve action: thin call into `driveOpenTab`, which already
  *  refuses an unknown agent id (`findRenderedType`, `drive.ts:57-61`). */
-export function spawnTab(opts: { agent: string; model?: string; effort?: Effort; cwd?: string; title?: string }): Promise<string> {
+export function spawnTab(opts: { agent: string; model?: string; effort?: Effort; cwd?: string; title?: string; vault?: string }): Promise<string> {
   return driveOpenTab(opts);
 }
 
@@ -85,7 +86,7 @@ export async function showDisplay(path: string, focus: boolean): Promise<{ ok: b
   if (documentDirty()) return { ok: false, reason: "document has unsaved changes" };
   if (focus) revealWorkbenchTab("doc");
   const ok = await openDocumentPath(path);
-  const name = path.split("\\").pop() ?? path;
+  const name = basename(path);
   return ok ? { ok: true } : { ok: false, reason: `open failed: "${name}"` };
 }
 

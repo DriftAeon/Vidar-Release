@@ -7,6 +7,8 @@ import type { DepCatalog, DepEntry, DepReport, DepStatus } from "../deps/types";
 import type { ColorIcon } from "../icon-img";
 import type { LucideName } from "../icons";
 import type { CliUpdate, CliUpdateBusy } from "../startup-updates/core";
+// @ts-ignore TS5097: node --test loads this module directly
+import { confirmRow } from "../dom.ts";
 
 /** Draws a shared Lucide glyph (src/icons.ts `lucide`). Passed in, not imported: tests load this
  *  view under node without a resolve hook, and icons.ts is reached through an extensionless import. */
@@ -95,7 +97,7 @@ export interface KnownCliUpdates {
   error?: string | null;
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(
+function el<K extends keyof HTMLElementTagNameMap>( // home-ok: takes the Document as an argument; node tests pass a fake one
   doc: Document, tag: K, cls: string, text?: string,
 ): HTMLElementTagNameMap[K] {
   const e = doc.createElement(tag);
@@ -148,10 +150,10 @@ export function renderStartupUpdateRows(
   }
   body.appendChild(rows);
   if (error) body.appendChild(el(doc, "div", "deps-error", error));
-  if (actions.updateAll && updates.length) {
-    const all = button(doc, "deps-update-all ws-primary", running ? "Updating All…" : "Update All", () => actions.updateAll?.());
+  if (actions.updateAll && updates.length && !running) {
+    const all = button(doc, "deps-update-all ws-primary", "Update All", () => actions.updateAll?.());
     // Nothing to start: a job is running, or every CLI waits on an open tab.
-    all.disabled = busy !== null || running || updates.every((u) => !!actions.blocked?.(u));
+    all.disabled = busy !== null || updates.every((u) => !!actions.blocked?.(u));
     const foot = el(doc, "div", "swap-confirm-actions");
     foot.appendChild(all);
     body.appendChild(foot);
@@ -182,20 +184,14 @@ function trustControls(doc: Document, folder: string, actions: DepViewActions, u
   }
   const running = ui.trusting === folder;
   // Not `.ws-btn`: its hover/active colours would override the shared decision pair.
-  const plain = (cls: string, label: string, onClick: () => void): HTMLButtonElement => {
-    const b = el(doc, "button", cls, label);
-    b.type = "button";
-    b.addEventListener("click", onClick);
-    return b;
-  };
-  const yes = plain("swap-yes vs-trust-confirm", running ? "Trusting…" : "Trust", () => actions.trust?.(folder));
-  const no = plain("swap-no vs-trust-cancel", "Cancel", () => actions.cancelTrust?.());
-  yes.disabled = locked;
-  no.disabled = running;
-  const btns = el(doc, "div", "swap-confirm-actions");
-  btns.append(yes, no);
   const ask = el(doc, "div", "deps-ask");
-  ask.append(el(doc, "p", "vs-confirm-text", `Re-Pin Pack ${folder} As It Is Now?`), btns);
+  confirmRow({
+    doc,
+    root: ask,
+    note: el(doc, "p", "vs-confirm-text", `Re-Pin Pack ${folder} As It Is Now?`),
+    yes: { label: running ? "Trusting…" : "Trust", cls: "vs-trust-confirm", run: () => actions.trust?.(folder), disabled: locked },
+    no: { label: "Cancel", cls: "vs-trust-cancel", run: () => actions.cancelTrust?.(), disabled: running },
+  });
   return ask;
 }
 

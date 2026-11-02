@@ -1,19 +1,20 @@
 /* ---- Changes tab (panels/changes.ts, changes/view.ts): two groups. Status letters and +/- counts take the --git-* tokens;
    file glyphs take a tint map. Compact buttons share the bench's .wb-actions button look
    (workbench.css); the Revert All confirm uses the decision pair (decision-pair.css). */
-.changes-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
-.changes-pane [hidden] { display: none; }
-.changes-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
+/* The pane frame and toolbar buttons shared by the Changes, Jira, Slack and Notion panes (their sheets load after this one). */
+.changes-pane, .jira-pane, .slack-pane, .notion-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
+.changes-pane [hidden], .jira-pane [hidden], .slack-pane [hidden], .notion-pane [hidden] { display: none; }
+.changes-pane .icn, .jira-pane .icn, .slack-pane .icn, .notion-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
 
 /* bench compact buttons: the .wb-actions look at the bar size (workbench.css .wb-block .wb-actions button) */
-.changes-pane .wb-actions button {
+.changes-pane .wb-actions button, .jira-pane .wb-actions button, .slack-pane .wb-actions button, .notion-pane .wb-actions button {
   box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); white-space: nowrap;
   font-family: var(--font-ui);
 }
-.changes-pane .wb-actions button.cx-ico { width: var(--row-24); padding: 0; }
+.changes-pane .wb-actions button.cx-ico, .jira-pane .wb-actions button.cx-ico, .slack-pane .wb-actions button.cx-ico, .notion-pane .wb-actions button.nt-ico { width: var(--row-24); padding: 0; }
+.changes-pane .wb-actions button[aria-busy="true"], .jira-pane .wb-actions button[aria-busy="true"], .slack-pane .wb-actions button[aria-busy="true"], .notion-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 .changes-pane .wb-actions button.cx-primary, .changes-pane .wb-actions button.cx-primary:hover:not(:disabled) { --edge: var(--accent); }
-.changes-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 
 /* head: branch, rename pencil (shown on head hover or focus), Sync split */
 .cx-head { display: flex; align-items: center; gap: var(--space-4); height: var(--row-28); flex: none; }
@@ -154,8 +155,7 @@
 /* commit bar */
 .cx-commit { display: flex; flex-direction: column; gap: var(--space-8); flex: none; padding-top: var(--space-8); }
 .cx-commit-bar { display: flex; gap: var(--space-4); }
-.cx-spin { animation: cx-spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
-@keyframes cx-spin { to { transform: rotate(360deg); } }
+.cx-spin { animation: spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
 @media (prefers-reduced-motion: reduce) { .cx-spin { animation: none; } }
 .changes-pane .wb-actions button[aria-busy="true"] .cx-spin { color: var(--accent); }
-.changes-pane .cx-split-main[aria-busy="true"] .icn { animation: cx-spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
+.changes-pane .cx-split-main[aria-busy="true"] .icn { animation: spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */

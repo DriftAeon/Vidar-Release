@@ -4,7 +4,7 @@
 # conhost --headless never runs the child, so it is not a usable wrapper (dead end, don't retry).
 # Codex runs it after every turn with ONE argument: a JSON object
 #   { type: "agent-turn-complete", thread-id, turn-id, cwd, input-messages, last-assistant-message }
-# Two outputs, both atomic (unique tmp + rename), UTF-8 without BOM:
+# Two outputs, both atomic via Write-BridgeJsonAtomic (tools\lib\BridgeIo.ps1: unique tmp + rename), UTF-8 without BOM:
 #   bridge\review\hook-alive.json        every turn — proves the hook is wired
 #   bridge\review\<id>\done.json         when the reply ends with a line `ASTRA-DONE <id>`
 #                                        (id = 8 hex) — the request-specific completion signal
@@ -24,16 +24,9 @@
 $ErrorActionPreference = 'Stop'
 $vidar = Split-Path (Split-Path $PSScriptRoot)
 . "$PSScriptRoot\..\lib\Paths.ps1"
+. "$PSScriptRoot\..\lib\BridgeIo.ps1"
 $root = Resolve-VidarPath -Id review -Root $vidar
 $enc = [System.Text.UTF8Encoding]::new($false)
-
-function Write-Atomic([string]$path, [string]$text) {
-    $dir = Split-Path -Parent $path
-    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { [void][IO.Directory]::CreateDirectory($dir) }
-    $tmp = Join-Path $dir ("." + [IO.Path]::GetFileName($path) + "." + [guid]::NewGuid().ToString('N') + ".tmp")
-    [IO.File]::WriteAllText($tmp, $text, $enc)
-    [IO.File]::Move($tmp, $path, $true)
-}
 
 function Log-Error([string]$msg) {
     try {
@@ -85,7 +78,7 @@ function Write-UnmarkedDiagnostic($ev) {
             if (-not [string]::Equals($want, $cwd, [StringComparison]::OrdinalIgnoreCase)) { continue }
             if (-not (Test-Path -LiteralPath ([string]$req.report) -PathType Leaf)) { continue }
             Log-Error "turn ended without ASTRA-DONE; report for $($d.Name) exists ($($req.report)); done.json not written"
-            Write-Atomic (Join-Path $d.FullName 'diag.json') (@{ id = $d.Name; at = (Get-Date -Format o); 'turn-id' = $ev.'turn-id'; note = 'turn ended without ASTRA-DONE; report exists' } | ConvertTo-Json -Compress)
+            Write-BridgeJsonAtomic -Path (Join-Path $d.FullName 'diag.json') -Value (@{ id = $d.Name; at = (Get-Date -Format o); 'turn-id' = $ev.'turn-id'; note = 'turn ended without ASTRA-DONE; report exists' } | ConvertTo-Json -Compress)
         }
     } catch { Log-Error "diagnostic: $($_.Exception.Message)" }
 }
@@ -98,7 +91,7 @@ try {
 
     $at = Get-Date -Format o
     $alive = @{ at = $at; type = $ev.type; 'thread-id' = $ev.'thread-id'; 'turn-id' = $ev.'turn-id'; cwd = $ev.cwd } | ConvertTo-Json -Compress
-    Write-Atomic (Join-Path $root 'hook-alive.json') $alive
+    Write-BridgeJsonAtomic -Path (Join-Path $root 'hook-alive.json') -Value $alive
 
     $msg = [string]$ev.'last-assistant-message'
     $marked = $false
@@ -155,10 +148,10 @@ try {
                     else { $delta = [int]$a5.used_percentage - [int]$b5.used_percentage }
                     $meter = [ordered]@{ id = $id; budget = $(if ($req) { $req.budget } else { $null }); before = $before; after = $after
                         five_hour_delta = $delta; delta_note = $(if ($why) { $why } else { 'account usage over the interval; meaningful only with one Codex tab' }) } | ConvertTo-Json -Compress -Depth 8
-                    Write-Atomic (Join-Path $idDir 'meter.json') $meter
+                    Write-BridgeJsonAtomic -Path (Join-Path $idDir 'meter.json') -Value $meter
                 } catch { Log-Error "meter.json for ${id}: $($_.Exception.Message)" }
                 $done = @{ id = $id; at = $at; 'thread-id' = $ev.'thread-id'; 'turn-id' = $ev.'turn-id'; findings = $report; report = $report } | ConvertTo-Json -Compress
-                Write-Atomic (Join-Path $idDir 'done.json') $done
+                Write-BridgeJsonAtomic -Path (Join-Path $idDir 'done.json') -Value $done
             }
         }
     }

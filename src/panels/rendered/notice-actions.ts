@@ -10,6 +10,7 @@ import { FIX_UNAVAILABLE, fixAvailable, requestFix } from "./fix-seam";
 import { AGENTS } from "../../agents/descriptor";
 import type { AgentId } from "../../agents/id";
 import { notCarriedLine } from "../../runes/not-carried";
+import { errText } from "../../err-text";
 
 /** What `codex_trust_offer` returns for a tab whose launch folder the user's Codex config does not trust. */
 export interface TrustOffer {
@@ -44,6 +45,8 @@ export const TRUSTED_LINE = "Trusted. Reopen the tab to load project settings.";
 export const TRUSTED_REFRESH_LINE = "Trusted. Refresh to load the project settings.";
 export const REFRESH_LABEL = "Refresh";
 export const REFRESH_KEEPS_CHAT = "Opens a fresh tab here; this chat stays open.";
+/** The Runes pane's trust slot once its tab's folder was trusted after an untrusted launch, until the tab restarts. */
+const RESTART_LINE = "Restart the tab to load this folder's .codex settings";
 const REFRESH_FALLBACK = "Couldn't refresh: reopen the tab yourself";
 const TRUST_FALLBACK = "Couldn't trust this folder: reopen the tab and try again";
 const ASK_FALLBACK = "Couldn't open a Claude tab to fix this";
@@ -65,7 +68,7 @@ export function actionButton(label: string, busyLabel: string, primary: boolean,
         b.removeAttribute("aria-busy");
         b.textContent = label;
         b.classList.add("is-error");
-        const raw = e instanceof Error ? e.message : String(e);
+        const raw = errText(e);
         onError(raw.startsWith("Couldn't ") ? raw : fallback);
       },
     );
@@ -114,37 +117,65 @@ function askButton(host: NoticeHost, warning: string, folder: string, error: (me
   return b;
 }
 
+/** Each drawn trust card's settle step, by tab id. The chat notice area and the Runes trace each draw a card for one
+ *  tab, and the folder is trusted once: a trust from either card runs every settle of its tab, so neither copy is left
+ *  asking (the host forgets the offer, so a second press could only fail). */
+const settles = new Map<string, Set<() => void>>();
+/** The offer text of each tab trusted from a card this page drew, for the page's life (no persistence). */
+const trustedTabs = new Map<string, string>();
+
+/** The offer text the tab's folder was trusted on from a trust card this page drew; undefined when none was. */
+export const trustedOfferText = (tabId: string): string | undefined => trustedTabs.get(tabId);
+
+/** The Runes pane's trust slot after a trust there or in the chat: the card with RESTART_LINE and no buttons. */
+export function restartCard(): HTMLElement {
+  const c = card(RESTART_LINE);
+  c.acts.remove();
+  return c.root;
+}
+
 /** The trust card: Trust Folder (busy, error, then the Trusted line) and Dismiss. The chat notice area and
- *  the Runes trace both draw it, so there is one renderer; the write happens only on the click. */
-export function trustCard(tabId: string, trust: TrustOffer, reopen?: TrustReopen): HTMLElement {
+ *  the Runes trace both draw it, so there is one renderer; the write happens only on the click. `settled` builds what
+ *  replaces a card with no reopen action once trusted (default: the Trusted line). */
+export function trustCard(tabId: string, trust: TrustOffer, reopen?: TrustReopen, settled?: () => HTMLElement): HTMLElement {
   const c = card(trust.text);
+  const settle = () => {
+    if (!reopen) {
+      if (settled) { c.root.replaceWith(settled()); return; }
+      const done = el("div", "blk blk-notice done");
+      done.append(lucide("check", "icn"), document.createTextNode(TRUSTED_LINE));
+      c.root.replaceWith(done);
+      return;
+    }
+    // the card stays: its text and its one button change, so the next step is where the eye is
+    c.text.textContent = TRUSTED_REFRESH_LINE;
+    c.error(null);
+    const refresh = actionButton(
+      REFRESH_LABEL,
+      "Refreshing",
+      true,
+      () => reopen.run(reopen.hasTurns()),
+      c.error,
+      REFRESH_FALLBACK,
+    );
+    const title = () => { refresh.title = reopen.hasTurns() ? REFRESH_KEEPS_CHAT : ""; };
+    title();
+    refresh.addEventListener("pointerenter", title);
+    c.acts.replaceChildren(refresh);
+  };
+  let mine = settles.get(tabId);
+  if (!mine) settles.set(tabId, mine = new Set());
+  mine.add(settle);
   const trustBtn = actionButton(
     TRUST_LABEL,
     "Trusting",
     true,
     async () => {
       await invoke("codex_trust_folder", { id: tabId, folder: trust.folder });
-      if (!reopen) {
-        const done = el("div", "blk blk-notice done");
-        done.append(lucide("check", "icn"), document.createTextNode(TRUSTED_LINE));
-        c.root.replaceWith(done);
-        return;
-      }
-      // the card stays: its text and its one button change, so the next step is where the eye is
-      c.text.textContent = TRUSTED_REFRESH_LINE;
-      c.error(null);
-      const refresh = actionButton(
-        REFRESH_LABEL,
-        "Refreshing",
-        true,
-        () => reopen.run(reopen.hasTurns()),
-        c.error,
-        REFRESH_FALLBACK,
-      );
-      const title = () => { refresh.title = reopen.hasTurns() ? REFRESH_KEEPS_CHAT : ""; };
-      title();
-      refresh.addEventListener("pointerenter", title);
-      c.acts.replaceChildren(refresh);
+      trustedTabs.set(tabId, trust.text);
+      const all = settles.get(tabId) ?? new Set([settle]);
+      settles.delete(tabId);
+      for (const s of all) s();
     },
     c.error,
     TRUST_FALLBACK,
@@ -166,7 +197,7 @@ export function vidarFolderCard(open: () => Promise<void>): HTMLElement {
     WORKTREE_LABEL,
     "Opening",
     true,
-    () => open().catch((e) => { throw new Error(WORKTREE_FAILED + (e instanceof Error ? e.message : String(e))); }),
+    () => open().catch((e) => { throw new Error(WORKTREE_FAILED + (errText(e))); }),
     c.error,
     WORKTREE_FAILED + "try again",
   );
@@ -188,6 +219,7 @@ export function bareNotices(host: NoticeHost, warnings: readonly string[], trust
     const c = card(w);
     c.text.replaceChildren(...notCarriedLine(w));
     c.acts.appendChild(askButton(host, w, host.cwd, c.error));
+    c.acts.appendChild(dismissButton(c.root));
     host.append(c.root);
   }
 }

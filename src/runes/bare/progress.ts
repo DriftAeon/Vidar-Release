@@ -88,26 +88,6 @@ export const ADD_TO_VAULT_LABEL = "Add to Vault";
 /** What a landed generation names: its library and set (`RulesGenerated`). */
 export interface GeneratedRef { library: string; set: string }
 
-export type VaultEditOp = { op: "addRuneset"; ref: { library: string; set: string } };
-export type VaultEditArgs = { id: string; ops: VaultEditOp[]; mode: "unlocked" };
-/** `rune_vault_edit`, injected so this module stays IPC-free. */
-export type VaultEdit = (a: VaultEditArgs) => Promise<unknown>;
-
-/** Pure: the one op Add to Vault sends. */
-export const addToVaultOps = (r: GeneratedRef): VaultEditOp[] => [{ op: "addRuneset", ref: { library: r.library, set: r.set } }];
-
-/** Add to Vault on the tab's vault, unlocked mode only: a locked vault is refused by the store, whose error comes
- *  back as the text to show (the variant / edit-original choice comes later). `null` on success. */
-export async function addToVault(edit: VaultEdit, vaultId: string | null, r: GeneratedRef): Promise<string | null> {
-  if (!vaultId) return "This tab has no vault to add to.";
-  try {
-    await edit({ id: vaultId, ops: addToVaultOps(r), mode: "unlocked" });
-    return null;
-  } catch (e) {
-    return e instanceof Error ? e.message : String(e);
-  }
-}
-
 /** A drawn card: the row, its Retrying flag and its start time while it is running (null otherwise). */
 export interface ProgressCard extends ProgressRow { retrying: boolean; startedAt: number | null }
 

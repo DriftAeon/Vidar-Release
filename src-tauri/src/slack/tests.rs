@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use serde_json::json;
 
 use super::*;
+use crate::net::{Reply, SendError};
 use crate::slack::vault::memory::Memory;
 
 const TOKEN: &str = "xoxp-1111-2222-fixture";

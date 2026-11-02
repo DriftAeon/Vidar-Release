@@ -2,10 +2,10 @@
 // scrub below is an import-time side effect that must run in each test process.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { copyFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeTree } from "../helpers/tree.mjs";
 import { rel } from "../../tools/lib/paths.mjs";
 
 // A pre-commit hook exports GIT_DIR/GIT_INDEX_FILE; left in, the temp repos below resolve to this one.
@@ -68,7 +68,7 @@ export function copyPathsLib(tmp, { pack = fixturePack(), snapshot } = {}) {
 // ANTHROPIC_AUTH_TOKEN is non-empty (never values: with a real User-scope key present, AUTH_TOKEN
 // holds it). The shape rule mirrors vendor-tab.ps1's Test-CredentialName.
 export function launchRig(tabTag, fixtures, packOpts) {
-  const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "vidar-fence-"))); // expands an 8.3 runner temp
+  const tmp = realpathSync.native(makeTree("vidar-fence-")); // expands an 8.3 runner temp
   const dir = join(tmp, "tools", "vendor");
   const bin = join(tmp, "bin");
   mkdirSync(dir, { recursive: true });

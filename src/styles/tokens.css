@@ -95,11 +95,12 @@
   --font-14: 14px;
   --font-16: 16px;
   --font-18: 18px;
+  --font-24: 24px; /* display titles: the Rune Library's inscription */
   /* tokens:end */
   --bar-inset: var(--space-6); /* legacy 6: the left bar's side inset (leftbar.css re-sets it); the caption row reads it */
 
   /* new-ui:start — the only tokens new components use, plus
-     --space-2 4 8 12 16 24 32, --radius-2 4 6 (and -full for dots), --font-11 12 13 16, --font-title (titles only),
+     --space-2 4 8 12 16 24 32, --radius-2 4 6 (and -full for dots), --font-11 12 13 16 24 (24: display titles), --font-title (titles only),
      the themed colours (--accent, never --accent2) and the signal colours above. The rest of
      the tokens:start block is legacy: kept for existing rules, never picked for new ones.
      The three colour steps derive from the theme, so no [data-theme] block repeats them. */
@@ -110,6 +111,7 @@
   --weight-strong: 600;
   --weight-bold: 700; /* Segoe UI Bold, where 600 at small sizes reads as regular (2026-10-18) */
   --tracking-caps: 0.08em; /* uppercase divider and section labels */
+  --tracking-inscribed: 0.24em; /* the Rune Library's inscription title */
   --line-16: 16px;
   --line-20: 20px;
   --row-24: 24px;
@@ -185,15 +187,15 @@
   --fill-agent: #36365c;
   --fill-skill: #314944;
   --fill-hook: #ab871a; /* gold (was #4b462b); bright, so its ink is --bg */
-  --fill-stock: #5e1417; /* red (was #71181b, #493039) */
+  --fill-vidar: #5e1417; /* red (was #71181b, #493039) */
   --fill-rule: #233459; /* blue (was #2e3e58) */
   --fill-plugin: #51302e; /* #b00500's hue at the other fills' depth and saturation */
   /* Generated rune libraries' set-head hue (2026-10-20) */
   --hue-generated: #3fbfb0;
-  /* Set-only libraries (Kit) and the Inherited Runes card */
-  --hue-set: #e07a7a;
+  /* Set-only libraries (Add Runeset) and the Inherited Runes card */
+  --hue-set: #906621; /* brown (was the salmon #e07a7a) */
   --hue-inherited: #4f7df0;
-  /* Claude's own sets (Kit Claude): the Flow Output orange, so they part from Kit and stock */
+  /* Claude's own sets (the Claude runeset): the Flow Output orange, so they part from the base runeset and the Vidar Runeset */
   --hue-agent-claude-set: #c97a4a;
   /* Module kind and place colours (Jira, Notion, Slack card edges, 2026-10-18); story and task are
      retuned away from --status-done and --status-todo */

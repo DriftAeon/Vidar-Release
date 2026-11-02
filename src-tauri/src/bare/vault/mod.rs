@@ -4,20 +4,21 @@
 //! records which vault (and hash) each session loaded. Nothing here reads a launcher row.
 //! Wire format: `tests/fixtures/rune-vault/vaults/**` (field order, nulls and empty `pins` always emitted).
 
-pub mod migrate;
-pub mod migrate_recall;
+pub mod library_sets;
+pub mod migrate_lib_rename;
 pub mod session;
 pub mod store;
 mod store_header;
+pub(crate) mod vidar;
 
 #[cfg(test)]
 mod member_tests;
 #[cfg(test)]
-mod migrate_recall_tests;
-#[cfg(test)]
 mod off_tests;
 #[cfg(test)]
 mod session_tests;
+#[cfg(test)]
+mod vidar_tests;
 #[cfg(test)]
 mod tests;
 
@@ -55,12 +56,11 @@ pub struct Vault {
     pub off_sets: Vec<SetSource>,
 }
 
-/// Lineage: a variant of a vault at a hash, or a copy of a template.
+/// Lineage: a variant of a vault at a hash.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
 pub enum VaultFrom {
     Vault { vault: String, hash: String },
-    Template { template: String },
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,19 +114,6 @@ pub struct RunesetCopy {
     pub source_hash: String,
 }
 
-/// A stock template (`profiles\bare\templates\<id>.json`): runesets named by source, copied at create.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Template {
-    pub version: u32,
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub runesets: Vec<SetSource>,
-    #[serde(default)]
-    pub runes: Vec<RuneRef>,
-}
-
 /// sha256 hex of `bytes` with CR removed, so a CRLF checkout hashes like LF.
 pub(crate) fn content_sha(bytes: &[u8]) -> String {
     let lf: Vec<u8> = bytes.iter().copied().filter(|b| *b != b'\r').collect();
@@ -152,7 +139,7 @@ pub(crate) fn vault_hash(sets: &[(SetSource, String)], runes: &[RuneRef]) -> Str
 
 // ---- IPC (registered in main.rs for the whole run; `src/ipc.ts` mirrors these shapes) ----
 
-/// `rune_vault_list` row: a vault in the vaults folder (`paths::rune_vaults_dir_in`) or a stock template.
+/// `rune_vault_list` row: a vault in the vaults folder (`paths::rune_vaults_dir_in`).
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Listed {
@@ -190,6 +177,10 @@ pub struct VaultView {
 pub struct ViewRune {
     /// The runeset it is slotted or recalled in; `None` for a one-off rune.
     pub set: Option<SetSource>,
+    /// The other placed runesets that also slot or recall it: it loads once, under `set`, and each of
+    /// these lists and counts it too. Omitted when empty.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<SetSource>,
     pub library: String,
     pub id: String,
     pub kind: String,
@@ -200,6 +191,9 @@ pub struct ViewRune {
     /// Joined through the runeset's `<?recall?>` line rather than a slot.
     pub recall: bool,
     pub body: String,
+    /// The library file the rune lives in as a plain drive-rooted path (`store::source_path`); empty when
+    /// the library no longer holds it, so the View offers no Edit or Open Folder.
+    pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -214,6 +208,27 @@ pub struct ViewRune {
     pub item: Option<crate::bare::rune_items::RedactedItem>,
     /// The library body changed or vanished since lock (D-e, a hash compare against `pins`).
     pub drift: bool,
+    /// A Vidar Runeset slot only: the name of the on slot that needs it (`vidar::Slot::needed_by`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub needed_by: Option<String>,
+    /// A Vidar Runeset slot only: the shipped set marks it required (`vidar::Slot::required`), text runes included.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub required: bool,
+}
+
+/// `Store::view_runes`' one-listing check for `lib/id` met in placed runeset `set`: true the first time
+/// (list it). Met again, the row stays one (it loads once) and names `set` in `also`, so that runeset's
+/// card lists and counts it too; a one-off row is left alone.
+pub(crate) fn listed_once(seen: &mut std::collections::HashSet<String>, out: &mut [ViewRune], lib: &str, id: &str, set: &SetSource) -> bool {
+    if seen.insert(format!("{lib}/{id}")) {
+        return true;
+    }
+    if let Some(r) = out.iter_mut().find(|r| r.set.is_some() && r.library == lib && r.id == id) {
+        if r.set.as_ref() != Some(set) && !r.also.contains(set) {
+            r.also.push(set.clone());
+        }
+    }
+    false
 }
 
 fn store() -> store::Store {
@@ -225,17 +240,24 @@ pub fn rune_vault_list() -> Result<Vec<Listed>, String> {
     store().list()
 }
 
-/// `hash` reads a revision (a session's loaded state, `revs/<hash>/`); absent reads the vault now.
+/// `hash` reads a revision (a session's loaded state, `revs/<hash>/`); absent reads the vault now. A null
+/// `id` reads no vault: the blank view of a new one for `agent` (`Store::blank_view`).
 #[tauri::command]
-pub fn rune_vault_read(id: String, hash: Option<String>) -> Result<VaultView, String> {
-    read_view(&store(), &id, hash.as_deref())
+pub fn rune_vault_read(id: Option<String>, hash: Option<String>, agent: Option<String>) -> Result<VaultView, String> {
+    read_view_for(&store(), id.as_deref(), hash.as_deref(), agent.as_deref().and_then(crate::agent_spec::parse))
 }
 
-/// `rune_vault_read` against any store (tests use a temp root). A `stock-*` id is written from its
-/// template when absent (`Store::ensure_stock`), so Custom finds the floor before any stock launch.
-pub(crate) fn read_view(s: &store::Store, id: &str, hash: Option<&str>) -> Result<VaultView, String> {
+/// `rune_vault_read` against any store (tests use a temp root), with no agent filter.
+pub(crate) fn read_view(s: &store::Store, id: Option<&str>, hash: Option<&str>) -> Result<VaultView, String> {
+    read_view_for(s, id, hash, None)
+}
+
+/// `read_view` for a tab's `agent`: the Vidar Runeset lists only the members that fit it (`Rune::fits`), so
+/// a tab's pane never draws the other agent's members. No id is the blank view.
+pub(crate) fn read_view_for(s: &store::Store, id: Option<&str>, hash: Option<&str>, agent: Option<crate::agent_spec::Agent>) -> Result<VaultView, String> {
+    let Some(id) = id else { return s.blank_view(agent) };
     let id = id.to_string();
-    let current = if id.starts_with("stock-") { s.ensure_stock(&id)? } else { s.get(&id)? };
+    let current = s.get(&id)?;
     let (vault, earlier) = match hash {
         Some(h) if h != current.hash => (s.load_at(&id, h)?, true),
         _ => (current, false),
@@ -243,52 +265,36 @@ pub(crate) fn read_view(s: &store::Store, id: &str, hash: Option<&str>) -> Resul
     // drift against the read revision's own pins; a locked vault, or a session's earlier revision,
     // shows the copy that session loaded
     let drift = if earlier { s.view_drift(&vault)? } else { s.drift(&id)? };
-    let (runes, warnings, off) = s.view_runes(&vault, earlier || vault.locked_utc.is_some(), &drift)?;
+    let (runes, warnings, off) = s.view_runes(&vault, earlier || vault.locked_utc.is_some(), &drift, agent)?;
     Ok(VaultView { vault, drift, runes, warnings, off })
 }
 
-/// A Custom vault on `agent`'s floor (model R2): the stock template's runesets and runes, then the picks
-/// not already in it, as `src/launcher/set-pick.ts` `createCustom` does. A missing or unreadable template
-/// refuses: a vault without the floor would load without the identity and guard runes.
-pub(crate) fn floored_custom(root: &std::path::Path, agent: &str, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Vault, String> {
-    let Some(parsed) = crate::agent_spec::parse(agent) else {
-        return Err(format!("Agent {agent:?} is not claude or codex; vault refused"));
-    };
-    let s = store::Store::open(root);
-    let id = format!("stock-{}", parsed.as_str());
-    let file = crate::paths::rune_templates_dir_in(root).join(format!("{id}.json"));
-    if !file.is_file() {
-        return Err(format!("Stock Template Missing: {id}"));
-    }
-    let t = s.template(&id).map_err(|e| format!("Stock template {id}: {e}; vault refused"))?;
-    let (mut sets, mut refs) = (t.runesets, t.runes);
-    for p in runesets {
-        if !sets.contains(p) {
-            sets.push(p.clone());
-        }
-    }
-    for r in runes {
-        if !refs.contains(r) {
-            refs.push(r.clone());
-        }
-    }
-    s.create_custom(&sets, &refs)
-}
-
-/// `name: null` makes a Custom vault (`custom-<hash6>`, an identical pick reuses it; `from` ignored)
-/// on `agent`'s stock floor (`floored_custom`), so no caller can make a Custom vault without it.
+/// `name: null` starts a copy (`copy-<utc>-<hex>`): of `from` (a vault at a hash) when it names one, else a
+/// blank vault (the Vidar Runeset alone) plus the picks. Every call makes a new vault.
 #[tauri::command]
 pub fn rune_vault_create(name: Option<String>, from: Option<VaultFrom>, runesets: Vec<SetSource>, runes: Vec<RuneRef>, agent: Option<String>) -> Result<Vault, String> {
-    create_at(&crate::paths::root(), name, from, &runesets, &runes, agent.as_deref())
+    let _ = agent; // the wire still sends it; a blank vault has no per-agent floor
+    create_typed_at(&crate::paths::root(), name, from, &runesets, &runes)
 }
 
-/// `rune_vault_create` against any root (tests use a temp one).
-pub(crate) fn create_at(root: &std::path::Path, name: Option<String>, from: Option<VaultFrom>, runesets: &[SetSource], runes: &[RuneRef], agent: Option<&str>) -> Result<Vault, String> {
+/// The command's body against any root: a user-typed `name` must not repeat a named vault or template.
+/// `create_at` itself keeps the id-suffix behaviour internal callers rely on.
+pub(crate) fn create_typed_at(root: &std::path::Path, name: Option<String>, from: Option<VaultFrom>, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Vault, String> {
+    if let Some(n) = name.as_deref().filter(|n| !n.trim().is_empty()) {
+        store::Store::open(root).refuse_taken_name(n)?;
+    }
+    create_at(root, name, from, runesets, runes)
+}
+
+/// `rune_vault_create` against any root (tests use a temp one). Every vault it makes carries the Vidar
+/// Runeset at index 0: with `from: None` an empty copy of it (no optional slot on), with `from` a vault the
+/// copy that vault holds, as is.
+pub(crate) fn create_at(root: &std::path::Path, name: Option<String>, from: Option<VaultFrom>, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Vault, String> {
     match name.filter(|n| !n.trim().is_empty()) {
-        Some(n) => store::Store::open(root).create(&n, from, runesets, runes),
-        None => match agent.and_then(crate::agent_spec::parse) {
-            Some(a) => floored_custom(root, a.as_str(), runesets, runes),
-            None => Err("A Custom vault needs its agent (claude or codex) for the stock floor; vault refused".into()),
+        Some(n) => store::Store::open(root).create_in(&n, from, runesets, runes, true),
+        None => match from {
+            Some(VaultFrom::Vault { vault, hash }) => store::Store::open(root).start_copy_in(&vault, Some(&hash), runesets, runes, true),
+            None => store::Store::open(root).start_blank(runesets, runes),
         },
     }
 }
@@ -309,6 +315,8 @@ pub fn rune_vault_lock(id: String, by: LockedBy, expect_hash: String) -> Result<
 pub struct LibraryRunes {
     /// `set` is always `None`; item kinds are redacted, so no hook command, MCP field or env value is sent.
     pub runes: Vec<ViewRune>,
+    /// The runesets the Rune Library groups by, each with its member refs (`library_sets.rs`).
+    pub runesets: Vec<library_sets::LibraryRuneset>,
     pub warnings: Vec<String>,
 }
 
@@ -321,7 +329,7 @@ pub fn rune_vault_library_runes(agent: String) -> Result<LibraryRunes, String> {
 pub(crate) fn library_runes_in(s: &store::Store, agent: &str) -> Result<LibraryRunes, String> {
     crate::rules::rune::check_id(agent).map_err(|e| format!("agent {agent:?}: {e}"))?;
     let (runes, warnings) = s.library_runes(agent);
-    Ok(LibraryRunes { runes, warnings })
+    Ok(LibraryRunes { runes, runesets: s.library_runesets(agent), warnings })
 }
 
 /// The newest record by `falconSession`, then `threadId`, then `tab`; `null` when none.
@@ -345,7 +353,7 @@ fn defaults_file(root: &std::path::Path) -> std::path::PathBuf {
     crate::paths::rune_vaults_dir_in(root).join("defaults.json")
 }
 
-/// The pre-pick per agent; empty when the file is absent or does not parse (the launcher falls back to stock).
+/// The pre-pick per agent; empty when the file is absent or does not parse.
 pub(crate) fn read_defaults(root: &std::path::Path) -> BTreeMap<String, String> {
     crate::fsx::read_json::<Defaults>(&defaults_file(root)).map(|d| d.last_vault).unwrap_or_default()
 }
@@ -366,8 +374,7 @@ pub(crate) fn write_default(root: &std::path::Path, agent: &str, vault: &str) ->
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    let json = serde_json::to_string_pretty(&Defaults { version: 1, last_vault }).map_err(|e| e.to_string())? + "\n";
-    crate::fsx::atomic_write(&file, json.as_bytes())
+    crate::fsx::write_json_pretty(&file, &Defaults { version: 1, last_vault }, true)
 }
 
 /// The launcher pre-pick per agent (`agent` -> vault id).

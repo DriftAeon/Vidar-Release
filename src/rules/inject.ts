@@ -1,7 +1,9 @@
 // Rule injection, the pure half: what a launch carries (`RulesLaunch`), which agent rows may take
 // rules (`rulesPlan`), and the rewrite of a Raw tab's `-Command` string (`injectRules`). No IPC:
 // src/rules/prepare.ts calls `rules_prepare`, terminal-body.ts applies the rewrite once at spawn.
-import type { AgentId } from "../agents/id";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENT_IDS, isAgentId } from "../agents/id.ts";
+import type { AgentId } from "../agents/id.ts";
 
 /** `rules_prepare`'s `codex` field (src-tauri/src/rules/mod.rs `CodexRules`): `value` is a TOML basic string, quotes included. */
 type CodexRules = { mode: "c"; value: string } | { mode: "profile"; name: string } | null;
@@ -32,7 +34,7 @@ export function rulesPlan(row: RulesRow): { key: string; ids: string[]; client: 
   if (typeof row.key !== "string" || !row.key.trim()) {
     return { warning: `Rules not applied: the "${who}" entry in vidar.json has no key, so its last-good rules cannot be tracked. Add a "key" to that entry and open a new tab.` };
   }
-  if (row.id !== "claude" && row.id !== "codex") {
+  if (!isAgentId(row.id)) {
     return { warning: `Rules not applied: "${who}" is not a Claude or Codex row. Remove "rules" from its entry in vidar.json.` };
   }
   return { key: row.key, ids, client: row.id };
@@ -42,6 +44,16 @@ export function rulesPlan(row: RulesRow): { key: string; ids: string[]; client: 
 const psq = (s: string) => `'${s.replace(/['‘-‛]/g, (c) => c + c)}'`;
 
 const UNKNOWN_SHAPE = 'Rules not applied to this terminal launch: the command is not a plain claude or codex command. Remove "args" from its entry in vidar.json, or remove "rules".';
+const COMMAND_AGENT = new RegExp(`^(${AGENT_IDS.join("|")})(?=\\s|$)`);
+const ruleFlag: Record<AgentId, (rules: RulesLaunch) => string | null> = {
+  claude: (rules) => rules.file === null ? null : `--append-system-prompt-file ${psq(rules.file)}`,
+  codex: (rules) => inlineFlag(rules),
+};
+function inlineFlag(rules: RulesLaunch): string | null {
+  const layer = rules.codex;
+  if (!layer) return null;
+  return layer.mode === "c" ? `-c ${psq(`developer_instructions=${layer.value}`)}` : `--profile ${psq(layer.name)}`;
+}
 
 /** Rewrite a Raw tab's args (`["-NoExit", "-Command", "<cmd>"]`) so `<cmd>` carries the rules:
  *  Claude gets `--append-system-prompt-file '<file>'`, Codex `-c 'developer_instructions=<toml>'`
@@ -49,19 +61,12 @@ const UNKNOWN_SHAPE = 'Rules not applied to this terminal launch: the command is
  *  `claude --resume <id>` and `codex resume <id>` keep their subcommand. Any other shape comes
  *  back unchanged with a warning. No rules, or nothing to inject for that agent: unchanged, silent. */
 export function injectRules(args: string[] | undefined, rules: RulesLaunch | null | undefined): { args: string[] | undefined; warning?: string } {
-  if (!rules || (rules.file === null && rules.codex === null)) return { args };
+  if (!rules || AGENT_IDS.every((id) => ruleFlag[id](rules) === null)) return { args };
   const at = args?.findIndex((a) => a.toLowerCase() === "-command") ?? -1;
   const cmd = args && at >= 0 && at === args.length - 2 ? args[at + 1] : null;
-  const m = cmd === null ? null : /^(claude|codex)(?=\s|$)/.exec(cmd);
-  if (!args || cmd === null || !m) return { args, warning: UNKNOWN_SHAPE };
-  let flag: string | null = null;
-  if (m[1] === "claude" && rules.file !== null) {
-    flag = `--append-system-prompt-file ${psq(rules.file)}`;
-  } else if (m[1] === "codex" && rules.codex) {
-    flag = rules.codex.mode === "c"
-      ? `-c ${psq(`developer_instructions=${rules.codex.value}`)}`
-      : `--profile ${psq(rules.codex.name)}`;
-  }
+  const m = cmd === null ? null : COMMAND_AGENT.exec(cmd);
+  if (!args || cmd === null || !m || !isAgentId(m[1])) return { args, warning: UNKNOWN_SHAPE };
+  const flag = ruleFlag[m[1]](rules);
   if (flag === null) return { args };
   const out = [...args];
   out[at + 1] = `${m[1]} ${flag}${cmd.slice(m[1].length)}`;

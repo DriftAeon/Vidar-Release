@@ -48,10 +48,6 @@ Optional: Git.
   `notify` hook in `~\.codex\config.toml` at this folder. You make that edit by hand, and undo
   it the same way.
 
-### Gemini
-
-Signs in through its own CLI, outside Vidar; its tabs use that sign-in.
-
 ### Local
 
 Signs in through its own CLI, outside Vidar; its tabs use that sign-in.

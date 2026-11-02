@@ -3,15 +3,16 @@
 import { createFalconAdoptTransport, createRenderedBody, falconAgentTransport } from "../rendered";
 import { createFalconProfileTransport, createGatewayTransport, createProfileTransport, createRefusedTransport } from "../rendered/transport";
 import { claudeArt } from "./gateway-art";
-import { AGENT_PROFILE, codexHostShape } from "../../agents/agent-profile";
+import { AGENT_PROFILE, gatedHostShape } from "../../agents/agent-profile";
 import { hostedCodexOn } from "../../launcher/readopt";
 import { isAgentId } from "../../agents/id";
+import { agentOrder } from "../../agents/descriptor";
 import { invoke } from "../../ipc";
 import { dispatchCharacterActivity, dispatchCharacterCompletion, dispatchCharacterStatus } from "../../character/events";
 import { dispatchReplyDone } from "../reply-events";
 import { noteCodexSession, noteCodexTurn, saveCodexTabs } from "./codex-save";
 import { feedDetached, feedRendered } from "./tab-state-feeds";
-import type { TerminalSession } from "./types";
+import { sessionSupports, type TerminalSession } from "./types";
 import { rescueBottombar } from "./bottombar-dock";
 import { hostedFalconSession } from "./lookup";
 import { saveTabOrder } from "./tab-order";
@@ -46,12 +47,12 @@ export function retireRenderedBody(body: object) {
 /** A Codex tab that may run in Falcon (gate on, no rules file, no profile, not an adopt): only
  *  then is the host asked, since `falcon_list` launches one. Sync, so with the gate off
  *  createSession attaches without an await, as before. */
-export function codexMayHost(s: TerminalSession): boolean {
-  return s.agent === "codex" && !s.falconSession
-    && codexHostShape({ hostedCodex: hostedCodexOn(), rulesFile: s.rules?.file ?? null, profile: s.profile ?? null });
+export function mayHostInFalcon(s: TerminalSession): boolean {
+  return sessionSupports(s.agent, "thread") && !s.falconSession
+    && gatedHostShape({ hostedCodex: hostedCodexOn(), rulesFile: s.rules?.file ?? null, profile: s.profile ?? null });
 }
 
-/** The host's capabilities for `codexMayHost` tabs, asked before the body exists (a body never
+/** The host's capabilities for `mayHostInFalcon` tabs, asked before the body exists (a body never
  *  changes backend). A failed `falcon_list` means Falcon is unavailable: null, so in-process. */
 export async function codexHostCapabilities(): Promise<readonly string[] | null> {
   try {
@@ -81,23 +82,23 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
   // Claude is always hosted by Falcon; a Codex tab is hosted when its profile's check admits it
   // (gate on, host capability, no rules file or profile), else it keeps the in-process path.
   // `undefined` means "the default", which is Vidar's own backend.
-  const agentKind = isAgentId(s.agent) ? s.agent : "claude";
+  const agentKind = isAgentId(s.agent) ? s.agent : agentOrder(null)[0];
   const hosted = AGENT_PROFILE[agentKind].falconHosted({
     hostedCodex: hostedCodexOn(), capabilities, rulesFile: s.rules?.file ?? null, profile: s.profile ?? null,
   });
   // A gateway tab carries its identity in the tab art (adoptHosted sets it from the host's summary).
   // An art the module registry does not know fails closed: it adopts, but never respawns as plain Claude.
-  const art = agentKind === "claude" ? claudeArt(button.dataset.art) : { kind: "plain" } as const;
+  const art = sessionSupports(agentKind, "gateway") ? claudeArt(button.dataset.art) : { kind: "plain" } as const;
   const gateway = art.kind === "gateway" ? art.id : undefined;
   const refused = art.kind === "unknown";
   // A profiled (bare) tab keeps its profile on every spawn: Falcon's for Claude
   // (createFalconProfileTransport, and through a re-adopt), in-process for Codex (createProfileTransport).
   const transport = s.falconSession
-    ? createFalconAdoptTransport(s.falconSession, gateway, s.profile, refused, s.rowKey, s.sets, s.vault)
+    ? createFalconAdoptTransport(s.falconSession, gateway, s.profile, refused, s.rowKey, s.sets, () => s.vault)
     : refused ? createRefusedTransport()
     : gateway ? createGatewayTransport(gateway)
-    : hosted ? (s.profile ? createFalconProfileTransport(s.profile, s.rowKey, s.sets, s.vault) : falconAgentTransport)
-    : s.profile ? createProfileTransport(s.profile, s.rowKey, s.sets, s.vault) : undefined;
+    : hosted ? (s.profile ? createFalconProfileTransport(s.profile, s.rowKey, s.sets, () => s.vault) : falconAgentTransport)
+    : s.profile ? createProfileTransport(s.profile, s.rowKey, s.sets, () => s.vault) : undefined;
   // the body shows prepare-time warnings once; the tab keeps the file for Resume and a switch back
   const rules = s.rules ?? null;
   if (s.rules) s.rules = { ...s.rules, warnings: [] };
@@ -130,11 +131,11 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
       if (!cur || cur.rendered !== body) return;
       cur.model = info.model || cur.model;
       if (id === getActiveId()) dispatchFocus();
-      if (agentKind === "codex") { noteCodexSession(id, info.sessionId); saveCodexTabs(); }
+      if (sessionSupports(agentKind, "thread")) { noteCodexSession(id, info.sessionId); saveCodexTabs(); }
     },
     onModeChange: () => {
       const cur = sessions.get(id);
-      if (cur && cur.rendered === body && agentKind === "codex") saveCodexTabs();
+      if (cur && cur.rendered === body && sessionSupports(agentKind, "thread")) saveCodexTabs();
     },
     onAlive: () => {
       const cur = sessions.get(id);
@@ -164,7 +165,7 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
     onCharacterStatus: (status) => { if (!retired.has(body)) dispatchCharacterStatus({ id, ...status }); },
     onCharacterActivity: (active) => {
       if (retired.has(body)) return;
-      if (active && agentKind === "codex") noteCodexTurn(id); // the thread now has a turn: resumable
+      if (active && sessionSupports(agentKind, "thread")) noteCodexTurn(id); // the thread now has a turn: resumable
       dispatchCharacterActivity({ id, active });
     },
     onCharacterCompletion: () => { if (!retired.has(body)) dispatchCharacterCompletion({ id }); },
@@ -173,6 +174,7 @@ export function attachRenderedBody(s: TerminalSession, resume?: string, draft?: 
     onToolDone: null,
     // may fire while the body is still being built (`body` is not bound yet): the tab map guards a closed tab
     onTabState: (chip, pendingTool, hydrating) => { if (sessions.has(id)) feedRendered(id, chip, pendingTool, hydrating); },
+    vaultGate: s.pendingVault ?? null,
   });
   s.rendered = body;
   s.alive = true;

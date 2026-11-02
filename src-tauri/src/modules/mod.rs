@@ -15,6 +15,7 @@
 //! A release set beside the exe (`set`) leaves its excluded non-core modules out of every listing.
 
 pub(crate) mod compat;
+pub(crate) mod ledger;
 mod manifest;
 mod scan;
 mod set;
@@ -57,15 +58,30 @@ fn pins_path() -> PathBuf {
 /// snapshot (only `modules_list` does). Read-only, a first-sight gateway is left out of
 /// `modules` (`Scan::pending`), so it reaches no execution consumer.
 fn list(record: bool) -> Scan {
-    list_in(&crate::paths::packs_dir(), &pins_path(), &crate::paths::gateway_snapshot_path(), record)
+    list_in(&crate::paths::packs_dir(), &pins_path(), &crate::paths::gateway_snapshot_path(), ledger::LedgerPaths::live().as_ref(), record)
 }
 
-fn list_in(packs: &Path, pins: &Path, snap: &Path, record: bool) -> Scan {
+/// `ledger` is None in a dev checkout and in tests: no floor, no recording, no Restore.
+fn list_in(packs: &Path, pins: &Path, snap: &Path, lp: Option<&ledger::LedgerPaths>, record: bool) -> Scan {
+    // A Restore that died between its renames is undone before the scan sees a missing folder.
+    let interrupted = lp.map(|lp| ledger::repair(packs, &lp.file)).unwrap_or_default();
     let store = crate::voice_slots::pins::load(pins);
     let mut out = scan::scan(packs, contract(), &crate::deps::catalog_claims(), &store);
     // Before settle: a set-excluded gateway records no pin and joins no snapshot.
     if let Some(s) = set::current() {
         s.apply(&mut out);
+    }
+    // The load floor, also before settle: a pack below it records no pin and joins no snapshot.
+    // An unreadable ledger fails open (no floor, no recording) and is never overwritten.
+    let ledger_ok = lp.and_then(|lp| match ledger::load(&lp.file) {
+        Ok(l) => Some((lp, l)),
+        Err(e) => {
+            eprintln!("modules: pack ledger not used: {e}");
+            None
+        }
+    });
+    if let Some((_, l)) = &ledger_ok {
+        ledger::apply(&mut out, l, &interrupted);
     }
     if record {
         out.settle(|p| crate::voice_slots::pins::record(pins, p, false));
@@ -73,31 +89,56 @@ fn list_in(packs: &Path, pins: &Path, snap: &Path, record: bool) -> Scan {
             // Fails closed: the old file is removed, so no launch runs on trust withdrawn since.
             eprintln!("modules: gateway snapshot not written: {reason}");
         }
+        if let Some((lp, _)) = &ledger_ok {
+            record_loaded(lp, packs, &out);
+        }
+    }
+    // Reload: a record above may have rotated previous.
+    if let Some((lp, _)) = &ledger_ok {
+        if let Ok(l) = ledger::load(&lp.file) {
+            ledger::mark_restorable(&mut out, &l, &lp.kept);
+        }
     }
     out
+}
+
+/// Records the packs that loaded (in `modules`, with a folder and a release): not broken,
+/// set-excluded, below the floor or pin-failed ones.
+fn record_loaded(lp: &ledger::LedgerPaths, packs: &Path, out: &Scan) {
+    for m in &out.modules {
+        let (Some(folder), Some(release)) = (m.folder.as_ref(), m.release.as_ref()) else { continue };
+        if let Err(e) = ledger::record(lp, folder, &packs.join(folder), release, ledger::keeps_copies(folder)) {
+            eprintln!("modules: pack ledger not updated for {folder}: {e}");
+        }
+    }
 }
 
 /// Trust Current for the gateway pack in `folder`: only a pack broken by `Changed Since
 /// Pinned` alone (`Scan::changed`) is re-pinned, from its declaration as scanned now. Any
 /// other state is refused; those packs have to be fixed in the pack. The registry is then
 /// listed with recording, so the gateway snapshot is rewritten.
-fn trust_current_in(packs: &Path, pins: &Path, snap: &Path, folder: &str) -> Result<Scan, String> {
+fn trust_current_in(packs: &Path, pins: &Path, snap: &Path, lp: Option<&ledger::LedgerPaths>, folder: &str) -> Result<Scan, String> {
     let mut now = scan::scan(packs, contract(), &crate::deps::catalog_claims(), &crate::voice_slots::pins::load(pins));
     if let Some(s) = set::current() {
         s.apply(&mut now);
     }
-    let Some((id, pin)) = now.changed.get(folder) else {
+    // A changed pack below its floor leaves `changed` for `broken` (`Release {r} Is Older Than
+    // {floor}`), so Trust Current finds nothing to pin.
+    if let Some(l) = lp.and_then(|lp| ledger::load(&lp.file).ok()) {
+        ledger::apply(&mut now, &l, &[]);
+    }
+    let Some((id, pin, _)) = now.changed.get(folder) else {
         return Err(format!("Pack {folder} Is Not Changed Since Pinned"));
     };
     crate::voice_slots::pins::record(pins, vec![(scan::pin_key(id), pin.clone())], true)?;
-    Ok(list_in(packs, pins, snap, true))
+    Ok(list_in(packs, pins, snap, lp, true))
 }
 
 /// Settings › Dependencies: Trust Current on a gateway pack row. Returns the new registry.
 #[tauri::command]
 pub async fn module_trust_current(folder: String) -> Result<Scan, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        trust_current_in(&crate::paths::packs_dir(), &pins_path(), &crate::paths::gateway_snapshot_path(), &folder)
+        trust_current_in(&crate::paths::packs_dir(), &pins_path(), &crate::paths::gateway_snapshot_path(), ledger::LedgerPaths::live().as_ref(), &folder)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -443,10 +484,10 @@ mod tests {
         let root = temp("trust");
         let (packs, pins, snap) = (root.join("mod-packs"), root.join("pins.json"), root.join("gateways.json"));
         write_pack(&packs, "acme", &gateway_pack("https://api.acme.example/anthropic"));
-        list_in(&packs, &pins, &snap, true);
+        list_in(&packs, &pins, &snap, None, true);
         write_pack(&packs, "acme", &gateway_pack("https://elsewhere.example/anthropic"));
-        let edited = list_in(&packs, &pins, &snap, true);
-        let trusted = trust_current_in(&packs, &pins, &snap, "acme");
+        let edited = list_in(&packs, &pins, &snap, None, true);
+        let trusted = trust_current_in(&packs, &pins, &snap, None, "acme");
         let written: Value = serde_json::from_slice(&std::fs::read(&snap).unwrap()).unwrap();
         let _ = std::fs::remove_dir_all(&root);
         assert_eq!(edited.broken, vec![Broken { folder: "acme".into(), reason: "Changed Since Pinned".into() }]);
@@ -461,7 +502,7 @@ mod tests {
         let root = temp("trustbad");
         let (packs, pins, snap) = (root.join("mod-packs"), root.join("pins.json"), root.join("gateways.json"));
         write_pack(&packs, "acme", &gateway_pack("https://api.acme.example/anthropic").replace(r#""model": "acme-large""#, r#""model": "-acme""#));
-        let got = trust_current_in(&packs, &pins, &snap, "acme");
+        let got = trust_current_in(&packs, &pins, &snap, None, "acme");
         let pinned = pins.exists();
         let _ = std::fs::remove_dir_all(&root);
         assert_eq!(got.err().as_deref(), Some("Pack acme Is Not Changed Since Pinned"));
@@ -541,7 +582,7 @@ mod tests {
         write_pack(
             &root,
             "acme",
-            r#"{ "id": "acme", "module": { "id": "acme", "label": "Acme", "level": "optional", "kind": "agent",
+            r#"{ "id": "acme", "version": 1, "module": { "id": "acme", "label": "Acme", "level": "optional", "kind": "agent",
                 "flowModels": [{ "id": "acme-large", "label": "Acme Large", "haiku": "acme-small", "maxContext": 200000 }] } }"#,
         );
         let s = scan(&root, contract(), &Default::default(), &Ok(Store::default()));
@@ -624,7 +665,7 @@ mod tests {
         write_pack(
             &root,
             "other",
-            r#"{ "id": "other", "module": { "id": "other", "label": "Other", "level": "optional", "kind": "content",
+            r#"{ "id": "other", "version": 1, "module": { "id": "other", "label": "Other", "level": "optional", "kind": "content",
                 "deps": [{ "id": "other-key", "label": "Other Key", "probe": { "kind": "env", "name": "ACME_API_KEY" } }] } }"#,
         );
         let by_module = scan(&root, contract(), &Default::default(), &Ok(Store::default()));
@@ -642,6 +683,7 @@ mod tests {
         let pack = |folder: &str, dep_id: &str| {
             serde_json::json!({
                 "id": folder,
+                "version": 1,
                 "module": {
                     "id": folder,
                     "label": folder,
@@ -676,7 +718,7 @@ mod tests {
         let root = temp("icon");
         let pack = |icon: &str| {
             format!(
-                r#"{{ "id": "art", "module": {{ "id": "art", "label": "Art", "level": "optional", "kind": "agent",
+                r#"{{ "id": "art", "version": 1, "module": {{ "id": "art", "label": "Art", "level": "optional", "kind": "agent",
                     "agent": {{ "art": {{ "icon": "{icon}" }} }} }} }}"#
             )
         };
@@ -695,5 +737,76 @@ mod tests {
         assert!(got[1].as_deref().is_some_and(|r| r.contains("Not A Path Inside")), "{:?}", got[1]);
         assert!(got[2].as_deref().is_some_and(|r| r.contains("Is Not A PNG")), "{:?}", got[2]);
         assert!(got[3].as_deref().is_some_and(|r| r.contains("Not A Path Inside")), "{:?}", got[3]);
+    }
+
+    fn release_pack(packs: &Path, folder: &str, release: &str, depends_on: Option<&str>) {
+        let module = depends_on.map_or(String::new(), |d| {
+            format!(r#", "module": {{ "id": "{folder}", "label": "L", "level": "optional", "kind": "agent", "dependsOn": ["{d}"] }}"#)
+        });
+        write_pack(packs, folder, &format!(r#"{{ "id": "{folder}", "version": 1, "release": "{release}"{module} }}"#));
+        std::fs::write(packs.join(folder).join("payload.txt"), release).unwrap();
+    }
+
+    /// Floor over temp paths: a pack below its floor reads broken (its dependant `Needs` it).
+    #[test]
+    fn modules_floor_marks_a_downgraded_pack_broken() {
+        let root = temp("ledger");
+        let (packs, pins, snap) = (root.join("mod-packs"), root.join("pins.json"), root.join("gateways.json"));
+        let lp = ledger::LedgerPaths { file: root.join("pack-ledger.json"), kept: root.join("kept") };
+        for r in ["1.0.0", "1.1.0"] {
+            release_pack(&packs, "pi", r, None);
+            list_in(&packs, &pins, &snap, Some(&lp), true);
+        }
+        release_pack(&packs, "dep", "1.0.0", Some("pi"));
+        let ok = list_in(&packs, &pins, &snap, Some(&lp), true);
+        assert!(ok.broken.is_empty(), "{:?}", ok.broken);
+        assert_eq!(ok.restorable.get("pi").map(String::as_str), Some("1.0.0"));
+        // A downgrade by hand: below the floor.
+        release_pack(&packs, "pi", "1.0.5", None);
+        let low = list_in(&packs, &pins, &snap, Some(&lp), false);
+        let reasons: Vec<(&str, &str)> = low.broken.iter().map(|b| (b.folder.as_str(), b.reason.as_str())).collect();
+        assert_eq!(reasons, [("dep", "Needs pi"), ("pi", "Release 1.0.5 Is Older Than 1.1.0")]);
+        assert_eq!(low.older.get("pi").map(String::as_str), Some("1.0.5"));
+        // No ledger paths: no floor.
+        assert!(list_in(&packs, &pins, &snap, None, false).broken.is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A gateway pack Changed Since Pinned and below its floor reads the floor reason, and Trust
+    /// Current cannot pin it.
+    #[test]
+    fn modules_floor_covers_a_changed_gateway_pack() {
+        let root = temp("ledger-changed");
+        let (packs, pins, snap) = (root.join("mod-packs"), root.join("pins.json"), root.join("gateways.json"));
+        let lp = ledger::LedgerPaths { file: root.join("pack-ledger.json"), kept: root.join("kept") };
+        let with_release = |url: &str, release: &str| {
+            let mut v: Value = serde_json::from_str(&gateway_pack(url)).unwrap();
+            v["release"] = Value::String(release.into());
+            v.to_string()
+        };
+        write_pack(&packs, "acme", &with_release("https://api.acme.example/anthropic", "1.1.0"));
+        list_in(&packs, &pins, &snap, Some(&lp), true);
+        write_pack(&packs, "acme", &with_release("https://elsewhere.example/anthropic", "1.0.0"));
+        let low = list_in(&packs, &pins, &snap, Some(&lp), false);
+        let trust = trust_current_in(&packs, &pins, &snap, Some(&lp), "acme");
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(low.broken, vec![Broken { folder: "acme".into(), reason: "Release 1.0.0 Is Older Than 1.1.0".into() }]);
+        assert_eq!(low.older.get("acme").map(String::as_str), Some("1.0.0"));
+        assert!(trust.is_err());
+    }
+
+    /// An unreadable ledger fails open and is never overwritten.
+    #[test]
+    fn modules_unreadable_ledger_fails_open() {
+        let root = temp("ledger-bad");
+        let (packs, pins, snap) = (root.join("mod-packs"), root.join("pins.json"), root.join("gateways.json"));
+        let lp = ledger::LedgerPaths { file: root.join("pack-ledger.json"), kept: root.join("kept") };
+        release_pack(&packs, "other", "1.0.0", None);
+        std::fs::write(&lp.file, "garbage").unwrap();
+        let s = list_in(&packs, &pins, &snap, Some(&lp), true);
+        let kept = std::fs::read_to_string(&lp.file).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(s.broken.is_empty() && s.modules.iter().any(|m| m.decl.id == "other"));
+        assert_eq!(kept, "garbage");
     }
 }

@@ -13,7 +13,7 @@
 // (voice_slots::resolve), never from the webview, so swapping engines is a pick or a manifest.
 
 use std::fs;
-use std::os::windows::process::CommandExt;
+use crate::proc_job::SpawnExt;
 use std::process::Command;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -33,7 +33,6 @@ const MAX_SECONDS: usize = 120;
 const SILENCE_PEAK: f32 = 0.01;
 /// whisper.cpp's native rate; its loader resamples anyway, this just keeps the WAV small.
 const TARGET_RATE: u32 = 16_000;
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -413,7 +412,7 @@ pub(crate) fn transcribe(stt: &Resolved, prompt: &str, samples: Vec<f32>, rate: 
         None => {
             let output = Command::new(&stt.command)
                 .args(&args)
-                .creation_flags(CREATE_NO_WINDOW)
+                .quiet()
                 .output()
                 .map_err(|e| format!("{who}: Cannot Run {}: {e}", stt.command.display()))?;
             if !output.status.success() {
@@ -436,12 +435,41 @@ pub fn voice_devices() -> Result<Vec<String>, String> {
     device_names()
 }
 
-/// (Re)binds the one voice chord. Empty chord = unbind. Errors are the plugin's own
-/// (parse failure, or RegisterHotKey refused because another app owns the chord).
+/// Why a chord could not be bound: `taken` (another process holds it, or Windows refused the
+/// registration) or `invalid` (the chord does not parse). The webview words the popup from this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HotkeyReason {
+    Taken,
+    Invalid,
+}
+
+/// The `voice_register` error: a typed reason plus the chord, never the plugin's Debug text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HotkeyError {
+    pub reason: HotkeyReason,
+    pub chord: String,
+}
+
+/// The global-shortcut plugin flattens its errors to text, so the reason is read from that text:
+/// "already registered" (another process or a second Vidar on the chord) and "Unable to register"
+/// (RegisterHotKey refused) are `taken`; a parse failure and anything else is `invalid`.
+fn hotkey_error(chord: &str, plugin_text: &str) -> HotkeyError {
+    let t = plugin_text.to_ascii_lowercase();
+    let reason = if t.contains("already registered") || t.contains("unable to register") {
+        HotkeyReason::Taken
+    } else {
+        HotkeyReason::Invalid
+    };
+    HotkeyError { reason, chord: chord.to_string() }
+}
+
+/// (Re)binds the one voice chord. Empty chord = unbind. A refused chord comes back as a
+/// `HotkeyError` (reason + chord): RegisterHotKey refuses one another app owns, a bad chord fails to parse.
 #[tauri::command]
-pub fn voice_register(app: AppHandle, chord: String) -> Result<(), String> {
+pub fn voice_register(app: AppHandle, chord: String) -> Result<(), HotkeyError> {
     let gs = app.global_shortcut();
-    gs.unregister_all().map_err(|e| e.to_string())?;
+    gs.unregister_all().map_err(|e| hotkey_error(&chord, &e.to_string()))?;
     if chord.trim().is_empty() {
         return Ok(());
     }
@@ -452,7 +480,7 @@ pub fn voice_register(app: AppHandle, chord: String) -> Result<(), String> {
         };
         let _ = app.emit("voice-hotkey", state);
     })
-    .map_err(|e| format!("hotkey \"{chord}\": {e}"))
+    .map_err(|e| hotkey_error(&chord, &e.to_string()))
 }
 
 /// Push-to-talk pauses wake-word listening for the hold (stop its capture stream, keep its
@@ -502,6 +530,23 @@ pub async fn voice_stop(state: State<'_, VoiceState>, listen: State<'_, crate::l
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hotkey_error_maps_taken_and_invalid() {
+        let taken = "HotKey already registered: HotKey { mods: Modifiers(CONTROL | SHIFT), key: KeyG, id: 34078745 }";
+        let e = hotkey_error("Ctrl+Shift+G", taken);
+        assert_eq!(e, HotkeyError { reason: HotkeyReason::Taken, chord: "Ctrl+Shift+G".into() });
+        assert_eq!(hotkey_error("Alt+K", "Unable to register hotkey: Access is denied.").reason, HotkeyReason::Taken);
+        let bad = "Invalid hotkey format: \"Ctrl+\", an hotkey should have the modifiers first and only one main key";
+        assert_eq!(hotkey_error("Ctrl+", bad).reason, HotkeyReason::Invalid);
+        assert_eq!(hotkey_error("Ctrl+Nope", "Couldn't recognize \"Nope\" as a valid HotKey Code").reason, HotkeyReason::Invalid);
+    }
+
+    #[test]
+    fn hotkey_error_serialises_without_plugin_text() {
+        let json = serde_json::to_string(&hotkey_error("Ctrl+G", "HotKey already registered: HotKey { id: 1 }")).unwrap();
+        assert_eq!(json, r#"{"reason":"taken","chord":"Ctrl+G"}"#);
+    }
 
     #[test]
     fn downmix_averages_frames() {

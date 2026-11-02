@@ -33,7 +33,7 @@ const keep = <T extends ShownRow>(available: (id: string) => boolean) => (r: T):
 
 // Root order (Settings › Agents › Launcher Order). The default, top-down, by a
 // row's key, else its id (the user's key-less Local row matches "local").
-// Gateway module roots (launcher/gateways.ts, by agent.order) sit between Pi and Gemini.
+// Gateway module roots (launcher/gateways.ts, by agent.order) sit after Pi.
 let gatewayRoots: readonly string[] = [];
 export function setGatewayRootOrder(ids: readonly string[]): void {
   gatewayRoots = [...ids];

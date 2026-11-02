@@ -1,5 +1,5 @@
 /* Voice input box (voice.ts): home is the bottom bar, left of the status readout.
-   Rectangular, same height as the macro chips; state = colour. While recording
+   Rectangular, state = colour. While recording
    or transcribing it is reparented into the target pane as `.overlay` — see the
    comment over paneHost() in voice.ts for which pane and why. */
 #voice-pill {
@@ -21,6 +21,8 @@
 /* in a rendered composer the row is already tight, and 6px keeps the chip off the
    textarea's resize grip */
 .rendered-input-row > #voice-pill.overlay { right: 6px; bottom: 6px; }
+/* bold Recording/Transcribing in the rendered composer */
+.rendered-input-row > #voice-pill.overlay:is(.rec, .busy) { font-weight: var(--weight-strong); }
 #voice-pill.rec { color: var(--rec-red); border-color: var(--rec-red); animation: voice-pulse 1.2s ease-in-out infinite; }
 #voice-pill.busy { color: var(--accent); border-color: var(--accent); }
 #voice-pill.warn { color: var(--fg-dim); }

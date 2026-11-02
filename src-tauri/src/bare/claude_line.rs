@@ -1,6 +1,6 @@
 //! The Claude Raw spawn line, built from inputs already resolved: the argv (settings and payload
 //! args from the profile, then what the session's Rune Vault carries: `--plugin-dir`,
-//! `--allowedTools`, `--permission-mode`) and the PowerShell line that runs it. Pure: no file is read.
+//! `--permission-mode`) and the PowerShell line that runs it. Pure: no file is read.
 
 use std::path::Path;
 
@@ -11,12 +11,11 @@ use super::{ps_quote, Profile};
 const ALLOWED_MODES: &str = include_str!("../../../contracts/permission-modes.json");
 
 /// What a Raw line carries from the session's Rune Vault:
-/// plugin rune folders (absolute, `<root>\plugins\<name>`), the permission allow list and mode.
+/// plugin rune folders (absolute, `<root>\plugins\<name>`) and the permission mode; the allow list rides settings.json.
 /// Empty means the vault holds none: nothing of that kind rides the line.
 #[derive(Default)]
 pub(super) struct VaultArgs<'a> {
     pub plugins: &'a [String],
-    pub allow: &'a [String],
     pub mode: Option<&'a str>,
 }
 
@@ -27,7 +26,7 @@ pub(super) fn mode_allowed(mode: &str) -> bool {
 
 /// The argv after the binary: the profile's `args` with `{{payload}}`, `{{root}}` and `{{home}}`
 /// filled and `{{remoteControl}}` expanded to `--remote-control` when `remote_control` says so; then
-/// one `--plugin-dir` per vault plugin, `--allowedTools` with the vault's allow list, and
+/// one `--plugin-dir` per vault plugin and
 /// `--permission-mode` with its mode (refused when not an allowed mode); then the strict MCP file.
 pub(super) fn claude_args(
     p: &Profile,
@@ -49,9 +48,6 @@ pub(super) fn claude_args(
     }
     for dir in vault.plugins {
         out.extend(["--plugin-dir".to_string(), dir.clone()]);
-    }
-    if !vault.allow.is_empty() {
-        out.extend(["--allowedTools".to_string(), vault.allow.join(",")]);
     }
     if let Some(mode) = vault.mode {
         if !mode_allowed(mode) {

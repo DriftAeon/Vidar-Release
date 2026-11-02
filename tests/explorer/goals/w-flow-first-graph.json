@@ -1,0 +1,17 @@
+{
+  "id": "w-flow-first-graph",
+  "title": "Build a First Flow Graph Without Running It",
+  "style": "first-time",
+  "scope": "vidar",
+  "surfaces": ["flow"],
+  "tags": ["flow"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "find Flow and open a new, empty graph" },
+    { "intent": "add two nodes and connect them, if the page makes connecting possible" },
+    { "intent": "name or save the graph so I could find it again, without running it" },
+    { "intent": "close Flow, reopen it and check the graph is still there" }
+  ]
+}

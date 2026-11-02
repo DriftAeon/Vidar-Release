@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
-use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::Ordering;
@@ -28,19 +27,10 @@ use super::child::{
     OUTPUT_CAP_BYTES,
 };
 use super::codex_mcp::{self, StartedCalls};
-use super::env::{apply_env_plan, EnvPlan};
 use super::{FlowPermissionPayload, FlowRunNodeStatus};
 use crate::bare::Env;
+use crate::proc_job::SpawnExt;
 
-/// The agent module this adapter runs (adapter tier of the agent-literal ratchet).
-const CODEX_MODULE: &str = "codex";
-
-/// The agent this adapter speaks for: Flow dispatches on it, never on a fallthrough.
-pub(super) fn agent() -> crate::agent_spec::Agent {
-    crate::agent_spec::parse(CODEX_MODULE).expect("the codex module id is an agent id")
-}
-
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Same 4 Hz live-text throttle as the Claude runner.
 const THROTTLE: Duration = Duration::from_millis(250);
 /// The Flow model id that sends no `model`, so the app-server uses its configured default.
@@ -88,9 +78,26 @@ struct ServerRequest {
 }
 
 /// Production's runner spec: the node runs on the home its Rune Vault builds (`bare/flow_vault.rs`),
-/// with a fresh control token for the vault config's `vidar_drive` server.
+/// with a control token for the vault config's `vidar_drive` server when the vault carries a `ctl: yes` rune.
+/// `cwd` gets the trust table when the user's config trusts it.
 pub(super) fn spec(cwd: &str, vault: &str, tab: &str) -> Result<RunnerSpec, String> {
-    super::bare::codex_spec(&super::bare::mint_ctl_token()?, cwd, vault, tab)
+    let n = crate::bare::flow_vault::codex_node(vault, tab, cwd)?;
+    Ok(spec_from(n))
+}
+
+pub(super) fn spec_from(n: crate::bare::flow_vault::CodexNode) -> RunnerSpec {
+    RunnerSpec::AppServer {
+        js: n.js,
+        home: Some(n.home),
+        bare: Some(super::bare::BareCodex {
+            ctl_token: n.ctl_token,
+            env: n.env,
+            node: n.node,
+            args: n.args,
+            instructions: n.instructions,
+            warnings: n.warnings,
+        }),
+    }
 }
 
 /// Spawns `node <js> app-server` under a Job Object. On the Bare home (`bare`: its `node` and
@@ -103,34 +110,24 @@ pub(super) fn spawn(js: &Path, cwd: &str, extra_args: &[String], bare: Option<(&
         Some((node, _)) => node.to_path_buf(),
         None => crate::which::find_on_path_exact("node.exe").ok_or("node.exe not found on PATH")?,
     };
-    let mut remove: Vec<String> = crate::pty::SCRUBBED_ENV.iter().map(|s| s.to_string()).collect();
-    remove.extend(["VIDAR_TAB", "VIDAR_TAB_NAME"].map(String::from));
-    let plan = EnvPlan { remove, set: Vec::new() };
     let mut cmd = Command::new(node);
     cmd.arg(js)
         .arg("app-server")
         .args(extra_args)
         .current_dir(cwd)
-        .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     match bare {
         Some((_, env)) => {
-            cmd.env_clear();
-            for (k, v) in env.iter() {
-                cmd.env(k, v);
-            }
+            cmd.exact_env(env.iter());
         }
-        None => apply_env_plan(&mut cmd, &plan),
+        None => {
+            cmd.scrubbed().env_remove("VIDAR_TAB").env_remove("VIDAR_TAB_NAME");
+        }
     }
     let job = Job::new()?;
-    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
-    if let Err(error) = job.assign(&child) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(format!("assign flow job: {error}"));
-    }
+    let child = super::child::spawn_in_job(&mut cmd, &job)?;
     Ok((child, job))
 }
 

@@ -2,10 +2,10 @@
 // and the schema-3 CLI paths. Every test feeds a small inline source; nothing here reads the repo's own fixtures.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { makeTree, writeTree } from "./helpers/tree.mjs";
 import { fileURLToPath } from "node:url";
 import { anchor, applyPins, classOf, strictOf, tierOf, useIds, words, DEFAULT_IDS } from "../tools/agents/key-words.mjs";
 import { enumsOf, lex, scan } from "../tools/agents/rust-keys.mjs";
@@ -59,10 +59,11 @@ test("tierOf: table, adapter, test, harness, devtool, other", () => {
   assert.equal(tierOf("tests/agent-literals.test.mjs"), "test");
   assert.equal(tierOf("content/x/test_speak.py"), "test");
   assert.equal(tierOf("tools/sandbox/card-sandbox.ps1"), "harness");
-  assert.equal(tierOf("tools/sandbox/write-audit.ps1"), "other");
+  assert.equal(tierOf("tools/sandbox/write-audit.ps1"), "harness");
   assert.equal(tierOf("tools/foo/run-smoke.mjs"), "harness");
   assert.equal(tierOf("tools/bare/probe-seed-data.mjs"), "harness");
-  assert.equal(tierOf("tools/claude-sidecar-seed.mjs"), "adapter:claude");
+  assert.equal(tierOf("tools/claude-sidecar-seed.mjs"), "harness");
+  assert.equal(tierOf("tools/falcon/falcon-vidar-smoke.ps1"), "other");
   assert.equal(tierOf("tools/bare/sweep.mjs"), "devtool");
   assert.equal(tierOf("tools/bare/codex-hook-probe.mjs"), "devtool");
   assert.equal(tierOf("tools/claude-sidecar.mjs"), "adapter:claude");
@@ -175,7 +176,12 @@ test("pins: anchor survives a line shift and a reindent, fails on a swapped site
   assert.match(anchor(["a", "b", "c", "d", "e", "f", "g", "h"], 4, "fn"), /^fn: b c d e f g h$/);
 });
 
-test("pins: dead pin and n mismatch fail; blank-is-claude without a test is refused", () => {
+test("words: Object.prototype names are not aliases (K.Constructor, toString)", () => {
+  for (const tok of ["Constructor", "constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"]) assert.equal(classOf(tok), "none", tok);
+  for (const [alias, id] of Object.entries(DEFAULT_IDS.aliases)) assert.equal(classOf(alias), "S1", `${alias} -> ${id}`);
+});
+
+test("pins: dead pin and n mismatch fail; blank-default without a test is refused", () => {
   const body = (k) => `fn p() { ${"a(Agent::Claude); ".repeat(k)}b(); }`;
   const two = K(body(3));
   assert.equal(two[0].n, 2);
@@ -183,7 +189,7 @@ test("pins: dead pin and n mismatch fail; blank-is-claude without a test is refu
   assert.deepEqual(applyPins(two, [pin], ["rs"]).problems, []);
   assert.match(applyPins(K(body(4)), [pin], ["rs"]).problems[0], /n is 3, pinned 2/);
   assert.match(applyPins(K(`fn q() {}`), [pin], ["rs"]).problems[0], /^dead pin/);
-  assert.match(applyPins(two, [{ ...pin, why: "blank-is-claude" }], ["rs"]).problems[0], /needs --test/);
+  assert.match(applyPins(two, [{ ...pin, why: "blank-default" }], ["rs"]).problems[0], /needs --test/);
   assert.match(applyPins(two, [{ ...pin, why: "seed-data" }], ["rs"]).problems[0], /why must be one of/);
   assert.deepEqual(applyPins(two, [{ ...pin, why: "history-data", test: "history_roundtrip" }], ["rs"]).problems, []);
 });
@@ -191,19 +197,16 @@ test("pins: dead pin and n mismatch fail; blank-is-claude without a test is refu
 // ---- CLI ----
 
 function tree(files) {
-  const dir = mkdtempSync(join(tmpdir(), "agent-keys-"));
+  const dir = makeTree("agent-keys-");
   const git = (...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: dir });
   git("init", "-q");
-  for (const [f, body] of Object.entries(files)) {
-    mkdirSync(dirname(join(dir, f)), { recursive: true });
-    writeFileSync(join(dir, f), body);
-  }
+  writeTree(dir, files);
   git("add", "-A");
   git("commit", "-qm", "base");
   return { dir, git };
 }
 const cli = (dir, ...flags) => spawnSync(process.execPath, [CLI, ...flags], { encoding: "utf8", env: { ...process.env, AGENT_LITERALS_ROOT: dir, AGENT_LITERALS_FIXTURE: join(dir, "fx.json") } });
-const FX3 = { $schema: 3, $ids: ["claude", "codex", "gemini", "pi"], $enums: [], $adapters: [], $strict: {} };
+const FX3 = { $schema: 3, $ids: ["claude", "codex", "pi"], $enums: [], $adapters: [], $strict: {} };
 const withTree = (files, fn) => { const t = tree(files); try { fn(t); } finally { rmSync(t.dir, { recursive: true, force: true }); } };
 
 test("cli: --lang loads present scanners and names the missing ones", () => {
@@ -226,7 +229,7 @@ test("cli: mutation, a planted matches!(d, AgentDriver::Codex(..)) is an unpinne
     let r = cli(dir, "--strict-dry", "--lang", "rs");
     assert.equal(r.status, 1);
     assert.match(r.stdout, /y\.rs:1 S1 Codex/);
-    assert.equal(cli(dir, "--pin", "src-tauri/src/y.rs:1", "--why", "blank-is-claude", "--lang", "rs").status, 2);
+    assert.equal(cli(dir, "--pin", "src-tauri/src/y.rs:1", "--why", "blank-default", "--lang", "rs").status, 2);
     assert.equal(cli(dir, "--pin", "src-tauri/src/y.rs:1", "--why", "bogus", "--lang", "rs").status, 2);
     assert.equal(cli(dir, "--pin", "src-tauri/src/y.rs:1", "--why", "dev-probe", "--lang", "rs").status, 0);
     const pins = JSON.parse(readFileSync(join(dir, "agent-pins.json"), "utf8")).pins;
@@ -248,15 +251,15 @@ test("cli: --owns needs each strict-hit file owned by exactly one lane", () => {
   });
 });
 
-test("cli: $ keys are skipped by readers and kept by --write (old fixture)", () => {
+test("cli: an old (v1) fixture is not read; --write refuses it and leaves it as it was", () => {
   withTree({ "src/a.ts": `export const a = 1;\n` }, ({ dir }) => {
     const fx = { $note: { x: 1 }, "src/a.ts": { kind: "debt", literals: { claude: 2 } } };
     writeFileSync(join(dir, "fx.json"), JSON.stringify(fx));
     assert.equal(cli(dir).status, 0);
-    assert.equal(cli(dir, "--write").status, 0);
-    const after = JSON.parse(readFileSync(join(dir, "fx.json"), "utf8"));
-    assert.deepEqual(after.$note, { x: 1 });
-    assert.equal(after["src/a.ts"], undefined);
+    const w = cli(dir, "--write");
+    assert.equal(w.status, 2);
+    assert.match(w.stderr, /needs \$schema 3/);
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, "fx.json"), "utf8")), fx);
   });
 });
 
@@ -291,7 +294,7 @@ test("cli: schema 3 default run checks $enums, new adapters and strict growth", 
     assert.match(cli(dir, "--lang", "rs").stderr, /\$enums drift/);
     writeFileSync(join(dir, "fx.json"), JSON.stringify({ ...fx, $adapters: [] }));
     assert.match(cli(dir, "--lang", "rs").stderr, /new adapter path src-tauri\/src\/codex_x\.rs/);
-    writeFileSync(join(dir, "fx.json"), JSON.stringify({ ...fx, $strict: { "src-tauri/src/a.rs": 1 } }));
+    writeFileSync(join(dir, "fx.json"), JSON.stringify({ ...fx, $strict: { "src-tauri/src/a.rs": 0 } }));
     assert.match(cli(dir, "--lang", "rs").stderr, /strict rise/);
   });
 });

@@ -4,13 +4,13 @@
 //! Refs build in ref order through `build::build_in`; a repeated ref is built once, and a slot
 //! whose rune id and body an earlier library already rendered is dropped from a later library's
 //! set, with a warning (the same id with another body is another rule and stays). The built text fills `{{sets}}`
-//! in the profile's `setsPayload`, gains a fresh marker and is written to
+//! in `PAYLOAD_TEMPLATE`, gains a fresh marker and is written to
 //! `<home>\layer\payload-<hash12>.md` under the home lock. Any failure refuses the spawn (BR3): a
 //! library name outside the id grammar, with no folder or one resolving outside the import folder,
 //! an unknown, tombstoned or non-set rune,
 //! an empty build, a user-profile path in the text, or an unreadable vidar.json. No sets: nothing
-//! here runs and `layer\` is never made. A Codex Bare spawn builds the same way from its own
-//! `setsPayload` (the skills listing alone through `build_text_payload` when the row has no sets)
+//! here runs and `layer\` is never made. A Codex Bare spawn builds the same way from the same
+//! template (the skills listing alone through `build_text_payload` when the row has no sets)
 //! and hands the text to Codex as `developerInstructions` on `thread/start` or a `--profile` file, uncapped.
 
 use std::path::{Path, PathBuf};
@@ -19,6 +19,20 @@ use serde::Deserialize;
 
 use super::home::{self, HomeLock};
 use crate::rules::{build, context::RenderCtx, library::Library, rune::{self, Rune, State}};
+
+/// The shipped Vidar rune library (`paths::rune_vidar_dir_in`); the name is reserved.
+pub(crate) const VIDAR_LIBRARY: &str = "vidar";
+/// The Vidar Runeset inside that library (its set file arrives with the live runeset).
+#[allow(dead_code)]
+pub(crate) const VIDAR_SET: &str = "vidar";
+/// True for the Vidar library's name.
+pub(crate) fn is_vidar_library(name: &str) -> bool {
+    name == VIDAR_LIBRARY
+}
+
+/// The payload template of every Bare spawn: the vault's text, and the marker `write_filled` adds. The
+/// identity rune carries the identity text, so no profile file holds any.
+pub(crate) const PAYLOAD_TEMPLATE: &str = "{{sets}}";
 
 /// One entry of a row's `sets`: an absent `library` means `rulesLibrary`.
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -50,7 +64,7 @@ pub struct BuiltPayload {
     pub warnings: Vec<String>,
 }
 
-/// Builds `row`'s sets into `template` (the profile's `setsPayload` text) and writes the result
+/// Builds `row`'s sets into `template` (`PAYLOAD_TEMPLATE`) and writes the result
 /// to `<home>\layer\payload-<hash12>.md`, hash12 the file's own SHA-256 prefix. Takes the caller's
 /// `HomeLock` (it is not reentrant, so this never locks). Nothing is written unless every check
 /// passes; a file already holding the same bytes is left as it is. `carried` is the guard file names
@@ -139,9 +153,9 @@ pub(crate) fn library_dir(root: &Path, row: &RowSets, r: &SetRef) -> Result<Path
         let rel = row.rules_library.as_deref().ok_or("Rune sets need rulesLibrary in vidar.json; Bare spawn refused")?;
         return Ok(root.join(rel));
     };
-    // `stock` is reserved for the shipped stock library, as `tools/runes/lint.mjs` maps it.
-    if name == "stock" {
-        return Ok(crate::paths::rune_stock_dir_in(root));
+    // `vidar` is reserved for the shipped Vidar library, as `tools/runes/lint.mjs` maps it.
+    if is_vidar_library(name) {
+        return Ok(crate::paths::rune_vidar_dir_in(root));
     }
     if rune::check_id(name).is_err() {
         return Err(format!(
@@ -168,13 +182,14 @@ pub(crate) fn library_dir(root: &Path, row: &RowSets, r: &SetRef) -> Result<Path
 }
 
 /// A library by name, as a vault names it (the vault store's resolver):
-/// `stock` is the shipped stock library; any other name is `runtime\runes\<name>\` when that folder
-/// exists (kit, `gen-*`; canonical and inside the import folder, as `library_dir`), else the library
-/// vidar.json's `rulesLibrary` names by its folder name (`library_name`).
+/// `vidar` is the shipped Vidar library; any other name is `runtime\runes\<name>\` when that folder
+/// exists (installed, `gen-*`; canonical and inside the import folder, as `library_dir`); else a retired
+/// name (`migrate_lib_rename::RENAMES`) resolves as its new name, so a locked vault that still names the
+/// old library reads on; else the library vidar.json's `rulesLibrary` names by its folder name (`library_name`).
 pub(crate) fn library_dir_named(root: &Path, name: &str) -> Result<PathBuf, String> {
     rune::check_id(name).map_err(|e| format!("library {name:?}: {e}"))?;
-    if name == "stock" {
-        return Ok(crate::paths::rune_stock_dir_in(root));
+    if is_vidar_library(name) {
+        return Ok(crate::paths::rune_vidar_dir_in(root));
     }
     let base = crate::paths::rune_imports_dir_in(root);
     if base.join(name).exists() {
@@ -183,6 +198,10 @@ pub(crate) fn library_dir_named(root: &Path, name: &str) -> Result<PathBuf, Stri
             return Err(format!("library {name:?} resolves outside the imports folder"));
         }
         return Ok(dir);
+    }
+    // Only when the old folder is gone: a library still under its old name is read as itself.
+    if let Some(new) = super::vault::migrate_lib_rename::renamed_to(name) {
+        return library_dir_named(root, new);
     }
     let config = crate::paths::config_path_in(root);
     let mut ignored = Vec::new();
@@ -373,7 +392,7 @@ mod tests {
     fn print_real_library_paths() {
         let Some(root) = std::env::var_os("VIDAR_LIBRARY_PROOF_ROOT") else { return };
         let root = PathBuf::from(root);
-        let mut names = vec!["stock".to_string()];
+        let mut names = vec![VIDAR_LIBRARY.to_string()];
         let mut ignored = Vec::new();
         if let Some(rel) = super::super::set_loadout::rules_library(&crate::paths::config_path_in(&root), &mut ignored) {
             names.push(library_name(&rel));
@@ -390,11 +409,11 @@ mod tests {
 
     #[test]
     fn a_prefixed_slot_names_its_library_and_a_bare_slot_the_sets_own() {
-        assert_eq!(slot_id("- <?rune stock/gate-fact?>"), Some("stock/gate-fact"));
-        assert_eq!(slot_ref("- <?rune stock/gate-fact?>"), Some((Some("stock"), "gate-fact")));
+        assert_eq!(slot_id("- <?rune base/gate-fact?>"), Some("base/gate-fact"));
+        assert_eq!(slot_ref("- <?rune base/gate-fact?>"), Some((Some("base"), "gate-fact")));
         assert_eq!(slot_ref("2. <?rune plain?>"), Some((None, "plain")));
-        assert_eq!(slot_in("<?rune plain?>", "kit"), Some(("kit", "plain")));
-        assert_eq!(slot_in("* <?rune stock/gate-fact?>", "kit"), Some(("stock", "gate-fact")));
+        assert_eq!(slot_in("<?rune plain?>", "installed"), Some(("installed", "plain")));
+        assert_eq!(slot_in("* <?rune base/gate-fact?>", "installed"), Some(("base", "gate-fact")));
         for bad in ["- <?rune /x?>", "- <?rune lib/?>", "- <?rune a/b/c?>", "- <?rune a b?>", "text"] {
             assert_eq!(slot_ref(bad), None, "{bad}");
         }

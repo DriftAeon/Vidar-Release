@@ -3,10 +3,8 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { compareVersions, explicitCheck, offeredUpdates, quietCheck, skippedVersions } from "../src/startup-updates/core.ts";
 import { renderStartupUpdateRows } from "../src/settings/dependencies-view.ts";
-import { GEMINI_HIDDEN_PRELOAD, geminiHiddenArgs } from "../src/startup-updates/gemini-launch.ts";
 import { cardShell } from "../src/startup-updates/shell.ts";
 import { pendingUpdates, updateAll } from "../src/startup-updates/batch.ts";
-import cp from "node:child_process";
 import { SKEW_KEY, SKEW_TEXT, warnCodexSkew } from "../src/startup-updates/codex-skew.ts";
 
 test("update ordering handles numeric releases, prereleases, build metadata and unreadable versions", () => {
@@ -23,11 +21,11 @@ test("update ordering handles numeric releases, prereleases, build metadata and 
 
 test("skip survives state round trips and only a newer release reoffers", () => {
   const skipped = skippedVersions(JSON.parse(JSON.stringify({
-    "startupUpdates.skip.gemini": "1.10.0", "startupUpdates.skip.codex": 123,
+    "startupUpdates.skip.pi": "1.10.0", "startupUpdates.skip.codex": 123,
     "startupUpdates.skip.claude": "invalid", "theme": "dark",
   })));
-  assert.deepEqual(skipped, { gemini: "1.10.0" });
-  const offer = { id: "gemini", label: "Gemini CLI", installed: "1.8.0", latest: "1.10.0" };
+  assert.deepEqual(skipped, { pi: "1.10.0" });
+  const offer = { id: "pi", label: "Pi CLI", installed: "1.8.0", latest: "1.10.0" };
   assert.deepEqual(offeredUpdates([offer], skipped), []);
   assert.deepEqual(offeredUpdates([{ ...offer, latest: "1.9.0" }], skipped), []);
   assert.equal(offeredUpdates([{ ...offer, latest: "1.11.0" }], skipped).length, 1);
@@ -47,12 +45,12 @@ test("offline check settles quietly on timeout/rejection and discards a late res
 });
 
 test("explicit check offers skipped versions, drops not-newer ones and rejects on error or timeout", async () => {
-  const offer = { id: "gemini", label: "Gemini CLI", installed: "1.8.0", latest: "1.10.0" };
-  const skipped = { gemini: "1.10.0" };
+  const offer = { id: "pi", label: "Pi CLI", installed: "1.8.0", latest: "1.10.0" };
+  const skipped = { pi: "1.10.0" };
   assert.deepEqual(offeredUpdates([offer], skipped), [], "the startup filter hides the skipped version");
   const found = await explicitCheck(async () => [
     offer,
-    { ...offer, id: "pi", installed: "2.0.0", latest: "2.0.0" },
+    { ...offer, id: "acme", installed: "2.0.0", latest: "2.0.0" },
     { ...offer, id: "codex", installed: "2.0.0", latest: "1.0.0" },
     { ...offer, id: "claude", installed: "unknown" },
   ]);
@@ -66,15 +64,15 @@ test("explicit check offers skipped versions, drops not-newer ones and rejects o
 test("one dependency row per CLI dispatches Update / Skip and disables actions while working", () => {
   const { document } = new JSDOM("<!doctype html><body></body>").window;
   const root = document.createElement("aside");
-  const offers = ["gemini", "codex", "claude", "pi"].map((id) => ({ id, label: id, installed: "1.0.0", latest: "1.1.0" }));
+  const offers = ["pi", "codex", "claude"].map((id) => ({ id, label: id, installed: "1.0.0", latest: "1.1.0" }));
   const clicks = [];
   const actions = { update: (u) => clicks.push(["update", u.id]), skip: (u) => clicks.push(["skip", u.id]) };
   renderStartupUpdateRows(root, offers, null, null, actions);
-  assert.equal(root.querySelectorAll(".deps-row").length, 4);
-  root.querySelector('[data-cli="gemini"] .deps-update').click();
+  assert.equal(root.querySelectorAll(".deps-row").length, 3);
+  root.querySelector('[data-cli="pi"] .deps-update').click();
   root.querySelector('[data-cli="codex"] .deps-skip').click();
-  assert.deepEqual(clicks, [["update", "gemini"], ["skip", "codex"]]);
-  renderStartupUpdateRows(root, offers, { id: "gemini", label: "Updating…" }, "Update Failed", actions);
+  assert.deepEqual(clicks, [["update", "pi"], ["skip", "codex"]]);
+  renderStartupUpdateRows(root, offers, { id: "pi", label: "Updating…" }, "Update Failed", actions);
   assert.ok([...root.querySelectorAll("button")].every((b) => b.disabled));
   assert.equal(root.querySelector(".deps-update").textContent, "Updating…");
   assert.equal(root.querySelector(".deps-error").textContent, "Update Failed");
@@ -92,7 +90,7 @@ test("one dependency row per CLI dispatches Update / Skip and disables actions w
 test("Update is the primary button and Update All starts every unblocked row, disabled when none", async () => {
   const { document } = new JSDOM("<!doctype html><body></body>").window;
   const root = document.createElement("aside");
-  const offers = ["gemini", "codex", "claude"].map((id) => ({ id, label: id, installed: "1.0.0", latest: "1.1.0" }));
+  const offers = ["pi", "codex", "claude"].map((id) => ({ id, label: id, installed: "1.0.0", latest: "1.1.0" }));
   let all = 0;
   const actions = { update() {}, skip() {}, updateAll: () => { all += 1; } };
   renderStartupUpdateRows(root, offers, null, null, actions);
@@ -103,10 +101,9 @@ test("Update is the primary button and Update All starts every unblocked row, di
   assert.ok(button().classList.contains("ws-primary"));
   button().click();
   assert.equal(all, 1);
-  // Running or a single job busy: disabled, with the running label.
+  // Batch running: the footer is gone and every row button is disabled.
   renderStartupUpdateRows(root, offers, null, null, actions, undefined, true);
-  assert.equal(button().disabled, true);
-  assert.equal(button().textContent, "Updating All…");
+  assert.equal(button(), null);
   assert.ok([...root.querySelectorAll("button")].every((b) => b.disabled));
   renderStartupUpdateRows(root, offers, { id: "codex", label: "Updating…" }, null, actions);
   assert.equal(button().disabled, true);
@@ -124,10 +121,10 @@ test("Update is the primary button and Update All starts every unblocked row, di
   const ran = [];
   const blocked = (u) => u.id === "codex" ? "Close codex Tabs First" : null;
   assert.equal(await updateAll(offers, blocked, async (u) => { ran.push(u.id); return true; }), 2);
-  assert.deepEqual(ran, ["gemini", "claude"]);
+  assert.deepEqual(ran, ["pi", "claude"]);
   ran.length = 0;
-  assert.equal(await updateAll(offers, () => null, async (u) => { ran.push(u.id); return u.id !== "gemini"; }), 0);
-  assert.deepEqual(ran, ["gemini"]);
+  assert.equal(await updateAll(offers, () => null, async (u) => { ran.push(u.id); return u.id !== "pi"; }), 0);
+  assert.deepEqual(ran, ["pi"]);
   assert.deepEqual(pendingUpdates([], () => null), []);
   assert.equal(await updateAll([], () => null, async () => true), 0);
 });
@@ -142,8 +139,8 @@ test("the card keeps a Close button through an update, and Escape or Close hides
     assert.equal(close.getAttribute("aria-label"), "Close");
     assert.equal(close.title, "Close");
     // Painting the rows during an update (every row button disabled) leaves Close alone.
-    const offers = [{ id: "gemini", label: "gemini", installed: "1.0.0", latest: "1.1.0" }];
-    renderStartupUpdateRows(shell.body, offers, { id: "gemini", label: "Updating…" }, null, { update() {}, skip() {} });
+    const offers = [{ id: "pi", label: "pi", installed: "1.0.0", latest: "1.1.0" }];
+    renderStartupUpdateRows(shell.body, offers, { id: "pi", label: "Updating…" }, null, { update() {}, skip() {} });
     assert.ok([...shell.body.querySelectorAll("button")].every((b) => b.disabled));
     assert.equal(close.disabled, false);
     assert.ok(shell.card.contains(close));
@@ -161,41 +158,6 @@ test("the card keeps a Close button through an update, and Escape or Close hides
     delete globalThis.document;
     delete globalThis.window;
   }
-});
-
-test("Gemini preload hides both spawn signatures without dropping arguments or existing options", async () => {
-  const original = cp.spawn;
-  const calls = [];
-  cp.spawn = (...args) => { calls.push(args); return "child"; };
-  try {
-    await import(`data:text/javascript;base64,${Buffer.from(GEMINI_HIDDEN_PRELOAD).toString("base64")}`);
-    cp.spawn("npm install", { shell: true, detached: true, stdio: "ignore" });
-    cp.spawn("node", ["gemini.js"], { env: { keep: "yes" }, windowsHide: false });
-    cp.spawn("node", undefined, { env: { keep: "yes" } });
-    assert.deepEqual(calls, [
-      ["npm install", { shell: true, detached: true, stdio: "ignore", windowsHide: true }],
-      // Only detached children are hidden; attached ones keep the caller's options untouched.
-      ["node", ["gemini.js"], { env: { keep: "yes" }, windowsHide: false }],
-      ["node", undefined, { env: { keep: "yes" } }],
-    ]);
-  } finally {
-    cp.spawn = original;
-    (await import("node:module")).syncBuiltinESMExports();
-  }
-});
-
-test("configured Gemini flags survive wrapping and the caller's args stay unchanged", () => {
-  const args = ["-NoExit", "-Command", "gemini --model flash"];
-  const wrapped = geminiHiddenArgs(args);
-  assert.deepEqual(args, ["-NoExit", "-Command", "gemini --model flash"]);
-  assert.equal(wrapped[0], "-NoExit");
-  assert.ok(wrapped[2].includes("gemini --model flash } finally"));
-  assert.ok(wrapped[2].includes("$env:NODE_OPTIONS = $vidarGeminiNodeOptions"));
-  const script = ["-File", "custom-gemini.ps1"];
-  assert.equal(geminiHiddenArgs(script), script);
-  const bash = ["-c", "gemini"];
-  assert.equal(geminiHiddenArgs(bash, "bash.exe"), bash);
-  assert.equal(geminiHiddenArgs(undefined), undefined);
 });
 
 test("codex skew toasts once per version pair across launches", async () => {

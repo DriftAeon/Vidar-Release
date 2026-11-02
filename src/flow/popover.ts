@@ -20,7 +20,7 @@
 import { S } from "./state";
 import type { FlowNode } from "./model";
 import { onSelectionChanged, setSelection } from "./selection";
-import { renderInspector, updateLiveOutput, setOpenInDocumentCb } from "./inspector";
+import { renderInspector, refreshVaults, updateLiveOutput, setOpenInDocumentCb } from "./inspector";
 import { closeAddonMenu } from "./modifiers";
 import { positionPopover } from "./popover-position";
 import "./inspector.css";
@@ -90,10 +90,11 @@ export function renderPopover(): void {
     return;
   }
 
-  // Known gap: a full rebuild (still needed on open, on the running/not-running transition, and on
-  // any in-card edit) replaces every element in the card, so focus that was on a non-editable
-  // control inside it (e.g. the × button) is lost to the body rather than restored.
+  // A full rebuild (on open, on the running/not-running transition, on any in-card edit) replaces
+  // every element in the card; renderInspector puts focus back on the same control (or the card
+  // root when that control is gone) whenever focus was inside the card, and takes none otherwise.
   renderInspector(node);
+  if (isNewOpen && node.kind === "agent") refreshVaults(node); // one list read per card open; its redraw never fetches
   const nodeEl = S.nodeEls.get(node.id);
   const kind = nodeEl ? getComputedStyle(nodeEl).getPropertyValue("--kind").trim() : "";
   if (kind) {
@@ -159,6 +160,7 @@ export function initPopover(openPathInDocument: (path: string) => void): void {
   S.inspectorEl.addEventListener("dblclick", (e) => e.stopPropagation());
   // selection.ts's keyboardAllowed() blocks panels/flow.ts's document-level Escape
   // handler while focus sits in the card's Task/Content textarea, so Esc otherwise did nothing.
+  // Esc closes and keeps the card's edits: every field saves and repaints the node face per input.
   S.inspectorEl.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     e.stopPropagation();

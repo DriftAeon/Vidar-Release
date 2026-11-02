@@ -1,6 +1,7 @@
 // A tab's Rune Vault, looked up the way a respawn would (Falcon session, then thread id, then tab), and the
 // respawn of the other Rendered tabs on a vault after an unlocked edit.
 import { invoke, type VaultSession } from "../../ipc";
+import { vaultIpc } from "../../runes/bare/vault-io";
 import * as lookup from "./lookup"; // namespace: a test stub of lookup need not list every export
 
 /** `rune_vault_session` for `tab` with the identity a re-adopted tab carries: its Falcon session and thread id.
@@ -28,7 +29,7 @@ const defaults: VaultTabsDeps = {
   tabs: () => lookup.driveSnapshot?.().tabs ?? [],
   body: (id) => lookup.renderedBody(id),
   recorded: (tab, falcon, thread) => lookup.recordedVault(tab, falcon, thread),
-  locked: async (id) => !!(await invoke("rune_vault_read", { id })).vault.lockedUtc,
+  locked: async (id) => !!(await vaultIpc.read(id)).vault.lockedUtc,
 };
 
 /** Respawns every Rendered tab except `except` whose recorded vault is `vault`, fresh, so it loads the edit.

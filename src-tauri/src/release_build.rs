@@ -6,7 +6,6 @@
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read};
-use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -19,7 +18,6 @@ use tauri::{AppHandle, Emitter};
 
 use crate::proc_job::JobChild;
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Same wording as swap_button: tools\release is export-ignored, so a shipped install has no wrapper.
 const UNAVAILABLE: &str = "Build Unavailable: No Release Tools In This Install";
 const CATALOG_TIMEOUT: Duration = Duration::from_secs(60);
@@ -66,7 +64,7 @@ fn wrap_line(line: &str, from_stdout: bool) -> Value {
 fn clear_lock_at(path: &std::path::Path, pid: u32) {
     let named = std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| serde_json::from_str::<Value>(s.trim_start_matches('\u{feff}')).ok())
+        .and_then(|s| serde_json::from_str::<Value>(crate::fsx::strip_bom(&s)).ok())
         .and_then(|v| v.get("pid").and_then(Value::as_u64));
     if named == Some(u64::from(pid)) {
         let _ = std::fs::remove_file(path);
@@ -200,8 +198,7 @@ pub fn release_build_start(app: AppHandle, base: String, include: Vec<String>) -
         .current_dir(crate::paths::root())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
+        .stderr(Stdio::piped());
     for (key, _) in std::env::vars_os() {
         if crate::swap_button::is_scrubbed(&key.to_string_lossy()) {
             cmd.env_remove(&key);

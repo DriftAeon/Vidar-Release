@@ -41,6 +41,14 @@ const enter = (body) => body.el.querySelector("textarea").dispatchEvent(new Keyb
 const type = (body, text) => { body.el.querySelector("textarea").value = text; };
 const bangCalls = () => dom.ipc.invoked.filter((c) => c === "bang_run").length;
 
+test("the prompt box has an accessible name and no placeholder", () => {
+  const body = mount("bang-name", []);
+  const ta = body.el.querySelector("textarea.rendered-input");
+  assert.equal(ta.getAttribute("aria-label"), "Prompt");
+  assert.equal(ta.placeholder, "");
+  body.dispose();
+});
+
 test("bang: write() never runs a ! line, the next keyboard Enter does", async () => {
   dom.ipc.answers.bang_run = RESULT;
   const body = mount("bang-1", []);

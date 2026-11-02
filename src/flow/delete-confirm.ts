@@ -4,6 +4,7 @@
 // Esc and Cancel hand focus back to `returnTo`. The picker owns the delete itself (`onDelete`).
 
 import { iconImg } from "../icon-img";
+import { confirmRow, el } from "../dom";
 
 const TITLE = "Delete Flow?";
 
@@ -37,31 +38,17 @@ export function openDeleteConfirm(anchor: HTMLElement, name: string, onDelete: (
   const strong = document.createElement("strong");
   strong.textContent = TITLE;
   head.append(tile, strong);
-  const body = document.createElement("div");
-  body.className = "swap-confirm-body";
-  const text = document.createElement("p");
-  text.textContent = `${name} will be deleted. Its runs are kept.`;
-  const actions = document.createElement("div");
-  actions.className = "swap-confirm-actions";
-  const yes = document.createElement("button");
-  yes.type = "button";
-  yes.className = "swap-yes";
-  yes.textContent = "Delete";
-  const no = document.createElement("button");
-  no.type = "button";
-  no.className = "swap-no";
-  no.textContent = "Cancel";
+  const body = el("div", "swap-confirm-body");
   const cancel = () => {
     closeDeleteConfirm();
     returnTo.focus();
   };
-  yes.addEventListener("click", () => {
-    closeDeleteConfirm();
-    onDelete();
+  const { no } = confirmRow({
+    root: body,
+    note: el("p", undefined, `${name} will be deleted. Its runs are kept.`),
+    yes: { label: "Delete", run: () => { closeDeleteConfirm(); onDelete(); } },
+    no: { label: "Cancel", run: cancel },
   });
-  no.addEventListener("click", cancel);
-  actions.append(yes, no);
-  body.append(text, actions);
   box.append(head, body);
   document.body.append(box);
   card = box;

@@ -367,7 +367,7 @@ fn a_recorded_tree_stays_recorded_across_a_retry() {
 fn sleeper() -> std::process::Child {
     Command::new("ping")
         .args(["-n", "30", "127.0.0.1"])
-        .creation_flags(CREATE_NO_WINDOW)
+        .quiet()
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

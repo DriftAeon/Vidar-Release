@@ -1,6 +1,8 @@
 // Transcript Read paths are matched to On Demand brick paths; Skill calls need an explicit
 // skill-to-rune mapping from actives before they can mark a brick as loaded.
-import { normPath } from "../trace";
+
+/** Case-insensitive, backslash-normalised path: transcript paths are only compared, never opened. */
+const normPath = (p: string): string => p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
 
 export const readSet = (paths: readonly string[] = []): ReadonlySet<string> => new Set(paths.map(normPath));
 

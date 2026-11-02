@@ -10,6 +10,7 @@ setupDom({
   },
 });
 const { createTextStream } = await import("../src/panels/rendered/text-stream.ts");
+await (await import("../src/panels/markdown-lazy.ts")).markdownReady(); // the parser loads on first use; these tests paint synchronously
 
 function mk() {
   const transcript = document.createElement("div");

@@ -1,19 +1,9 @@
 //! The send seam: `Live` is `net::https::send`; tests use `Fake`, which answers from a queue and
 //! records what was sent. No test ever reaches Notion.
 
-use crate::net::{self, Limits, Reply, Request, Secret, SendError};
-
-pub trait Transport {
-    fn send(&self, req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, SendError>;
-}
-
-pub struct Live;
-
-impl Transport for Live {
-    fn send(&self, req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, SendError> {
-        net::send(req, headers, limits)
-    }
-}
+#[cfg(test)]
+use crate::net::{Limits, Reply, Request, Secret, SendError};
+pub use crate::net::{Live, Transport};
 
 #[cfg(test)]
 pub mod fake {

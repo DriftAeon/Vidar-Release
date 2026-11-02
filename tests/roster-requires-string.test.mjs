@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { shownRootsOf } from '../src/launcher/roster-shown.ts';
 
 test('shownRootsOf: a string requires gates like a one-item list instead of throwing', () => {
-  const roots = [{ id: 'a', requires: 'gemini' }, { id: 'b' }];
-  assert.deepEqual(shownRootsOf(roots, (id) => id !== 'gemini').map((r) => r.id), ['b']);
+  const roots = [{ id: 'a', requires: 'acme' }, { id: 'b' }];
+  assert.deepEqual(shownRootsOf(roots, (id) => id !== 'acme').map((r) => r.id), ['b']);
   assert.deepEqual(shownRootsOf(roots, () => true).map((r) => r.id), ['a', 'b']);
 });

@@ -5,17 +5,11 @@ import type { Location } from "../config";
 import { folderName, pickFolder, saveWorkspaces, workspaces } from "../launcher/workspaces";
 import { REVERT_EVENT } from "./modal";
 import { isRedrawing, redraw } from "./live-list";
+import { wsButton } from "../dom";
 import { addSettingRow, registerCategory } from "./registry";
 
 const WORKSPACES_CATEGORY = "workspaces";
 
-function button(label: string, cls = ""): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = `ws-btn ${cls}`.trim();
-  b.textContent = label;
-  return b;
-}
 
 function editor(setError: (msg: string) => void): HTMLElement {
   const root = document.createElement("div");
@@ -57,7 +51,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
         e.stopPropagation(); // same as General's inputs: typing is not a shortcut
       });
 
-      const browse = button("Browse");
+      const browse = wsButton("Browse");
       browse.title = "Choose A Different Folder";
       browse.addEventListener("click", () => {
         void pickFolder(w.cwd).then((cwd) => {
@@ -70,14 +64,14 @@ function editor(setError: (msg: string) => void): HTMLElement {
       path.textContent = w.cwd;
       path.title = w.cwd;
 
-      const remove = button("Remove", "ws-remove");
+      const remove = wsButton("Remove", "ws-remove");
       remove.addEventListener("click", () => {
         void save((fresh) => fresh.filter((x) => x.cwd !== w.cwd));
       });
       row.append(name, path, browse, remove);
       root.appendChild(row);
     });
-    const add = button("Add Workspace", "ws-add");
+    const add = wsButton("Add Workspace", "ws-add");
     add.addEventListener("click", () => {
       void pickFolder().then((cwd) => {
         if (cwd) void save((fresh) => [...fresh, { label: folderName(cwd), cwd }]);

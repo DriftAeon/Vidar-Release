@@ -218,18 +218,10 @@ fn run(cwd: &Path, args: &[&str]) -> Result<(Option<i32>, String, String, bool),
         let _ = std::io::copy(&mut stderr, &mut std::io::sink());
         buf
     });
-    let started = Instant::now();
-    let waited: Result<std::process::ExitStatus, String> = loop {
-        match child.try_wait() {
-            Ok(Some(st)) => break Ok(st),
-            Ok(None) => {
-                if started.elapsed() > TIMEOUT {
-                    break Err(format!("p4 timed out after {}s", TIMEOUT.as_secs()));
-                }
-                thread::sleep(Duration::from_millis(20));
-            }
-            Err(e) => break Err(format!("p4 wait failed: {e}")),
-        }
+    let waited: Result<std::process::ExitStatus, String> = match child.wait_bounded(Instant::now() + TIMEOUT) {
+        Ok(Some(st)) => Ok(st),
+        Ok(None) => Err(format!("p4 timed out after {}s", TIMEOUT.as_secs())),
+        Err(e) => Err(format!("p4 wait failed: {e}")),
     };
     child.kill();
     let _ = child.wait();

@@ -9,6 +9,7 @@ use std::{
 };
 
 use super::Host;
+use crate::util::now_ms;
 use crate::{
     protocol::{Agent, EventBody},
     session::Session,
@@ -435,13 +436,6 @@ pub(super) fn pending_jettison(path: &std::path::Path, now: u64) -> Option<Strin
         return None;
     }
     Some(record.get("session")?.as_str()?.to_string())
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 /// When a session was first seen orphaned, its journal position then, and

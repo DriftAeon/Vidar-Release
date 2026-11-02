@@ -3,15 +3,17 @@ import { codexSaveGate } from "./panels/sessions/codex-save";
 import { beginTabOrderRestore, endTabOrderRestore } from "./panels/sessions/tab-order";
 import { initTabState } from "./panels/sessions/tab-state-feeds";
 import { invoke } from "./ipc";
+import { vaultIpc } from "./runes/bare/vault-io";
 import { readoptHostedSessions } from "./launcher/readopt";
 import { restoreCodexTabs } from "./launcher/codex-restore";
+import { AGENTS } from "./agents/descriptor";
 import { initDrive } from "./drive/drive";
 import "./control/listen";
 import { initAskGate } from "./control/open-ask";
 import { loadConfig, onSettingsChanged, reloadConfig, type VidarConfig } from "./config";
 import { overlayAgents } from "./config-agents";
 import { setLauncherLead } from "./launcher/body-order";
-import { builtinAgents, setGatewayModules, spawnFrom, spawnAstra, rosterView, shownRoots, shownVariants } from "./launcher/roster";
+import { builtinAgents, defaultVault, setGatewayModules, spawnFrom, spawnAstra, rosterView, shownRoots, shownVariants } from "./launcher/roster";
 import { createFixOpener } from "./launcher/fix-tab";
 import { setFixOpener } from "./panels/rendered/fix-seam";
 import { showSessionsToast } from "./panels/sessions/zoom";
@@ -37,7 +39,8 @@ import { registerAgentRows } from "./settings/agents";
 import { registerVoiceSlotRows } from "./settings/voice-slots";
 import { registerModuleRows } from "./settings/modules";
 import "./settings/modules.css";
-import { loadDeps } from "./deps/state";
+import { depsReport, loadDeps } from "./deps/state";
+import { onboardingOpen } from "./onboarding/shell";
 import { onInspectEnter } from "./panels/inspect";
 import { mountPanels } from "./panels/index";
 import { mountCapabilities } from "./capabilities/registry";
@@ -46,7 +49,6 @@ import { setModuleNames } from "./modules/names";
 import { effectivePrimary } from "./agents/primary";
 import { initToolbench, setActiveCanvas, type Canvas } from "./panels/toolbench";
 import { createToolRegistry } from "./tools/registry";
-import { initMacros, BUILTIN_MACROS } from "./panels/macros";
 import { initShortcuts, openShortcutsModal, closeShortcutsModal } from "./shortcuts";
 import {
   initTheme,
@@ -113,7 +115,7 @@ initCasDial();
 
 /* ---- static panels ---- */
 
-// Registry in panels/index.ts: status, inspect, close lock, swap, rightbar grip, the rack/loadout
+// Registry in panels/index.ts: status, inspect, close lock, swap, rightbar grip, the rack
 // modules half (independent of config, so it loads in parallel with it). Character is
 // a capability, mounted by mountCapabilities below.
 const disposePanels = mountPanels();
@@ -163,7 +165,16 @@ settingsBtn.addEventListener("click", (e) => {
 // window.__vidarDrive, extracted into src\drive\drive.ts:
 // spawnFrom/rosterView are src\launcher\roster.ts exports the drive
 // module needs, injected once here; rosterView is read per call, after the config lands.
-initDrive({ spawnFrom, roster: rosterView });
+initDrive({
+  spawnFrom,
+  roster: rosterView,
+  shown: { roots: shownRoots, variants: shownVariants, depsLanded: () => depsReport() !== null, onboardingOpen },
+  // ctl.spawn's Rune Vault inputs: the user's Last Vault and the live vault ids.
+  vaults: {
+    last: defaultVault,
+    listed: () => vaultIpc.list().then((l) => l.map((v) => v.id), () => null),
+  },
+});
 setGatewayModules(gatewayModules);
 // Ask Agent to Fix on a Rendered notice card opens its fix tab through this opener (launcher/fix-tab.ts).
 setFixOpener(createFixOpener({ roots: shownRoots, variants: shownVariants, spawn: spawnFrom, toast: showSessionsToast }));
@@ -203,14 +214,10 @@ void (async () => {
     document.getElementById("tool-options")!,
     createToolRegistry(moduleOn),
   );
-  initMacros(
-    document.getElementById("macro-strip")!,
-    cfg.macros?.length ? cfg.macros : BUILTIN_MACROS,
-  );
-  // Live apply: Settings › Agents writes through patch_settings; the launcher and the macro
-  // strip rebuild from the fresh file without a restart. initMacros clears the strip itself.
+  // Live apply: Settings › Agents writes through patch_settings; the launcher rebuilds from the
+  // fresh file without a restart.
   onSettingsChanged(({ keys }) => {
-    if (!keys.includes("agents") && !keys.includes("locations") && !keys.includes("macros")) return;
+    if (!keys.includes("agents") && !keys.includes("locations")) return;
     void loadConfig().then(({ config: c }) => {
       if (keys.includes("agents") || keys.includes("locations")) {
         const w: string[] = [];
@@ -222,9 +229,6 @@ void (async () => {
           if (notice) setBanner("config-notice", notice);
           else clearBanner("config-notice");
         }
-      }
-      if (keys.includes("macros")) {
-        initMacros(document.getElementById("macro-strip")!, c.macros?.length ? c.macros : BUILTIN_MACROS);
       }
     });
   });
@@ -286,7 +290,7 @@ void (async () => {
       reap: () => invoke("agent_reap_all"),
       openThreadIds: openRenderedSessionIds,
       open: (rec) => createSession({
-        agent: "codex", body: "rendered", cwd: rec.cwd, model: rec.model ?? undefined,
+        agent: AGENTS.codex.id, body: "rendered", cwd: rec.cwd, model: rec.model ?? undefined,
         permissionMode: rec.mode, rules: rec.rules ? { file: rec.rules, codex: null, warnings: [] } : undefined,
         resume: rec.threadId ?? undefined, title: rec.title, art: rec.art, background: true,
         tabKey: rec.tabKey, restoreSlot: true,
@@ -295,8 +299,8 @@ void (async () => {
       }),
       // A Bare tab whose row was deleted or renamed stays saved and unopened, with a note.
       resolves: (rec) => shownRoots().flatMap((r) => [r, ...shownVariants(r)])
-        .some((x) => x.profile === rec.profile && x.id === "codex" && x.body === "rendered" && (!rec.rowKey || x.key === rec.rowKey)),
-      stale: (recs) => setBanner("codex-restore-notice", `${recs.length === 1 ? "A Bare Codex Tab" : `${recs.length} Bare Codex Tabs`} Not Restored: Launcher Row Missing (${recs.map((r) => r.title).join(", ")})`),
+        .some((x) => x.profile === rec.profile && x.id === AGENTS.codex.id && x.body === "rendered" && (!rec.rowKey || x.key === rec.rowKey)),
+      stale: (recs) => setBanner(`${AGENTS.codex.id}-restore-notice`, `${recs.length === 1 ? "A Bare Codex Tab" : `${recs.length} Bare Codex Tabs`} Not Restored: Launcher Row Missing (${recs.map((r) => r.title).join(", ")})`),
       activeId: getActiveSessionId,
       select: activate,
       gate: codexSaveGate,

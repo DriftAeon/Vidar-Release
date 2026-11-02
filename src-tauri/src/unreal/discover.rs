@@ -19,7 +19,7 @@ const MISS_TTL: Duration = Duration::from_secs(45);
 static CACHE: LazyLock<Mutex<HashMap<String, Vec<PathBuf>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 static MISSES: LazyLock<Mutex<HashMap<String, Instant>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn uprojects_in(dir: &Path) -> Vec<PathBuf> {
+pub(super) fn uprojects_in(dir: &Path) -> Vec<PathBuf> {
     let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
     let mut v: Vec<PathBuf> = rd
         .flatten()

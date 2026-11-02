@@ -3,9 +3,9 @@
 import type { AgentEvent, PlanStatus, PlanView } from "./protocol";
 import { codexPlans, type CodexPlanStore } from "./codex-plan-store";
 
-type Json = Record<string, unknown>;
-const obj = (v: unknown): Json => v && typeof v === "object" && !Array.isArray(v) ? v as Json : {};
-const str = (v: unknown): string => typeof v === "string" ? v : "";
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj as objOrNull, str, type Json } from "../json.ts";
+const obj = (v: unknown): Json => objOrNull(v) ?? {}; // home-ok: empty-object fallback keeps the call sites as they were
 const arr = (v: unknown): unknown[] => Array.isArray(v) ? v : [];
 
 export function codexPlan(p: Json): AgentEvent[] {
@@ -41,14 +41,14 @@ export class CodexProgress {
     const name = tool === "spawnAgent" ? "Agent" : ["sendInput", "sendMessage", "followupTask", "resumeAgent"].includes(tool) ? "SendMessage"
       : tool === "wait" ? "Wait" : tool === "closeAgent" ? "CloseAgent" : tool === "interruptAgent" ? "InterruptAgent" : "ListAgents";
     return [{ kind: "tool_start", toolUseId: str(item.id), name, parentToolUseId: null,
-      input: { ...item, description: str(item.prompt), subagent_type: "Codex", to: arr(item.receiverThreadIds).map(str).join(", "), summary: str(item.prompt) } }];
+      input: { ...item, description: str(item.prompt), subagent_type: "Codex", to: arr(item.receiverThreadIds).map((x) => str(x)).join(", "), summary: str(item.prompt) } }];
   }
   completed(item: Json, live = true): AgentEvent[] {
     const toolUseId = str(item.id), tool = str(item.tool), states = obj(item.agentsStates);
     const out: AgentEvent[] = [{ kind: "tool_done", toolUseId, parentToolUseId: null,
       content: JSON.stringify(states, null, 2), isError: ["failed", "interrupted"].includes(str(item.status)) }];
     if (!live) return out; // Historical running states do not prove a child is still running.
-    for (const id of new Set([...arr(item.receiverThreadIds).map(str), ...Object.keys(states)])) {
+    for (const id of new Set([...arr(item.receiverThreadIds).map((x) => str(x)), ...Object.keys(states)])) {
       if (!id) continue;
       const state = obj(states[id]), status = str(state.status), previous = this.agents.get(id);
       const link = previous?.toolUseId ?? toolUseId;

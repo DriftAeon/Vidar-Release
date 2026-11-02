@@ -49,7 +49,7 @@ fn from_fields(v: &Value, local: bool) -> Option<BuildStamp> {
 
 /// `set.id` of a release manifest; absent, empty or unreadable is `None`.
 fn parse_set(text: &str) -> Option<String> {
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let v: Value = serde_json::from_str(crate::fsx::strip_bom(text)).ok()?;
     let id = v.get("set")?.get("id")?.as_str()?.trim();
     (!id.is_empty()).then(|| id.to_string())
 }
@@ -64,11 +64,11 @@ pub fn release_set() -> Option<String> {
 }
 
 fn parse_head(text: &str) -> Option<BuildStamp> {
-    from_fields(&serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?, true)
+    from_fields(&serde_json::from_str(crate::fsx::strip_bom(text)).ok()?, true)
 }
 
 fn parse_manifest(text: &str) -> Option<BuildStamp> {
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let v: Value = serde_json::from_str(crate::fsx::strip_bom(text)).ok()?;
     from_fields(v.get("exe")?.get("build_stamp")?, false)
 }
 

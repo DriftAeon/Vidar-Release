@@ -5,6 +5,7 @@ import { invoke } from "../../ipc";
 import type { AgentEvent, Effort, PermissionMode, PlanView, Usage } from "../../agents/protocol";
 import { EFFORT_LEVELS, isPermissionMode } from "../../agents/protocol";
 import { getPref } from "../../prefs";
+import { isAgentId, type AgentId } from "../../agents/id";
 import { hostHas } from "./host-profile";
 import { AGENT_PROFILE } from "../../agents/agent-profile";
 import { label, prettyModel } from "../../format";
@@ -98,8 +99,18 @@ export interface EventsDeps {
  *  works before its own initialize handshake. Codex's picker uses its own session-only catalog;
  *  the saved `codexModels` copy feeds Settings › Agents only. */
 export function seededModels(agent: string): RenderedState["models"] {
-  return agent === "claude" ? getPref("claudeModels") ?? [] : [];
+  return isAgentId(agent) ? SEEDED_MODELS[agent]() : [];
 }
+
+/** The saved model list that seeds a new tab's picker (an agent that fetches its own catalog seeds none). */
+const SEEDED_MODELS: Record<AgentId, () => RenderedState["models"]> = {
+  claude: () => getPref("claudeModels") ?? [],
+  codex: () => [],
+};
+/** Agents whose model alias resolves to a versioned id that the pill can name as a hint. */
+const ALIAS_NAMES_VERSION: Record<AgentId, boolean> = { claude: true, codex: false };
+/** Agents whose host replays its applied effort pick on reattach, so the tab adopts it as its own choice. */
+const REPLAYS_EFFORT: Record<AgentId, boolean> = { claude: false, codex: true };
 
 export function createEvents(S: RenderedState, deps: EventsDeps) {
   const {
@@ -137,7 +148,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
    *  stays the live truth (it sets characterModelLive and overwrites this). */
   function versionAlias(models: { value: string; resolved?: string }[]) {
     const alias = opts.model;
-    if (opts.agent !== "claude" || !alias || S.characterModelLive || sl.model !== prettyModel(alias)) return;
+    if (!ALIAS_NAMES_VERSION[opts.agent] || !alias || S.characterModelLive || sl.model !== prettyModel(alias)) return;
     const resolved = models.find((m) => m.value === alias)?.resolved;
     if (!resolved) return;
     const versioned = /\[1m\]$/i.test(alias) && !/\[1m\]$/i.test(resolved) ? `${resolved}[1m]` : resolved;
@@ -341,7 +352,7 @@ export function createEvents(S: RenderedState, deps: EventsDeps) {
         if ((EFFORT_LEVELS as readonly string[]).includes(ev.level)) S.liveEffort = ev.level as Effort;
         // seed a body with no chosen effort so a /clear respawn keeps the running level
         // a replayed Codex level (the host's applied pick) is the tab's choice too
-        if ((opts.effort === null || (S.hydrating && opts.agent === "codex")) && (EFFORT_LEVELS as readonly string[]).includes(ev.level)) opts.effort = ev.level as Effort;
+        if ((opts.effort === null || (S.hydrating && REPLAYS_EFFORT[opts.agent])) && (EFFORT_LEVELS as readonly string[]).includes(ev.level)) opts.effort = ev.level as Effort;
         break;
       case "rate_limit":
         if (ev.utilization !== null) {

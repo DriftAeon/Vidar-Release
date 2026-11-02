@@ -24,13 +24,14 @@ function bump(d: Record<string, number>, k: string) { d[k] = (d[k] ?? 0) + 1; }
 
 // A leading YAML frontmatter block (--- ... ---) is not Markdown: unstripped, its closing --- turns
 // the fields into a setext heading. Blanked line for line so the line maps stay true to the file.
-export function blankFrontmatter(text: string): string {
+function blankFrontmatter(text: string): string {
   const m = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
   return m ? m[0].replace(/[^\n]/g, "") + text.slice(m[0].length) : text;
 }
 
-export interface RenderOpts { softBreaks?: "space" | "br" }
+interface RenderOpts { softBreaks?: "space" | "br" }
 
+/** @public reached through markdown-lazy.ts's stored module namespace, which knip 6.44 no longer follows */
 export function renderMarkdownOrText(name: string, text: string, opts?: RenderOpts): Built {
   const dropped: Record<string, number> = {};
   if (text.length > INPUT_CAP) return { el: document.createElement("div"), dropped, fellBack: { reason: "input over 2 MiB" } };

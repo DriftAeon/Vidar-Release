@@ -15,7 +15,7 @@ const RX = new Set(["match", "notmatch", "replace", "split"]);
 const STOP = /[\s;|&(){}[\],'"$@<>=!]/;
 const OPEN = new Set(["(", "$(", "{", "["]);
 const CLOSE = new Set([")", "}", "]"]);
-const COND = 1, NEG = 2, FB = 4;
+const COND = 1, NEG = 2, FB = 4, CMPB = 8; // CMPB: operand of an -eq-family operator or a switch label (ctx.comparison, Q2 a)
 
 /** End index (past the `)`) of the sub-expression whose `(` is at `open`; quotes inside are skipped. */
 function subEnd(s, open) {
@@ -221,7 +221,7 @@ function flags(toks, m) {
     const t = toks[k];
     if (t.t === "op") {
       if (CMP.has(t.v)) {
-        const bit = COND | (NEGOP.has(t.v) ? NEG : 0);
+        const bit = COND | CMPB | (NEGOP.has(t.v) ? NEG : 0);
         mark(left(k, LISTOP.has(t.v)), k - 1, bit);
         mark(k + 1, right(k, LISTOP.has(t.v)), bit);
         if (RX.has(t.v) && toks[k + 1]?.t === "str") toks[k + 1].rx = true;
@@ -249,7 +249,7 @@ function flags(toks, m) {
           if (q >= end || m[q] < 0) break;
           const label = toks.slice(p, q);
           if (label.length === 1 && isW(label[0], "default")) mark(q + 1, m[q] - 1, FB);
-          else if (label.length) mark(p, q - 1, COND);
+          else if (label.length) mark(p, q - 1, COND | CMPB);
           else if (!afterScriptLabel) { mark(q + 1, m[q] - 1, COND); afterScriptLabel = true; p = m[q] + 1; continue; }
           afterScriptLabel = false;
           p = m[q] + 1;
@@ -280,7 +280,7 @@ function scanFile(path, src) {
   const tier = tierOf(path);
   const out = [];
   const push = (k, tok, kind) => {
-    const c = { kind, condition: !!(fl[k] & COND), negated: !!(fl[k] & NEG), fallbackArm: !!(fl[k] & FB), forcedArm: false, wild: false, mergesNone: false };
+    const c = { kind, condition: !!(fl[k] & COND), negated: !!(fl[k] & NEG), fallbackArm: !!(fl[k] & FB), forcedArm: false, wild: false, mergesNone: false, comparison: !!(fl[k] & CMPB) };
     const cls = classOf(tok, c);
     if (cls === "none") return;
     out.push({ file: path, line: toks[k].line, tok, cls, base: cls, anchor: anchor(toks, k, names[k]), forced: false, tier, ids: idsIn(tok), ctx: c });

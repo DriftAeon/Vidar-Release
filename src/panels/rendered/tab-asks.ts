@@ -10,6 +10,7 @@ import { btn, el } from "./dom";
 import { cardShell } from "./card-shell";
 import { labelledMark } from "./marks";
 import { questionForm } from "./question-form";
+import { errText } from "../../err-text";
 
 export interface TabAsksDeps {
   /** this body's tab id: only store items whose askerTab is this id are drawn */
@@ -73,7 +74,7 @@ export function createTabAsks(deps: TabAsksDeps) {
     const run = async (go: () => Promise<void>, done: () => void) => {
       if (busy) return;
       busy = true; error.textContent = ""; sync();
-      try { await go(); done(); } catch (e) { error.textContent = e instanceof Error ? e.message : String(e); }
+      try { await go(); done(); } catch (e) { error.textContent = errText(e); }
       busy = false; sync();
     };
     const answer = btn("Answer", DRIVE_CLASS.allow, () => {

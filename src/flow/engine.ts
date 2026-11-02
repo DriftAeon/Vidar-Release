@@ -26,6 +26,8 @@ import { paintRun, paintApprovalQueue } from "./run-view";
 // last wipe the other's in-memory list back to storage, losing run records (and run-view.ts's
 // getRun/edge-painting would silently find nothing for a live run).
 import { upsertRun } from "./runs-store";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { errText } from "../err-text.ts";
 
 /** §4.1 asks for persistence on status transitions only, not on every one of the 4 Hz
  *  "running" text events — a run keyed by (own status):(nodeId:status:attempts,...) so a costUsd-
@@ -210,7 +212,7 @@ async function runNode(rs: RunEngineState, nodeId: string, attempt: number): Pro
     setNodeState(rs.run, nodeId, {
       status: "error",
       endedAt: new Date().toISOString(),
-      error: err instanceof Error ? err.message : String(err),
+      error: errText(err),
     });
     persistRun(rs.run);
     finishRun(rs, "error");

@@ -12,15 +12,15 @@ export const isFileRow = (f: Pick<BareLocalFile, "kind">): boolean => f.kind ===
 
 /** Pure: a file's human name. `guard-install.mjs` → Guard Install, folder `adversarial-diff-review` → Adversarial Diff Review,
  *  `Striker-O.md` → Striker O. A skill's `SKILL.md` names its folder. */
-export function fileName(path: string): string {
+function fileName(path: string): string {
   const segs = path.split(/[\\/]/).filter(Boolean);
   let last = segs.pop() ?? path;
   if (/^skill\.md$/i.test(last) && segs.length) last = segs.pop()!;
-  return nameLabel(last.replace(EXT, "")) || last;
+  return titleWords(last.replace(EXT, "")) || last;
 }
 
-/** An id in Title Case (format.ts titleWords; kept under this name for the Runes callers): `kit-mine` → Kit Mine. */
-export const nameLabel = titleWords;
+/** A set, library or rune id in Title Case (format.ts titleWords), the id itself when that is empty: `kit-mine` → Kit Mine. */
+export const idLabel = (id: string): string => titleWords(id) || id;
 
 /** The text a tick row shows: an MCP server id in the same Title Case skills get (`vidar-control` → Vidar Control);
  *  the raw id stays in the row's title. */

@@ -5,15 +5,16 @@
 // the 7.x scanner (`reScanSlashToken` for regex literals, `reScanTemplateToken` for template parts).
 //   scan(files, ctx) -> [{file, line, tok, cls, base, anchor, n, forced, tier, ids, ctx}]
 // files are {path, src}; ctx is {root, ids, types}. `ctx.types === false` skips the checker (no forced keys).
-// ctx on each entry: { kind, condition, negated, fallbackArm, forcedArm, mergesNone, wild, cmp } where cmp is
-// { op, subject } for an operand of an equality test (the sys-agent-branch sweep lane reads it).
+// ctx on each entry: { kind, condition, negated, fallbackArm, forcedArm, mergesNone, wild, idUnion, cmp } where cmp is
+// { op, subject } for an operand of an equality test (the sys-agent-branch sweep lane reads it); idUnion marks a member
+// of the AgentId union spelled inline (strict, unpinnable outside table files: alias AgentId from src/agents/id.ts).
 // Forced (F): a key of an object literal typed with every AgentId as a required property (Record<AgentId, X>), reported
 // at the object literal's first line; a `case` literal of a switch over the AgentId union whose `default` is closed by
 // `unknownAgent(x)` or any call/declaration typed `never`. A switch without the close is not forced (its case literals
 // are `wild`, strict in every tier when a non-closing default exists).
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, posix, resolve } from "node:path";
 import { API, SymbolFlags, TypeFlags } from "typescript/unstable/sync";
 import { LanguageVariant, SyntaxKind as K, createScanner } from "typescript/unstable/ast";
 import { DEFAULT_IDS, anchor, classOf, idsIn, isIdWord, tierOf, useIds, words } from "./key-words.mjs";
@@ -123,9 +124,23 @@ const isModuleSpec = (n) => {
   if (p.kind === K.CallExpression && p.expression.kind === K.ImportKeyword) return true;
   return p.kind === K.LiteralType && p.parent?.kind === K.ImportType;
 };
-const isRegExpArg = (n) => {
+const isDynamicImport = (n) => n.parent?.kind === K.CallExpression && n.parent.expression.kind === K.ImportKeyword;
+
+/** Repo-relative file a relative specifier names, from ctx.all (tracked paths); null when unresolved. */
+function resolveSpec(from, spec, ctx) {
+  if (!spec.startsWith(".") || !ctx.all) return null;
+  const all = ctx.all instanceof Set ? ctx.all : new Set(ctx.all);
+  const p = posix.normalize(posix.join(posix.dirname(from), spec));
+  return [p, `${p}.ts`, `${p}.mjs`, p.replace(/\.m?js$/, ".ts"), `${p}/index.ts`].find((c) => all.has(c)) ?? null;
+}
+const isRegExpArg =(n) => {
   const p = n.parent;
   return !!p && (p.kind === K.NewExpression || p.kind === K.CallExpression) && p.expression.kind === K.Identifier && p.expression.text === "RegExp" && p.arguments?.[0] === n;
+};
+// Math.PI member name, matched by value so the scanner source holds no id-shaped token.
+const isMathConst = (n) => {
+  const p = n.parent;
+  return n.kind === K.Identifier && Math[n.text] === Math.PI && p?.kind === K.PropertyAccessExpression && p.name === n && p.expression.kind === K.Identifier && p.expression.text === "Math";
 };
 const isHasOwnArg = (n) => {
   const p = n.parent;
@@ -134,6 +149,17 @@ const isHasOwnArg = (n) => {
   const nm = e.kind === K.PropertyAccessExpression ? e.name.text : e.kind === K.Identifier ? e.text : "";
   return nm === "hasOwnProperty" || nm === "hasOwn";
 };
+
+const CMP_METHODS = new Set(["includes", "startsWith", "endsWith", "indexOf"]);
+/** Direct comparison operand (Q2 a): a `case` label, an `in` operand, or the receiver / argument of includes / startsWith / endsWith / indexOf. */
+function isCompared(n) {
+  const p = n.parent;
+  if (!p) return false;
+  if (p.kind === K.CaseClause && p.expression === n) return true;
+  if (p.kind === K.BinaryExpression && p.operatorToken.kind === K.InKeyword) return true;
+  if (p.kind === K.CallExpression && p.arguments?.includes(n)) return p.expression.kind === K.PropertyAccessExpression && CMP_METHODS.has(p.expression.name.text);
+  return p.kind === K.PropertyAccessExpression && p.expression === n && CMP_METHODS.has(p.name.text) && p.parent?.kind === K.CallExpression;
+}
 
 function openProject(files, ctx) {
   const root = resolve(ctx.root ?? join(tmpdir(), "__agent_keys__"));
@@ -166,7 +192,7 @@ function scanFile(f, sf, checker, ctx, idList) {
   const byStart = new Map(toks.map((t, i) => [t.start, i]));
   const tier = tierOf(path);
   const base = tier;
-  const forced = new Set(), wild = new Set(), lineAt = new Map();
+  const forced = new Set(), wild = new Set(), unions = new Set(), lineAt = new Map();
   const startOf = (n) => n.getStart(sf);
   const lineOf = (pos) => sf.getLineAndCharacterOfPosition(pos).line + 1;
   const idSet = new Set(idList);
@@ -206,8 +232,21 @@ function scanFile(f, sf, checker, ctx, idList) {
     if (def && def.statements.some(neverish)) lits.forEach((p) => forced.add(p));
     else if (def) lits.forEach((p) => wild.add(p));
   };
+  // The AgentId union spelled inline (`"claude" | "codex"`, any order, nothing else in it): id.ts alone may write it.
+  const onUnion = (u) => {
+    const lits = u.types.map((t) => (t.kind === K.LiteralType && t.literal.kind === K.StringLiteral ? t.literal : null));
+    if (lits.length < 2 || lits.some((l) => !l)) return;
+    const vals = new Set(lits.map((l) => l.text));
+    if (vals.size === lits.length && sameSet(vals, idSet)) lits.forEach((l) => unions.add(startOf(l)));
+  };
 
-  const push = (node, tok, kind, at = node) => {
+  // St-import: a static specifier whose file is the adapter of the id it names; a dynamic import() string is a literal.
+  const specSt = (n) => {
+    const hit = resolveSpec(path, n.text, ctx);
+    const ids = idsIn(n.text);
+    return !!hit && ids.length > 0 && ids.every((i) => tierOf(hit) === `adapter:${i}`);
+  };
+  const push = (node, tok, kind, at = node, st = false) => {
     const { top, q } = chainTop(node);
     const sl = slot(top);
     const cmpP = top.parent;
@@ -221,9 +260,11 @@ function scanFile(f, sf, checker, ctx, idList) {
       forcedArm: forced.has(s),
       mergesNone: false,
       wild: wild.has(s),
+      idUnion: unions.has(s),
       cmp,
+      comparison: !!cmp || isCompared(node),
     };
-    const cls = classOf(tok, c);
+    const cls = st ? "St" : classOf(tok, c);
     if (cls === "none") return;
     const i = byStart.get(s);
     const item = itemName(node);
@@ -237,11 +278,15 @@ function scanFile(f, sf, checker, ctx, idList) {
     switch (n.kind) {
       case K.ObjectLiteralExpression: onObject(n); break;
       case K.SwitchStatement: onSwitch(n); break;
+      case K.UnionType: onUnion(n); break;
       case K.Identifier:
-      case K.PrivateIdentifier: push(n, n.text, "ident"); break;
+      case K.PrivateIdentifier:
+        if (isMathConst(n)) break; // `Math.PI`: a member of the global Math, not the agent id `pi`
+        push(n, n.text, "ident"); break;
       case K.StringLiteral:
       case K.NoSubstitutionTemplateLiteral:
-        if (!isModuleSpec(n)) push(n, n.text, isRegExpArg(n) ? "regex" : "literal");
+        if (!isModuleSpec(n) || isDynamicImport(n)) push(n, n.text, isRegExpArg(n) ? "regex" : "literal");
+        else if (specSt(n)) push(n, n.text, "literal", n, true);
         break;
       case K.TemplateHead:
       case K.TemplateMiddle:

@@ -91,9 +91,11 @@ import adapter_job
 ROOT = Path(__file__).resolve().parent
 TMP = ROOT / ".tmp"
 PROJECTS = Path.home() / ".claude" / "projects"
-CODEX_SESSIONS = Path.home() / ".codex" / "sessions"
+ROLLOUT_SESSIONS = Path.home() / ".codex" / "sessions"
 # Codex keeps every rollout ever (hundreds per day), so only the last 3 days' folders are scanned.
-CODEX_DAYS = 3
+ROLLOUT_DAYS = 3
+PROJECT_AGENT = PROJECTS.parent.name.lstrip(".")
+ROLLOUT_AGENT = ROLLOUT_SESSIONS.parent.name.lstrip(".")
 # A small model in LM Studio defaults to a 4k context; keep the prompt well inside it.
 HEAD_CHARS, TAIL_CHARS = 6000, 2000
 MIN_WORDS, MAX_WORDS = 15, 90
@@ -119,7 +121,7 @@ def _norm_cwd(p: str) -> str:
     return p.replace("\\", "/").rstrip("/").casefold()
 
 
-def _codex_cwd(f: Path) -> str:
+def _rollout_cwd(f: Path) -> str:
     """The rollout's session_meta cwd (its first line), or "" when unreadable."""
     try:
         with f.open(encoding="utf-8", errors="replace") as fh:
@@ -131,36 +133,36 @@ def _codex_cwd(f: Path) -> str:
     return str((rec.get("payload") or {}).get("cwd") or "")
 
 
-def codex_rollouts(cwd: str, root: Path, now: float | None = None) -> list[Path]:
-    """Rollouts under root (<yyyy>/<mm>/<dd>/rollout-*.jsonl) from the last CODEX_DAYS days
+def recent_rollouts(cwd: str, root: Path, now: float | None = None) -> list[Path]:
+    """Rollouts under root (<yyyy>/<mm>/<dd>/rollout-*.jsonl) from the last ROLLOUT_DAYS days
     whose session_meta cwd is `cwd`. The store is large, so only those day folders are listed."""
     now = time.time() if now is None else now
     want = _norm_cwd(cwd)
     found: list[Path] = []
-    for back in range(CODEX_DAYS + 1):  # +1: the folder's date may be UTC, ahead of local
+    for back in range(ROLLOUT_DAYS + 1):  # +1: the folder's date may be UTC, ahead of local
         day = datetime.fromtimestamp(now - back * 86400)
         ddir = root / f"{day:%Y}" / f"{day:%m}" / f"{day:%d}"
         if not ddir.is_dir():
             continue
         for f in ddir.glob("rollout-*.jsonl"):
             try:
-                if f.stat().st_mtime < now - CODEX_DAYS * 86400:
+                if f.stat().st_mtime < now - ROLLOUT_DAYS * 86400:
                     continue
             except OSError:
                 continue
-            if _norm_cwd(_codex_cwd(f)) == want:
+            if _norm_cwd(_rollout_cwd(f)) == want:
                 found.append(f)
     return found
 
 
-def latest_reply(cwd: str, claude_root: Path | None = None, codex_root: Path | None = None,
+def latest_reply(cwd: str, project_root: Path | None = None, rollout_root: Path | None = None,
                  agent: str | None = None) -> tuple[str, str]:
     """(text, source) — the latest reply in the newest transcript for `cwd`. `agent` ("claude" or
     "codex") restricts the search to that store; None searches both (the CLI default)."""
-    pdir = (claude_root or PROJECTS) / project_slug(cwd)
-    files = list(pdir.glob("*.jsonl")) if pdir.is_dir() and agent != "codex" else []
-    if agent != "claude":
-        files += codex_rollouts(cwd, codex_root or CODEX_SESSIONS)
+    pdir = (project_root or PROJECTS) / project_slug(cwd)
+    files = list(pdir.glob("*.jsonl")) if pdir.is_dir() and agent in (None, PROJECT_AGENT) else []
+    if agent in (None, ROLLOUT_AGENT):
+        files += recent_rollouts(cwd, rollout_root or ROLLOUT_SESSIONS)
     if not files:
         raise RuntimeError(f"no transcripts for {cwd} (expected {pdir} or a Codex rollout)")
     files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -542,9 +544,9 @@ def run(args: argparse.Namespace) -> dict:
     elif args.stdin:
         text, source = sys.stdin.read(), "stdin"
     else:
-        codex_root = Path(args.codex_home) / "sessions" if args.codex_home else None
-        claude_root = Path(args.claude_home) / "projects" if args.claude_home else None
-        text, source = latest_reply(args.cwd, claude_root, codex_root, agent=args.agent)
+        rollout_root = Path(args.rollout_home) / "sessions" if args.rollout_home else None
+        project_root = Path(args.project_home) / "projects" if args.project_home else None
+        text, source = latest_reply(args.cwd, project_root, rollout_root, agent=args.agent)
     text = text.strip()
     if not text:
         raise RuntimeError("nothing to speak")
@@ -626,11 +628,11 @@ def main() -> int:
             stream.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cwd", default=os.getcwd())
-    ap.add_argument("--agent", choices=["claude", "codex"], default=None,
+    ap.add_argument("--agent", choices=[PROJECT_AGENT, ROLLOUT_AGENT], default=None,
                     help="read only this agent's transcripts (default: newest of both)")
-    ap.add_argument("--claude-home", dest="claude_home", default=None,
+    ap.add_argument("--claude-home", dest="project_home", default=None,
                     help="CLAUDE_CONFIG_DIR of the tab (default ~/.claude); its projects folder is searched")
-    ap.add_argument("--codex-home", dest="codex_home", default=None,
+    ap.add_argument("--codex-home", dest="rollout_home", default=None,
                     help="CODEX_HOME of the tab (default ~/.codex); its sessions folder is searched")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--text")

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 const h = setupDom().ipc;
-const { holdsCodexThread, launchLineThread, pickRawThreads, rolloutKey } = await import("../src/panels/sessions/codex-thread.ts");
+const { holdsResumableThread, launchLineThread, pickRawThreads, rolloutKey } = await import("../src/panels/sessions/codex-thread.ts");
 const lookup = await import("../src/panels/sessions/lookup.ts");
 const { falconAgentTransport, tauriAgentTransport } = await import("../src/panels/rendered/transport.ts");
 
@@ -14,14 +14,14 @@ const raw = (cmd, over = {}) => ({ agent: "codex", body: "terminal", alive: true
 const rendered = (id, over = {}) => ({ agent: "codex", body: "rendered", alive: true, rendered: { sessionId: () => id }, ...over });
 
 test("a Raw tab with `codex resume X` holds X; other shapes do not", () => {
-  assert.equal(holdsCodexThread(raw(`codex resume ${X}`), X), true);
-  assert.equal(holdsCodexThread(raw(`codex -c 'developer_instructions="a b"' resume ${X}`), X), true);
-  assert.equal(holdsCodexThread(raw(`codex resume ${X}`), "019a2b3c"), false, "a prefix is not the thread");
-  assert.equal(holdsCodexThread(raw(`codex resume ${X}`, { alive: false }), X), false, "a dead Raw tab holds nothing");
-  assert.equal(holdsCodexThread(raw(`claude --resume ${X}`, { agent: "claude" }), X), false);
-  assert.equal(holdsCodexThread(raw("codex"), X), false);
-  assert.equal(holdsCodexThread(rendered(X), X), true);
-  assert.equal(holdsCodexThread(rendered(null), X), false);
+  assert.equal(holdsResumableThread(raw(`codex resume ${X}`), X), true);
+  assert.equal(holdsResumableThread(raw(`codex -c 'developer_instructions="a b"' resume ${X}`), X), true);
+  assert.equal(holdsResumableThread(raw(`codex resume ${X}`), "019a2b3c"), false, "a prefix is not the thread");
+  assert.equal(holdsResumableThread(raw(`codex resume ${X}`, { alive: false }), X), false, "a dead Raw tab holds nothing");
+  assert.equal(holdsResumableThread(raw(`claude --resume ${X}`, { agent: "claude" }), X), false);
+  assert.equal(holdsResumableThread(raw("codex"), X), false);
+  assert.equal(holdsResumableThread(rendered(X), X), true);
+  assert.equal(holdsResumableThread(rendered(null), X), false);
 });
 
 test("lookup: the holder is found, the spawning tab itself is skipped", () => {

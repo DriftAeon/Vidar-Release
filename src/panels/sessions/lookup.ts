@@ -2,11 +2,11 @@
 // session and the drive snapshot. sessions.ts binds its tab map and active id in and re-exports these.
 import { invoke } from "../../ipc";
 import { mintTabName } from "../../tab-names";
-import { holdsCodexThread, launchLineThread, pickRawThreads, rolloutKey, type RawThreadTab, type RolloutThread } from "./codex-thread";
+import { holdsResumableThread, launchLineThread, pickRawThreads, rolloutKey, type RawThreadTab, type RolloutThread } from "./codex-thread";
 import type { RenderedBody } from "../rendered";
 import type { PermissionMode } from "../../agents/protocol";
 import type { RulesLaunch } from "../../rules/inject";
-import type { LaunchOpts, SessionAgent, SessionBody, TerminalSession } from "./types";
+import { sessionSupports, type LaunchOpts, type SessionAgent, type SessionBody, type TerminalSession } from "./types";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
 let getActiveId: () => string | null = () => null;
@@ -53,7 +53,7 @@ export function openRenderedSessionIds(): string[] {
  *  held thread (codex-thread.ts). Call `refreshRawCodexThreads` first for a current answer. */
 export function codexThreadHolder(thread: string, exceptTab?: string): string | null {
   for (const [id, s] of sessions) {
-    if (id !== exceptTab && holdsCodexThread(s, thread, rawThreads.has(id) ? rawThreads.get(id) : undefined)) return id;
+    if (id !== exceptTab && holdsResumableThread(s, thread, rawThreads.has(id) ? rawThreads.get(id) : undefined)) return id;
   }
   return null;
 }
@@ -78,7 +78,7 @@ export async function refreshRawCodexThreads(fetch: RolloutFetch = fetchRollouts
   const raws: RawThreadTab[] = [];
   const held: string[] = [];
   for (const [id, s] of sessions) {
-    if (s.agent !== "codex" || !s.alive) continue;
+    if (!sessionSupports(s.agent, "thread") || !s.alive) continue;
     const sid = s.rendered?.sessionId();
     if (sid) held.push(sid);
     const spawnedMs = rawSpawnMs.get(id);
@@ -251,6 +251,12 @@ export function renderedBody(id: string): RenderedBody | null {
   return sessions.get(id)?.rendered ?? null;
 }
 
+/** The tab record of a Rendered Bare tab still waiting for its Rune Vault, else null (`pickTabVault`, the Runes view). */
+export function pendingVaultTab(id: string): TerminalSession | null {
+  const s = sessions.get(id);
+  return s?.pendingVault?.pending ? s : null;
+}
+
 /** What a tab was launched with, for a successor spawn — same
  *  agent, cwd, model, launch args and permission mode as the source tab. */
 export function sessionLaunchInfo(id: string): {
@@ -278,7 +284,7 @@ export function sessionLaunchInfo(id: string): {
 export async function recordedVault(tab: string, falconSession?: string | null, threadId?: string | null): Promise<string | null> {
   try {
     const rec = await invoke("rune_vault_session", { tab, falconSession: falconSession ?? null, threadId: threadId ?? null });
-    return rec?.vault.id ?? null;
+    return rec?.vault?.id ?? null;
   } catch {
     return null;
   }

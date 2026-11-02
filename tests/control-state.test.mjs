@@ -2,17 +2,9 @@
 // reaches onPress (aria-disabled, unlike `disabled`, still delivers clicks). jsdom stands in for WebView2.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
-Object.assign(globalThis, {
-  window,
-  document: window.document,
-  Node: window.Node,
-  HTMLElement: window.HTMLElement,
-  HTMLButtonElement: window.HTMLButtonElement,
-  MouseEvent: window.MouseEvent,
-});
+installDom(["Node", "HTMLElement", "HTMLButtonElement", "MouseEvent"]);
 const { control } = await import("../src/panels/controls/control.ts");
 
 test("a focused control keeps its node and focus across set({ blocked: true })", () => {

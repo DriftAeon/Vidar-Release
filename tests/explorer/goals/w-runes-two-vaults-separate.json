@@ -1,0 +1,18 @@
+{
+  "id": "w-runes-two-vaults-separate",
+  "title": "Start Two New Rune Vaults and Keep the Tabs Apart",
+  "style": "new-user",
+  "scope": "vidar",
+  "surfaces": ["launcher", "runes"],
+  "tags": ["runes", "vault"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "start a new Claude tab, press New Rune Vault, name it and press Done, then press Start Session without sending a message" },
+    { "intent": "in Runes, press Modify, switch one rune's State to Off and press Done" },
+    { "intent": "start a second Claude tab the same way, with its own new Rune Vault" },
+    { "intent": "in the second tab's Runes, check the rune I switched in the first tab still reads State: On and Lock still reads Lock" },
+    { "intent": "go back to the first tab and check its rune still reads State: Off" }
+  ]
+}

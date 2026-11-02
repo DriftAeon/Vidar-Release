@@ -154,8 +154,7 @@ mod tests {
 
     fn resolved(root: &Path, enabled: bool) -> set_loadout::Loadout {
         let config = crate::paths::config_path_in(root);
-        let home = root.join("home");
-        let env = ResolveEnv { root, config: &config, home: &home, user_home: None };
+        let env = ResolveEnv { root, config: &config, user_home: None };
         let set = SetRef { library: None, set: "main".into() };
         let (loadout, warnings) = set_loadout::resolve_with_delivery(&env, Agent::Claude, &[set], enabled);
         assert!(warnings.is_empty(), "{warnings:?}");
@@ -213,13 +212,13 @@ mod tests {
     fn guarded_rune_refusal_names_id_library_set_and_reason() {
         let t = temp("refusal");
         fixture(&t.0);
-        let lib = crate::paths::rune_imports_dir_in(&t.0).join("kit");
+        let lib = crate::paths::rune_imports_dir_in(&t.0).join("installed");
         put(&lib.join("facts/memory.md"), "---\nname: memory\nkind: fact\nscope: [s]\nactivate: recall\ndescription: Remember this\n---\nThe account path /person/secret must not appear here.\n");
         put(&lib.join("sets/workflow.md"), "---\nname: workflow\nkind: set\nscope: [s]\n---\n<?recall?>\n");
         let config = crate::paths::config_path_in(&t.0);
         let home_dir = t.0.join("home");
-        let env = ResolveEnv { root: &t.0, config: &config, home: &home_dir, user_home: None };
-        let source = SetRef { library: Some("kit".into()), set: "workflow".into() };
+        let env = ResolveEnv { root: &t.0, config: &config, user_home: None };
+        let source = SetRef { library: Some("installed".into()), set: "workflow".into() };
         let (loadout, warnings) = set_loadout::resolve_with_delivery(&env, Agent::Claude, &[source], true);
         assert!(warnings.is_empty(), "{warnings:?}");
         let draft = loadout.recall_skill;
@@ -231,7 +230,7 @@ mod tests {
         let payload: serde_json::Value = serde_json::from_str(payload).unwrap();
         assert_eq!(payload, serde_json::json!({
             "reason": "Bare rune skill: holds the account name",
-            "id": "memory", "library": "kit", "set": "workflow"
+            "id": "memory", "library": "installed", "set": "workflow"
         }));
         assert!(!crate::paths::rune_skills_dir_in(&t.0).exists());
     }

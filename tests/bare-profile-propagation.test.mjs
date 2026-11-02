@@ -16,6 +16,10 @@ const dom = setupDom({ stubs: {
     export function hasArmedAstra() { return false; }`,
   "tab-names": "export function mintTabName() { return 'Tab'; }",
   "capabilities/registry": "export function use() { return null; }",
+}, answers: {
+  // a fresh launch on a copy source starts a new copy (src/launcher/start-vault.ts)
+  rune_vault_read: ({ id }) => ({ vault: { id, hash: "h" }, drift: [] }),
+  rune_vault_create: () => ({ id: "copy-test-1" }),
 } });
 
 const { BUILTIN_AGENTS, builtinAgents, defaultVault, setGatewayModules, setRoster, rosterView, spawnFrom } = await import("../src/launcher/roster.ts");
@@ -30,44 +34,53 @@ const LOC = { label: "Trial", cwd: "C:\\work\\trial-repo" };
 test("spawnFrom: a Bare launch names one vault; the row's sets and workspace add-ons are never read", async () => {
   const row = { ...bareRow, sets: [{ set: "Base" }], permissionMode: "plan" };
   rig.created.length = 0;
-  await spawnFrom(row, { ...LOC, sets: [{ set: "Added" }] });
-  assert.equal(rig.created.at(-1).vault, "stock-claude", "a plain click with no last vault launches the stock vault");
+  // Q7: a Raw Bare row with no Last Vault has nothing to load; it refuses with a notice and creates nothing
+  await assert.rejects(spawnFrom(row, { ...LOC, sets: [{ set: "Added" }] }), /No Last Vault for this agent yet/);
+  assert.deepEqual(rig.created, []);
+  assert.equal(defaultVault("claude"), undefined);
+  await spawnFrom(row, LOC, undefined, undefined, undefined, undefined, undefined, { vault: "copy-old-1" });
+  assert.equal(rig.created.at(-1).vault, "copy-test-1", "a copy source launches as a new copy");
+  assert.equal(defaultVault("claude"), "copy-old-1", "Last Vault keeps the source, never the copy");
   assert.equal(Object.hasOwn(rig.created.at(-1), "sets"), false);
   assert.equal(rig.created.at(-1).permissionMode, undefined, "a Bare row's mode comes from its vault (D-c)");
-  await spawnFrom(row, LOC, undefined, undefined, undefined, undefined, undefined, "team-kit");
-  assert.equal(rig.created.at(-1).vault, "team-kit");
-  assert.equal(defaultVault("claude"), "team-kit", "the last vault launched is the next pre-pick");
+  await spawnFrom(row, LOC, undefined, undefined, undefined, undefined, undefined, { vault: "team-main" });
+  assert.equal(rig.created.at(-1).vault, "team-main");
+  assert.equal(defaultVault("claude"), "team-main", "the last vault launched is the next pre-pick");
+  // An agent launch (remember: false) loads its vault but leaves the user's Last Vault alone.
+  await spawnFrom(row, LOC, undefined, undefined, undefined, undefined, undefined, { vault: "agent-main", remember: false });
+  assert.equal(rig.created.at(-1).vault, "agent-main");
+  assert.equal(defaultVault("claude"), "team-main", "an agent launch does not overwrite Last Vault");
   await spawnFrom(row, LOC);
-  assert.equal(rig.created.at(-1).vault, "team-kit");
+  assert.equal(rig.created.at(-1).vault, "team-main");
   // The set-list transition (a resumed thread's manifest sets): no vault, the sets ride as given.
   await spawnFrom(row, LOC, undefined, undefined, undefined, undefined, []);
   assert.deepEqual(rig.created.at(-1).sets, []);
   assert.equal(Object.hasOwn(rig.created.at(-1), "vault"), false);
-  assert.equal(defaultVault("codex"), "stock-codex");
+  assert.equal(defaultVault("codex"), undefined);
 });
 
 test("spawn transports: a vault rides instead of sets, and a session record's vault wins on respawn", async () => {
   const params = { tabId: "t", agent: "claude", cwd: LOC.cwd, permissionMode: "default" };
   const sent = [];
   dom.ipc.answers.falcon_spawn = (args) => { sent.push(args); return 1; };
-  await createFalconProfileTransport("bare", "claude-rendered-bare", [{ set: "x" }], "team-kit").spawn(params);
-  assert.equal(sent.at(-1).vault, "team-kit");
+  await createFalconProfileTransport("bare", "claude-rendered-bare", [{ set: "x" }], "team-main").spawn(params);
+  assert.equal(sent.at(-1).vault, "team-main");
   assert.equal(Object.hasOwn(sent.at(-1), "sets"), false);
   dom.ipc.answers.rune_vault_session = (args) => (args.tab === "t" ? { vault: { id: "custom-abc123", hash: "h" } } : null);
-  await createFalconProfileTransport("bare", "claude-rendered-bare", undefined, "team-kit").spawn(params);
+  await createFalconProfileTransport("bare", "claude-rendered-bare", undefined, "team-main").spawn(params);
   assert.equal(sent.at(-1).vault, "custom-abc123", "/clear and Retry load the recorded vault (D-g)");
   const codex = [];
   dom.ipc.answers.spawn_codex_appserver = (args) => { codex.push(args); return { gen: 1, developerInstructions: null }; };
-  await createProfileTransport("bare", "codex-rendered-bare", undefined, "stock-codex").spawn({ ...params, agent: "codex" });
+  await createProfileTransport("bare", "codex-rendered-bare", undefined, "team-codex").spawn({ ...params, agent: "codex" });
   assert.equal(codex.at(-1).vault, "custom-abc123");
   delete dom.ipc.answers.rune_vault_session;
-  await createProfileTransport("bare", "codex-rendered-bare", undefined, "stock-codex").spawn({ ...params, agent: "codex" });
-  assert.equal(codex.at(-1).vault, "stock-codex");
+  await createProfileTransport("bare", "codex-rendered-bare", undefined, "team-codex").spawn({ ...params, agent: "codex" });
+  assert.equal(codex.at(-1).vault, "team-codex");
   delete dom.ipc.answers.spawn_codex_appserver;
   delete dom.ipc.answers.falcon_spawn;
   const raw = ptySpawnPayload({ id: "t", cols: 80, rows: 24, cwd: LOC.cwd, tabName: null, ptyGen: 1,
-    profile: "bare", rowKey: "claude-bare", agent: "claude", sets: [{ set: "x" }], vault: "team-kit" });
-  assert.equal(raw.payload.vault, "team-kit");
+    profile: "bare", rowKey: "claude-bare", agent: "claude", sets: [{ set: "x" }], vault: "team-main" });
+  assert.equal(raw.payload.vault, "team-main");
   assert.equal(Object.hasOwn(raw.payload, "sets"), false);
 });
 
@@ -125,7 +138,7 @@ test("spawnFrom: the Codex Bare row creates a Raw Codex tab carrying the profile
   rig.created.length = 0;
   const row = BUILTIN_AGENTS.find((a) => a.key === "codex-bare");
   assert.deepEqual(row, { key: "codex-bare", id: "codex", label: "Codex", profile: "bare", requires: ["codex", "node"] });
-  await spawnFrom(row, LOC, "Codex");
+  await spawnFrom(row, LOC, "Codex", undefined, undefined, undefined, undefined, { vault: "team-codex" });
   assert.equal(rig.created[0].profile, "bare");
   assert.equal(rig.created[0].agent, "codex");
   assert.equal(rig.created[0].rowKey, "codex-bare");
@@ -215,11 +228,11 @@ test("spawn payload: a profiled tab handed a resume line passes it through for R
   assert.equal(payload.profile, "bare");
 });
 
-test("spawn payload: a default Claude tab keeps shell, app layer and rules, and has no profile", () => {
+test("spawn payload: a default Claude tab keeps shell and rules, and has no profile", () => {
   const rules = { file: "C:\\v\\built\\a.md", codex: null, warnings: [] };
   const { payload } = ptySpawnPayload({ ...BASE, shell: "pwsh", args: ["-NoExit", "-Command", "claude"], rules });
   assert.equal(payload.shell, "pwsh");
-  assert.match(payload.args[2], /^claude --plugin-dir .*--append-system-prompt-file/);
+  assert.match(payload.args[2], /^claude --append-system-prompt-file/);
   assert.equal("profile" in payload, false);
 });
 
@@ -249,9 +262,9 @@ test("rowKey: the Raw Bare row's key reaches createSession, the spawn payload an
 test("spawnFrom: a vault or set pick on a row that is not Bare throws and creates nothing", async () => {
   const MSG = /A Rune Vault loads only on a Bare row; this row would launch without it\.$/;
   const plain = BUILTIN_AGENTS.find((a) => a.key === "claude");
-  for (const [pick, vault] of [[undefined, "stock-claude"], [[{ set: "a" }], undefined]]) {
+  for (const [pick, vault] of [[undefined, "team-main"], [[{ set: "a" }], undefined]]) {
     rig.created.length = 0;
-    await assert.rejects(spawnFrom(plain, LOC, undefined, undefined, undefined, undefined, pick, vault), MSG);
+    await assert.rejects(spawnFrom(plain, LOC, undefined, undefined, undefined, undefined, pick, vault ? { vault } : undefined), MSG);
     assert.deepEqual(rig.created, []);
   }
   rig.created.length = 0;
@@ -303,7 +316,7 @@ test("rowKey: a Codex Bare row's key reaches spawn_codex_appserver on the first 
   assert.equal(Object.hasOwn(sent[1], "rowKey"), false, "a non-profiled Codex spawn sends none");
   delete dom.ipc.answers.spawn_codex_appserver;
   const body = readFileSync(new URL("../src/panels/sessions/rendered-body.ts", import.meta.url), "utf8");
-  assert.match(body, /createProfileTransport\(s\.profile, s\.rowKey, s\.sets, s\.vault\)/);
+  assert.match(body, /createProfileTransport\(s\.profile, s\.rowKey, s\.sets, \(\) => s\.vault\)/);
 });
 
 test("rowKey: a re-adopted Rendered Bare tab sends the host's echoed key again on /clear", async () => {
@@ -321,8 +334,8 @@ test("rowKey: a re-adopted Rendered Bare tab sends the host's echoed key again o
   assert.equal(sent[0].rowKey, "claude-rendered-bare");
   // attachRenderedBody hands the tab's rowKey to that transport (src/panels/sessions/rendered-body.ts).
   const body = readFileSync(new URL("../src/panels/sessions/rendered-body.ts", import.meta.url), "utf8");
-  assert.match(body, /createFalconAdoptTransport\(s\.falconSession, gateway, s\.profile, refused, s\.rowKey, s\.sets, s\.vault\)/);
-  assert.match(body, /createFalconProfileTransport\(s\.profile, s\.rowKey, s\.sets, s\.vault\)/);
+  assert.match(body, /createFalconAdoptTransport\(s\.falconSession, gateway, s\.profile, refused, s\.rowKey, s\.sets, \(\) => s\.vault\)/);
+  assert.match(body, /createFalconProfileTransport\(s\.profile, s\.rowKey, s\.sets, \(\) => s\.vault\)/);
   delete dom.ipc.answers.falcon_adopt;
   delete dom.ipc.answers.falcon_spawn;
 });

@@ -92,7 +92,7 @@ pub fn allowlisted(inherited: impl IntoIterator<Item = (OsString, OsString)>) ->
 /// overlay must set an absolute `CODEX_HOME`: Codex on Windows reportedly ignores `USERPROFILE`
 /// (peers #25184, inferred), so only an explicit home keeps it off `~\.codex`. The tab variables
 /// (`VIDAR_TAB`, `VIDAR_TAB_NAME`, `VIDAR_CTL_TOKEN`) are added by the spawn (agent.rs).
-pub fn codex(inherited: impl IntoIterator<Item = (OsString, OsString)>, overlay: &BTreeMap<String, String>) -> Result<Env, String> {
+pub fn app_server(inherited: impl IntoIterator<Item = (OsString, OsString)>, overlay: &BTreeMap<String, String>) -> Result<Env, String> {
     let home = overlay.get("CODEX_HOME").map(String::as_str).unwrap_or_default();
     if split_home(home).is_none() {
         return Err(format!("Bare Codex profile sets no absolute CODEX_HOME ({home:?}); spawn refused"));
@@ -117,7 +117,7 @@ pub fn codex(inherited: impl IntoIterator<Item = (OsString, OsString)>, overlay:
 /// The overlay placeholder for the spawning process's own `LOCALAPPDATA`. A Bare Codex shell's
 /// TEMP is built from the Codex process's LOCALAPPDATA; a redirected, never-created folder there
 /// leaves pwsh in ConstrainedLanguage with unwritable temp.
-/// Filled in `codex`, so every spawn path (Vidar's and Falcon's, via the mounted module) shares it.
+/// Filled in `app_server`, so every spawn path (Vidar's and Falcon's, via the mounted module) shares it.
 pub const LOCALAPPDATA_PLACEHOLDER: &str = "{{localappdata}}";
 
 /// The real `LOCALAPPDATA` from `inherited`: refused when unset, relative, or inside the Bare home
@@ -180,6 +180,38 @@ pub fn split_home(path: &str) -> Option<(String, String)> {
     } else {
         None
     }
+}
+
+/// Names a Bare spawn sets itself beyond its profile overlay: `HOMEDRIVE`/`HOMEPATH` from the
+/// overlay's `USERPROFILE`, and the tab and session variables (`VIDAR_TAB`, `VIDAR_TAB_NAME`,
+/// `VIDAR_CTL_TOKEN`, Falcon's `VIDAR_CTL_SECRET` and `FALCON_SESSION`). A rune's env may not set them.
+pub const PLUMBING_ENV: &[&str] = &["HOMEDRIVE", "HOMEPATH", "VIDAR_TAB", "VIDAR_TAB_NAME", "VIDAR_CTL_TOKEN", "VIDAR_CTL_SECRET", "FALCON_SESSION"];
+
+/// The rune env pairs a spawn sets, in order, refusing any name the `<agent>` home overlay
+/// (`overlay`, its names) or the plumbing (`PLUMBING_ENV`) sets, case-insensitively. Shared by
+/// Vidar (`rune_env`) and the Falcon host's re-check (`src-falcon/src/claude.rs` `bare_spawn`).
+pub fn admit_rune_env<'a>(
+    agent: &str,
+    pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
+    overlay: &[&str],
+) -> Result<Vec<(String, String)>, String> {
+    let mut out = Vec::new();
+    for (name, value) in pairs {
+        if overlay.iter().chain(PLUMBING_ENV).any(|k| k.eq_ignore_ascii_case(name)) {
+            return Err(format!("Rune Vault env {name} conflicts with the {agent} home overlay; Bare spawn refused"));
+        }
+        out.push((name.to_string(), value.to_string()));
+    }
+    Ok(out)
+}
+
+/// A loadout's env runes (`Loadout.env`) as the pairs to set over `overlay` (the agent's home
+/// overlay), through [`admit_rune_env`]. `agent` is the refusal's `Claude` or `Codex`.
+/// Vidar-only: Falcon mounts this file without `crate::bare` and calls `admit_rune_env`.
+#[cfg(not(falcon_shell))]
+pub(crate) fn rune_env(agent: &str, loadout: &crate::bare::set_loadout::Loadout, overlay: &BTreeMap<String, String>) -> Result<Vec<(String, String)>, String> {
+    let names: Vec<&str> = overlay.keys().map(String::as_str).collect();
+    admit_rune_env(agent, loadout.env.iter().map(|(n, v)| (n.as_str(), v.expose())), &names)
 }
 
 #[cfg(test)]
@@ -279,7 +311,7 @@ mod tests {
 
     #[test]
     fn the_codex_env_drops_inherited_codex_and_credential_names_and_keeps_the_allowlist() {
-        let env = codex(
+        let env = app_server(
             os(&[
                 ("Path", r"C:\npm;C:\Windows"),
                 ("SystemRoot", r"C:\Windows"),
@@ -321,16 +353,16 @@ mod tests {
     fn a_codex_overlay_without_an_absolute_home_refuses() {
         let mut o = codex_overlay();
         o.remove("CODEX_HOME");
-        assert!(codex(os(&[("Path", r"C:\x")]), &o).unwrap_err().contains("CODEX_HOME"));
+        assert!(app_server(os(&[("Path", r"C:\x")]), &o).unwrap_err().contains("CODEX_HOME"));
         o.insert("CODEX_HOME".into(), r"codex-home".into());
-        assert!(codex(os(&[("Path", r"C:\x")]), &o).is_err());
+        assert!(app_server(os(&[("Path", r"C:\x")]), &o).is_err());
     }
 
     #[test]
     fn the_localappdata_placeholder_is_the_real_one_and_refuses_unset_relative_or_inside_the_home() {
         let mut o = codex_overlay();
         o.insert("LOCALAPPDATA".into(), LOCALAPPDATA_PLACEHOLDER.into());
-        let env = codex(os(&[("Path", r"C:\x"), ("LocalAppData", r"C:\Users\u\AppData\Local")]), &o).unwrap();
+        let env = app_server(os(&[("Path", r"C:\x"), ("LocalAppData", r"C:\Users\u\AppData\Local")]), &o).unwrap();
         assert_eq!(env.get("LOCALAPPDATA"), Some(OsStr::new(r"C:\Users\u\AppData\Local")));
         assert_eq!(env.get("TEMP"), Some(OsStr::new(r"X:\h\user-home\AppData\Local\Temp")), "TEMP stays in the home");
         for bad in [None, Some("AppData\\Local"), Some(r"X:\h\user-home\AppData\Local"), Some(r"x:\H\user-home")] {
@@ -338,7 +370,7 @@ mod tests {
             if let Some(b) = bad {
                 inh.push(("LOCALAPPDATA", b));
             }
-            let e = codex(os(&inh), &o).unwrap_err();
+            let e = app_server(os(&inh), &o).unwrap_err();
             assert!(e.contains("LOCALAPPDATA") && e.contains("spawn refused"), "{bad:?}: {e}");
         }
     }
@@ -386,12 +418,34 @@ mod tests {
         }
     }
 
+    /// The hooks env rides the gate rune (`env:`), so the Rendered layer adds no env of its own.
+    #[cfg(not(falcon_shell))]
+    #[test]
+    fn every_claude_bare_rendered_overlay_is_empty() {
+        let root = crate::paths::root();
+        for id in crate::bare::PROFILES {
+            let raw: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(root.join("profiles").join(id).join("claude.json")).unwrap()).unwrap();
+            assert_eq!(raw["rendered"]["overlay"], serde_json::json!({}), "{id}: rendered.overlay");
+        }
+    }
+
+    #[test]
+    fn a_rune_env_name_the_overlay_or_plumbing_sets_is_refused_in_any_case() {
+        let overlay = ["HOME", "USERPROFILE"];
+        let ok = admit_rune_env("Claude", [("CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "1")], &overlay).unwrap();
+        assert_eq!(ok, [("CLAUDE_CODE_ENABLE_FUNCTION_HOOKS".to_string(), "1".to_string())]);
+        for (name, agent) in [("HOME", "Claude"), ("home", "Claude"), ("Home", "Codex"), ("homedrive", "Claude"), ("VIDAR_CTL_TOKEN", "Codex")] {
+            let e = admit_rune_env(agent, [("A", "1"), (name, "x")], &overlay).unwrap_err();
+            assert_eq!(e, format!("Rune Vault env {name} conflicts with the {agent} home overlay; Bare spawn refused"));
+        }
+    }
+
     /// Codex Bare: `[analytics] enabled = false` in the shipped template (Codex 0.163 types the key
     /// as a boolean; a non-boolean fails its config load).
     #[cfg(not(falcon_shell))]
     #[test]
     fn the_codex_template_turns_analytics_off() {
-        let path = crate::paths::root().join("profiles").join("bare").join("codex.config.template.toml");
+        let path = crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("codex-config.toml");
         let doc = crate::bare::home::parse_toml_lite(&std::fs::read_to_string(path).unwrap()).unwrap();
         let v = doc.iter().find(|(k, _)| k == "analytics.enabled").map(|(_, v)| v);
         assert_eq!(v, Some(&crate::bare::home::Toml::Bool(false)));

@@ -1,12 +1,17 @@
 // The Voice Slots page, the view half (voice slots V6): paints the `voice_slots_status` rows.
 // Pure DOM over `root`; no IPC, no clipboard. Every click goes out through `actions`, so the page
 // (voice-slots.ts) owns side effects and tests can drive this with stubs.
-// One compact row per slot, in the Dependencies page's look: a slot glyph, the name, a state icon
-// (the state word and reason are its tooltip), one mono line for the pick, then the fix (a Copy
-// chip or Trust Current). Adapter, model, size, source and pin live in the pick line's tooltip.
+// Slots sit under two heads, Recommended (Speech To Text) and Optional (the rest), after a Set Up
+// Voice row that opens into one section per install. Every row is one fixed-height line: the slot
+// glyph, the name (one colour and weight for all; state shows through the icon only), the state
+// icon (the state word and reason are its tooltip), one mono pick line, the size, and Copy in a
+// fixed last column. The row opens for what its command installs and the command itself. Adapter,
+// model, size, source and pin live in the pick line's tooltip.
 import type { ColorIcon } from "../icon-img";
 import type { LucideName } from "../icons";
 import type { VoiceSlot, VoiceSlotSource, VoiceSlotStatus } from "../ipc-voice";
+// @ts-ignore TS5097: node --test loads this module directly
+import { confirmRow } from "../dom.ts";
 
 export interface SlotViewActions {
   redetect(): void;
@@ -56,6 +61,35 @@ const SLOT_COLOR_ICON: Record<VoiceSlot, ColorIcon> = {
   tts: "speaker-on",
 };
 
+/** The two heads the four slots sit under, in the order each head lists them. */
+const SLOT_GROUPS: ReadonlyArray<readonly [string, readonly VoiceSlot[]]> = [
+  ["Recommended", ["stt"]],
+  ["Optional", ["wake", "tts", "rewrite"]],
+];
+
+/** One install `setup-voice.ps1 -Only <id>` runs alone (sizes and sources from its confirm table). */
+interface SetupInstall {
+  id: "whisper" | "venv" | "kokoro" | "wakeword";
+  name: string;
+  size: string;
+  from: string;
+  needs: string;
+  context: string;
+}
+
+const SETUP_INSTALLS: readonly SetupInstall[] = [
+  { id: "whisper", name: "Whisper", size: "59 MB", from: "GitHub, Hugging Face", needs: "Nothing Else",
+    context: "Installs the Whisper CLI and the tiny.en Model" },
+  { id: "venv", name: "Voice Venv", size: "150 MB", from: "Python Package Index", needs: "Python 3.11 Installed",
+    context: "Creates the Venv and Installs Its Python Packages" },
+  { id: "kokoro", name: "Kokoro Voice", size: "115 MB", from: "GitHub", needs: "Voice Venv To Run It",
+    context: "Installs the Kokoro Model and Voice Files" },
+  { id: "wakeword", name: "Wake-Word Models", size: "7 MB", from: "github.com/dscripka/openWakeWord", needs: "Voice Venv To Run It",
+    context: "Installs the openWakeWord Models" },
+];
+const SETUP_FULL_SIZE = "330 MB";
+const SETUP_FULL_TIP = "Runs every install above; it lists each download and asks before fetching anything";
+
 /** Same element as iconImg("copy") (src/icon-img.ts); inlined because tests load this view under node, which cannot resolve extensionless imports. */
 function copyIcon(doc: Document): HTMLImageElement {
   const img = doc.createElement("img");
@@ -76,7 +110,7 @@ function shieldIcon(doc: Document): HTMLImageElement {
 
 const PINNED_LABEL ={ yes: "Yes", "not-yet": "Not Yet", never: "Never" } as const;
 
-function el<K extends keyof HTMLElementTagNameMap>(
+function el<K extends keyof HTMLElementTagNameMap>( // home-ok: takes the Document as an argument; node tests pass a fake one
   doc: Document, tag: K, cls: string, text?: string,
 ): HTMLElementTagNameMap[K] {
   const e = doc.createElement(tag);
@@ -128,6 +162,32 @@ function fillParts(fill: string): { note: string | null; command: string } {
   const m = /^from (.+?), unverified: (.*)$/s.exec(fill);
   const command = (m ? m[2] : fill).replace(/\\/g, "/");
   return { note: m ? `From ${m[1]}, Unverified` : null, command: `! ${command}` };
+}
+
+/** One line on what a fill installs, from the script it runs; an unknown (pack) fill gets the generic line. */
+function fillContext(command: string, unverified: boolean): string {
+  if (unverified) return "Runs a Command From a Pack";
+  if (/fetch-whisper\.ps1/.test(command)) return "Installs the Whisper CLI and the Model";
+  if (/wakeword-models\.ps1/.test(command)) return "Installs the openWakeWord Models";
+  if (/setup-voice\.ps1.* -Only kokoro/.test(command)) return "Installs the Kokoro Model and Voice Files";
+  if (/setup-voice\.ps1.* -Only venv/.test(command)) return "Creates the Venv and Installs Its Python Packages";
+  if (/setup-voice\.ps1/.test(command)) return "Installs the Voice Stack";
+  return "Runs a Setup Command";
+}
+
+/** The checkout path the slot fills name (`... -File <root>/tools/voice/...`), so the Set Up Voice
+ *  commands carry the real path; `<install>` when no fill names one. */
+function installRoot(rows: VoiceSlotStatus[]): string {
+  for (const r of rows) {
+    const m = r.fill ? /-File\s+(.+?)\/tools\/voice\//.exec(r.fill.replace(/\\/g, "/")) : null;
+    if (m) return m[1];
+  }
+  return "<install>";
+}
+
+function setupCommand(root: string, only?: SetupInstall["id"]): string {
+  const script = `${root}/tools/voice/setup-voice.ps1`;
+  return `! pwsh -File ${script.includes(" ") ? `"${script}"` : script}${only ? ` -Only ${only}` : ""}`;
 }
 
 /** Adapter, model, size, licence, source, recommendation, pin and file as `Key: value` lines. */
@@ -200,71 +260,143 @@ function trustControls(
   head.append(tile, el(doc, "strong", "", "Trust Current"));
   const body = el(doc, "div", "swap-confirm-body");
   // Not `.ws-btn`: its hover/active colours would override the shared decision pair.
-  const plain = (cls: string, label: string, onClick: () => void): HTMLButtonElement => {
-    const b = el(doc, "button", cls, label);
-    b.type = "button";
-    b.addEventListener("click", onClick);
-    return b;
-  };
-  const yes = plain("swap-yes vs-trust-confirm", running ? "Trusting…" : "Trust", () => actions.trust(slot));
-  const no = plain("swap-no vs-trust-cancel", "Cancel", () => actions.cancelTrust());
-  yes.disabled = locked;
-  no.disabled = running;
-  const btns = el(doc, "div", "swap-confirm-actions");
-  btns.append(yes, no);
-  body.append(el(doc, "p", "vs-confirm-text", `Re-Pin ${changedPath(r)} As It Is Now?`), btns);
+  confirmRow({
+    doc,
+    root: body,
+    note: el(doc, "p", "vs-confirm-text", `Re-Pin ${changedPath(r)} As It Is Now?`),
+    yes: { label: running ? "Trusting…" : "Trust", cls: "vs-trust-confirm", run: () => actions.trust(slot), disabled: locked },
+    no: { label: "Cancel", cls: "vs-trust-cancel", run: () => actions.cancelTrust(), disabled: running },
+  });
   box.append(head, body);
   return box;
 }
 
-/** The fix: the setup command as a one-line mono chip (the whole command is its tooltip) and Copy.
- *  An unverified (pack) fill shows whole, wrapped with newlines kept, behind a warning mark, and
- *  its Copy says so: the copied `!` line runs when pasted, so no part of it may hide. */
-function fillLine(doc: Document, fill: string, actions: SlotViewActions, icons: SlotViewIcons): HTMLElement {
-  const { note, command } = fillParts(fill);
-  const line = el(doc, "div", note ? "deps-route vs-fill is-unverified" : "deps-route vs-fill");
-  if (note) line.appendChild(mark(doc, icons.color("warning"), "vs-unverified", `${note}: read all of it before you run it.`));
-  const code = el(doc, "code", "vs-cmd", command);
-  code.title = command;
+/** The Copy icon button: it sits in the fixed last column of its line. An unverified (pack) fill's
+ *  Copy says so: the copied `!` line runs when pasted, so no part of it may hide. */
+function copyButton(doc: Document, command: string, note: string | null, actions: SlotViewActions, tip?: string): HTMLButtonElement {
   const copy = button(doc, "vs-copy icon-btn", "", () => actions.copy(command));
   copy.appendChild(copyIcon(doc));
   copy.setAttribute("aria-label", note ? "Copy (Unverified)" : "Copy");
   copy.setAttribute("data-text", command);
-  copy.title = note ? "Copy this unverified command; read all of it first" : `Copy ${command}`;
-  line.append(code, copy);
+  copy.title = note ? "Copy this unverified command; read all of it first" : (tip ?? `Copy ${command}`);
+  return copy;
+}
+
+/** The command as a one-line mono chip (the whole command is its tooltip). An unverified (pack)
+ *  fill shows whole, wrapped with newlines kept, behind a warning mark. */
+function commandLine(doc: Document, command: string, note: string | null, icons: SlotViewIcons): HTMLElement {
+  const line = el(doc, "div", note ? "deps-route vs-fill is-unverified" : "deps-route vs-fill");
+  if (note) line.appendChild(mark(doc, icons.color("warning"), "vs-unverified", `${note}: read all of it before you run it.`));
+  const code = el(doc, "code", "vs-cmd", command);
+  code.title = command;
+  line.appendChild(code);
   return line;
 }
 
+/** Open or closed survives a repaint: each `details` records its toggle here, keyed per root. */
+const openState = new WeakMap<HTMLElement, Map<string, boolean>>();
+
+function track(root: HTMLElement, d: HTMLDetailsElement, key: string, fallback: boolean): void {
+  let map = openState.get(root);
+  if (!map) openState.set(root, (map = new Map()));
+  const saved = map;
+  d.open = saved.get(key) ?? fallback;
+  d.addEventListener("toggle", () => saved.set(key, d.open));
+}
+
+/** The summary line every row shares: glyph, name, state slot, pick slot, size slot, Copy slot. */
+function summary(doc: Document, parts: { glyph: Element; label: string; state?: Element; pick: Element; size?: string; copy?: Element }): HTMLElement {
+  const sum = el(doc, "summary", "vs-sum");
+  sum.append(
+    parts.glyph,
+    el(doc, "span", "vs-label", parts.label),
+    parts.state ?? el(doc, "span", "vs-slot"),
+    parts.pick,
+    el(doc, "span", "vs-size", parts.size ?? ""),
+    parts.copy ?? el(doc, "span", "vs-slot vs-copy-gap"),
+  );
+  return sum;
+}
+
 function row(
-  doc: Document, r: VoiceSlotStatus, actions: SlotViewActions, pack: boolean, locked: boolean, ui: SlotViewState,
+  root: HTMLElement, key: string, r: VoiceSlotStatus, actions: SlotViewActions, pack: boolean, locked: boolean, ui: SlotViewState,
   icons: SlotViewIcons,
 ): HTMLElement {
-  const item = el(doc, "div", `vs-row is-${r.state}${!pack && r.slot && !r.required ? " is-optional" : ""}`);
+  const doc = root.ownerDocument;
+  const item = el(doc, "details", `vs-row is-${r.state}${!pack && r.slot && !r.required ? " is-optional" : ""}`);
   item.setAttribute("data-slot", pack || !r.slot ? "pack" : r.slot);
   item.setAttribute("data-state", r.state);
 
   const glyph = pack || !r.slot ? icons.icon("file-cog") : icons.color(SLOT_COLOR_ICON[r.slot]);
-  item.appendChild(mark(doc, glyph, "vs-glyph"));
-
-  const body = el(doc, "div", "vs-body");
-  const head = el(doc, "div", "vs-head");
   const label = pack || !r.slot ? (r.slot ? `Pack (${SLOT_LABEL[r.slot]})` : "Pack") : SLOT_LABEL[r.slot];
-  head.append(el(doc, "span", "vs-label", label), stateMark(doc, r, pack, icons));
-  body.appendChild(head);
-
   const pick = pickLine(r, pack);
   const facts = factLines(r, pack);
-  if (pick) {
-    const line = el(doc, "code", `deps-where vs-pick is-${pick.kind === "Recommended" ? "recommended" : "current"}`, pick.text);
-    line.title = [`${pick.kind}: ${pick.text}`, ...facts].join("\n");
-    body.appendChild(line);
-  } else if (facts.length) head.title = facts.join("\n");
+  const { note, command } = r.fill ? fillParts(r.fill) : { note: null, command: "" };
 
-  if (r.fill) body.appendChild(fillLine(doc, r.fill, actions, icons));
+  let pickEl: HTMLElement;
+  if (pick) {
+    pickEl = el(doc, "code", `deps-where vs-pick is-${pick.kind === "Recommended" ? "recommended" : "current"}`, pick.text);
+    pickEl.title = [`${pick.kind}: ${pick.text}`, ...facts].join("\n");
+  } else pickEl = el(doc, "span", "vs-pick");
+  const sum = summary(doc, {
+    glyph: mark(doc, glyph, "vs-glyph"),
+    label,
+    state: stateMark(doc, r, pack, icons),
+    pick: pickEl,
+    size: r.bytes !== null ? sizeText(r.bytes) : undefined,
+    copy: r.fill ? copyButton(doc, command, note, actions) : undefined,
+  });
+  if (!pick && facts.length) sum.title = facts.join("\n");
+  item.appendChild(sum);
 
   const slot = r.slot;
-  if (!pack && slot && isPinMismatch(r)) body.appendChild(trustControls(doc, r, slot, actions, locked, ui));
-  item.appendChild(body);
+  const trust = !pack && slot && isPinMismatch(r);
+  if (r.fill || trust) {
+    const body = el(doc, "div", "vs-more");
+    if (r.fill) {
+      body.appendChild(el(doc, "p", "vs-context", fillContext(command, !!note)));
+      body.appendChild(commandLine(doc, command, note, icons));
+    }
+    if (trust && slot) body.appendChild(trustControls(doc, r, slot, actions, locked, ui));
+    item.appendChild(body);
+    track(root, item, key, !!note || !!trust);
+  } else item.classList.add("is-flat");
+  return item;
+}
+
+/** The Set Up Voice row: Copy in its summary runs the full stack; it opens into one section per
+ *  install, each with its own facts and Copy, all in the same columns as the slot rows. */
+function setupRow(root: HTMLElement, installRootPath: string, open: boolean, actions: SlotViewActions, icons: SlotViewIcons): HTMLElement {
+  const doc = root.ownerDocument;
+  const item = el(doc, "details", "vs-row vs-setup");
+  item.setAttribute("data-slot", "setup");
+  const full = setupCommand(installRootPath);
+  item.appendChild(summary(doc, {
+    glyph: mark(doc, icons.icon("file-cog"), "vs-glyph"),
+    label: "Set Up Voice",
+    pick: el(doc, "span", "vs-pick vs-pick-ui", SETUP_INSTALLS.map((i) => i.name).join(", ")),
+    size: SETUP_FULL_SIZE,
+    copy: copyButton(doc, full, null, actions, `Copy ${full}: ${SETUP_FULL_TIP}`),
+  }));
+  const more = el(doc, "div", "vs-more vs-installs");
+  for (const i of SETUP_INSTALLS) {
+    const cmd = setupCommand(installRootPath, i.id);
+    const block = el(doc, "section", "vs-install");
+    block.setAttribute("data-install", i.id);
+    const facts = el(doc, "div", "vs-facts");
+    facts.append(el(doc, "span", "vs-fact", `From: ${i.from}`), el(doc, "span", "vs-fact", `Needs: ${i.needs}`));
+    block.append(
+      el(doc, "span", "vs-install-name", i.name),
+      el(doc, "span", "vs-context", i.context),
+      el(doc, "span", "vs-size", i.size),
+      copyButton(doc, cmd, null, actions),
+      facts,
+      commandLine(doc, cmd, null, icons),
+    );
+    more.appendChild(block);
+  }
+  item.appendChild(more);
+  track(root, item, "setup", open);
   return item;
 }
 
@@ -324,13 +456,23 @@ export function renderVoiceSlots(
   }
   if (!rows) return;
 
-  // The four slots need no head (the page is Voice Slots); broken packs and manifests get one.
-  for (const [title, list] of [[null, slots], ["Broken Packs", packs]] as const) {
+  // Set Up Voice leads (no head), then the slots under Recommended and Optional, then broken packs.
+  const setup = el(doc, "section", "vs-section");
+  const setupHolder = el(doc, "div", "vs-rows");
+  setupHolder.appendChild(setupRow(root, installRoot(rows), failing > 0, actions, icons));
+  setup.appendChild(setupHolder);
+  root.appendChild(setup);
+
+  const sections: Array<readonly [string, VoiceSlotStatus[], boolean]> = [
+    ...SLOT_GROUPS.map(([title, ids]) => [title, ids.map((id) => slots.find((r) => r.slot === id)).filter((r): r is VoiceSlotStatus => !!r), false] as const),
+    ["Broken Packs", packs, true] as const,
+  ];
+  for (const [title, list, isPacks] of sections) {
     if (!list.length) continue;
     const section = el(doc, "section", "vs-section");
-    if (title) section.appendChild(el(doc, "h3", "vs-section-title", title));
+    section.appendChild(el(doc, "h3", "vs-section-title", title));
     const holder = el(doc, "div", "vs-rows");
-    for (const r of list) holder.appendChild(row(doc, r, actions, list === packs, locked, ui, icons));
+    list.forEach((r, i) => holder.appendChild(row(root, isPacks ? `pack:${i}` : `slot:${r.slot}`, r, actions, isPacks, locked, ui, icons)));
     section.appendChild(holder);
     root.appendChild(section);
   }

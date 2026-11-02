@@ -28,10 +28,9 @@ import { scheduleGraphSave } from "./store";
 import { modelLabel, wiredModels } from "./roster";
 import { releaseFullOutput } from "./output-fill";
 import { setSelection } from "./selection";
-import { isBlank, setLiveVaultIds, setVaultAgentOf } from "./validate";
-import { agentOfModel } from "./runner";
-import { invoke } from "../ipc";
-import type { VaultListed } from "../ipc";
+import { isBlank } from "./validate";
+import { refreshVaultNames, vaultRows, vaultsLoaded } from "./vault-names";
+import { refreshNodeFace } from "./nodes";
 import { buildModifiers, closeAddonMenu } from "./modifiers";
 import "./inspector.css";
 
@@ -46,13 +45,50 @@ function fieldSpecFor(node: FlowNode, k: string): FlowFieldSpec | undefined {
   return node.fieldSpecs?.find((s) => s.k === k);
 }
 
-/** Refreshes the canvas card's field-0 text after an edit that doesn't go through a full
- *  `renderInspector()` — `fields[0]` is what `buildNode` (nodes.ts) shows on the card. No-op for
- *  any field but the first. */
-function refreshCanvasField0(node: FlowNode, idx: number, value: string): void {
-  if (idx !== 0) return;
-  const fv = S.nodeEls.get(node.id)?.querySelector<HTMLElement>(".flow-node-field-v");
-  if (fv) fv.textContent = fieldValue(node.fields[idx].k, value);
+/** The card control focus sat on before a rebuild: its accessible name when it has one, else
+ *  its tag/class and position among its kind, plus a text field's caret. */
+interface FocusMark {
+  label: string | null;
+  kind: string; // tag plus class list, for controls with no accessible name
+  index: number;
+  selStart: number | null;
+  selEnd: number | null;
+  selDir: "forward" | "backward" | "none" | null;
+}
+
+const kindOf = (el: Element) => `${el.tagName} ${el.className}`;
+/** Same-kind elements in card order (no CSS selector: class names are not escaped). */
+const sameKind = (kind: string) => [...S.inspectorEl.querySelectorAll<HTMLElement>("*")].filter((el) => kindOf(el) === kind);
+
+/** `null` when focus is outside the card: a rebuild then takes nothing back. */
+function markFocus(): FocusMark | null {
+  const ae = document.activeElement as HTMLElement | null;
+  if (!ae || !S.inspectorEl.contains(ae)) return null;
+  if (ae === S.inspectorEl) return { label: null, kind: "", index: -1, selStart: null, selEnd: null, selDir: null };
+  const kind = kindOf(ae);
+  const field = ae instanceof HTMLTextAreaElement || ae instanceof HTMLInputElement ? ae : null;
+  let selStart: number | null = null, selEnd: number | null = null, selDir: FocusMark["selDir"] = null;
+  try {
+    selStart = field?.selectionStart ?? null;
+    selEnd = field?.selectionEnd ?? null;
+    selDir = field?.selectionDirection ?? null;
+  } catch { /* input types without a selection API */ }
+  return { label: ae.getAttribute("aria-label"), kind, index: sameKind(kind).indexOf(ae), selStart, selEnd, selDir };
+}
+
+/** Puts focus back on the control `mark` names after a rebuild, without scrolling; a control that
+ *  no longer exists leaves focus on the card root so Escape and Tab still work from there. */
+function restoreFocus(mark: FocusMark): void {
+  let el: HTMLElement | null = null;
+  if (mark.label) el = [...S.inspectorEl.querySelectorAll<HTMLElement>("[aria-label]")].find((c) => c.getAttribute("aria-label") === mark.label) ?? null;
+  if (!el && mark.kind) el = sameKind(mark.kind)[mark.index] ?? null;
+  if (!el || (el as HTMLButtonElement).disabled) el = S.inspectorEl;
+  el.focus({ preventScroll: true });
+  if (mark.selStart !== null && (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)) {
+    try {
+      el.setSelectionRange(mark.selStart, mark.selEnd ?? mark.selStart, mark.selDir ?? undefined);
+    } catch { /* input types without a selection API */ }
+  }
 }
 
 function buildSegmented(
@@ -154,49 +190,35 @@ function buildModelRow(node: FlowNode, locked: boolean): HTMLElement {
     node.subtitle = node.model ? modelLabel(node.model) : node.subtitle;
     scheduleGraphSave();
     renderInspector(node);
-    const subtitleEl = S.nodeEls.get(node.id)?.querySelector<HTMLElement>(".flow-node-subtitle");
-    if (subtitleEl && node.model) subtitleEl.textContent = modelLabel(node.model);
+    refreshNodeFace(node); // the subtitle follows the model
   });
   if (isBlank(node.model) || unwired) select.classList.add("warn");
   wrap.append(select);
   return wrap;
 }
 
-setVaultAgentOf(agentOfModel);
+const NO_VAULT_PROMPT = "Pick a Vault";
 
-// set-pick.ts loads on first use: a static import would close runtime import cycles (tests/import-cycles.test.mjs).
-let vaultRows: ((list: readonly VaultListed[], agent: string) => VaultListed[]) | null = null;
-let vaultList: VaultListed[] | null = null;
-let vaultFetch: Promise<void> | null = null;
-
-/** Reads `rune_vault_list` once (the same fetch the launcher's vault pick makes), hands the ids to
- *  validate.ts, then re-draws the card the row was built for. */
-function loadVaults(node: FlowNode): void {
-  if (vaultList) return;
-  vaultFetch ??= Promise.all([
-    import("../launcher/set-pick"),
-    invoke("rune_vault_list").catch((e) => { console.error("flow vault list:", e); return [] as VaultListed[]; }),
-  ])
-    .then(([pick, all]) => {
-      vaultRows = pick.vaultRows;
-      vaultList = all;
-      setLiveVaultIds(() => all.map((v) => v.id));
-    });
-  void vaultFetch.then(() => { if (vaultList?.length && S.selected.size === 1 && S.selected.has(node.id)) renderInspector(node); });
+/** A card OPENED: vault-names.ts reads `rune_vault_list` (one fetch in flight; a render never
+ *  fetches), then the card it was opened for is re-drawn. */
+export function refreshVaults(node: FlowNode): void {
+  void refreshVaultNames().then((ok) => {
+    if (ok && S.selected.size === 1 && S.selected.has(node.id)) renderInspector(node);
+  });
 }
 
 function buildVaultRow(node: FlowNode, locked: boolean): HTMLElement {
   const wrap = document.createElement("div");
   wrap.append(capLabel("Vault"));
-  const agent = agentOfModel(node.model ?? "");
-  const stock = `stock-${agent}`;
-  const current = node.vault ?? stock;
-  const rows = vaultList && vaultRows ? vaultRows(vaultList, agent) : [];
+  // an agent node names its vault: unset reads as the Pick a Vault prompt and the node cannot Run (validate.ts)
+  const current = node.vault ?? "";
+  const rows = vaultRows();
   const options = rows.map((v) => ({ value: v.id, label: v.name, bad: "" }));
-  if (!options.some((o) => o.value === current)) {
-    const bad = current.startsWith("stock-") ? "Stock Vault for Another Agent" : vaultList ? "Unknown Vault" : "";
+  if (current && !options.some((o) => o.value === current)) {
+    const bad = vaultsLoaded() ? "Unknown Vault" : "";
     options.unshift({ value: current, label: bad ? `${current} (${bad})` : current, bad });
   }
+  if (!current) options.unshift({ value: "", label: NO_VAULT_PROMPT, bad: NO_VAULT_PROMPT });
   const select = document.createElement("select");
   select.className = "flow-model-select";
   select.setAttribute("aria-label", "Vault");
@@ -211,13 +233,12 @@ function buildVaultRow(node: FlowNode, locked: boolean): HTMLElement {
   select.value = current;
   if (options.some((o) => o.bad)) select.classList.add("warn");
   select.addEventListener("change", () => {
-    if (select.value === stock) delete node.vault;
-    else node.vault = select.value;
+    node.vault = select.value;
     scheduleGraphSave();
     renderInspector(node);
+    refreshNodeFace(node);
   });
   wrap.append(select);
-  loadVaults(node);
   return wrap;
 }
 
@@ -229,6 +250,7 @@ function buildTaskCard(node: FlowNode, locked: boolean): HTMLElement {
   const textarea = document.createElement("textarea");
   textarea.className = "flow-pop-task";
   textarea.rows = 3;
+  textarea.setAttribute("aria-label", "Task");
   textarea.disabled = locked;
   textarea.value = value;
   if (isBlank(value)) textarea.classList.add("warn");
@@ -236,12 +258,13 @@ function buildTaskCard(node: FlowNode, locked: boolean): HTMLElement {
     if (idx < 0) return;
     node.fields[idx].v = textarea.value;
     scheduleGraphSave();
+    refreshNodeFace(node);
   });
   textarea.addEventListener("blur", () => {
     if (idx < 0) return;
     node.fields[idx].v = textarea.value;
     scheduleGraphSave();
-    refreshCanvasField0(node, idx, textarea.value);
+    refreshNodeFace(node);
     textarea.classList.toggle("warn", isBlank(textarea.value));
   });
   wrap.append(textarea);
@@ -274,7 +297,7 @@ function buildShapeRow(node: FlowNode): HTMLElement {
     if (idx < 0) return;
     node.fields[idx].v = v;
     scheduleGraphSave();
-    refreshCanvasField0(node, idx, v);
+    refreshNodeFace(node);
     renderInspector(node);
   });
   if (isBlank(current)) seg.classList.add("warn");
@@ -291,12 +314,14 @@ function buildContentCard(node: FlowNode): HTMLElement {
   const textarea = document.createElement("textarea");
   textarea.className = "flow-pop-task";
   textarea.rows = 4;
+  textarea.setAttribute("aria-label", "Content");
   textarea.value = value;
   if (isBlank(value)) textarea.classList.add("warn");
   textarea.addEventListener("input", () => {
     if (idx < 0) return;
     node.fields[idx].v = textarea.value;
     scheduleGraphSave();
+    refreshNodeFace(node);
     const extraEl = wrap.querySelector<HTMLElement>(".flow-pop-cap span:last-child");
     if (extraEl) extraEl.textContent = `${textarea.value.length} Chars`;
   });
@@ -304,7 +329,7 @@ function buildContentCard(node: FlowNode): HTMLElement {
     if (idx < 0) return;
     node.fields[idx].v = textarea.value;
     scheduleGraphSave();
-    refreshCanvasField0(node, idx, textarea.value);
+    refreshNodeFace(node);
     textarea.classList.toggle("warn", isBlank(textarea.value));
   });
   wrap.append(textarea);
@@ -315,6 +340,16 @@ function buildContentCard(node: FlowNode): HTMLElement {
  *  whenever the selection settles on exactly one node, and again after any edit made inside the
  *  card (mirrors the old docked panel's full-rebuild-on-edit pattern). */
 export function renderInspector(node: FlowNode): void {
+  const focus = markFocus();
+  const scrollTop = S.inspectorEl.scrollTop;
+  buildCard(node);
+  if (focus) {
+    S.inspectorEl.scrollTop = scrollTop;
+    restoreFocus(focus);
+  }
+}
+
+function buildCard(node: FlowNode): void {
   // A full rebuild replaces every element in the card, including the ADD button an open addon
   // menu is anchored off — leaving the menu open referencing a detached anchor (and its own
   // document listeners still armed) if the rebuild didn't close it first.
@@ -359,9 +394,11 @@ export function editInPlace(
   initial: string,
   commit: (value: string) => void,
   rebuild: (value: string) => HTMLElement,
+  label: string,
 ) {
   const input = document.createElement("input");
   input.className = "flow-inspector-input";
+  input.setAttribute("aria-label", label);
   input.value = initial;
   span.replaceWith(input);
   input.focus();
@@ -395,8 +432,7 @@ function startEditTitle(node: FlowNode, span: HTMLElement) {
     node.title = value;
     const sub = S.inspectorEl.querySelector<HTMLElement>(".flow-pop-sub");
     if (sub) sub.textContent = headerSubtitle(node);
-    const titleEl = S.nodeEls.get(node.id)?.querySelector<HTMLElement>(".flow-node-title");
-    if (titleEl) titleEl.textContent = node.title;
+    refreshNodeFace(node);
     scheduleGraphSave();
   };
   const rebuild = (value: string) => {
@@ -404,5 +440,5 @@ function startEditTitle(node: FlowNode, span: HTMLElement) {
     next.addEventListener("click", () => startEditTitle(node, next));
     return next;
   };
-  editInPlace(node, span, node.title, commit, rebuild);
+  editInPlace(node, span, node.title, commit, rebuild, "Title");
 }

@@ -1,0 +1,17 @@
+{
+  "id": "w-settings-dependencies-health",
+  "title": "Check Which Packs Are Installed and Healthy",
+  "style": "first-time",
+  "scope": "vidar",
+  "surfaces": ["settings"],
+  "tags": ["settings", "modules"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "find where Vidar lists the packs and modules it has installed" },
+    { "intent": "tell whether any of them are broken or need attention, and why" },
+    { "intent": "find out what one module does from what the page shows" },
+    { "intent": "say whether the page answered those questions without guessing" }
+  ]
+}

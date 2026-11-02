@@ -1,16 +1,5 @@
 /* Slack bench tab (panels/slack.ts, slack/view.ts): the Jira tab's scoped frame rules (jira.css :3-15, :17,
    :20-24, :29-30) under .slack-pane; the shared jx-form/cx- classes carry the rest. Row parts are sx-. */
-.slack-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
-.slack-pane [hidden] { display: none; }
-.slack-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
-
-.slack-pane .wb-actions button {
-  box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); white-space: nowrap;
-  font-family: var(--font-ui);
-}
-.slack-pane .wb-actions button.cx-ico { width: var(--row-24); padding: 0; }
-.slack-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 
 .slack-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
 .slack-pane .cx-list { min-height: 0; overflow-y: auto; }

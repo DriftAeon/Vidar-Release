@@ -6,7 +6,6 @@
    teardown uses deadlines so a wedged tree can finish Close or refuse Resume. */
 
 use std::collections::{HashMap, HashSet};
-use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
@@ -21,7 +20,7 @@ use windows::Win32::System::Threading::{
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
 };
 
-use super::CREATE_NO_WINDOW;
+use crate::proc_job::{wait_bounded, SpawnExt};
 use crate::procs::ProcRow;
 
 /// How long taskkill gets to answer before the call fails.
@@ -378,24 +377,21 @@ pub(crate) fn take_or_restore<T>(
 fn run_taskkill(args: &[String], timeout: Duration) -> Result<(), String> {
     let mut child = Command::new("taskkill")
         .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
+        .quiet()
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("taskkill failed to start: {e}"))?;
     let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(s)) => break s,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(format!("taskkill: no answer after {} ms", timeout.as_millis()));
-            }
-            Ok(None) => thread::sleep(POLL),
-            Err(e) => return Err(format!("taskkill: {e}")),
+    let status = match wait_bounded(&mut child, deadline) {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("taskkill: no answer after {} ms", timeout.as_millis()));
         }
+        Err(e) => return Err(format!("taskkill: {e}")),
     };
     taskkill_outcome(status.code())
 }

@@ -1,6 +1,8 @@
 // Settings > Build, pure state: the toggle list from release-build.ps1's catalog, the dependsOn
 // closure, and the run model folded from `release-build-event` lines. No DOM, no IPC
 // (tests/release-build-state.test.mjs imports it directly).
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { mmss } from "../../format.ts";
 import type {
   ReleaseBuildCatalog, ReleaseBuildEvent, ReleaseBuildModule, ReleaseBuildPhase, ReleaseBuildResult, ReleaseBuildSet,
 } from "../../ipc-settings";
@@ -113,12 +115,7 @@ export function phaseLabel(phase: ReleaseBuildPhase | null): string {
 }
 
 /** mm:ss, or h:mm:ss past an hour. */
-export function elapsed(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const two = (n: number) => String(n).padStart(2, "0");
-  const h = Math.floor(s / 3600);
-  return h ? `${h}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}` : `${two(Math.floor(s / 60))}:${two(s % 60)}`;
-}
+export const elapsed = mmss;
 
 /** The wrapper serializes a one-item array as a bare string; both read as a list. */
 export function droppedIds(result: ReleaseBuildResult): string[] {

@@ -1,5 +1,5 @@
 // Respawn of other tabs on an edited vault, an absent record without retry,
-// the Add Rune picker's warnings, and the unlocked edit's hook into tabVaultEditIo.
+// the Rune Library's warnings, and the unlocked edit's hook into tabVaultIo.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
@@ -51,12 +51,14 @@ test("without a launch vault an absent record paints No Vault Session at once", 
   h.dispose();
 });
 
-test("Add Rune keeps the library read's warnings while the list is open", async () => {
-  const s = vaultModifyState({ currentView: async () => null });
-  await s.toggleLibrary(async () => ({ runes: [], warnings: ["w1"] }));
+test("the Rune Library keeps the library read's warnings until Modify resets", async () => {
+  const s = vaultModifyState({ read: async () => null });
+  await s.loadLibrary(async () => ({ runes: [], warnings: ["w1"] }));
   assert.deepEqual(s.libraryWarnings, ["w1"]);
-  await s.toggleLibrary(async () => { throw new Error("closing needs no read"); });
+  s.reset();
   assert.deepEqual(s.libraryWarnings, []);
-  await s.toggleLibrary(async () => []);
+  assert.equal(s.library, null);
+  await s.loadLibrary(async () => []);
   assert.deepEqual(s.libraryWarnings, []);
+  assert.deepEqual(s.library, []);
 });

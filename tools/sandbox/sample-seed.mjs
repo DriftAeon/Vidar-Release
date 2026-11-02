@@ -1,7 +1,7 @@
 // tools/sandbox/sample-seed.mjs — the `sample-project` and `sample-project-instructions` sandbox seeds
 // (tests/fixtures/sample-project): a small git project planted at <base>\work\<set>, so the onboarding run opens on
 // a realistic folder instead of an empty one. The project is slugkit, a toy CLI (README, package.json, src/, test/).
-//   sample-project               no CLAUDE.md, AGENTS.md or .claude/: Local Files comes up empty (the Add Kit case).
+//   sample-project               no CLAUDE.md, AGENTS.md or .claude/: Local Files comes up empty (the Add Runeset case).
 //   sample-project-instructions  the same project plus CLAUDE.md, AGENTS.md and .claude/skills/changelog-entry/SKILL.md:
 //                                Local Files lists sources, Create Runes has something to import and generate from.
 // <base>\app\vidar.json gets `defaultCwd` set to the project (the first tab opens there) and the project as a saved
@@ -18,11 +18,11 @@
 // the manifest; the unseeded launch.ps1 start does the same. --dry-run prints the plan and writes nothing.
 // Refuses (exit 2): a <base> that neither holds .vidar-sandbox nor sits under %TEMP%; an unknown set.
 // Fails (exit 1): git errors; a project folder that exists and no earlier run made.
-import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve as pathResolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { git as gitIn } from "../lib/git.mjs";
 import { resolve, root } from "../lib/paths.mjs";
 
 export const MARKER = ".vidar-sandbox";
@@ -82,11 +82,7 @@ function readManifest(base) {
   return { dirs: (Array.isArray(m.dirs) ? m.dirs : []).filter((d) => typeof d === "string" && isUnder(d, base)) };
 }
 
-function git(cwd, args) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith("GIT_")));
-  const r = spawnSync("git", args, { cwd, env, encoding: "utf8" });
-  if (r.status !== 0) throw new Failed(`git ${args.join(" ")} failed in ${cwd}: ${(r.stderr || r.error?.message || "").trim()}`);
-}
+const git = (cwd, args) => gitIn(cwd, args, Failed);
 
 /** One run; returns `{ code, lines }` (0 done, 1 failed, 2 refused). */
 export function run({ base, set, dryRun = false, revert = false }) {

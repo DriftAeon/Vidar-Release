@@ -2,7 +2,7 @@
 //! `<id>.md`, `tombstones.md` (retired ids) and the one trust boundary: an id is a grammar-checked name, and
 //! the file it names must resolve inside the library root. Parsing a rune is `rune.rs`; the
 //! dangling-reference rules are `check.rs`. The item folders `skills/ agents/ hooks/ mcp/ permissions/
-//! plugins/` hold item runes (`rune::KINDS`); Kit source files beside them are skipped (`walk`).
+//! plugins/` hold item runes (`rune::KINDS`); Add Runeset source files beside them are skipped (`walk`).
 
 use std::path::{Path, PathBuf};
 
@@ -36,11 +36,11 @@ pub struct Library {
 }
 
 /// Whether an item-folder `.md` is a rune: its header (the lines between the opening and closing `---`)
-/// declares `kind:`. Kit libraries keep source files in the same folders (`agents/<name>.md` agent
+/// declares `kind:`. Libraries made by Add Runeset keep source files in the same folders (`agents/<name>.md` agent
 /// definitions, `skills/<name>/SKILL.md`), which carry no `kind:` and are not runes.
 fn declares_kind(path: &Path) -> bool {
     let Ok(text) = crate::fsx::read_text(path) else { return true };
-    let text = text.strip_prefix('\u{FEFF}').unwrap_or(&text);
+    let text = crate::fsx::strip_bom(&text);
     let mut lines = text.lines();
     if lines.next().map(str::trim_end) != Some("---") {
         return false;
@@ -221,8 +221,8 @@ mod tests {
     }
 
     #[test]
-    fn the_stock_fixture_library_loads_every_item_kind_without_errors() {
-        let lib = Library::open(&repo().join("tests/fixtures/rune-vault/stock-runes")).unwrap();
+    fn the_vidar_fixture_library_loads_every_item_kind_without_errors() {
+        let lib = Library::open(&repo().join("tests/fixtures/rune-vault/vidar-runes")).unwrap();
         let (runes, errors) = lib.all_runes();
         assert!(errors.is_empty(), "{errors:?}");
         let mut kinds: Vec<&str> = runes.iter().map(|(r, _)| r.kind.as_str()).collect();

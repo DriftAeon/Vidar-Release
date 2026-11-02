@@ -13,7 +13,7 @@ use crate::rules::{build, context::RenderCtx, library::Library};
 const PATH: &str = r"~\.claude\CLAUDE.md";
 const GEN_A: &str = "gen-0a1b2c3d";
 const SET: &str = "generated-20261017";
-const CONFIG: &str = "{\"agents\":[{\"key\":\"claude-rendered-bare\",\"sets\":[{\"library\":\"kit\",\"set\":\"kit\"}]}]}";
+const CONFIG: &str = "{\"agents\":[{\"key\":\"claude-rendered-bare\",\"sets\":[{\"library\":\"installed\",\"set\":\"installed\"}]}]}";
 
 struct Fx {
     base: PathBuf,
@@ -69,8 +69,7 @@ fn prepared(library: &str) -> Prepared {
     let runes = vec![rune("keep-a", "Never guess.", 1), rune("keep-b", "Always test.", 2), rune("braces", "Fill {{name}} in.", 3)];
     let ids = runes.iter().map(|r| r.id.clone()).collect();
     let env = Envelope { runes, sections: vec![Section { heading: "Rules".into(), ids }], dropped: vec![] };
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let template = std::fs::read_to_string(repo.join("profiles/bare/payload-sets.md")).unwrap().replace("{{root}}", r"D:\Vidar");
+    let template = crate::bare::layer::PAYLOAD_TEMPLATE.to_string();
     let guard = Guard { user_profile: Some(r"C:\Users\testuser".into()), username: Some("testuser".into()) };
     let ctx = PayloadCtx { agent: "claude", template: &template, row: None, root: r"D:\Vidar", home: r"D:\Home", guard: &guard };
     let meta = Meta {

@@ -1,6 +1,6 @@
 // Vidar-layer status line for bare Claude tabs: the bridge-write part of the global
 // statusline-command.mjs (bare-mode inventory row 7), delivered by path from the generated
-// settings of a bare home (profiles/bare/claude.settings.template.json).
+// settings of a bare home (profiles/bare/vidar-runes/settings/claude-settings.json).
 //
 // Usage (Claude's statusLine command; Claude pipes its statusLine JSON on stdin):
 //   node "<root>\tools\agent-layer\statusline-bridge.mjs" --root "<root>" --home "<home>"

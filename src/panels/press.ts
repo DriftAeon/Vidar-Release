@@ -1,5 +1,5 @@
 /** src\panels\press.ts — act on press, not release, for disclosure toggles.
- *  `click` fires on mouse-up, so a toggle waits for the release (Loadout rows
+ *  `click` fires on mouse-up, so a toggle waits for the release (rack rows
  *  felt ~0.1 s late, Unreal's Pressed vs Clicked). The primary pointer button acts on
  *  pointerdown; the click that follows it is swallowed; keyboard (Enter/Space) still arrives
  *  as a click with no pointerdown before it and acts there. */

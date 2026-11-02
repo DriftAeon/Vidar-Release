@@ -12,13 +12,14 @@
 //! `bypass_hook_trust` override is used.
 
 use std::io::{BufRead, BufReader, Write};
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
+
+use crate::proc_job::SpawnExt;
 
 use super::env::Env;
 use super::guards::CodexGroup;
@@ -51,8 +52,7 @@ pub fn write(_lock: &HomeLock, codex_home: &Path, groups: &[CodexGroup]) -> Resu
             _ => unreachable!("hooks.<event> is always an array here"),
         }
     }
-    let text = serde_json::to_string_pretty(&json!({ "hooks": events })).map_err(|e| e.to_string())? + "\n";
-    crate::fsx::atomic_write(&path, text.as_bytes()).map_err(|e| format!("Bare Codex hooks {}: {e}; Bare spawn refused", path.display()))?;
+    crate::fsx::write_json_pretty(&path, &json!({ "hooks": events }), true).map_err(|e| format!("Bare Codex hooks {}: {e}; Bare spawn refused", path.display()))?;
     Ok(handlers)
 }
 
@@ -145,14 +145,10 @@ fn app_server_list(ctx: &ListCtx) -> Result<Vec<Listed>, String> {
     cmd.arg(js)
         .arg("app-server")
         .current_dir(ctx.codex_home)
-        .env_clear()
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .exact_env(ctx.env.iter())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    for (k, v) in ctx.env.iter() {
-        cmd.env(k, v);
-    }
     let mut child = crate::proc_job::JobChild::spawn(&mut cmd)?;
     let mut stdin = child.stdin.take().ok_or("missing codex stdin")?;
     let stdout = child.stdout.take().ok_or("missing codex stdout")?;
@@ -234,9 +230,7 @@ fn read_cache(hooks_json: &Path) -> Option<(Fingerprint, Vec<(String, String)>)>
 fn write_cache(hooks_json: &Path, fp: &Fingerprint, entries: &[(String, String)]) {
     let map: Map<String, Value> = entries.iter().map(|(k, h)| (k.clone(), json!(h))).collect();
     let v = json!({ "hooksSha256": fp.hooks_sha256, "codexJs": fp.codex_js, "codexVersion": fp.codex_version, "entries": map });
-    if let Ok(text) = serde_json::to_string_pretty(&v) {
-        let _ = crate::fsx::atomic_write(&cache_path(hooks_json), (text + "\n").as_bytes());
-    }
+    let _ = crate::fsx::write_json_pretty(&cache_path(hooks_json), &v, true);
 }
 
 

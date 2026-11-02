@@ -9,12 +9,15 @@
 
 import { createDisplayRenderer, type DisplayRenderer } from "../panels/display-render";
 import { iconImg } from "../icon-img";
+import { basename } from "../paths";
 import { labelledMark } from "../panels/rendered/marks";
 import { createAskForm, type AskForm } from "./ask-view";
 import { createAskState, type AskState } from "./card-ask-state";
 import { createCardForm, type CardForm } from "./card-view";
 import { isUnread, type RelayItem } from "./store";
 import { createRelayStrip, type RelayStrip } from "./strip";
+import { span } from "../dom";
+import { clock } from "../format";
 import { fitThumb, type ThumbFit } from "./thumb";
 import { relayViewKey, type RelayViewState } from "./view";
 
@@ -43,11 +46,6 @@ export interface RelayCard {
 
 const KIND_CHIP = { display: "Display", ask: "Ask", card: "Approval", question: "Ask" } as const;
 
-function clock(ms: number): string {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 function div(cls: string, text?: string): HTMLElement {
   const e = document.createElement("div");
   e.className = cls;
@@ -55,12 +53,6 @@ function div(cls: string, text?: string): HTMLElement {
   return e;
 }
 
-function span(cls: string, text?: string): HTMLElement {
-  const e = document.createElement("span");
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 
 export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayCard {
   let item = first;
@@ -134,7 +126,7 @@ export function createRelayCard(first: RelayItem, hooks: RelayCardHooks): RelayC
   const v = item.view;
   if (v.type === "display") {
     const thumb = div("relay-thumb");
-    const file = div("relay-card-file", v.path.split("\\").pop() ?? v.path);
+    const file = div("relay-card-file", basename(v.path));
     file.title = v.path;
     const fileLine = div("relay-card-fileline");
     fileLine.append(file, time);

@@ -1,5 +1,5 @@
 // src\runes\bare\view-entry.ts — the Bare view's entry points for a caller other than the Runes tab
-// (onboarding's First Runeset step): which view it opens on and the done notification. Pure, no imports,
+// (onboarding's Runeset step): which view it opens on and the done notification. Pure, no imports,
 // so `node --test` loads it. view.ts is at its line cap; the logic lives here.
 
 export type StartView = "actives" | "files";

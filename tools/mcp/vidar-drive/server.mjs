@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // tools\mcp\vidar-drive\server.mjs — "Vidar Drive" stdio MCP server: the control-bus verbs
 // (tools\control) as tools for Claude tabs. Config key `vidar-drive` in the repo `.mcp.json` and
-// `drive` in `plugins\vidar-app\.mcp.json` (tools `mcp__plugin_vidar_drive__*`).
+// `vidar_drive` in contracts\module-bundles.json (tools `mcp__vidar_drive__*`).
 
 import { readFileSync, realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { root as repoRoot } from "../../lib/paths.mjs";
 import { serve, RpcError, INVALID_PARAMS } from "./rpc.mjs";
 import { TOOLS, makeCall } from "./tools.mjs";
 
-const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const REPO = repoRoot();
 const VERSION = JSON.parse(readFileSync(resolve(REPO, "package.json"), "utf8")).version;
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
 

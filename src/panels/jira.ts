@@ -3,7 +3,9 @@
 // interval poll (rate limits). The token goes from the form to jira_connect once and is never held here.
 // Plan: docs/projects/jira/all-types-plan.md § D1-D5; docs/projects/jira/issues-tab-plan.md § D8.
 // Model: jira/model.ts; DOM: jira/view.ts.
+import { errText } from "../err-text";
 import { invoke } from "../ipc";
+import { callOrNetwork, networkError } from "../integration-call";
 import { buildDetail, type DetailHost } from "../jira/detail";
 import { buildFilterBar, type FilterBar, type Opt } from "../jira/filters";
 import {
@@ -12,7 +14,7 @@ import {
 } from "../jira/model";
 import type { Filters } from "../jira/ipc";
 import { buildView, errorTitle, type ErrorKind, type FormValues, type View, type ViewState } from "../jira/view";
-import { getPref, setPref } from "../prefs";
+import { hideModule } from "../modules/hidden";
 import { getFocusedSession } from "./sessions/lookup";
 import { writeToSession } from "./sessions";
 
@@ -139,18 +141,11 @@ function openUrl(url: string) {
   void invoke("open_url", { url }).catch(console.error);
 }
 
-function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 type Fetched = { issues: Issue[]; nextPageToken: string | null } | { error: { kind: ErrorKind; message: string } };
 
 async function fetchPage(scope: Scope, pageToken: string | null, sent: Filters | null): Promise<Fetched> {
-  try {
-    return await invoke("jira_issues", { scope, filters: sent, pageToken });
-  } catch (e) {
-    return { error: { kind: "network", message: errText(e) } };
-  }
+  return callOrNetwork(() => invoke("jira_issues", { scope, filters: sent, pageToken }));
 }
 
 /** Starts a new query: every older reply is dropped and the paging state of the old one is cleared. */
@@ -210,7 +205,7 @@ async function refresh() {
     }
   } catch (e) {
     if (q !== query) return;
-    state = { ...state, mode: "list", issues: [], error: { kind: "network", message: errText(e) } };
+    state = { ...state, mode: "list", issues: [], error: networkError(e) };
   }
   draw();
 }
@@ -247,10 +242,7 @@ function setScope(scope: Scope) {
 }
 
 function hideTab() {
-  const key = "bench:jira";
-  const hidden = getPref("modules.hidden") ?? [];
-  if (hidden.includes(key)) return;
-  if (setPref("modules.hidden", [...hidden, key])) document.dispatchEvent(new document.defaultView!.CustomEvent("vidar-modules-change"));
+  hideModule("bench:jira");
 }
 
 function formFail(error: NonNullable<ViewState["formError"]>) {

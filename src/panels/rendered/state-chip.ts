@@ -12,7 +12,7 @@ export const NOT_LOGGED_IN = "Not Logged In";
  *  sidecar's ready line, which binds before `transport.spawn` resolves: `write()` refuses until it clears, so
  *  Ready must not show meanwhile (E1 run 3, case 2). `holding`: a respawn's send hold, which starts before its spawn
  *  (the old process is still being stopped) and reads Starting… too (E1 run 4, case 2). */
-export type ChipSignals = Pick<RenderedState, "hydrating" | "disconnected" | "isAlive" | "pendingApproval" | "inTurn" | "loggedOut" | "sessionId" | "costTotal"> & { spawning?: unknown; holding?: boolean };
+export type ChipSignals = Pick<RenderedState, "hydrating" | "disconnected" | "isAlive" | "pendingApproval" | "inTurn" | "loggedOut" | "sessionId" | "costTotal"> & { spawning?: unknown; holding?: boolean; picking?: boolean };
 
 /** Whether a bus `write()` with a trailing `\r` submits now (rendered.ts): false while starting, respawning,
  *  restoring, disconnected or closed. The chip's Ready means exactly this, so the two read the same signals. */
@@ -20,13 +20,15 @@ export function promptReady(S: Pick<RenderedState, "isAlive" | "hydrating" | "di
   return S.isAlive && !S.spawning && !S.holding && !S.hydrating && !S.disconnected && !S.disposed;
 }
 
-export type ChipKey = "restoring" | "disconnected" | "stopped" | "approval" | "working" | "agents" | "starting" | "login" | "ready";
+export type ChipKey = "restoring" | "disconnected" | "stopped" | "approval" | "working" | "agents" | "starting" | "login" | "ready" | "picking";
 
 /** Priority: restoring > disconnected > stopped > approval > working > agents > starting >
  *  not logged in > ready. `starting` = the status line still on "Starting…", or a spawn in flight. `key` names the
  *  state for readers that must not parse the tooltip (the left-bar tab state, tab-state.ts). */
 export function chipState(S: ChipSignals, starting: boolean, agentsRunning: number): { key: ChipKey; cls: string; title: string } {
-  const [key, text, cls]: [ChipKey, string, string] = S.hydrating ? ["restoring", "Restoring", "working"]
+  // `picking`: the tab waits for its Rune Vault (vault-gate.ts); it outranks Stopped, since nothing has spawned yet
+  const [key, text, cls]: [ChipKey, string, string] = S.picking ? ["picking", "Picking", "idle"]
+    : S.hydrating ? ["restoring", "Restoring", "working"]
     : S.disconnected ? ["disconnected", "Disconnected", "dead"]
     : !S.isAlive ? ["stopped", "Stopped", "dead"]
     : S.pendingApproval ? ["approval", "Waiting for approval", "approval"]

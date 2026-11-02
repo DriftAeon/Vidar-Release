@@ -41,7 +41,7 @@ use std::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc, Mutex,
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 // Only `Falcon::bus_stop` (Vidar-only) is atomic-bool now; the reader flags
@@ -139,22 +139,10 @@ impl FalconPaths {
         }
     }
 
-    /// Only `falcon_dock_ask_blocking` reads these two, and that command is
-    /// registered only by the shell build (`src-falcon\src\main.rs`).
     /// Vidar's `vidar-state.json` in this shape (`uiState`); shell-only, for `falcon_theme`.
     #[cfg(falcon_shell)]
     fn ui_state(&self) -> PathBuf {
         self.root.join(self.shape.ui_state)
-    }
-
-    #[cfg(falcon_shell)]
-    fn open_dir(&self) -> PathBuf {
-        self.root.join(self.shape.bridge).join(layout::OPEN)
-    }
-
-    #[cfg(falcon_shell)]
-    fn open_dispatch_dir(&self) -> PathBuf {
-        self.root.join(self.shape.bridge).join(layout::OPEN_DISPATCH)
     }
 
     #[cfg(falcon_shell)]
@@ -191,7 +179,7 @@ pub const CLIENT_NAME: &str = if cfg!(falcon_shell) {
 /// `src-falcon/src/protocol.rs::PROTOCOL_VERSION` even though both builds share that
 /// file: a host version bump must not silently raise what this client claims to speak.
 /// Raise it only when this file implements the new version.
-pub(crate) const CLIENT_PROTOCOL: u32 = 2;
+pub(crate) const CLIENT_PROTOCOL: u32 = 3;
 
 /// Falcon's own `MAX_SESSION_FRAME`, from the shared wire module. A frame over
 /// this is a protocol error, not something to grow a buffer for.
@@ -444,30 +432,15 @@ pub(crate) fn hosted_sessions() -> Result<Vec<(String, bool)>, String> {
 
 // Shared by `falcon/handoff.rs` and `falcon/dock.rs` (both via `super::`).
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    crate::fsx::now_ms()
 }
 
-/// Unique tmp in the same directory, then rename (`.claude\rules\bridge-rs.md`).
-/// Rename-only: `std::fs::rename` on Windows already replaces the destination
-/// (`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`), so a manual
-/// `remove_file` first only opened a window where a concurrent reader saw
-/// `NotFound` mid-write.
+/// Creates the parent directory, then writes through `fsx::atomic_write`
+/// (unique tmp, synced, renamed over the destination).
 fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let dir = path.parent().ok_or("no parent")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or("bad name")?;
-    let tmp = dir.join(format!(".{name}.{}.tmp", now_ms()));
-    std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        e.to_string()
-    })
+    crate::fsx::atomic_write(path, text.as_bytes())
 }
 
 impl Falcon {
@@ -565,6 +538,11 @@ impl Falcon {
         let op_for_retry = op.clone();
 
         let connection = guard.as_mut().expect("just opened");
+        // Refused before a byte is written, connection kept: an older host
+        // would drop the env runes without a word.
+        if let Some(refusal) = ops::env_runes_refusal(&op, connection.protocol) {
+            return Err(refusal);
+        }
         // `mut` is only needed by the `host_warning` patch-up below, which is
         // Vidar-only; the shell build never mutates `result`.
         #[cfg_attr(falcon_shell, allow(unused_mut))]
@@ -587,6 +565,11 @@ impl Falcon {
             if let Ok(registry) = read_registry(&self.paths) {
                 if host_alive(&registry) {
                     if let Ok(mut retry_conn) = Connection::open(&registry) {
+                        if let Some(refusal) =
+                            ops::env_runes_refusal(&op_for_retry, retry_conn.protocol)
+                        {
+                            return Err(refusal);
+                        }
                         self.control_epoch.fetch_add(1, Ordering::SeqCst);
                         let retry_id = self.next_id();
                         result = match retry_conn.request(retry_id, op_for_retry, request_timeout) {
@@ -949,6 +932,74 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// A Claude spawn, with or without env runes.
+    fn spawn_with_env(env: Vec<(String, String)>) -> Op {
+        Op::Spawn(SpawnParams {
+            agent: Some(Agent::Claude),
+            cwd: r"C:\work".into(),
+            permission_mode: "default".into(),
+            model: None,
+            effort: None,
+            resume: None,
+            ctl_secret: None,
+            rules_file: None,
+            tab_name: None,
+            gateway: None,
+            profile: Some("p".into()),
+            payload_file: None,
+            row_key: None,
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            env,
+            sets: None,
+            mcp_file: None,
+        })
+    }
+
+    /// Sends `op` on a control connection negotiated at `stamp`, a file standing in for
+    /// the pipe; returns the result and the bytes that reached the "host".
+    fn spawn_on_stamp(name: &str, stamp: u32, op: Op) -> (Result<Value, String>, u64) {
+        let root = std::env::temp_dir().join(format!("vidar-falcon-env-runes-{name}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let pipe_path = root.join("pipe.bin");
+        let pipe = std::fs::File::create(&pipe_path).unwrap();
+        let falcon = Falcon::new(root.clone());
+        let mut connection = Connection::raw(pipe);
+        connection.protocol = stamp;
+        *falcon.control.lock().unwrap() = Some(connection);
+        let result = falcon.control(op);
+        let written = std::fs::metadata(&pipe_path).unwrap().len();
+        *falcon.control.lock().unwrap() = None;
+        let _ = std::fs::remove_dir_all(&root);
+        (result, written)
+    }
+
+    #[test]
+    fn env_runes_on_an_older_host_are_refused_before_a_byte_is_sent() {
+        let env = vec![("FOO".to_string(), "1".to_string())];
+        let (result, written) = spawn_on_stamp("old", 2, spawn_with_env(env));
+        assert_eq!(
+            result.expect_err("an older host must be refused locally"),
+            "Falcon host predates env runes; restart it with falcon-refresh to launch this vault"
+        );
+        assert_eq!(written, 0, "bytes reached the host");
+    }
+
+    #[test]
+    fn env_runes_on_the_current_stamp_are_sent() {
+        let env = vec![("FOO".to_string(), "1".to_string())];
+        let (result, written) = spawn_on_stamp("current", CLIENT_PROTOCOL, spawn_with_env(env));
+        // The file pipe never answers, so the request fails on the read, after the write.
+        assert!(!result.unwrap_err().contains("predates env runes"));
+        assert!(written > 0, "the spawn never went out");
+    }
+
+    #[test]
+    fn a_spawn_without_env_runes_still_goes_to_an_older_host() {
+        let (result, written) = spawn_on_stamp("plain", 2, spawn_with_env(Vec::new()));
+        assert!(!result.unwrap_err().contains("predates env runes"));
+        assert!(written > 0, "the spawn never went out");
+    }
+
     /// An op as the wire object `request` sends, minus the request id.
     fn wire(op: &Op) -> Value {
         serde_json::to_value(op).expect("an op always serialises")
@@ -1138,7 +1189,7 @@ mod tests {
                     profile: None,
                     payload_file: None,
                     row_key: None,
-                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
                     sets: None,
                     mcp_file: None,
                 }),
@@ -1160,7 +1211,7 @@ mod tests {
                     profile: None,
                     payload_file: None,
                     row_key: None,
-                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
                     sets: None,
                     mcp_file: None,
                 }),
@@ -1419,6 +1470,7 @@ mod tests {
     mod host_launch {
         use super::*;
         use std::fs;
+        use std::time::{SystemTime, UNIX_EPOCH};
 
         fn temp_bundle_root(label: &str) -> PathBuf {
             let nanos = SystemTime::now()

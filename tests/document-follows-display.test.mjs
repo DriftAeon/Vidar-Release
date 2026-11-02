@@ -11,6 +11,7 @@ const dom = setupDom({
     "clipboard": "export async function copyText() { return true; }",
     "panels/document-open-menu": `export const mountOpenMenu = () => {}; export const closeOpenMenu = () => {};
       export const setOpenDocLabel = () => {}; export const clearOpenDocLabel = () => {};
+      export const dismissControl = () => document.createElement("span");
       export function setCatalog(entries) { (globalThis.__catalogs ??= []).push(entries); }`,
   },
 });

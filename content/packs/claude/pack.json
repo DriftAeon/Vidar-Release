@@ -2,6 +2,7 @@
   "id": "claude",
   "version": 1,
   "release": "1.0.0",
+  "requires": { "contract": 1, "minCore": "0.2.0" },
   "provides": [],
   "slots": { "rewrite": ["voice/claude-p.json"] },
   "ui": { "label": "Claude" },
@@ -20,7 +21,8 @@
         "usedBy": ["Claude Tabs", "Gateway Tabs", "Setup Via Agent"],
         "probe": { "kind": "exe", "names": ["claude.exe", "claude.cmd", "claude.ps1"], "candidates": ["%USERPROFILE%\\.local\\bin\\claude.exe"] },
         "authCheck": "claude",
-        "update": { "package": "@anthropic-ai/claude-code", "native": true },
+        "update": { "package": "@anthropic-ai/claude-code", "native": true,
+          "channel": { "url": "https://downloads.claude.ai/claude-code-releases/{channel}", "settings": "%USERPROFILE%\\.claude\\settings.json", "setting": "autoUpdatesChannel", "names": ["latest", "stable"] } },
         "install": {
           "command": "irm https://claude.ai/install.ps1 | iex",
           "url": "https://code.claude.com/docs/en/setup",
@@ -45,10 +47,8 @@
       "tools/claude-sidecar-mcp-wait.mjs",
       "tools/vendor/",
       "plugins/gate/",
-      "plugins/vidar-app/",
       "profiles/bare/claude.json",
-      "profiles/bare/claude.settings.template.json",
-      "profiles/bare/payload.md"
+      "profiles/bare/vidar-runes/settings/claude-settings.json"
     ],
     "trace": ["claude-agent-sdk", "@anthropic-ai", "claude-sidecar", "claude\\.exe"]
   }

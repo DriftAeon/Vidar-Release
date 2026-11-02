@@ -17,7 +17,8 @@ use serde::de::IgnoredAny;
 use serde::Deserialize;
 
 use super::local::{file, LocalEnv, LocalFile};
-use crate::bare::bundles::{Bundles, Mcp};
+use crate::agent_spec::Agent;
+use crate::bare::bundles::{self, Bundles, Mcp};
 
 /// The read cap: `~/.claude.json` holds history and project state as well (93,501 B on the planner's machine).
 pub const CAP: u64 = 4 * 1024 * 1024;
@@ -84,8 +85,7 @@ pub fn servers(path: &Path) -> Result<Vec<Server>, &'static str> {
 
 /// The catalog server whose http url equals `url` exactly and that Claude loads (no `agents`, or `claude`).
 fn catalog_match<'a>(catalog: &'a Bundles, url: &str) -> Option<&'a Mcp> {
-    let claude = |m: &Mcp| m.agents.is_empty() || m.agents.iter().any(|a| a.eq_ignore_ascii_case("claude"));
-    catalog.bundles.values().flat_map(|b| b.mcp.iter()).find(|m| claude(m) && m.http.as_ref().is_some_and(|h| h.url == url))
+    catalog.bundles.values().flat_map(|b| b.mcp.iter()).find(|m| bundles::serves(m, Agent::Claude) && m.http.as_ref().is_some_and(|h| h.url == url))
 }
 
 /// The Claude `mcp` rows of `env.claude_json`, matched against `env.catalog`; any failure offers none.

@@ -18,7 +18,7 @@ export function runeRunGoing(): boolean {
 
 registerStep({
   id: RUNES,
-  title: "First Runeset",
+  title: "Runeset",
   mount(body: HTMLElement, ctx: StepCtx) {
     let disposed = false;
     let dispose = (): void => {};

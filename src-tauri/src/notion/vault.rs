@@ -3,10 +3,10 @@
 //! token. `credman` holds no validators, so the token is checked here before any write or send.
 
 use crate::credman::{Cred, CredStore, Store};
-use crate::net::Secret;
+use crate::net::{printable, Secret};
+pub use crate::net::TOKEN_MAX_BYTES;
 
 pub const TARGET_PREFIX: &str = "Vidar/Notion/";
-pub const TOKEN_MAX_BYTES: usize = 1024;
 pub const WORKSPACE_MAX_UNITS: usize = 256;
 
 /// The live store for this install root.
@@ -17,14 +17,7 @@ pub fn store() -> CredStore {
 /// 1-1024 bytes of printable ASCII with no whitespace; no prefix parse (`secret_` and `ntn_` both
 /// exist). The message never echoes the token.
 pub fn validate_token(token: &Secret) -> Result<(), String> {
-    let t = token.expose().as_bytes();
-    if t.is_empty() || t.len() > TOKEN_MAX_BYTES {
-        return Err(format!("token must be 1-{TOKEN_MAX_BYTES} bytes"));
-    }
-    if !t.iter().all(|b| (0x21..=0x7e).contains(b)) {
-        return Err("token must be printable ASCII with no spaces".to_string());
-    }
-    Ok(())
+    printable(token, TOKEN_MAX_BYTES)
 }
 
 /// The owner kind `bot.owner.type` names: `user` is a personal access token, anything else an

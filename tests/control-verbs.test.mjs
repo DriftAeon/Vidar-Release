@@ -88,6 +88,13 @@ test("spawn carries --effort in the payload only when given", () => {
   assert.equal(Object.hasOwn(bare, "effort"), false);
 });
 
+test("spawn carries --vault only when given", () => {
+  const given = build("spawn", { agent: "claude", model: "opus", vault: "team-daily", text: "hi" }).payload;
+  assert.equal(given.vault, "team-daily");
+  assert.equal(Object.hasOwn(build("spawn", { agent: "claude", model: "opus", text: "hi" }).payload, "vault"), false);
+  assert.throws(() => build("spawn", { agent: "claude", model: "opus", vault: " ", text: "hi" }), /--vault must not be blank/);
+});
+
 test("spawn with an unknown effort is a usage error", () => {
   assert.throws(() => build("spawn", { agent: "claude", model: "opus", effort: "bogus", text: "hi" }), /--effort must be one of/);
 });

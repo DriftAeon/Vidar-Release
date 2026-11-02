@@ -1,6 +1,7 @@
 // Lab tab detail DOM: Cases list, Runs table, delta-per-commit chart and the copy-command
 // buttons. Series building lives in chart.ts; this file only draws it.
 import { copyText } from "../clipboard";
+import { el } from "../dom";
 import { iconImg, type ColorIcon } from "../icon-img";
 import { buildSeries, linePath, project, shortCommit, type ChartBox } from "./chart";
 import { dryCommand, liveCommand, type LabLib } from "./commands";
@@ -16,13 +17,6 @@ export const LAB_KIND_ICONS: Readonly<Record<string, ColorIcon>> = {
 
 export interface DetailCtx {
   note: (msg: string) => void;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
 }
 
 const SVG = "http://www.w3.org/2000/svg";

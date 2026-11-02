@@ -9,6 +9,7 @@ import { copyPathButton, isBrowserPath, openFolderButton, openInBrowserButton, O
 import type { Painted } from "../panels/display-render";
 import { viewPath, type RelayItem, type RelayVerdict } from "./store";
 import type { RelayViewState } from "./view";
+import { errText } from "../err-text";
 
 export interface RelayStripDeps {
   selected(): RelayItem | null;
@@ -101,7 +102,7 @@ export function createRelayStrip(host: HTMLElement, deps: RelayStripDeps): Relay
         commentEl.rows = 1;
       }
     } catch (e) {
-      message = e instanceof Error ? e.message : String(e);
+      message = errText(e);
       msgFor = item.id;
     } finally {
       inFlight.delete(item.id);

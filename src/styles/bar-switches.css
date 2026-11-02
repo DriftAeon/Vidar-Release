@@ -131,9 +131,8 @@
   display: block; width: var(--font-16); height: var(--font-16); box-sizing: border-box;
   border: calc(2 * var(--border-w)) solid color-mix(in srgb, var(--deny-red) 25%, transparent);
   border-top-color: var(--deny-red); border-radius: var(--radius-full);
-  animation: swap-spin 800ms linear infinite; /* motion: progress spinner, continuous, not a state change */
+  animation: spin 800ms linear infinite; /* motion: progress spinner, continuous, not a state change */
 }
-@keyframes swap-spin { to { transform: rotate(360deg); } }
 /* the Swap button's failure line (a failure's first line), right of the toggle run; hidden otherwise */
 #swap-status {
   min-width: 0; flex-shrink: 1; max-width: 40ch;

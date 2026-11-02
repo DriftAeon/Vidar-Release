@@ -11,6 +11,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,13 +45,18 @@ function fixture() {
   mkdirSync(join(root, "tools"));
   for (const f of SIDECAR_FILES) copyFileSync(join(REPO, "tools", f), join(root, "tools", f));
   mkdirSync(join(root, "profiles", "bare"), { recursive: true });
-  for (const f of ["claude.json", "payload.md"]) copyFileSync(join(REPO, "profiles", "bare", f), join(root, "profiles", "bare", f));
-  for (const p of ["vidar-app", "gate"]) mkdirSync(join(root, "plugins", p), { recursive: true });
+  for (const f of ["claude.json"]) copyFileSync(join(REPO, "profiles", "bare", f), join(root, "profiles", "bare", f));
+  for (const p of ["roster", "gate"]) mkdirSync(join(root, "plugins", p), { recursive: true });
   writeFileSync(join(root, "vidar.json"), JSON.stringify({ statuslineMirror: false }));
   mkdirSync(join(root, "userprofile"));
   const home = join(root, "agent-home");
   mkdirSync(join(home, "claude-config"), { recursive: true });
-  return { root, home };
+  // The payload is the vault's built text, written by the launch into the home's layer folder.
+  mkdirSync(join(home, "layer"));
+  const text = "vault payload\nVIDAR-PAYLOAD-0123456789ab\n";
+  const payload = join(home, "layer", `payload-${createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex").slice(0, 12)}.md`);
+  writeFileSync(payload, text);
+  return { root, home, payload };
 }
 
 function run(f, extra = [], { mode = "auto", home = true } = {}) {
@@ -73,7 +79,7 @@ function run(f, extra = [], { mode = "auto", home = true } = {}) {
   });
 }
 
-const flowArgs = (f) => ["--flow", "--profile", "bare", "--root", f.root, "--home", f.home];
+const flowArgs = (f) => ["--flow", "--profile", "bare", "--root", f.root, "--home", f.home, "--payload", f.payload];
 const options = (root) => JSON.parse(readFileSync(join(root, "options.json"), "utf8"));
 
 test("a Flow stage maps the profile onto the SDK options and keeps canUseTool and its mode", async () => {
@@ -82,7 +88,7 @@ test("a Flow stage maps the profile onto the SDK options and keeps canUseTool an
     const r = await run(f, flowArgs(f));
     assert.equal(r.code, 0, `sidecar exited ${r.code}\n${r.stderr}`);
     const o = options(f.root);
-    const payload = readFileSync(join(f.root, "profiles", "bare", "payload.md"), "utf8");
+    const payload = readFileSync(f.payload, "utf8");
     assert.deepEqual(o.systemPrompt, { type: "preset", preset: "claude_code", append: payload });
     assert.deepEqual(o.settingSources, ["user"]);
     assert.equal(o.hasCanUseTool, true);
@@ -110,9 +116,8 @@ test("--permission-mode wins over a home defaultMode of plan or bypass", async (
 test("a stage's --mcp-file becomes one strict MCP set", async () => {
   const f = fixture();
   try {
-    mkdirSync(join(f.home, "layer"));
     const file = join(f.home, "layer", "mcp-0123456789ab.json");
-    const servers = { plugin_vidar_drive: { command: "node", args: ["drive.mjs"] }, proxy: { type: "http", url: "http://127.0.0.1:8765/mcp" } };
+    const servers = { vidar_drive: { command: "node", args: ["drive.mjs"] }, proxy: { type: "http", url: "http://127.0.0.1:8765/mcp" } };
     writeFileSync(file, JSON.stringify({ mcpServers: servers }));
     const r = await run(f, [...flowArgs(f), "--mcp-file", file]);
     assert.equal(r.code, 0, `sidecar exited ${r.code}\n${r.stderr}`);

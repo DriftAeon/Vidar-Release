@@ -1,0 +1,17 @@
+{
+  "id": "w-tabstrip-rename-and-find",
+  "title": "Rename Tabs and Switch Between Them",
+  "style": "keyboard-first",
+  "scope": "vidar",
+  "surfaces": ["tabstrip", "launcher"],
+  "tags": ["tabs"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "open two tabs of different agents" },
+    { "intent": "rename one of them to something I'd recognise" },
+    { "intent": "switch between the two tabs a few times, by mouse and by keyboard if a shortcut exists" },
+    { "intent": "check each tab still shows its own content and name after switching" }
+  ]
+}

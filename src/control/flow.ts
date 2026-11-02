@@ -1,5 +1,7 @@
 // Flow card and observe listeners, kept out of listen.ts's general verb handler.
+import { errText } from "../err-text";
 import { listen as ipcListen } from "../ipc";
+import { vaultIpc } from "../runes/bare/vault-io";
 import { openApproval } from "../asks/approvals";
 import { APPROVAL_TITLES } from "../asks/approval";
 import { prepareControlFlow, approveControlFlow, saveControlFlow } from "../flow/control-start";
@@ -10,7 +12,7 @@ import { orderedNodes } from "../flow/control-core";
 import { initFlowStorage } from "../flow/file-storage";
 import { initRunsStore } from "../flow/runs-store";
 import { heldRunIds, resolveRunGrants } from "../flow/engine";
-import { modesOfGrants } from "../flow/permission-mode";
+import { modesOfGrants, type NodeGrants } from "../flow/permission-mode";
 import { driveSnapshot, requesterTabId } from "./registry";
 import type { Requester } from "./requester";
 
@@ -19,7 +21,20 @@ type Observe = { id: string; runId: string; root: string; timeoutMs: number; req
 type Reply = (id: string, ok: boolean, line: string) => void;
 type CardReply = (id: string, cardId: string, ok: boolean, line: string, verdict?: string) => void;
 
-const reason = (error: unknown) => error instanceof Error ? error.message : String(error);
+const reason = errText;
+
+/** The grants as the card shows them: a `copy-*` vault reads as its source's name (a copy carries it), since the
+ *  copy's id is a stamp. The grants the run approves keep the copy's id. */
+async function sourceNamed(grants: NodeGrants): Promise<NodeGrants> {
+  const out: NodeGrants = {};
+  for (const [node, grant] of Object.entries(grants)) {
+    const name = grant.vault.startsWith("copy-")
+      ? await vaultIpc.read(grant.vault).then((v) => v.vault.name, () => grant.vault)
+      : grant.vault;
+    out[node] = { ...grant, vault: name };
+  }
+  return out;
+}
 
 export function handleFlowCard(card: Card, hooks: {
   cardResult: CardReply; label: (r: Requester) => string; problem: (r: Requester) => string | null;
@@ -34,8 +49,9 @@ export function handleFlowCard(card: Card, hooks: {
       if (hooks.problem(requester)) { result(false, "err requester gone"); return; }
       if (Date.now() >= expiresAtMs) { result(false, "err expired"); return; }
       const label = hooks.label(requester);
-      const rows = flowCardRows(snapshot, label, orderedNodes, modes, grants);
-      const matrix = flowCardMatrix(snapshot, label, orderedNodes, modes, grants);
+      const shown = await sourceNamed(grants);
+      const rows = flowCardRows(snapshot, label, orderedNodes, modes, shown);
+      const matrix = flowCardMatrix(snapshot, label, orderedNodes, modes, shown);
       // One record; Relay (or Drive) answers it and the registry settles it once, so approve starts the flow once.
       const refused = openApproval({
         id: cardId, origin: "ctl-flow", title: APPROVAL_TITLES["ctl-flow"],

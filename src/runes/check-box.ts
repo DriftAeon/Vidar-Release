@@ -25,10 +25,15 @@ function glyph(state: CheckState): SVGSVGElement {
 
 /** A checkbox button: `role=checkbox`, `aria-checked` true / false / mixed. A click flips without opening the
  *  `details` it may sit in (a set head is a `summary`). */
-export function checkBox(o: { state: CheckState; disabled: boolean; title: string; label: string; flip: () => void }): HTMLButtonElement {
+export function checkBox(o: { state: CheckState; disabled: boolean; title: string; label: string; flip: () => void;
+  /** Modify's staged state: an accent box marks a change waiting for Done (runes-bare.css `.is-pending`). */
+  pending?: boolean;
+  /** A repaint gives focus back to the box with this key (field-focus.ts `data-keep`). */
+  keep?: string }): HTMLButtonElement {
   const b = document.createElement("button");
   b.type = "button";
-  b.className = "runes-check";
+  b.className = o.pending ? "runes-check is-pending" : "runes-check";
+  if (o.keep) b.dataset.keep = o.keep;
   b.setAttribute("role", "checkbox");
   b.setAttribute("aria-checked", o.state === "on" ? "true" : o.state === "off" ? "false" : "mixed");
   b.setAttribute("aria-label", o.label);

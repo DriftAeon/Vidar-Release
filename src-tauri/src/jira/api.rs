@@ -1,4 +1,4 @@
-//! Jira Cloud search, as pure functions over the `Transport` seam.
+//! Jira Cloud search, as pure functions over `http::Client` (the `net::Transport` seam).
 //! One request, `POST /rest/api/3/search/jql`, first page only; the reply maps to the D6 issue
 //! shape or to an error kind. `unset` (no credential, or a site mismatch) is decided before
 //! any request, in B1's commands.
@@ -6,7 +6,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::http::{Request, SendError, Transport};
+use super::http::Client;
+use crate::net::{self, NetKind, Reply, Request};
 
 pub const SEARCH_PATH: &str = "/rest/api/3/search/jql";
 pub const FIELDS: [&str; 6] = ["summary", "status", "issuetype", "priority", "updated", "parent"];
@@ -80,17 +81,13 @@ pub enum ErrorKind {
     Network,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ApiError {
-    pub kind: ErrorKind,
-    pub message: String,
+impl NetKind for ErrorKind {
+    const ENDPOINT: Self = ErrorKind::Endpoint;
+    const NETWORK: Self = ErrorKind::Network;
 }
 
-impl ApiError {
-    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        ApiError { kind, message: message.into() }
-    }
-}
+/// `{ kind, message, retryAfter? }`; `retryAfter` is set on `rate` when the reply names seconds.
+pub type ApiError = net::ApiError<ErrorKind>;
 
 /// The host of an `https://<name>.atlassian.net` site; anything else is refused here too, so no
 /// caller can point the Basic header or an issue url at another host (one validator, `config`).
@@ -111,7 +108,7 @@ pub fn page_request(site: &str, jql: &str, page_token: Option<&str>) -> Result<R
         method: "POST",
         host: host.to_string(),
         path: SEARCH_PATH.to_string(),
-        body: serde_json::to_vec(&body).map_err(|e| e.to_string())?,
+        body: Some(serde_json::to_vec(&body).map_err(|e| e.to_string())?),
     })
 }
 
@@ -201,19 +198,16 @@ fn first_error_message(body: &[u8]) -> String {
     listed.or_else(field).map(|m| m.chars().take(MESSAGE_CAP).collect()).unwrap_or_default()
 }
 
-/// Maps a transport result to a parsed 200 body or an error kind. An over-cap body
-/// is the endpoint misbehaving, not the network.
-pub(super) fn map_with<T>(sent: Result<(u16, Vec<u8>), SendError>, parse: impl FnOnce(&[u8]) -> Result<T, String>) -> Result<T, ApiError> {
-    let (status, body) = sent.map_err(|e| match e {
-        SendError::OverCap => ApiError::new(ErrorKind::Endpoint, e.to_string()),
-        SendError::Failed(message) => ApiError::new(ErrorKind::Network, message),
-    })?;
+/// Maps a send result (`Client::send`, which already turned transport failures into `endpoint`
+/// and `network`) to a parsed 200 body or an error kind.
+pub(super) fn map_with<T>(sent: Result<Reply, ApiError>, parse: impl FnOnce(&[u8]) -> Result<T, String>) -> Result<T, ApiError> {
+    let Reply { status, retry_after, body } = sent?;
     match status {
         200 => parse(&body).map_err(|e| ApiError::new(ErrorKind::Endpoint, e)),
         // 403 is a permission or allowlist refusal, not a bad token: it keeps the saved credential (F4)
         401 => Err(ApiError::new(ErrorKind::Auth, format!("HTTP {status}"))),
         400 => Err(ApiError::new(ErrorKind::Jql, first_error_message(&body))),
-        429 => Err(ApiError::new(ErrorKind::Rate, format!("HTTP {status}"))),
+        429 => Err(ApiError::new(ErrorKind::Rate, format!("HTTP {status}")).after(retry_after)),
         410 => Err(ApiError::new(ErrorKind::Endpoint, format!("HTTP {status}"))),
         300..=399 | 404 => Err(ApiError::new(ErrorKind::Site, format!("HTTP {status}"))),
         _ => Err(ApiError::new(ErrorKind::Endpoint, format!("HTTP {status}"))),
@@ -222,14 +216,14 @@ pub(super) fn map_with<T>(sent: Result<(u16, Vec<u8>), SendError>, parse: impl F
 
 /// Maps a transport result to a page of issues or an error kind. An over-cap body
 /// is the endpoint misbehaving, not the network.
-pub fn map_response(site: &str, sent: Result<(u16, Vec<u8>), SendError>) -> Result<Page, ApiError> {
+pub fn map_response(site: &str, sent: Result<Reply, ApiError>) -> Result<Page, ApiError> {
     map_with(sent, |body| parse_search(site, body))
 }
 
 /// Builds the search request, sends it and maps the reply.
-pub fn search(transport: &dyn Transport, site: &str, jql: &str, page_token: Option<&str>) -> Result<Page, ApiError> {
+pub fn search(client: &Client, site: &str, jql: &str, page_token: Option<&str>) -> Result<Page, ApiError> {
     let req = page_request(site, jql, page_token).map_err(|e| ApiError::new(ErrorKind::Site, e))?;
-    map_response(site, transport.send(&req))
+    map_response(site, client.send(&req))
 }
 
 /// One issue type for the Type picker.
@@ -247,7 +241,7 @@ pub struct ProjectOption {
 }
 
 pub(super) fn get_request(site: &str, path: &str) -> Result<Request, String> {
-    Ok(Request { method: "GET", host: host_of(site)?.to_string(), path: path.to_string(), body: Vec::new() })
+    Ok(Request { method: "GET", host: host_of(site)?.to_string(), path: path.to_string(), body: None })
 }
 
 pub fn types_request(site: &str) -> Result<Request, String> {
@@ -291,21 +285,22 @@ pub fn parse_projects(body: &[u8]) -> Result<Vec<ProjectOption>, String> {
 }
 
 /// Builds the types request, sends it and maps the reply.
-pub fn types(transport: &dyn Transport, site: &str) -> Result<Vec<TypeOption>, ApiError> {
+pub fn types(client: &Client, site: &str) -> Result<Vec<TypeOption>, ApiError> {
     let req = types_request(site).map_err(|e| ApiError::new(ErrorKind::Site, e))?;
-    map_with(transport.send(&req), parse_types)
+    map_with(client.send(&req), parse_types)
 }
 
 /// Builds the projects request, sends it and maps the reply.
-pub fn projects(transport: &dyn Transport, site: &str) -> Result<Vec<ProjectOption>, ApiError> {
+pub fn projects(client: &Client, site: &str) -> Result<Vec<ProjectOption>, ApiError> {
     let req = projects_request(site).map_err(|e| ApiError::new(ErrorKind::Site, e))?;
-    map_with(transport.send(&req), parse_projects)
+    map_with(client.send(&req), parse_projects)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use crate::jira::http::fake::{reply, Fake};
+    use crate::net::SendError;
 
     const SITE: &str = "https://example.atlassian.net";
     const SEARCH: &str = include_str!("../../../tests/fixtures/jira/search-jql.json");
@@ -313,21 +308,12 @@ mod tests {
     const ERROR_400: &str = include_str!("../../../tests/fixtures/jira/error-400.json");
     const ISSUES: &str = include_str!("../../../tests/fixtures/jira/issues.json");
 
-    struct Fixture {
-        status: u16,
-        body: &'static str,
-        seen: RefCell<Option<Request>>,
+    fn fixture(status: u16, body: &'static str) -> Fake {
+        Fake::fixed(status, body)
     }
 
-    impl Transport for Fixture {
-        fn send(&self, req: &Request) -> Result<(u16, Vec<u8>), SendError> {
-            *self.seen.borrow_mut() = Some(req.clone());
-            Ok((self.status, self.body.as_bytes().to_vec()))
-        }
-    }
-
-    fn fixture(status: u16, body: &'static str) -> Fixture {
-        Fixture { status, body, seen: RefCell::new(None) }
+    fn body_of(req: &Request) -> Value {
+        serde_json::from_slice(req.body.as_deref().unwrap()).unwrap()
     }
 
     const TYPES: &str = include_str!("../../../tests/fixtures/jira/issuetype.json");
@@ -336,20 +322,20 @@ mod tests {
     #[test]
     fn types_dedupe_by_name_and_sort_by_level() {
         let t = fixture(200, TYPES);
-        let got = types(&t, SITE).unwrap();
+        let got = types(&t.client(), SITE).unwrap();
         let want: Vec<(&str, i64)> = vec![("Epic", 1), ("Bug", 0), ("Chore", 0), ("Story", 0), ("Task", 0), ("Sub-task", -1), ("Technical Sub-task", -1)];
         assert_eq!(got.iter().map(|o| (o.name.as_str(), o.level)).collect::<Vec<_>>(), want);
-        let seen = t.seen.borrow().clone().unwrap();
+        let seen = t.last().unwrap();
         assert_eq!((seen.method, seen.host.as_str(), seen.path.as_str()), ("GET", "example.atlassian.net", TYPES_PATH));
-        assert!(seen.body.is_empty());
+        assert!(seen.body.is_none());
         assert_eq!(serde_json::to_value(&got[0]).unwrap(), json!({ "name": "Epic", "level": 1 }));
-        assert_eq!(types(&fixture(200, "{}"), SITE).unwrap_err().kind, ErrorKind::Endpoint);
+        assert_eq!(types(&fixture(200, "{}").client(), SITE).unwrap_err().kind, ErrorKind::Endpoint);
     }
 
     #[test]
     fn projects_page_parses_and_drops_bad_keys() {
         let t = fixture(200, PROJECTS);
-        let got = projects(&t, SITE).unwrap();
+        let got = projects(&t.client(), SITE).unwrap();
         assert_eq!(
             got,
             vec![
@@ -358,32 +344,31 @@ mod tests {
                 ProjectOption { key: "WEB_2".into(), name: "Website".into() },
             ]
         );
-        assert_eq!(t.seen.borrow().as_ref().unwrap().path, PROJECTS_PATH);
+        assert_eq!(t.last().unwrap().path, PROJECTS_PATH);
         assert!(PROJECTS_PATH.contains("maxResults=100"));
     }
 
     #[test]
     fn search_fixture_parses_to_issue_shape() {
         let t = fixture(200, SEARCH);
-        let page = search(&t, SITE, "project = DEMO", None).unwrap();
+        let page = search(&t.client(), SITE, "project = DEMO", None).unwrap();
         let got = serde_json::to_value(json!({ "issues": page.issues, "nextPageToken": page.next_page_token })).unwrap();
         let want: Value = serde_json::from_str(ISSUES).unwrap();
         assert_eq!(got, want);
-        let empty = search(&fixture(200, EMPTY), SITE, "", None).unwrap();
+        let empty = search(&fixture(200, EMPTY).client(), SITE, "", None).unwrap();
         assert_eq!(empty, Page { issues: vec![], next_page_token: None });
     }
 
     #[test]
     fn request_carries_json_body_and_no_header_text() {
         let t = fixture(200, EMPTY);
-        search(&t, SITE, "project = DEMO ORDER BY updated DESC", None).unwrap();
-        let req = t.seen.borrow().clone().unwrap();
+        search(&t.client(), SITE, "project = DEMO ORDER BY updated DESC", None).unwrap();
+        let req = t.last().unwrap();
         assert_eq!(req.method, "POST");
         assert_eq!(req.host, "example.atlassian.net");
         assert_eq!(req.path, "/rest/api/3/search/jql");
-        let body: Value = serde_json::from_slice(&req.body).unwrap();
         assert_eq!(
-            body,
+            body_of(&req),
             json!({
                 "jql": "project = DEMO ORDER BY updated DESC",
                 "fields": ["summary", "status", "issuetype", "priority", "updated", "parent"],
@@ -395,13 +380,12 @@ mod tests {
             assert!(!shown.contains(needle), "{needle} in {shown}");
         }
         let blank = page_request(SITE, "  ", None).unwrap();
-        let body: Value = serde_json::from_slice(&blank.body).unwrap();
-        assert_eq!(body["jql"], DEFAULT_JQL);
+        assert_eq!(body_of(&blank)["jql"], DEFAULT_JQL);
     }
 
     #[test]
     fn error_status_maps_to_kind() {
-        let kind = |status, body: &'static str| search(&fixture(status, body), SITE, "x", None).unwrap_err();
+        let kind = |status, body: &'static str| search(&fixture(status, body).client(), SITE, "x", None).unwrap_err();
         assert_eq!(kind(401, "").kind, ErrorKind::Auth);
         assert_eq!(kind(403, "").kind, ErrorKind::Endpoint);
         let jql = kind(400, ERROR_400);
@@ -413,45 +397,61 @@ mod tests {
         assert_eq!(kind(302, "").kind, ErrorKind::Site);
         assert_eq!(kind(404, "").kind, ErrorKind::Site);
         assert_eq!(kind(200, "<html>").kind, ErrorKind::Endpoint);
-        let net = map_response(SITE, Err("WinHttpSendRequest failed (12002)".to_string().into())).unwrap_err();
+        let down = Fake::failing(SendError::Io("WinHttpSendRequest failed (12002)".into()));
+        let net = search(&down.client(), SITE, "x", None).unwrap_err();
         assert_eq!(net.kind, ErrorKind::Network);
 
         let long = format!(r#"{{"errorMessages":["{}"]}}"#, "é".repeat(400));
-        let capped = map_response(SITE, Ok((400, long.into_bytes()))).unwrap_err();
+        let capped = map_response(SITE, Ok(reply(400, long.as_bytes()))).unwrap_err();
         assert_eq!(capped.message.chars().count(), 300);
         assert_eq!(serde_json::to_value(&capped).unwrap()["kind"], "jql");
+    }
+
+    #[test]
+    fn rate_limit_carries_retry_after_seconds() {
+        let held = search(&Fake::rate(Some(7)).client(), SITE, "x", None).unwrap_err();
+        assert_eq!((held.kind, held.retry_after), (ErrorKind::Rate, Some(7)));
+        assert_eq!(serde_json::to_value(&held).unwrap(), json!({ "kind": "rate", "message": "HTTP 429", "retryAfter": 7 }));
+        let bare = search(&Fake::rate(None).client(), SITE, "x", None).unwrap_err();
+        assert_eq!(serde_json::to_value(&bare).unwrap(), json!({ "kind": "rate", "message": "HTTP 429" }));
+    }
+
+    #[test]
+    fn forbidden_is_not_an_auth_failure() {
+        // 403 keeps the saved credential: only 401 reads as `auth`.
+        let e = search(&fixture(403, "").client(), SITE, "x", None).unwrap_err();
+        assert_eq!((e.kind, e.retry_after), (ErrorKind::Endpoint, None));
     }
 
     #[test]
     fn site_off_atlassian_is_refused_before_send() {
         for bad in ["https://evil.example", "https://example.atlassian.net.evil.com", "https://Example.atlassian.net", "https://example.atlassian.net/x"] {
             let t = fixture(200, SEARCH);
-            assert_eq!(search(&t, bad, "x", None).unwrap_err().kind, ErrorKind::Site, "{bad}");
-            assert!(t.seen.borrow().is_none(), "{bad}");
+            assert_eq!(search(&t.client(), bad, "x", None).unwrap_err().kind, ErrorKind::Site, "{bad}");
+            assert!(t.last().is_none(), "{bad}");
             assert!(parse_search(bad, SEARCH.as_bytes()).is_err(), "{bad}");
         }
     }
 
     #[test]
     fn over_cap_body_maps_to_endpoint() {
-        let e = map_response(SITE, Err(SendError::OverCap)).unwrap_err();
-        assert_eq!(e.kind, ErrorKind::Endpoint);
-        assert_eq!(e.message, crate::jira::http::BODY_OVER_CAP);
+        let e = search(&Fake::failing(SendError::OverCap).client(), SITE, "x", None).unwrap_err();
+        assert_eq!((e.kind, e.message.as_str()), (ErrorKind::Endpoint, "reply too large"));
         // The kind comes from the variant, never from matching the text.
-        let e = map_response(SITE, Err(crate::jira::http::BODY_OVER_CAP.to_string().into())).unwrap_err();
+        let e = search(&Fake::failing(SendError::Io("reply too large".into())).client(), SITE, "x", None).unwrap_err();
         assert_eq!(e.kind, ErrorKind::Network);
-        let e = map_response(SITE, Err("body read past the deadline".to_string().into())).unwrap_err();
+        let e = search(&Fake::failing(SendError::Timeout).client(), SITE, "x", None).unwrap_err();
         assert_eq!(e.kind, ErrorKind::Network);
     }
 
     #[test]
     fn jql_error_falls_back_to_the_errors_map() {
         let body = br#"{"errorMessages":[],"errors":{"jql":"Field 'x' does not exist.","other":"later"}}"#;
-        let e = map_response(SITE, Ok((400, body.to_vec()))).unwrap_err();
+        let e = map_response(SITE, Ok(reply(400, body))).unwrap_err();
         assert_eq!((e.kind, e.message.as_str()), (ErrorKind::Jql, "Field 'x' does not exist."));
         let both = br#"{"errorMessages":["listed"],"errors":{"jql":"field"}}"#;
-        assert_eq!(map_response(SITE, Ok((400, both.to_vec()))).unwrap_err().message, "listed");
-        assert_eq!(map_response(SITE, Ok((400, b"{}".to_vec()))).unwrap_err().message, "");
+        assert_eq!(map_response(SITE, Ok(reply(400, both))).unwrap_err().message, "listed");
+        assert_eq!(map_response(SITE, Ok(reply(400, b"{}"))).unwrap_err().message, "");
     }
 
     #[test]
@@ -499,14 +499,14 @@ mod tests {
     #[test]
     fn next_page_token_is_returned_and_sent() {
         let t = fixture(200, SEARCH);
-        let page = search(&t, SITE, "x", None).unwrap();
+        let page = search(&t.client(), SITE, "x", None).unwrap();
         assert_eq!(page.next_page_token.as_deref(), Some("Ch0jU3RyaW5nJlJFVk5QVEU9JTNEJTNE"));
-        let first: Value = serde_json::from_slice(&t.seen.borrow().clone().unwrap().body).unwrap();
+        let first = body_of(&t.last().unwrap());
         assert!(first.get("nextPageToken").is_none());
-        assert_eq!(search(&fixture(200, EMPTY), SITE, "x", None).unwrap().next_page_token, None);
+        assert_eq!(search(&fixture(200, EMPTY).client(), SITE, "x", None).unwrap().next_page_token, None);
 
-        search(&t, SITE, "x", Some("tok123")).unwrap();
-        let second: Value = serde_json::from_slice(&t.seen.borrow().clone().unwrap().body).unwrap();
+        search(&t.client(), SITE, "x", Some("tok123")).unwrap();
+        let second = body_of(&t.last().unwrap());
         assert_eq!(second["nextPageToken"], "tok123");
         assert_eq!(second["jql"], "x");
     }
@@ -523,9 +523,8 @@ mod tests {
         let custom = "project = DEMO AND labels = x ORDER BY created ASC";
         assert_eq!(compose_jql(Scope::Mine, custom), custom);
         let t = fixture(200, EMPTY);
-        search(&t, SITE, &compose_jql(Scope::Mine, custom), None).unwrap();
-        let body: Value = serde_json::from_slice(&t.seen.borrow().clone().unwrap().body).unwrap();
-        assert_eq!(body["jql"], custom);
+        search(&t.client(), SITE, &compose_jql(Scope::Mine, custom), None).unwrap();
+        assert_eq!(body_of(&t.last().unwrap())["jql"], custom);
     }
 
     #[test]

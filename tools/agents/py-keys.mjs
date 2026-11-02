@@ -12,7 +12,7 @@ const CLOSE = new Set([")", "]", "}"]);
 const P3 = new Set(["**=", "//=", ">>=", "<<=", "..."]);
 const P2 = new Set(["==", "!=", "<=", ">=", "->", ":=", "**", "//", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "@="]);
 const KW = new Set(["if", "elif", "else", "while", "and", "or", "not", "in", "is", "return", "yield", "assert", "lambda", "for", "await", "del", "raise", "print"]);
-const COND = 1, NEG = 2, FB = 4;
+const COND = 1, NEG = 2, FB = 4, CMP = 8; // CMP: operand of `==` `!=` `in` (ctx.comparison, Q2 a)
 
 /** Tokens {t: str|name|num|punct, v, text, line, ls (first of its logical line), li (that line's indent), sid}. */
 export function lex(src, line0 = 1, parent = null) {
@@ -160,7 +160,7 @@ function flags(toks, m) {
     const t = toks[k];
     if (t.t === "punct") {
       if (t.v === "==" || t.v === "!=") {
-        const bit = COND | (t.v === "!=" ? NEG : 0);
+        const bit = COND | CMP | (t.v === "!=" ? NEG : 0);
         mark(left(k), k - 1, bit); mark(k + 1, right(k), bit);
       }
       continue;
@@ -181,7 +181,7 @@ function flags(toks, m) {
       for (let q = k + 3; q < n && (toks[q].li > t.li || toks[q].line === t.line); q++) fl[q] |= FB;
     } else if (v === "in" || v === "is") {
       const neg = (v === "in" && isN(toks[k - 1], "not")) || (v === "is" && isN(toks[k + 1], "not"));
-      const bit = COND | (neg ? NEG : 0);
+      const bit = COND | (neg ? NEG : 0) | (v === "in" ? CMP : 0);
       const op = v === "in" && isN(toks[k - 1], "not") ? k - 1 : k;
       const rs = v === "is" && isN(toks[k + 1], "not") ? k + 1 : k;
       mark(left(op), op - 1, bit); mark(rs + 1, right(rs), bit);
@@ -218,7 +218,7 @@ function scanFile(path, src) {
   const tier = tierOf(path);
   const out = [];
   const push = (k, tok, kind) => {
-    const c = { kind, condition: !!(fl[k] & COND), negated: !!(fl[k] & NEG), fallbackArm: !!(fl[k] & FB), forcedArm: false, wild: false, mergesNone: false };
+    const c = { kind, condition: !!(fl[k] & COND), negated: !!(fl[k] & NEG), fallbackArm: !!(fl[k] & FB), forcedArm: false, wild: false, mergesNone: false, comparison: !!(fl[k] & CMP) };
     const cls = classOf(tok, c);
     if (cls === "none") return;
     out.push({ file: path, line: toks[k].line, tok, cls, base: cls, anchor: anchor(toks, k, names[k]), forced: false, tier, ids: idsIn(tok), ctx: c });

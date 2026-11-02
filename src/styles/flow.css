@@ -64,6 +64,7 @@
 .flow-node-title { font-size: var(--font-12); font-weight: 600; color: color-mix(in srgb, var(--kind) 70%, var(--fg)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .flow-node-subtitle { font-size: var(--font-11); color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .flow-node-field { font-size: var(--font-11); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: var(--space-4); }
+.flow-node-vault .icn { width: var(--font-11); height: var(--font-11); flex-shrink: 0; align-self: center; }
 .flow-node-field-k { color: var(--fg-dim); flex-shrink: 0; }
 .flow-node-field-v { color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
 /* addon chips: a distinct muted hue per kind, deliberately off the five
@@ -138,12 +139,13 @@
 .flow-toolbar {
   display: flex; align-items: center; gap: var(--space-8); position: relative; /* no padding, fill or rule: the pane shell (.wb-pane-head) owns the head; #workbench insets 10px so the picker lines up with the tab icons (2026-10-04) */
 }
-.flow-toolbar-spacer { flex: 1; }
+.flow-toolbar-spacer { flex: 1; min-width: 0; } /* the spacer gives way first, so Add stays inside the pane */
 /* one height for every toolbar button: New, Create, Run, Cancel, Tidy, Add (2026-10-03) */
 .flow-toolbar button {
   display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
   height: var(--row-24); padding-block: 0;
 }
+.flow-toolbar .ws-btn { min-height: var(--row-24); } /* the Sheen's min-height 28 beat height 24 and pushed the frame down 4 (2026-10-31) */
 .flow-toolbar button[hidden] { display: none; } /* New swaps out for the name form */
 .flow-run-btn { color: var(--ok-green); border-color: var(--ok-green); font-weight: 600; }
 .flow-run-btn:hover:not(:disabled) {
@@ -152,7 +154,7 @@
 }
 .flow-run-btn:disabled { color: var(--fg-dim); border-color: var(--border); }
 /* Add (the `+` palette button): a colour icon button; the art carries the colour, so no fill. */
-.flow-plus-btn { position: relative; }
+.flow-plus-btn { position: relative; flex: none; }
 .flow-plus-btn:hover:not(:disabled) { border-color: var(--accent); }
 .flow-node.invalid { border-color: var(--alert); }
 .flow-node.invalid .flow-node-header { background: var(--alert); }
@@ -167,9 +169,11 @@
   display: flex; flex-direction: column; gap: var(--space-2); z-index: 5;
 }
 .flow-palette-label { font-size: var(--font-10); color: var(--fg-dim); padding: var(--space-4) var(--space-8) var(--space-2); }
+/* a <button> that keeps the old <div> row's look: the :where(button) base (border, dim colour, font, padding) is reset */
 .flow-palette-item {
   display: flex; align-items: center; gap: var(--space-8); padding: var(--space-6) var(--space-8);
   border-radius: var(--radius-4); cursor: pointer; font-size: var(--font-12);
+  box-sizing: border-box; width: 100%; border: 0; background: none; color: inherit; text-align: left;
 }
 .flow-palette-item:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .flow-palette-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }

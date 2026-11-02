@@ -70,11 +70,10 @@ test("Claude rewrite ships with Claude and its former paths leave the no-Claude 
   for (const path of [
     "content/packs/claude/",
     "plugins/gate/",
-    "plugins/vidar-app/",
-  ]) assert.ok(cut.includes(path), `${path} is not cut from codex`);
+  ])assert.ok(cut.includes(path), `${path} is not cut from codex`);
   const codexShip = shippedPaths("codex");
   const fullShip = shippedPaths("full");
-  for (const gone of ["plugins/gate/hooks/hooks.json", "plugins/vidar-app/.mcp.json", "content/packs/claude/voice/claude-p.json", "content/packs/claude/voice/rewrite_claude.py"]) {
+  for (const gone of ["plugins/gate/hooks/hooks.json", "content/packs/claude/voice/claude-p.json", "content/packs/claude/voice/rewrite_claude.py"]) {
     assert.ok(!codexShip.includes(gone), `${gone} ships in codex`);
     assert.ok(fullShip.includes(gone), `${gone} is missing from full`);
   }

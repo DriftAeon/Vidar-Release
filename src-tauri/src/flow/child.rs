@@ -15,7 +15,9 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 
 use super::bare::BareCodex;
-use super::{claude, codex, codex_mcp};
+use super::codex::Rpc;
+use super::codex_mcp;
+use super::{app_server, sidecar};
 use crate::bare::Env;
 use super::{FlowNodeEventPayload, FlowPermissionPayload, FlowRunNodeStatus};
 
@@ -32,22 +34,31 @@ pub(super) enum RunnerSpec {
     /// transport tests use), the stage's sidecar args (the profile mapping on the node's vault
     /// home: `--flow --profile --root --home` and the vault's payload, plugins and MCP file) and
     /// the warnings from building them.
-    Claude { sidecar: PathBuf, env: Option<Env>, args: Vec<String>, warnings: Vec<String> },
+    Sidecar { sidecar: PathBuf, env: Option<Env>, args: Vec<String>, warnings: Vec<String> },
     /// The Codex npm entrypoint, run as `node <js> app-server`, the Codex home whose config
     /// the pre-spawn MCP check reads (`None`: no check), and the Bare spawn inputs (`None`:
     /// Vidar's env minus the scrub, as the transport tests use).
-    Codex { js: PathBuf, home: Option<PathBuf>, bare: Option<BareCodex> },
+    AppServer { js: PathBuf, home: Option<PathBuf>, bare: Option<BareCodex> },
 }
 
 /// The runner a live `FlowChild` was started on; picks the runner-specific protocol steps.
 #[derive(Clone, Copy)]
 pub(super) enum Runner {
-    Claude,
-    Codex,
+    Sidecar,
+    AppServer,
 }
 
-// The Job Object (kill-on-close) lives in `crate::job`, shared with the rune generator.
-pub(super) use crate::job::Job;
+// The Job Object (kill-on-close) lives in `crate::proc_job`, shared with the rune generator.
+pub(super) use crate::proc_job::Job;
+
+/// Spawns `cmd` into `job` (suspended, resumed once assigned). Spawn errors keep their text;
+/// an assign or resume failure (`ErrorKind::Other`) reads "assign flow job: ...".
+pub(super) fn spawn_in_job(cmd: &mut std::process::Command, job: &Job) -> Result<std::process::Child, String> {
+    crate::proc_job::spawn_into(cmd, job).map_err(|e| match e.kind() {
+        std::io::ErrorKind::Other => format!("assign flow job: {e}"),
+        _ => e.to_string(),
+    })
+}
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
@@ -85,7 +96,7 @@ pub(super) struct FlowChild {
     // something better than nothing for reap()'s final text.
     pub(super) live_text: Mutex<String>,
     // Codex only: JSON-RPC ids, thread/turn ids and the open server requests (empty for Claude).
-    pub(super) rpc: Mutex<codex::Rpc>,
+    pub(super) rpc: Mutex<Rpc>,
     // Run warnings from the spawn inputs (user MCP servers left out of a node); Flow has
     // no warning event, so they join the node's error if it fails.
     warnings: Vec<String>,
@@ -279,8 +290,8 @@ pub(super) fn fail_child(child: &FlowChild, message: String) {
 pub(super) fn cancel_child(child: &FlowChild) {
     child.canceled.store(true, Ordering::SeqCst);
     match child.runner {
-        Runner::Claude => claude::send_interrupt(child),
-        Runner::Codex => codex::send_interrupt(child),
+        Runner::Sidecar => sidecar::send_interrupt(child),
+        Runner::AppServer => app_server::send_interrupt(child),
     }
     if let Ok(mut guard) = child.stdin.lock() {
         guard.take();
@@ -444,16 +455,16 @@ pub(super) fn start_node_process(
     let mut warnings: Vec<String> = Vec::new();
     let mut instructions: Option<String> = None;
     let (runner, (mut child, job)) = match &spec {
-        RunnerSpec::Claude { sidecar, env, args: stage_args, warnings: stage_warnings } => {
+        RunnerSpec::Sidecar { sidecar, env, args: stage_args, warnings: stage_warnings } => {
             // The stage's vault-home args, then the allowlist's MCP servers, which ride argv so the
             // sidecar waits for them before the first turn.
             let mut args = extra_args.clone();
             args.extend(stage_args.iter().cloned());
             warnings = stage_warnings.clone();
-            args.extend(claude::required_mcp_args(&tool_allowlist));
-            (Runner::Claude, claude::spawn(sidecar, &model, &cwd, &permission_mode, &args, env.as_ref())?)
+            args.extend(sidecar::required_mcp_args(&tool_allowlist));
+            (Runner::Sidecar, sidecar::spawn(sidecar, &model, &cwd, &permission_mode, &args, env.as_ref())?)
         }
-        RunnerSpec::Codex { js, home, bare } => {
+        RunnerSpec::AppServer { js, home, bare } => {
             // The vault's overrides (network, MCP) first, then the allowlist's MCP tools; a name
             // unsafe for a `-c` key, or a server the vault's Codex config does not define, fails
             // here, before anything spawns.
@@ -466,7 +477,7 @@ pub(super) fn start_node_process(
             args.extend(codex_mcp::approval_args(&tool_allowlist)?);
             list_timeouts = codex_mcp::preflight(home.as_deref(), &cwd, &tool_allowlist, &[])?;
             let on_bare = bare.as_ref().map(|b| (b.node.as_path(), &b.env));
-            (Runner::Codex, codex::spawn(js, &cwd, &args, on_bare)?)
+            (Runner::AppServer, app_server::spawn(js, &cwd, &args, on_bare)?)
         }
     };
     for w in &warnings {
@@ -495,7 +506,7 @@ pub(super) fn start_node_process(
         sidecar_error: Mutex::new(None),
         result_error_reason: Mutex::new(None),
         live_text: Mutex::new(String::new()),
-        rpc: Mutex::new(codex::Rpc::with_list_timeouts(list_timeouts).with_instructions(instructions)),
+        rpc: Mutex::new(Rpc::with_list_timeouts(list_timeouts).with_instructions(instructions)),
         warnings,
         emit,
     });
@@ -517,8 +528,8 @@ pub(super) fn start_node_process(
     let reader = thread::Builder::new()
         .name(format!("flow-stdout-{key}"))
         .spawn(move || match out_child.runner {
-            Runner::Claude => claude::forward_stdout(stdout, &out_child, &tool_allowlist),
-            Runner::Codex => codex::forward_stdout(stdout, &out_child, &tool_allowlist),
+            Runner::Sidecar => sidecar::forward_stdout(stdout, &out_child, &tool_allowlist),
+            Runner::AppServer => app_server::forward_stdout(stdout, &out_child, &tool_allowlist),
         })
         .map_err(|e| e.to_string())?;
 
@@ -526,9 +537,9 @@ pub(super) fn start_node_process(
     // draining. The sidecar's stdin readline listener is wired before its
     // query() starts, so this is queued safely even before its own "ready" line.
     let line = match flow_child.runner {
-        Runner::Claude => claude::prompt_line(&prompt),
+        Runner::Sidecar => sidecar::prompt_line(&prompt),
         // Codex: `initialize`; the prompt rides `turn/start` once the handshake reaches it.
-        Runner::Codex => codex::prompt_line(&flow_child, &prompt, &cwd, &model),
+        Runner::AppServer => app_server::prompt_line(&flow_child, &prompt, &cwd, &model),
     };
     if let Err(write_err) = send_raw_checked(&flow_child, &line) {
         // Give the stderr thread a moment to pick up whatever explains the write

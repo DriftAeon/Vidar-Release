@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -26,9 +26,7 @@ pub const CARD_TTL: Duration = Duration::from_secs(280);
 #[cfg(test)]
 pub const CARD_TTL: Duration = Duration::from_millis(50);
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+use crate::fsx::now_ms;
 
 #[derive(Default)]
 pub struct CardState {

@@ -27,10 +27,9 @@
 .plan-status.done { color: var(--ok-green); }
 .plan-status.done .plan-dot { fill: currentColor; }
 .plan-status.done .plan-tick { fill: none; stroke: var(--bg); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.plan-status.run { color: var(--accent); animation: plan-spin 900ms linear infinite; /* motion: a loading spinner turns for as long as the step runs */ }
+.plan-status.run { color: var(--accent); animation: spin 900ms linear infinite; /* motion: a loading spinner turns for as long as the step runs */ }
 .plan-status.run .plan-track { fill: none; stroke: var(--border); stroke-width: 2; }
 .plan-status.run .plan-arc { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .plan-status.todo { color: var(--border-strong); }
 .plan-status.todo .plan-ring-empty { fill: none; stroke: currentColor; stroke-width: 1.5; }
-@keyframes plan-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .plan-status.run { animation: none; } }

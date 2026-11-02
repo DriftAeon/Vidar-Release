@@ -92,14 +92,14 @@ test("seed saves the fixture project as a workspace with no row sets, then rever
     const bare = c.agents.find((a) => a.key === "claude-bare");
     assert.deepEqual(bare, { key: "claude-bare", label: "Mine" }, "an existing row is left as it was, with no sets");
     assert.equal(c.agents.length, 1, "no row is added");
-    assert.ok(!JSON.stringify(c).includes('"kit"'), "kit (MCP modules) is left out");
+    assert.ok(!JSON.stringify(c).includes('"installed"'), "installed (MCP modules) is left out");
     assert.match(text(join(l.app, "runes-e2e", "sets", "vidar-recall.md")), /<\?recall\?>/);
     assert.match(text(join(l.app, "runes-e2e", "rules", "desktop-only-recall.md")), /activate: recall/);
     assert.equal(existsSync(resolveNode("legacyRuneGenIndex", { root: l.app })), false, "no gen-index is seeded");
     for (const n of ["claude-user", "codex-user"]) assert.equal(existsSync(join(l.imports, n, "sets")), false, `${n} has no row sets`);
     assert.ok(readdirSync(join(l.imports, "claude-user", "rules")).length >= 3, "the library rules are seeded");
     assert.equal(existsSync(join(l.imports, "gen-claude-rendered-bare-5e1d0a7c")), false);
-    assert.equal(existsSync(join(l.imports, "kit")), false);
+    assert.equal(existsSync(join(l.imports, "installed")), false);
     assert.equal(run({ base }).code, 0, "a second run reseeds");
     assert.equal(JSON.parse(text(l.config)).locations.filter((x) => x.cwd === l.work).length, 1, "the workspace is not added twice");
 

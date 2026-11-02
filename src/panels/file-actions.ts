@@ -4,6 +4,7 @@
 // and nowhere else. A panel passes only what differs: how to get the path or text, where feedback goes.
 
 import { invoke, type CommandName } from "../ipc";
+import { basename } from "../paths";
 import { copyText } from "../clipboard";
 import { iconImg, type ColorIcon } from "../icon-img";
 
@@ -121,7 +122,7 @@ export function deleteButton(o: DeleteOpts): HTMLButtonElement {
   return build("Delete", "trash", o, () => {
     const path = o.path();
     if (!path) return;
-    const name = path.split("\\").pop() ?? path;
+    const name = basename(path);
     if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return;
     invoke(o.command as "delete_display_file", { path }) // any `{ path }` delete command; the cast only widens the name
       .then(() => o.onDeleted())

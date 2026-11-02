@@ -137,7 +137,32 @@ pub fn status_with(cwd: &Path, ubt_dir: Option<&Path>, editor_proc: bool) -> Res
 pub fn status_blocking(cwd: &str) -> Result<UnrealStatus, String> {
     let editor_proc = crate::procs::snapshot().values().any(|p| is_editor_exe(&p.exe));
     let ubt_dir = std::env::var_os("LOCALAPPDATA").map(|b| PathBuf::from(b).join("UnrealBuildTool"));
-    status_with(Path::new(cwd), ubt_dir.as_deref(), editor_proc)
+    let st = status_with(Path::new(cwd), ubt_dir.as_deref(), editor_proc)?;
+    // Agent-readable copy of what the tab shows; a failed write never fails the status read.
+    if let Some(doc) = state_doc(&st, crate::fsx::now_ms()) {
+        let _ = write_state(&crate::paths::unreal_state_path(), &doc);
+    }
+    Ok(st)
+}
+
+/// `state.json` body: the status fields as they are (no new detection) plus `version`,
+/// `readAt` (epoch ms) and `root`. None when no project was found. Readers treat a `readAt`
+/// older than 30 s as unknown.
+pub fn state_doc(st: &UnrealStatus, read_at: u64) -> Option<serde_json::Value> {
+    let project = st.project.as_ref()?;
+    let mut v = serde_json::to_value(st).ok()?;
+    let obj = v.as_object_mut()?;
+    obj.insert("version".into(), 1.into());
+    obj.insert("readAt".into(), read_at.into());
+    obj.insert("root".into(), project.root.clone().into());
+    Some(v)
+}
+
+fn write_state(path: &Path, doc: &serde_json::Value) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    crate::fsx::atomic_write(path, &crate::fsx::json_pretty_bytes(doc, true)?)
 }
 
 #[cfg(test)]
@@ -155,6 +180,24 @@ mod tests {
         fs::create_dir_all(d.join("Saved").join("Logs")).unwrap();
         fs::write(d.join("Zed.uproject"), "{}").unwrap();
         d
+    }
+
+    #[test]
+    fn state_json_carries_version_read_at_root_and_the_status_fields() {
+        let d = scratch("state");
+        let st = status_with(&d, None, false).unwrap();
+        let doc = state_doc(&st, 1234).unwrap();
+        assert_eq!(doc["version"], 1);
+        assert_eq!(doc["readAt"], 1234);
+        assert_eq!(doc["root"], st.project.as_ref().unwrap().root.as_str());
+        assert_eq!(doc["editor"], "closed");
+        assert!(doc["diags"].is_array() && doc.get("project").is_some());
+        let file = d.join("bridge").join("unreal").join("state.json");
+        write_state(&file, &doc).unwrap();
+        let back: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(back, doc);
+        let none = status_with(&std::env::temp_dir().join("vidar-no-such-project-dir"), None, false).unwrap();
+        assert!(state_doc(&none, 1).is_none());
     }
 
     #[test]

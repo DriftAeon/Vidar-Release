@@ -9,11 +9,9 @@ import type { CodexProgress } from "./codex-progress";
 import { codexStructured } from "./codex-diff";
 import { asyncAskEvents, asyncAskQuestions } from "./codex-async-ask";
 import { label, pretty } from "../format";
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, str, type Json } from "../json.ts";
 
-type Json = Record<string, unknown>;
-
-const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
-const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /** milliseconds as a short duration: 900ms, 5s, 1.5s, 2m 5s */

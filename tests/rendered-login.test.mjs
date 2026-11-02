@@ -30,7 +30,7 @@ test("an expired or failed sign-in on an error turn is logged out; prose or a cl
   assert.ok(!saysAuthFailed("", false));
   const S = { loggedOut: false, disposed: false };
   const tips = [];
-  const login = createLogin(S, { claude: true, tip: () => "log in", check: () => Promise.resolve(null), noticeBlock: (t) => tips.push(t), redrawStatus: () => {}, refreshState: () => {} });
+  const login = createLogin(S, { readsTurnReplies: true, tip: () => "log in", check: () => Promise.resolve(null), noticeBlock: (t) => tips.push(t), redrawStatus: () => {}, refreshState: () => {} });
   login.sawTurn(expired, false);
   assert.equal(S.loggedOut, true);
   assert.deepEqual(tips, ["log in"]);
@@ -44,7 +44,7 @@ test("logged out before any first turn the chip reads Not Logged In, never Ready
 
 test("a non-Claude tab never reads replies for the diagnostic", () => {
   const S = { loggedOut: false, disposed: false };
-  const login = createLogin(S, { claude: false, tip: () => "", check: () => Promise.resolve(null), noticeBlock: () => {}, redrawStatus: () => {}, refreshState: () => {} });
+  const login = createLogin(S, { readsTurnReplies: false, tip: () => "", check: () => Promise.resolve(null), noticeBlock: () => {}, redrawStatus: () => {}, refreshState: () => {} });
   login.sawTurn("Not logged in · Please run /login", false);
   assert.equal(S.loggedOut, false);
 });
@@ -53,7 +53,7 @@ test("a check that resolves after newer evidence is dropped", async () => {
   const S = { loggedOut: false, disposed: false };
   const pending = [];
   const login = createLogin(S, {
-    claude: true, tip: () => "",
+    readsTurnReplies: true, tip: () => "",
     check: () => new Promise((r) => pending.push(r)),
     noticeBlock: () => {}, redrawStatus: () => {}, refreshState: () => {},
   });
@@ -72,7 +72,7 @@ function harness(answer) {
   const S = { loggedOut: false, disposed: false };
   const notices = [];
   const login = createLogin(S, {
-    claude: true, tip: () => "",
+    readsTurnReplies: true, tip: () => "",
     check: () => Promise.resolve(answer.value),
     noticeBlock: (text, level) => notices.push(level),
     redrawStatus: () => {},

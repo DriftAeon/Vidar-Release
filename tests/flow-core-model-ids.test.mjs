@@ -9,9 +9,14 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 test('CORE_ROSTER ids equal contract flowCoreModelIds in order', () => {
   const contract = JSON.parse(read('../contracts/modules.json'));
   const src = read('../src/flow/roster.ts');
+  const { sonnet, opus, fable, haiku } = Object.fromEntries(
+    [...read('../src/flow/claude-models.ts').matchAll(/(sonnet|opus|fable|haiku): "([^"]+)"/g)]
+      .map(([, name, id]) => [name, id]));
   const block = /const CORE_ROSTER[^=]*=\s*\[([\s\S]*?)\n\];/.exec(src);
   assert.ok(block, 'CORE_ROSTER literal found');
-  const ids = [...block[1].matchAll(/\bid:\s*"([^"]+)"/g)].map((m) => m[1]);
+  const modelIds = { sonnet, opus, fable, haiku };
+  const ids = [...block[1].matchAll(/\bid:\s*(FLOW_MODELS\.(\w+)|appServerDefaultModel\(\))/g)]
+    .map((m) => m[2] ? modelIds[m[2]] : 'codex-default');
   assert.deepEqual(ids, contract.flowCoreModelIds);
 });
 
@@ -32,14 +37,14 @@ test('primary codex puts the Codex rows first; claude or unset keeps the roster 
   assert.deepEqual(order(undefined), rows.map((r) => r.id));
   // roster.ts must route its core+saved rows through leadRunner on the effective primary.
   const src = read('../src/flow/roster.ts');
-  assert.match(src, /effectivePrimary\(\) === "codex"\) out = leadRunner\(out, "codex"\)/);
+  assert.match(src, /effectivePrimary\(\) === appServerAgent\(\)\) out = leadRunner\(out, AGENTS\[appServerAgent\(\)\]\.flowBackend\)/);
 });
 
 test('CORE_ROSTER runners: claude models sdk, Codex Default codex', () => {
   const src = read('../src/flow/roster.ts');
   const block = /const CORE_ROSTER[^=]*=\s*\[([\s\S]*?)\n\];/.exec(src)[1];
-  const rows = [...block.matchAll(/id:\s*"([^"]+)",\s*label:\s*"([^"]+)",\s*wired:\s*(true|false),\s*runner:\s*"([^"]+)"/g)];
+  const rows = [...block.matchAll(/id:\s*(FLOW_MODELS\.\w+|appServerDefaultModel\(\)),\s*label:\s*"([^"]+)",\s*wired:\s*(true|false),\s*runner:\s*AGENTS\[(sdkAgent\(\)|appServerAgent\(\))\]\.flowBackend/g)];
   assert.equal(rows.length, 5);
-  for (const [, id, , , runner] of rows) assert.equal(runner, id === 'codex-default' ? 'codex' : 'sdk', id);
-  assert.ok(rows.some((r) => r[1] === 'codex-default' && r[2] === 'Codex Default'));
+  for (const [, id, , , agent] of rows) assert.equal(agent, id === 'appServerDefaultModel()' ? 'appServerAgent()' : 'sdkAgent()', id);
+  assert.ok(rows.some((r) => r[1] === 'appServerDefaultModel()' && r[2] === 'Codex Default'));
 });

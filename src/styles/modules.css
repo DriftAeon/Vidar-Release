@@ -18,18 +18,18 @@
    normal panel/row relationship */
 .module .rack-name { background: var(--bg-panel); }
 .rack-list { display: flex; flex-direction: column; gap: var(--space-6); }
-/* Loadout and MCP Servers: one box, no head, no dividers; rows separate by the list gap alone.
+/* MCP Servers: one box, no head, no dividers; rows separate by the list gap alone.
    Border stays the panel's --border: --border-strong read white and the straight hairlines clashed
    with the rounded row buttons (2026-10-05). An empty list draws no box at all. */
 .module-box { gap: 0; padding: var(--space-8); }
-.module-box:has(> .rack-list:empty), .module-box:has(> .loadout-wrap > .loadout-inner > .rack-list:empty) { display: none; }
+.module-box:has(> .rack-list:empty) { display: none; }
 /* its host div (panels/index.ts) would stay as a 0-high #modules child and keep a 10px gap (layout-audit, 2026-10-10) */
-#modules > :empty, #modules > :has(> .module-box:only-child > .rack-list:empty), #modules > :has(> .module-box:only-child > .loadout-wrap .rack-list:empty) { display: none; }
+#modules > :empty, #modules > :has(> .module-box:only-child > .rack-list:empty) { display: none; }
 .rack-row { display: flex; flex-direction: column; gap: var(--space-3); }
-/* MCP Servers: like Gear (loadout.css), DOM order is title then detail but the detail draws above, so the
+/* MCP Servers: DOM order is title then detail but the detail draws above, so the
    bar-modules stack (bottom-anchored, grows upward) leaves the title where it was on open */
-[aria-label="MCP Servers"] .rack-row, [aria-label="Loadout"] .rack-row { flex-direction: column-reverse; }
-/* Gear rows share it: the detail draws above its name and slides up like the Gear box (2026-10-20: the
+[aria-label="MCP Servers"] .rack-row { flex-direction: column-reverse; }
+/* Rack rows share it: the detail draws above its name and slides up like the module box (2026-10-20: the
    box slid up, then a row opening popped down) */
 .rack-name {
   display: flex; align-items: baseline; gap: var(--space-6); text-align: left;
@@ -48,7 +48,7 @@
 /* the row being dragged (reorder.ts) */
 .rack-row.dragging { opacity: 0.6; }
 .rack-row.dragging .rack-name { border-color: var(--accent); cursor: grabbing; }
-/* Loadout: a section with nothing to show keeps its border but does not open (rack-row.ts inert) */
+/* Rack rows: a section with nothing to show keeps its border but does not open (rack-row.ts inert) */
 .rack-name[aria-disabled="true"] { cursor: default; }
 .rack-name[aria-disabled="true"]:hover { color: inherit; border-color: var(--border); }
 .rack-name .icn { width: var(--font-12); height: var(--font-12); align-self: center; flex-shrink: 0; margin-right: var(--space-4); } /* .rack-name text is --font-12 */
@@ -62,15 +62,15 @@
 .rack-row:has(> .rack-detail:not(.collapsed)) { gap: var(--space-4); }
 /* Open/close slide: the detail stays in layout (.collapsed is the state flag; .hidden is display none !important, so it cannot animate) and its height runs
    0 <-> auto. The rows pin to the end (next to the name) and the clip is the detail's top edge, so rows are
-   uncovered from the name outward; top-pinned they would leave a band, see .loadout-wrap in loadout.css. */
-.rack-row { transition: gap 180ms ease-out; } /* motion: Gear reveal */
+   uncovered from the name outward; top-pinned they would leave a band. */
+.rack-row { transition: gap 180ms ease-out; } /* motion: rack reveal */
 .rack-detail {
   display: grid; align-content: end; overflow: hidden; interpolate-size: allow-keywords; height: auto;
-  transition: height 180ms ease-out, padding-bottom 180ms ease-out, visibility 0s; /* motion: Gear reveal */
+  transition: height 180ms ease-out, padding-bottom 180ms ease-out, visibility 0s; /* motion: rack reveal */
 }
 .rack-detail.collapsed {
   height: 0; padding-bottom: 0; visibility: hidden;
-  transition: height 180ms ease-out, padding-bottom 180ms ease-out, visibility 0s linear 180ms; /* motion: Gear reveal */
+  transition: height 180ms ease-out, padding-bottom 180ms ease-out, visibility 0s linear 180ms; /* motion: rack reveal */
 }
 .rack-row:has(> .rack-detail.collapsed) { gap: 0; }
 @media (prefers-reduced-motion: reduce) { .rack-row, .rack-detail, .rack-detail.collapsed { transition: none; } }
@@ -96,7 +96,7 @@
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 
-/* Shared item button (Loadout skills, MCP rack tools): dot and name, no chevron (2026-10-04); description on hover.
+/* Shared item button (MCP rack tools): dot and name, no chevron (2026-10-04); description on hover.
    No action yet, so the cursor stays default; the toggle lands later. */
 .item-btn-list { display: flex; flex-direction: column; gap: var(--space-4); }
 .item-btn {
@@ -126,10 +126,10 @@
 /* section headings centred; a head with a right-side control (Ports) keeps space-between */
 .module-head { text-align: center; }
 .mod-head-row:has(> :only-child) { justify-content: center; }
-/* centred title with its right-side control pinned to the edge (Loadout) */
+/* centred title with its right-side control pinned to the edge */
 .mod-head-center { justify-content: center; position: relative; }
 .mod-head-center > .mod-refresh { position: absolute; right: 0; }
-/* the caps heading, kept as a named style for Loadout and MCP Servers;
+/* the caps heading, kept as a named style for MCP Servers;
    source strings stay Title Case, the caps are display only */
 .mod-head-caps { text-transform: uppercase; letter-spacing: 0.06em; }
 .mod-head-count { font-size: var(--font-11); }

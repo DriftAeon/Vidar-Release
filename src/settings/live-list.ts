@@ -1,4 +1,4 @@
-// Settings lists that redraw from a fresh read (Agents, Macros, Workspaces): a redraw replaces every
+// Settings lists that redraw from a fresh read (Agents, Workspaces): a redraw replaces every
 // element, so it carries the focused control, its caret and any typed-but-uncommitted text across.
 
 export type Live = Set<{ root: HTMLElement; render: () => void }>;

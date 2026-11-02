@@ -58,6 +58,9 @@
 .release-build .release-build__cancel:focus-visible {
   border-color: var(--border-strong); outline: var(--border-w) solid var(--border-strong); outline-offset: var(--space-2);
 }
+/* the rune card's inline Delete confirm: Cancel keeps the grey pair but reads --fg at regular weight, not the dim bold label
+   (--fg on the grey gradient: 11.3:1 or better in every theme). The id inside :is() lifts specificity over the neutral rule above. */
+:is(#swap-confirm, .runes-delete-confirm).runes-delete-inline .swap-no { color: var(--fg); font-weight: var(--weight-regular); }
 /* the Codex login card's choice (ChatGPT, API Key): two equal buttons share the row; a failure above it reads as an error */
 .blk-login .approval-actions > button.approval-deny:first-child,
 .blk-login .approval-actions > button.approval-deny:first-child + button.approval-deny { flex: 1 1 0; }

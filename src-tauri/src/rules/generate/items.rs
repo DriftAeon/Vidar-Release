@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use crate::agent_spec::Agent;
+use crate::agent_spec::{spec, Agent};
 use crate::rules::import::local::LocalFile;
 use crate::rules::import::sources;
 use crate::rules::import::write::quote;
@@ -40,7 +40,7 @@ pub struct ItemSpec {
     /// Skill folder or agent file, `~` form where under the home.
     pub source: Option<String>,
     pub hook: Option<Hook>,
-    /// `claude` or `codex` on a hook (hooks run on one agent); `None` otherwise.
+    /// `claude` or `codex` on a hook or agent by its source home; `None` on a skill or an unknown home.
     pub agent: Option<&'static str>,
 }
 
@@ -76,6 +76,17 @@ fn stem(path: &str) -> String {
     } else {
         name
     }
+}
+
+/// The agent whose home an offered file came from: Codex when the row carries the codex tag, Claude when the path
+/// sits in the user's Claude folder, `None` when the home is unknown.
+fn source_home(f: &LocalFile, home: Option<&Path>) -> Result<Option<&'static str>, String> {
+    if let Some(tag) = f.agent {
+        return Ok(Some(super::home::agent_of(tag)?.as_str()));
+    }
+    let own = Agent::Claude;
+    let dir = home.map(|h| h.join(spec(own).user_dir));
+    Ok(dir.filter(|d| sources::under_root(Path::new(&f.path), d)).map(|_| own.as_str()))
 }
 
 /// The picks as item runes. A pick that matches no pickable offered file of its kind is an `invalid:` error; a
@@ -127,12 +138,7 @@ pub fn resolve(picks: &[Pick], offered: &[LocalFile], home: Option<&Path>, taken
                     description,
                     source: None,
                     hook: Some(Hook { event: g.event.clone(), matcher, run }),
-                    // An untagged hook is a Claude one (the Claude home's hooks carry no tag).
-                    agent: Some(match f.agent {
-                        None => Agent::Claude,
-                        Some(tag) => super::home::agent_of(tag)?,
-                    }
-                    .as_str()),
+                    agent: source_home(f, home)?,
                 }
             }
             _ => {
@@ -141,7 +147,9 @@ pub fn resolve(picks: &[Pick], offered: &[LocalFile], home: Option<&Path>, taken
                     .ok()
                     .and_then(|t| header_description(&t))
                     .unwrap_or_else(|| format!("Local {kind} {name}"));
-                ItemSpec { id: id.clone(), kind, description, source: Some(tilde(&f.path)), hook: None, agent: None }
+                // Skills are shared by both agents, so they stay untagged; an agent file carries its home's tag.
+                let agent = if kind == "agent" { source_home(f, home)? } else { None };
+                ItemSpec { id: id.clone(), kind, description, source: Some(tilde(&f.path)), hook: None, agent }
             }
         };
         used.push(id);
@@ -252,6 +260,35 @@ mod tests {
         let hook = offered("hook", r"C:\h\x.mjs");
         let (items, warnings) = resolve(&[Pick { kind: "hook".into(), path: hook.path.clone() }], &[hook], None, &[]).unwrap();
         assert!(items.is_empty() && warnings.len() == 1, "{warnings:?}");
+    }
+
+    fn hook_row(path: &str, codex: bool) -> LocalFile {
+        let mut h = offered("hook", path);
+        h.guard = Some(Guard { event: "PreToolUse".into(), matcher: None, run: vec!["node".into(), path.into()], source: None });
+        h.agent = codex.then_some("codex");
+        h
+    }
+
+    #[test]
+    fn hooks_and_agents_are_tagged_by_source_home_and_skills_never() {
+        let home = Path::new(r"C:\Users\u");
+        let tags = |files: Vec<LocalFile>, home: Option<&Path>| {
+            let picks: Vec<Pick> = files.iter().map(|f| Pick { kind: f.kind.into(), path: f.path.clone() }).collect();
+            resolve(&picks, &files, home, &[]).unwrap().0.into_iter().map(|i| (i.kind, i.agent)).collect::<Vec<_>>()
+        };
+        let mut codex_agent = offered("agent", r"C:\Users\u\.codex\agents\rev.toml");
+        codex_agent.agent = Some("codex");
+        let mut codex_skill = offered("skill", r"C:\Users\u\.codex\skills\s");
+        codex_skill.agent = Some("codex");
+        let codex = tags(vec![hook_row(r"C:\Users\u\.codex\hooks\h.mjs", true), codex_agent, codex_skill], Some(home));
+        assert_eq!(codex, [("hook", Some("codex")), ("agent", Some("codex")), ("skill", None)]);
+        let claude = tags(
+            vec![hook_row(r"C:\Users\u\.claude\hooks\h.mjs", false), offered("agent", r"C:\Users\u\.claude\agents\a.md"), offered("skill", r"C:\Users\u\.claude\skills\s")],
+            Some(home),
+        );
+        assert_eq!(claude, [("hook", Some("claude")), ("agent", Some("claude")), ("skill", None)]);
+        let unknown = tags(vec![hook_row(r"C:\elsewhere\h.mjs", false), offered("agent", r"C:\elsewhere\a.md"), offered("skill", r"C:\elsewhere\s")], Some(home));
+        assert_eq!(unknown, [("hook", None), ("agent", None), ("skill", None)]);
     }
 
     #[test]

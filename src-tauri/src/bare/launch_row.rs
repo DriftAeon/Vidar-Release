@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use super::{config_of, set_layer, LaunchOpts};
+use super::{config_of, LaunchOpts};
 use crate::agent_spec::{self, Agent};
 
 /// One set of a per-launch pick: an absent `library` means the config's `rulesLibrary`.
@@ -21,18 +21,18 @@ pub fn row_key_of(raw: Option<String>) -> Option<String> {
     raw.map(|k| k.trim().to_string()).filter(|k| !k.is_empty())
 }
 
-/// Whether an agent's Bare spawn rides a launcher row key (its sets come from the row). One decision per agent:
-/// a new agent fails to build here until it says.
-fn rides_row_key(agent: Agent) -> bool {
-    match agent {
-        Agent::Claude => false,
-        Agent::Codex => true,
-    }
+/// The agent whose Bare spawns ride a row key (`AgentSpec::rides_row_key`; the Codex Bare rows today).
+fn row_agent() -> Agent {
+    agent_spec::ALL.into_iter().find(|a| agent_spec::spec(*a).rides_row_key).expect("an agent rides a row key")
 }
 
-/// The agent whose Bare spawns ride a row key (the Codex Bare rows today).
-fn row_agent() -> Agent {
-    agent_spec::ALL.into_iter().find(|a| rides_row_key(*a)).expect("an agent rides a row key")
+/// A spawn's row key for `agent`: admitted (`admit_row_key`) where the spec says the agent rides one,
+/// else only trimmed. The one place a row key meets an agent.
+pub fn admit_row_key_for(agent: Agent, raw: Option<String>, profile: Option<&str>, config: Option<&Path>) -> Result<Option<String>, String> {
+    match agent_spec::spec(agent).rides_row_key {
+        true => admit_row_key(raw, profile, config),
+        false => Ok(row_key_of(raw)),
+    }
 }
 
 /// The built-in Bare rows of the row agent (`src/launcher/roster.ts`), Rendered and Raw: the agent's id, profile `bare`.
@@ -98,43 +98,28 @@ mod tests;
 pub(crate) const TEST_NO_VAULT: &str = "<test: no vault>";
 
 /// The one Rune Vault a spawn loads, read before any home is touched.
-/// `opts.vault` names it (a `stock-*` id is created or refreshed from its template); else the
-/// transition pick `opts.custom_sets` becomes a Custom vault on `agent`'s stock floor
-/// (`vault::floored_custom`; an absent library is vidar.json's `rulesLibrary`), as a resumed thread's
-/// manifest sets do. No vault, or an unknown id, refuses. Nothing here reads a launcher row's `sets` (model R1).
+/// `opts.vault` names it; an unknown id refuses. A vault without the Vidar Runeset at
+/// index 0 refuses. Else `opts.blank_vault` is the in-memory blank vault (`vidar::blank_vault`), and a pre-vault
+/// `opts.custom_sets` refuses. Nothing here reads a launcher row's `sets` (model R1).
 pub(super) fn vault_for(root: &Path, opts: &LaunchOpts, agent: super::agent_homes::Agent) -> Result<Option<super::vault::Vault>, String> {
-    use super::vault::{store::Store, SetSource};
-    let store = Store::open(&super::vault_spawn::store_root(root));
+    use super::vault::{store::Store, vidar};
     if let Some(id) = opts.vault.map(str::trim) {
         #[cfg(test)]
         if id == TEST_NO_VAULT {
             return Ok(None);
         }
-        let v = if id.starts_with("stock-") { store.ensure_stock(id) } else { store.get(id) };
-        return v.map(Some).map_err(|e| format!("Unknown vault {id:?} ({e}); Bare spawn refused"));
-    }
-    let Some(pick) = opts.custom_sets else {
-        return Err("No vault named for this spawn; Bare spawn refused".into());
-    };
-    let mut ignored = Vec::new();
-    let default_lib = super::set_loadout::rules_library(&config_of(opts), &mut ignored).map(|rel| super::layer::library_name(&rel));
-    let mut sources = Vec::new();
-    for r in pick {
-        // A resumed thread sends its manifest's sets back, recorded as `lib/set` since L2a.
-        let (library, set) = match (r.library.as_deref(), r.set.split_once('/')) {
-            (None, Some((lib, set))) => (Some(lib.to_string()), set.to_string()),
-            _ => (r.library.clone(), r.set.clone()),
-        };
-        if let Some(lib) = library.as_deref() {
-            if crate::rules::rune::check_id(lib).is_err() {
-                return Err(format!("Library {lib:?} in the set pick is not a library name; spawn refused"));
-            }
+        let store = Store::open(&super::vault_spawn::store_root(root));
+        let v = store.get(id).map_err(|e| format!("Unknown vault {id:?} ({e}); Bare spawn refused"))?;
+        if !v.runesets.first().is_some_and(|c| vidar::is_reserved(&c.source)) {
+            return Err("Vault lacks the Vidar Runeset; spawn refused".into());
         }
-        if !set_layer::plain_set_name(&set) {
-            return Err(format!("Set {:?} in the set pick is not a plain set name; spawn refused", r.set));
-        }
-        let library = library.or_else(|| default_lib.clone()).ok_or_else(|| format!("Set {:?} names no library and vidar.json sets no rulesLibrary; vault refused", r.set))?;
-        sources.push(SetSource { library, set });
+        return Ok(Some(v));
     }
-    super::vault::floored_custom(&super::vault_spawn::store_root(root), agent.as_str(), &sources, &[]).map(Some).map_err(|e| format!("Custom vault from the set pick: {e}; vault refused"))
+    if opts.blank_vault {
+        return Ok(Some(vidar::blank_vault(agent)));
+    }
+    if opts.custom_sets.is_some() {
+        return Err("This session predates Rune Vaults; spawn refused".into());
+    }
+    Err("No vault named for this spawn; Bare spawn refused".into())
 }

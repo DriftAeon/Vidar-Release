@@ -21,7 +21,7 @@
 /* Flow picker names: the " → " in a name is the right-arrow icon, sized to the row's text */
 .flow-pick .nm, #flow-pick-menu .nm { display: block; white-space: nowrap; } /* the global .nm (node-matrix.css) is a flex column */
 .flow-pick .nm .icn, #flow-pick-menu .nm .icn { width: var(--font-13); height: var(--font-13); vertical-align: middle; margin: 0 var(--space-4); }
-.flow-pick { min-width: 160px; flex: 0 1 auto; }
+.flow-pick { min-width: min(160px, 25%); flex: 0 1 auto; } /* the 160px floor holds at full width; a narrow pane shrinks it (the name ellipsizes) so Add stays inside */
 
 /* an HTML frame loading behind the render on screen, at its size, unpainted until loaded (display-render.ts
    show()); the host anchors it (position: relative) */

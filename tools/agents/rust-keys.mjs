@@ -7,11 +7,13 @@
 //   enumsOf(files, ctx) -> Map<enumName, variants[]> for enums with an id-named variant (the fixture's $enums)
 // files are {path, src}; ctx is {ids, enums}.
 import { anchor, classOf, idsIn, isIdWord, tierOf, useIds, words } from "./key-words.mjs";
+import { CMP, closeEnums, flagCompare, stMarks, testDeclared, variantsOf } from "./rust-structural.mjs";
 
+export { testDeclared };
 const P2 = new Set(["::", "==", "!=", "=>", "->", "<=", ">=", "..", "&&", "||"]);
-const isP = (t, v) => t?.t === "punct" && t.v === v;
-const isI = (t, v) => t?.t === "ident" && t.v === v;
-const isOpen = (t) => t?.t === "punct" && (t.v === "(" || t.v === "[" || t.v === "{");
+export const isP = (t, v) => t?.t === "punct" && t.v === v;
+export const isI = (t, v) => t?.t === "ident" && t.v === v;
+export const isOpen = (t) => t?.t === "punct" && (t.v === "(" || t.v === "[" || t.v === "{");
 
 /** Tokens {t: str|char|life|ident|punct|num, v, text, line}. */
 export function lex(src) {
@@ -86,7 +88,7 @@ export function lex(src) {
   return toks;
 }
 
-function mates(toks) {
+export function mates(toks) {
   const m = new Int32Array(toks.length).fill(-1);
   const st = [];
   toks.forEach((t, i) => {
@@ -126,7 +128,7 @@ function cfgPos(toks, k) {
 }
 
 /** Does the attribute starting at `#` (index k) make its item test-only? Returns the index past `]`, or 0. */
-function testAttr(toks, m, k) {
+export function testAttr(toks, m, k) {
   if (!isP(toks[k], "#") || !isP(toks[k + 1], "[") || m[k + 1] < 0) return -1;
   const end = m[k + 1];
   let pos = false;
@@ -209,28 +211,27 @@ function nameMaps(spans, n) {
 
 const idNamed = (v) => { const w = words(v); return w.length === 1 && isIdWord(w[0]); };
 
-/** Enums with an id-named variant, across the given files (test code excluded). */
+/** Enums with an id-named variant, across the given files (test code excluded). The map also carries `closed`
+ *  (the derived `$closed` set) and `open` ([{name, file, line}], reported as `open enum E: file:line`). */
 export function enumsOf(files) {
-  const out = new Map();
+  const out = new Map(), decls = new Map();
   for (const f of files) {
     const toks = stripTests(lex(f.src));
     const m = mates(toks);
     for (const sp of items(toks, m)) {
       if (sp.kind !== "enum" || sp.open < 0) continue;
-      const vs = [];
-      for (let j = sp.open + 1; j < sp.end; j++) {
-        if (isP(toks[j], "#") && isP(toks[j + 1], "[") && m[j + 1] > 0) { j = m[j + 1]; continue; }
-        if (toks[j].t !== "ident") continue;
-        vs.push(toks[j].v);
-        while (j < sp.end && !isP(toks[j], ",")) { if (isOpen(toks[j]) && m[j] >= 0) j = m[j]; j++; }
-      }
-      if (vs.some(idNamed)) out.set(sp.name, [...new Set([...(out.get(sp.name) ?? []), ...vs])]);
+      const vs = variantsOf(toks, m, sp).map((v) => v.name);
+      if (!vs.some(idNamed)) continue;
+      out.set(sp.name, [...new Set([...(out.get(sp.name) ?? []), ...vs])]);
+      decls.set(sp.name, [...(decls.get(sp.name) ?? []), { file: f.path, line: toks[sp.start].line }]);
     }
   }
+  Object.assign(out, closeEnums(files, out, decls, BITS));
   return out;
 }
 
 const COND = 1, NEG = 2, FB = 4, FORCED = 8, WILD = 16, MERGE = 32;
+const BITS = { FB, FORCED, WILD, MERGE };
 
 function skipAngle(toks, k) {
   let d = 0;
@@ -306,7 +307,14 @@ function altKind(toks, m, idxs, enums, selfName) {
   return listed ? "var" : "other";
 }
 
-function flagMatches(toks, m, fl, enums, impls) {
+/** Forced arms naming exactly one id get a record {id, bs, be} (their body is the St-arm region). */
+function armId(toks, a) {
+  const ids = new Set();
+  for (let q = a.ps; q < a.pe; q++) if (toks[q].t === "ident" || toks[q].t === "str") idsIn(toks[q].v).forEach((i) => ids.add(i));
+  return ids.size === 1 ? [...ids][0] : null;
+}
+
+function flagMatches(toks, m, fl, enums, impls, armRecs = []) {
   for (let k = 0; k < toks.length; k++) {
     if (!isI(toks[k], "match") || isP(toks[k - 1], ".") || isP(toks[k - 1], "::") || isP(toks[k + 1], "!")) continue;
     let j = k + 1;
@@ -322,7 +330,9 @@ function flagMatches(toks, m, fl, enums, impls) {
     const enumMatch = arms.some((a) => a.alts.some((al) => al.k === "var"));
     for (const a of arms) {
       const forced = a.g < 0 && a.alts.length > 0 && a.alts.every((al) => al.k === "var") && !hasCatch && !anyMerge;
-      for (let q = a.ps; q < (a.g < 0 ? a.pe : a.g); q++) fl[q] |= (forced ? FORCED : 0) | (enumMatch && hasCatch ? WILD : 0) | (a.merges ? MERGE : 0);
+      for (let q = a.ps; q < (a.g < 0 ? a.pe : a.g); q++) fl[q] |= (forced ? FORCED : 0) | (enumMatch && hasCatch ? WILD : 0) | (a.merges ? MERGE : 0) | CMP;
+      const id = forced ? armId(toks, a) : null;
+      if (id) armRecs.push({ id, bs: a.bs, be: a.be });
       if (a.g >= 0) for (let q = a.g; q < a.pe; q++) fl[q] |= COND;
       if (a.catchAll) for (let q = a.bs; q <= a.be; q++) fl[q] |= FB;
     }
@@ -346,7 +356,7 @@ function flagContext(toks, m, fl) {
       for (let q = k + 2; q < m[k + 1]; q++) fl[q] |= FB;
     } else if (t.v === "matches" && isP(toks[k + 1], "!") && isP(toks[k + 2], "(") && m[k + 2] > 0) {
       const neg = isP(toks[k - 1], "!");
-      for (let q = k + 3; q < m[k + 2]; q++) fl[q] |= COND | (neg ? NEG : 0);
+      for (let q = k + 3; q < m[k + 2]; q++) fl[q] |= COND | CMP | (neg ? NEG : 0);
     }
   }
   for (let p = 0; p < n; p++) {
@@ -376,15 +386,25 @@ function chainCtx(toks, m, k) {
   return { condition, negated: isP(prev, "!=") || isP(prev, "!") || isP(next, "!=") };
 }
 
-function scanFile(path, src, ctx) {
+/** Tokens of one file without test items, with items, names, context flags and forced-arm regions. */
+export function analyse(src, enums) {
   const toks = stripTests(lex(src));
   const n = toks.length, m = mates(toks);
   const spans = items(toks, m);
   const { names, impls } = nameMaps(spans, n);
-  const enums = ctx.enums instanceof Map ? ctx.enums : new Map();
-  const fl = new Uint8Array(n);
+  const fl = new Uint8Array(n), armRecs = [], armAt = new Int32Array(n).fill(-1);
   flagContext(toks, m, fl);
-  flagMatches(toks, m, fl, enums, impls);
+  flagCompare(toks, fl);
+  flagMatches(toks, m, fl, enums, impls, armRecs);
+  armRecs.forEach((r, i) => { for (let q = r.bs; q <= r.be; q++) armAt[q] = i; });
+  return { toks, n, m, spans, names, impls, fl, armRecs, armAt };
+}
+
+function scanFile(path, src, ctx) {
+  const enums = ctx.enums instanceof Map ? ctx.enums : new Map();
+  const an = analyse(src, enums);
+  const { toks, n, m, spans, names, fl } = an;
+  const marks = stMarks(path, an, { ...ctx, enums }, BITS);
   const base = tierOf(path);
   const table = path === "src-falcon/src/protocol.rs" ? spans.filter((s) => (s.kind === "enum" || s.kind === "impl") && s.name === "Agent") : [];
   const out = [];
@@ -396,10 +416,12 @@ function scanFile(path, src, ctx) {
     c.forcedArm = !!(fl[k] & FORCED);
     c.wild = !!(fl[k] & WILD);
     c.mergesNone = !!(fl[k] & MERGE);
-    const cls = classOf(tok, c);
-    if (cls === "none") return;
+    c.comparison = !!(fl[k] & CMP);
+    const plain = classOf(tok, c);
+    if (plain === "none") return;
+    const cls = plain !== "F" && kind !== "positional" && marks.has(k) ? "St" : plain;
     const tier = table.some((s) => k >= s.start && k <= s.end) ? "table" : base;
-    out.push({ file: path, line: toks[k].line, tok, cls, base: cls === "F" ? classOf(tok, { ...c, forcedArm: false }) : cls, anchor: anchor(toks, k, names[k] || "<file>"), forced: cls === "F", tier, ids: idsIn(tok), ctx: c });
+    out.push({ file: path, line: toks[k].line, tok, cls, base: plain === "F" ? classOf(tok, { ...c, forcedArm: false }) : plain, anchor: anchor(toks, k, names[k] || "<file>"), forced: cls === "F", st: cls === "St" ? marks.get(k) : undefined, tier, ids: idsIn(tok), ctx: c });
   };
   for (let k = 0; k < n; k++) {
     const t = toks[k];

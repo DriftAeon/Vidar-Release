@@ -1,0 +1,54 @@
+{
+  "note": "Recorded from falcon-inputs.ps1 at base 7c42246b (before the runtime table). Per runtime set: the runtime/ and build/ input lines. A line carries its value only when the value comes from the test's fake inputs; the rest are names, since their hashes follow the sources.",
+  "sets": {
+    "claude,codex": [
+      "runtime/claude-sidecar.mjs",
+      "build/profile|115dc3606fbf8691fb69f2aefec86f2ecd302362a0502b3a9648bf2c4dc8290f",
+      "build/incremental|0",
+      "build/rustflags|2934fb49d6b38adef036c28fac69f188feae09259f3184e6d9cfbd0f35454fec",
+      "build/features|tauri/custom-protocol",
+      "build/runtimes|claude,codex",
+      "runtime/claude-sidecar-shrink.mjs",
+      "runtime/claude-sidecar-statusline.mjs",
+      "runtime/claude-sidecar-seed.mjs",
+      "runtime/claude-sidecar-bare.mjs",
+      "runtime/claude-sidecar-recover.mjs",
+      "runtime/claude-sidecar-ledger.mjs",
+      "runtime/claude-sidecar-trust.mjs",
+      "runtime/sdk/package.json",
+      "runtime/sdk/sdk.mjs",
+      "runtime/claude.exe|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "runtime/claude/installed",
+      "runtime/codex/a.exe|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "runtime/codex/z/x.dll|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ],
+    "claude": [
+      "runtime/claude-sidecar.mjs",
+      "build/profile|115dc3606fbf8691fb69f2aefec86f2ecd302362a0502b3a9648bf2c4dc8290f",
+      "build/incremental|0",
+      "build/rustflags|2934fb49d6b38adef036c28fac69f188feae09259f3184e6d9cfbd0f35454fec",
+      "build/features|tauri/custom-protocol",
+      "build/runtimes|claude",
+      "runtime/claude-sidecar-shrink.mjs",
+      "runtime/claude-sidecar-statusline.mjs",
+      "runtime/claude-sidecar-seed.mjs",
+      "runtime/claude-sidecar-bare.mjs",
+      "runtime/claude-sidecar-recover.mjs",
+      "runtime/claude-sidecar-ledger.mjs",
+      "runtime/claude-sidecar-trust.mjs",
+      "runtime/sdk/package.json",
+      "runtime/sdk/sdk.mjs",
+      "runtime/claude.exe|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "runtime/claude/installed"
+    ],
+    "codex": [
+      "build/profile|115dc3606fbf8691fb69f2aefec86f2ecd302362a0502b3a9648bf2c4dc8290f",
+      "build/incremental|0",
+      "build/rustflags|2934fb49d6b38adef036c28fac69f188feae09259f3184e6d9cfbd0f35454fec",
+      "build/features|tauri/custom-protocol",
+      "build/runtimes|codex",
+      "runtime/codex/a.exe|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "runtime/codex/z/x.dll|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ]
+  }
+}

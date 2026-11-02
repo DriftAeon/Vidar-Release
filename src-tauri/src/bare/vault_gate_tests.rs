@@ -1,11 +1,10 @@
 //! src-tauri\src\bare\vault_gate_tests.rs — the Rune Vault acceptance gate.
-//! Contract: `docs/projects/bare/runeset-model.md` § Gate, R2, R3, R4, R6. Compiled only under
-//! `--features vault-gate` because it calls the vault API later lanes add; the run ends when
-//! `cargo test --features vault-gate -- vault_gate_tests` is green. Each test names the lane that turns it green.
+//! Contract: `docs/projects/bare/runeset-model.md` § Gate, R2, R3, R4, R6. Runs in plain
+//! `cargo test`.
 //!
-//! Fixtures (the wire formats): `tests/fixtures/rune-vault/` — `stock-runes/` (one rune per kind, the
-//! `stock` library), `kit/` (an import library whose set `kit` slots two own runes, one
-//! cross-library `stock/gate-fact` and `<?recall?>`), `vaults/` (vault.json v1 unlocked and locked
+//! Fixtures (the wire formats): `tests/fixtures/rune-vault/` — `vidar-runes/` (one rune per kind, the
+//! `base` library), `installed/` (an import library whose set `installed` slots two own runes, one
+//! cross-library `base/gate-fact` and `<?recall?>`), `vaults/` (vault.json v1 unlocked and locked
 //! variant with `revs/<hash>/`, a session record, `defaults.json`). Every rune body carries a
 //! `GATE-<KIND>-<ID>` sentinel the presence checks look for. Every spawn here runs against a temp
 //! root (profiles copied in), never the checkout's `runtime\`.
@@ -111,8 +110,8 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// A temp root: the shipped `profiles\bare` and the two Vidar plugins, the fixture `stock` runes
-/// merged into the stock library, `kit` as an import library, and the fixture skill/agent/hook sources.
+/// A temp root: the shipped `profiles\bare` and the two Vidar plugins, the fixture `base` runes
+/// merged into the `base` library, `installed` as an import library, and the fixture skill/agent/hook sources.
 struct Fx {
     t: TempDir,
 }
@@ -122,7 +121,7 @@ impl Fx {
         let t = TempDir::new(tag);
         let real = crate::paths::root();
         copy_dir(&real.join("profiles").join("bare"), &t.0.join("profiles").join("bare"));
-        for name in ["vidar-app", "gate"] {
+        for name in ["roster", "gate"] {
             let src = real.join("plugins").join(name);
             if src.is_dir() {
                 copy_dir(&src, &t.0.join("plugins").join(name));
@@ -134,8 +133,18 @@ impl Fx {
         copy_dir(&real.join(drive), &t.0.join(drive));
         std::fs::create_dir_all(t.0.join(shim).parent().unwrap()).unwrap();
         std::fs::copy(real.join(shim), t.0.join(shim)).unwrap();
-        copy_dir(&fixture().join("stock-runes"), &crate::paths::rune_stock_dir_in(&t.0));
-        copy_dir(&fixture().join("kit"), &crate::paths::rune_imports_dir_in(&t.0).join("kit"));
+        copy_dir(&fixture().join("vidar-runes"), &crate::paths::rune_imports_dir_in(&t.0).join("base"));
+        // The catalog row the drive mcp rune names (a Claude test may overwrite the file).
+        std::fs::create_dir_all(t.0.join("contracts")).unwrap();
+        std::fs::copy(real.join("contracts").join("module-bundles.json"), t.0.join("contracts").join("module-bundles.json")).unwrap();
+        super::vault::vidar::seed_core(&t.0);
+        // The two runes the app recognises by their Vidar library (drive server, app plugin) live there.
+        for rel in ["mcp/vidar-drive.md", "plugins/roster.md"] {
+            let dst = crate::paths::rune_vidar_dir_in(&t.0).join(rel);
+            std::fs::create_dir_all(dst.parent().unwrap()).unwrap();
+            std::fs::copy(fixture().join("vidar-runes").join(rel), dst).unwrap();
+        }
+        copy_dir(&fixture().join("installed"), &crate::paths::rune_imports_dir_in(&t.0).join("installed"));
         copy_dir(&fixture().join("sources"), &t.0.join("tests").join("fixtures").join("rune-vault").join("sources"));
         Fx { t }
     }
@@ -150,7 +159,7 @@ impl Fx {
     }
     /// Rewrites one library rune file in place (an edit after lock).
     fn edit_rune(&self, lib: &str, folder: &str, id: &str, text: &str) {
-        let dir = if lib == "stock" { crate::paths::rune_stock_dir_in(self.root()) } else { crate::paths::rune_imports_dir_in(self.root()).join(lib) };
+        let dir = crate::paths::rune_imports_dir_in(self.root()).join(lib);
         std::fs::create_dir_all(dir.join(folder)).unwrap();
         std::fs::write(dir.join(folder).join(format!("{id}.md")), text).unwrap();
     }
@@ -169,26 +178,28 @@ impl Fx {
     }
 }
 
-fn stock(id: &str) -> RuneRef {
-    RuneRef { library: "stock".into(), id: id.into() }
+fn base_ref(id: &str) -> RuneRef {
+    // The drive server and the app plugin are the Vidar library's; every other fixture rune sits in `base`.
+    let library = if matches!(id, "vidar-drive" | "roster") { "vidar" } else { "base" };
+    RuneRef { library: library.into(), id: id.into() }
 }
 
-fn kit_set() -> SetSource {
-    SetSource { library: "kit".into(), set: "kit".into() }
+fn installed_set() -> SetSource {
+    SetSource { library: "installed".into(), set: "installed".into() }
 }
 
-/// Every stock rune in the fixture, one per kind (the fact arrives through kit's cross-library slot).
+/// Every fixture rune, one per kind (the fact arrives through installed's cross-library slot).
 const ALL_ONE_OFFS: &[&str] = &[
-    "bare-identity", "gate-recall", "gate-skill", "gate-agent", "gate-hook-run", "gate-hook-command", "vidar-drive", "gate-permission", "vidar-app",
+    "bare-identity", "gate-recall", "gate-skill", "gate-agent", "gate-hook-run", "gate-hook-command", "vidar-drive", "gate-permission", "roster",
 ];
 
 /// The bundle catalog the Claude every-kind case writes: one command-form server for the Claude
 /// MCP rune `fixture-echo` (no url, no env, no secret).
-const CLAUDE_ECHO_CATALOG: &str = r#"{"version":1,"bundles":{"fixture-echo":{"mcp":[{"name":"fixture_echo","stdio":{"command":"node","args":["fixture-echo.mjs"],"envFrom":[]},"agents":["claude"],"reads":[]}],"skills":[],"agents":[],"guards":[]}}}"#;
+const CLAUDE_ECHO_CATALOG: &str = r#"{"version":1,"bundles":{"vidar-drive":{"mcp":[{"name":"vidar_drive","approval":"none","stdio":{"command":"node","args":["{{root}}\\tools\\mcp\\vidar-drive\\server.mjs"],"envFrom":[],"envPass":["VIDAR_CTL_TOKEN"]},"reads":["*"]}],"skills":[],"agents":[],"guards":[]},"fixture-echo":{"mcp":[{"name":"fixture_echo","stdio":{"command":"node","args":["fixture-echo.mjs"],"envFrom":[]},"agents":["claude"],"reads":[]}],"skills":[],"agents":[],"guards":[]}}}"#;
 
 fn full_vault(fx: &Fx, name: &str) -> Vault {
-    let runes: Vec<RuneRef> = ALL_ONE_OFFS.iter().map(|id| stock(id)).collect();
-    fx.store().create(name, None, &[kit_set()], &runes).unwrap()
+    let runes: Vec<RuneRef> = ALL_ONE_OFFS.iter().map(|id| base_ref(id)).collect();
+    super::vault::create_at(fx.root(), Some(name.into()), None, &[installed_set()], &runes).unwrap()
 }
 
 fn payload_text(path: &str) -> String {
@@ -227,7 +238,7 @@ fn claude_seen(fx: &Fx, tag: &str, vault: &str) -> ClaudeSeen {
     let settings = read(&config.join("settings.json"));
     let line = launch.args.join(" ");
     // MCP config only: the `--mcp-config` file and the `.claude.json` files. settings.json and the
-    // spawn line name `mcp__plugin_vidar_drive` through the `drive-allow` permission rune either way.
+    // spawn line name `mcp__vidar_drive` through the `drive-allow` permission rune either way.
     let flag = "'--mcp-config' '";
     let mcp_config = line.find(flag).map(|at| &line[at + flag.len()..]).and_then(|r| r.split('\'').next()).map(|p| read(Path::new(p))).unwrap_or_default();
     let mcp_files = mcp_config + &read(&config.join(".claude.json")) + &read(&home.join("user-home").join(".claude.json"));
@@ -263,7 +274,7 @@ fn the_fixture_vault_json_round_trips_through_the_vault_type() {
     let locked: Vault = serde_json::from_str(&read(&fixture().join("vaults").join("astra-code-no-skill").join("vault.json"))).unwrap();
     assert_eq!(locked.locked_by, Some(LockedBy::FirstMessage));
     assert!(matches!(&locked.from, Some(VaultFrom::Vault { vault, .. }) if vault == "astra-code"));
-    assert!(locked.pins.contains_key("kit/kit-recall-tip"), "a recall member is pinned at lock");
+    assert!(locked.pins.contains_key("installed/team-recall-tip"), "a recall member is pinned at lock");
     let revs = fixture().join("vaults").join("astra-code-no-skill").join("revs").join(&locked.hash);
     for key in locked.pins.keys() {
         let (lib, id) = key.split_once('/').unwrap();
@@ -287,16 +298,16 @@ fn the_fixture_session_record_round_trips_and_names_no_row() {
 #[test]
 fn every_kind_in_a_vault_reaches_a_claude_session_and_a_variant_without_it_does_not() {
     let fx = Fx::new("claude-kinds");
-    // A command-form Claude server with no secrets, for the Claude MCP rune `fixture-echo`. On
-    // Claude the drive server comes from the `vidar-app` plugin rune; `vidar-drive` is Codex's.
+    // A command-form Claude server with no secrets, for the Claude MCP rune `fixture-echo`, plus the
+    // drive server both agents get from the `vidar-drive` mcp rune.
     let catalog = fx.root().join("contracts").join("module-bundles.json");
     std::fs::create_dir_all(catalog.parent().unwrap()).unwrap();
     std::fs::write(&catalog, CLAUDE_ECHO_CATALOG).unwrap();
-    let mut runes: Vec<RuneRef> = ALL_ONE_OFFS.iter().map(|id| stock(id)).collect();
-    runes.push(stock("fixture-echo"));
-    let full = fx.store().create("Gate Full", None, &[kit_set()], &runes).unwrap();
+    let mut runes: Vec<RuneRef> = ALL_ONE_OFFS.iter().map(|id| base_ref(id)).collect();
+    runes.push(base_ref("fixture-echo"));
+    let full = super::vault::create_at(fx.root(), Some("Gate Full".into()), None, &[installed_set()], &runes).unwrap();
     let seen = claude_seen(&fx, "full", &full.id);
-    for needle in ["GATE-RULE-BARE-IDENTITY", "GATE-RULE-KIT-VERDICT-FIRST", "gate-recall", "kit-recall-tip"] {
+    for needle in ["GATE-RULE-BARE-IDENTITY", "GATE-RULE-TEAM-VERDICT-FIRST", "gate-recall", "team-recall-tip"] {
         assert!(seen.payload.contains(needle), "payload lacks {needle}: {}", seen.payload);
     }
     // The fact is recall-activated: its pointer in the payload, its body in the session's on-demand skill.
@@ -305,12 +316,13 @@ fn every_kind_in_a_vault_reaches_a_claude_session_and_a_variant_without_it_does_
     assert!(seen.agent, "agent rune not copied into the session's config dir");
     assert!(seen.settings.contains("gate-hook-run"), "run-list hook not in settings.json");
     assert!(seen.mcp.contains("fixture_echo"), "mcp rune fixture-echo not delivered: {}", seen.mcp);
-    assert!(seen.mcp.contains("plugin_vidar_drive"), "the vidar-app plugin rune's drive server not delivered: {}", seen.mcp);
-    assert!(seen.settings.contains("mcp__plugin_vidar_drive"), "permission allow list not in settings.json");
+    assert!(seen.mcp.contains("vidar_drive"), "the vidar-drive mcp rune's server not delivered: {}", seen.mcp);
+    assert!(seen.settings.contains("mcp__vidar_drive"), "permission allow list not in settings.json");
     assert!(seen.settings.contains("mcp__gate_write"), "permission ask list not in settings.json");
     assert!(seen.line.contains("'--permission-mode' 'auto'"), "permission mode not on the spawn line: {}", seen.line);
-    assert!(seen.line.contains("plugins\\vidar-app"), "plugin rune not passed by path: {}", seen.line);
-    assert!(seen.warnings.contains("gate-hook-command"), "a Codex-only rune warns on Claude, never barred: {}", seen.warnings);
+    assert!(seen.line.contains("plugins\\roster"), "plugin rune not passed by path: {}", seen.line);
+    assert!(!seen.warnings.contains("gate-hook-command"), "a Codex-only rune is absent on Claude, with no warning: {}", seen.warnings);
+    assert!(!seen.settings.contains("gate-notify"), "a Codex-only hook is absent from Claude's settings.json");
 
     // One variant per kind, each dropping that kind's rune; the rest stays.
     let drops: &[(&str, &str)] = &[
@@ -321,10 +333,10 @@ fn every_kind_in_a_vault_reaches_a_claude_session_and_a_variant_without_it_does_
         ("gate-hook-run", "hook"),
         ("fixture-echo", "mcp"),
         ("gate-permission", "permission"),
-        ("vidar-app", "plugin"),
+        ("roster", "plugin"),
     ];
     for (id, kind) in drops {
-        let v = fx.store().edit(&full.id, &[Op::RemoveRune(stock(id))], EditMode::Variant).unwrap();
+        let v = fx.store().edit(&full.id, &[Op::RemoveRune(base_ref(id))], EditMode::Variant).unwrap();
         assert_ne!(v.id, full.id, "{kind}: a variant is a new vault");
         let s = claude_seen(&fx, kind, &v.id);
         let present = match *kind {
@@ -335,21 +347,19 @@ fn every_kind_in_a_vault_reaches_a_claude_session_and_a_variant_without_it_does_
             "hook" => s.settings.contains("gate-hook-run"),
             "mcp" => s.mcp.contains("fixture_echo"),
             "permission" => s.settings.contains("mcp__gate_write") || s.line.contains("--permission-mode"),
-            // The plugin rune carries the drive server on Claude: both go with it (R1).
-            "plugin" => s.line.contains("plugins\\vidar-app") || s.line.contains("--plugin-dir") || s.mcp.contains("vidar_drive"),
+            "plugin" => s.line.contains("plugins\\roster") || s.line.contains("--plugin-dir"),
             _ => unreachable!(),
         };
         assert!(!present, "{kind}: rune {id} still reached a session on a variant without it");
-        assert!(s.payload.contains("GATE-RULE-KIT-VERDICT-FIRST"), "{kind}: the variant lost an unrelated rune");
+        assert!(s.payload.contains("GATE-RULE-TEAM-VERDICT-FIRST"), "{kind}: the variant lost an unrelated rune");
     }
     // Rule and fact ride a runeset: dropping the runeset drops them.
-    let no_kit = fx.store().edit(&full.id, &[Op::RemoveRuneset(kit_set())], EditMode::Variant).unwrap();
-    let s = claude_seen(&fx, "no-kit", &no_kit.id);
-    assert!(!s.payload.contains("GATE-RULE-KIT-VERDICT-FIRST") && !s.payload.contains("GATE-FACT-GATE-FACT") && !s.payload.contains("gate-fact.md"), "{}", s.payload);
-    // Dropping a `required-by: vidar` rune warns, never bars (identity also refuses an empty payload: L2b).
-    let no_id = fx.store().edit(&full.id, &[Op::RemoveRune(stock("bare-identity"))], EditMode::Variant).unwrap();
-    let s = claude_seen(&fx, "no-identity", &no_id.id);
-    assert!(s.warnings.contains("bare-identity"), "{}", s.warnings);
+    let no_installed = fx.store().edit(&full.id, &[Op::RemoveRuneset(installed_set())], EditMode::Variant).unwrap();
+    let s = claude_seen(&fx, "no-installed", &no_installed.id);
+    assert!(!s.payload.contains("GATE-RULE-TEAM-VERDICT-FIRST") && !s.payload.contains("GATE-FACT-GATE-FACT") && !s.payload.contains("gate-fact.md"), "{}", s.payload);
+    // Dropping the identity rune never bars the spawn (the Vidar Runeset still gives the payload a body).
+    let no_id = fx.store().edit(&full.id, &[Op::RemoveRune(base_ref("bare-identity"))], EditMode::Variant).unwrap();
+    claude_seen(&fx, "no-identity", &no_id.id);
 }
 
 #[test]
@@ -372,7 +382,7 @@ fn every_kind_in_a_vault_reaches_a_codex_session_and_mode_and_plugin_warn_unsupp
     let launch = fx.codex(&home, &full.id).unwrap();
     let text = launch.developer_instructions.clone().unwrap_or_else(|| payload_text(&launch.manifest.payload.path));
     // The fact is recall-activated: a pointer by file name, as on Claude.
-    for needle in ["GATE-RULE-BARE-IDENTITY", "GATE-RULE-KIT-VERDICT-FIRST", "gate-fact.md", "gate-recall"] {
+    for needle in ["GATE-RULE-BARE-IDENTITY", "GATE-RULE-TEAM-VERDICT-FIRST", "gate-fact.md", "gate-recall"] {
         assert!(text.contains(needle), "codex payload lacks {needle}: {text}");
     }
     let ch = launch.codex_home.clone();
@@ -384,14 +394,14 @@ fn every_kind_in_a_vault_reaches_a_codex_session_and_mode_and_plugin_warn_unsupp
     assert!(hooks.contains("gate-hook-run") && hooks.contains("gate-notify.mjs"), "hook runes not in hooks.json: {hooks}");
     assert!(read(&ch.join("config.toml")).contains("mcp_servers.vidar_drive"), "mcp rune not in config.toml");
     let w = codex_warnings(&launch);
-    assert!(w.contains("gate-permission") && w.contains("vidar-app"), "Codex must warn mode and plugin unsupported: {w}");
+    assert!(w.contains("gate-permission") && w.contains("roster"), "Codex must warn mode and plugin unsupported: {w}");
     let mut launch = launch;
     let m = launch.write_manifest("s-cx-kinds", ["Path"]).unwrap();
     assert!(!read(&m).contains("sk-secret-1"), "a hook command reached the manifest");
     drop(launch);
 
     for (id, check) in [("vidar-drive", "mcp"), ("gate-skill", "skill"), ("gate-hook-command", "hook")] {
-        let v = fx.store().edit(&full.id, &[Op::RemoveRune(stock(id))], EditMode::Variant).unwrap();
+        let v = fx.store().edit(&full.id, &[Op::RemoveRune(base_ref(id))], EditMode::Variant).unwrap();
         let home = fx.home(&format!("codex-{check}"));
         let _l = fx.codex(&home, &v.id).unwrap();
         let ch = _l.codex_home.clone();
@@ -414,13 +424,13 @@ fn a_hosted_session_still_shows_its_original_vault_after_a_variant_and_a_new_tab
     let mut launch = fx.hosted(&fx.home("hosted"), &v.id).unwrap();
     launch.write_manifest("t1-tab", "s-gate-0001", ["Path"]).unwrap();
     drop(launch);
-    let variant = fx.store().edit(&v.id, &[Op::RemoveRune(stock("gate-skill"))], EditMode::Variant).unwrap();
+    let variant = fx.store().edit(&v.id, &[Op::RemoveRune(base_ref("gate-skill"))], EditMode::Variant).unwrap();
     assert_ne!(variant.id, v.id);
     // A restart re-reads from disk; the re-adopted tab has a new id but the same Falcon session.
     let r = session::find(fx.root(), "t2-tab", Some("s-gate-0001"), None).unwrap().expect("record by falconSession");
     assert_eq!((r.vault.id.as_str(), r.vault.hash.as_str()), (v.id.as_str(), v.hash.as_str()));
     let shown = fx.store().load_at(&r.vault.id, &r.vault.hash).unwrap();
-    assert!(shown.runes.contains(&stock("gate-skill")), "the view shows the vault the session loaded");
+    assert!(shown.runes.contains(&base_ref("gate-skill")), "the view shows the vault the session loaded");
 }
 
 #[test]
@@ -437,7 +447,7 @@ fn a_codex_hosted_session_keeps_its_vault_across_re_adopt() {
     .unwrap();
     launch.write_manifest("t1-cx", "s-gate-cx01", ["Path"]).unwrap();
     drop(launch);
-    fx.store().edit(&v.id, &[Op::RemoveRune(stock("vidar-drive"))], EditMode::Variant).unwrap();
+    fx.store().edit(&v.id, &[Op::RemoveRune(base_ref("vidar-drive"))], EditMode::Variant).unwrap();
     let r = session::find(fx.root(), "t2-cx", Some("s-gate-cx01"), None).unwrap().expect("record");
     assert_eq!((r.vault.id.as_str(), r.vault.hash.as_str(), r.agent.as_str()), (v.id.as_str(), v.hash.as_str(), "codex"));
 }
@@ -449,7 +459,7 @@ fn a_pre_lock_edit_changes_the_hash_and_lock_refuses_a_stale_session_hash() {
     // D-d: lock pins the session's hash; a mismatch refuses.
     let fx = Fx::new("lock");
     let v = full_vault(&fx, "Gate Lock");
-    let edited = fx.store().edit(&v.id, &[Op::RemoveRune(stock("gate-agent"))], EditMode::Unlocked).unwrap();
+    let edited = fx.store().edit(&v.id, &[Op::RemoveRune(base_ref("gate-agent"))], EditMode::Unlocked).unwrap();
     assert_eq!(edited.id, v.id, "an unlocked edit stays on the vault");
     assert_ne!(edited.hash, v.hash);
     let e = fx.store().lock(&v.id, LockedBy::FirstMessage, &v.hash).err().unwrap();
@@ -461,11 +471,11 @@ fn a_pre_lock_edit_changes_the_hash_and_lock_refuses_a_stale_session_hash() {
     let again = fx.store().lock(&v.id, LockedBy::Button, &edited.hash).unwrap();
     assert_eq!(again.locked_by, Some(LockedBy::FirstMessage), "lock is idempotent; the first lock stands");
     // After lock: no silent edit; a variant or an invalidating edit only (R3).
-    assert!(fx.store().edit(&v.id, &[Op::AddRune(stock("gate-agent"))], EditMode::Unlocked).is_err());
-    let var = fx.store().edit(&v.id, &[Op::AddRune(stock("gate-agent"))], EditMode::Variant).unwrap();
+    assert!(fx.store().edit(&v.id, &[Op::AddRune(base_ref("gate-agent"))], EditMode::Unlocked).is_err());
+    let var = fx.store().edit(&v.id, &[Op::AddRune(base_ref("gate-agent"))], EditMode::Variant).unwrap();
     assert!(matches!(&var.from, Some(VaultFrom::Vault { vault, hash }) if vault == &v.id && hash == &edited.hash));
     assert!(var.locked_utc.is_none(), "a variant starts unlocked");
-    let inv = fx.store().edit(&v.id, &[Op::AddRune(stock("gate-agent"))], EditMode::Invalidate).unwrap();
+    let inv = fx.store().edit(&v.id, &[Op::AddRune(base_ref("gate-agent"))], EditMode::Invalidate).unwrap();
     assert_eq!(inv.id, v.id);
     assert!(fx.store().load_at(&v.id, &edited.hash).is_ok(), "the invalidated revision stays readable in revs/");
 }
@@ -476,13 +486,13 @@ fn a_locked_vault_resolves_its_copied_body_after_a_library_edit_and_reports_drif
     let fx = Fx::new("drift");
     let v = full_vault(&fx, "Gate Drift");
     fx.store().lock(&v.id, LockedBy::Button, &v.hash).unwrap();
-    fx.edit_rune("kit", "rules", "kit-verdict-first", "---\nname: kit-verdict-first\nkind: rule\nscope: [global]\ndescription: Kit rule one\n---\nEDITED-AFTER-LOCK\n");
+    fx.edit_rune("installed", "rules", "team-verdict-first", "---\nname: team-verdict-first\nkind: rule\nscope: [global]\ndescription: Team rule one\n---\nEDITED-AFTER-LOCK\n");
     let r = fx.store().resolve(&v.id).unwrap();
-    let body = &r.runes.iter().find(|x| x.library == "kit" && x.id == "kit-verdict-first").unwrap().body;
-    assert!(body.contains("GATE-RULE-KIT-VERDICT-FIRST") && !body.contains("EDITED-AFTER-LOCK"), "{body}");
-    assert_eq!(r.drift, vec![RuneRef { library: "kit".into(), id: "kit-verdict-first".into() }]);
+    let body = &r.runes.iter().find(|x| x.library == "installed" && x.id == "team-verdict-first").unwrap().body;
+    assert!(body.contains("GATE-RULE-TEAM-VERDICT-FIRST") && !body.contains("EDITED-AFTER-LOCK"), "{body}");
+    assert_eq!(r.drift, vec![RuneRef { library: "installed".into(), id: "team-verdict-first".into() }]);
     let seen = claude_seen(&fx, "drift", &v.id);
-    assert!(seen.payload.contains("GATE-RULE-KIT-VERDICT-FIRST") && !seen.payload.contains("EDITED-AFTER-LOCK"));
+    assert!(seen.payload.contains("GATE-RULE-TEAM-VERDICT-FIRST") && !seen.payload.contains("EDITED-AFTER-LOCK"));
 }
 
 #[test]
@@ -490,12 +500,12 @@ fn recall_members_of_a_locked_vault_come_only_from_its_pins() {
     let fx = Fx::new("recall-pins");
     let v = full_vault(&fx, "Gate Recall");
     let locked = fx.store().lock(&v.id, LockedBy::FirstMessage, &v.hash).unwrap();
-    assert!(locked.pins.contains_key("kit/kit-recall-tip"));
-    fx.edit_rune("kit", "procedures", "kit-recall-late", "---\nname: kit-recall-late\nkind: procedure\nscope: [global]\nactivate: recall\ndescription: Added after lock\n---\nGATE-PROCEDURE-KIT-RECALL-LATE\n");
+    assert!(locked.pins.contains_key("installed/team-recall-tip"));
+    fx.edit_rune("installed", "procedures", "team-recall-late", "---\nname: team-recall-late\nkind: procedure\nscope: [global]\nactivate: recall\ndescription: Added after lock\n---\nGATE-PROCEDURE-TEAM-RECALL-LATE\n");
     let r = fx.store().resolve(&v.id).unwrap();
-    assert!(r.runes.iter().any(|x| x.id == "kit-recall-tip" && x.recall));
-    assert!(!r.runes.iter().any(|x| x.id == "kit-recall-late"), "a recall rune added after lock joined a locked vault");
-    assert!(!claude_seen(&fx, "recall", &v.id).payload.contains("kit-recall-late"));
+    assert!(r.runes.iter().any(|x| x.id == "team-recall-tip" && x.recall));
+    assert!(!r.runes.iter().any(|x| x.id == "team-recall-late"), "a recall rune added after lock joined a locked vault");
+    assert!(!claude_seen(&fx, "recall", &v.id).payload.contains("team-recall-late"));
 }
 
 // ---- adopt, Custom, cross-library (L3a adopt, L1a Custom, L1d slots) ----
@@ -505,38 +515,39 @@ fn adopt_with_no_record_builds_or_reuses_a_vault_from_the_echoed_sets() {
     // D-g: a running session never gets the vault pick; the record is written at adopt.
     let fx = Fx::new("adopt");
     assert!(session::find(fx.root(), "t-old", Some("s-old-0001"), None).unwrap().is_none());
-    let a = session::adopt(fx.root(), "claude", "t-old", "s-old-0001", &[kit_set()]).unwrap();
-    let b = session::adopt(fx.root(), "claude", "t-old2", "s-old-0002", &[kit_set()]).unwrap();
-    assert_eq!(a.vault, b.vault, "identical echoed sets reuse one vault by content hash");
+    let a = session::adopt(fx.root(), "claude", "t-old", "s-old-0001", &[installed_set()]).unwrap();
+    let b = session::adopt(fx.root(), "claude", "t-old2", "s-old-0002", &[installed_set()]).unwrap();
+    assert_ne!(a.vault.id, b.vault.id, "each adopted session starts its own copy");
+    assert_eq!(a.vault.hash, b.vault.hash);
     let r = session::find(fx.root(), "t-other", Some("s-old-0001"), None).unwrap().expect("adopt wrote the record");
     assert_eq!(r.vault, a.vault);
     let v = fx.store().get(&a.vault.id).unwrap();
-    assert_eq!(v.runesets.iter().map(|s| s.source.clone()).collect::<Vec<_>>(), vec![kit_set()]);
+    assert_eq!(v.runesets.iter().map(|s| s.source.clone()).collect::<Vec<_>>(), vec![super::vault::vidar::source(), installed_set()]);
 }
 
 #[test]
-fn an_identical_custom_pick_reuses_its_vault() {
-    // D-i: id `custom-<content hash6>`.
+fn identical_custom_picks_give_two_vaults() {
+    // Runes Q1 = a: every pick starts `copy-<utc>-<hex>`; none is reused.
     let fx = Fx::new("custom");
-    let a = fx.store().create_custom(&[kit_set()], &[]).unwrap();
-    let b = fx.store().create_custom(&[kit_set()], &[]).unwrap();
-    assert_eq!(a.id, b.id);
-    assert!(a.id.starts_with("custom-") && a.id.len() == "custom-".len() + 6, "{}", a.id);
-    let c = fx.store().create_custom(&[kit_set()], &[stock("gate-skill")]).unwrap();
-    assert_ne!(c.id, a.id);
-    assert_eq!(fx.store().list().unwrap().iter().filter(|v| v.id.starts_with("custom-")).count(), 2);
+    let a = super::vault::create_at(fx.root(), None, None, &[installed_set()], &[]).unwrap();
+    let b = super::vault::create_at(fx.root(), None, None, &[installed_set()], &[]).unwrap();
+    assert_ne!(a.id, b.id);
+    assert_eq!(a.hash, b.hash, "a copy shares its source's content hash");
+    assert!(a.id.starts_with("copy-"), "{}", a.id);
+    let c = super::vault::create_at(fx.root(), None, None, &[installed_set()], &[base_ref("gate-skill")]).unwrap();
+    assert_ne!(c.hash, a.hash);
 }
 
 #[test]
 fn a_cross_library_slot_resolves_against_its_named_library() {
-    // D-h: `<?rune stock/gate-fact?>` in kit's set.
+    // D-h: `<?rune base/gate-fact?>` in installed's set.
     let fx = Fx::new("cross-lib");
-    let v = fx.store().create("Gate Kit Only", None, &[kit_set()], &[stock("bare-identity")]).unwrap();
-    assert!(v.runesets[0].file.ends_with("kit--kit.md"));
+    let v = super::vault::create_at(fx.root(), Some("Gate Installed Only".into()), None, &[installed_set()], &[base_ref("bare-identity")]).unwrap();
+    assert!(v.runesets[1].file.ends_with("installed--installed.md"), "the Vidar Runeset is first");
     let seen = claude_seen(&fx, "cross", &v.id);
     assert!(seen.payload.contains("gate-fact.md") && seen.recall.contains("GATE-FACT-GATE-FACT"), "{}", seen.payload);
     // The snapshot is a dated copy: editing the library set later does not reach the vault.
-    fx.edit_rune("kit", "sets", "kit", "---\nname: kit\nkind: set\nscope: [global]\n---\n- <?rune kit-plain-words?>\n");
+    fx.edit_rune("installed", "sets", "installed", "---\nname: installed\nkind: set\nscope: [global]\n---\n- <?rune team-plain-words?>\n");
     let again = claude_seen(&fx, "cross-again", &v.id);
     assert!(again.payload.contains("gate-fact.md") && again.recall.contains("GATE-FACT-GATE-FACT"), "the vault's runeset copy followed its original");
 }

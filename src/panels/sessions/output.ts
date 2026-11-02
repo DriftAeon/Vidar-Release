@@ -9,7 +9,7 @@ import {
 } from "../../character/behavior";
 import { dispatchCharacterActivity } from "../../character/events";
 import { createFlowGate, FLOW_HIGH, FLOW_LOW, type FlowGate } from "./flow-gate";
-import type { TerminalSession } from "./types";
+import { sessionSupports, type TerminalSession } from "./types";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
 let setFlow: (id: string, paused: boolean) => void = () => {};
@@ -134,7 +134,7 @@ export function flushOutput(id: string) {
     }
   }
 
-  if (s.agent !== "codex") {
+  if (!sessionSupports(s.agent, "thread")) {
     s.term.write(frame, parsed);
     return;
   }
@@ -163,7 +163,7 @@ const settling = new Map<string, number>();
 
 function markStreaming(id: string) {
   const s = sessions.get(id);
-  if (!s?.term || s.agent !== "codex") return;
+  if (!s?.term || !sessionSupports(s.agent, "thread")) return;
   window.clearTimeout(settling.get(id));
   settling.set(
     id,

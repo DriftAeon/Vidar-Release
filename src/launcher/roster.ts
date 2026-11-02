@@ -2,6 +2,7 @@
 // spawn paths (spawnFrom, spawnAstra) every launcher surface opens a tab through (split from main.ts).
 import { createSession, hasArmedAstra } from "../panels/sessions";
 import { recordedVault } from "../panels/sessions/lookup";
+import { startVault } from "./start-vault";
 import type { ModuleRow } from "../modules/registry";
 import { moduleViews } from "../modules/registry";
 import { agentKind, gatewayAgent } from "./agent-kind";
@@ -13,16 +14,17 @@ import { depFound, isAvailable } from "../deps/state";
 import { setPrimaryRootSource, shownIdsKey, shownRootsOf, shownVariantsOf } from "./roster-shown";
 import { resolveVidarCwd } from "./vidar-path";
 import { prepareRules } from "../rules/prepare";
-import { geminiHiddenArgs } from "../startup-updates/gemini-launch";
 import { effectivePrimary } from "../agents/primary";
 import { AGENT_IDS, PTY_ONLY_IDS, isAgentId, type AgentId } from "../agents/id";
 import { ALL_ROWS } from "./row-facts";
+import { rel } from "../paths";
+
+const ASTRA_CWD = `{vidar}\\${rel("display").replace(/\//g, "\\")}`;
 
 const astraAgent: Record<AgentId, boolean> = { claude: false, codex: true };
 const astraDependency: AgentId = AGENT_IDS.find((id) => astraAgent[id])!;
 const ptyArgHandlers: Record<typeof PTY_ONLY_IDS[number], (args: string[] | undefined, shell?: string) => string[] | undefined> = {
-  [PTY_ONLY_IDS[0]]: geminiHiddenArgs,
-  [PTY_ONLY_IDS[1]]: (args) => args,
+  [PTY_ONLY_IDS[0]]: (args) => args,
 };
 function ptyArgs(id: string, args: string[] | undefined, shell?: string): string[] | undefined {
   return (PTY_ONLY_IDS as readonly string[]).includes(id)
@@ -62,12 +64,12 @@ export const BUILTIN_AGENTS: AgentType[] = [
   // blocked command just fails back to the model). `{vidar}` is the Vidar folder (vidar-path.ts, K6).
   // `desks` is the opt-in pack in tools\desks\ (K2): without its built hook wrapper done.json never
   // lands, so the row stays hidden until setup step 1 ran (tools\desks\README.md).
-  ...AGENT_IDS.filter((id) => astraAgent[id]).map((id): AgentType => ({ key: "astra", id, label: "Astra", under: id, role: "astra", requires: [id, "desks"], cwd: "{vidar}\\runtime\\bridge\\display", args: ["-NoExit", "-Command", "codex -a never -s workspace-write -m gpt-6-astra -c model_reasoning_effort=low -c model_verbosity=low"] })),
+  ...AGENT_IDS.filter((id) => astraAgent[id]).map((id): AgentType => ({ key: "astra", id, label: "Astra", under: id, role: "astra", requires: [id, "desks"], cwd: ASTRA_CWD, args: ["-NoExit", "-Command", "codex -a never -s workspace-write -m gpt-6-astra -c model_reasoning_effort=low -c model_verbosity=low"] })),
   // The plain (non-Bare) rows, in PLAIN_KEYS: Claude and Codex as the CLI starts them, hidden from
   // builtinAgents() unless the "launcher.plainRows" pref is on. A plain Rendered variant hangs off the
   // plain root (resolveAgents), not the Bare one.
   ...ALL_ROWS.flatMap((r) => [r.plain, r.plainRendered]),
-  // Pack rows come from builtinAgents() below, including Gemini, Pi, Local and gateways.
+  // Pack rows come from builtinAgents() below, including Pi, Local and gateways.
   // the plain shell sits last: it's the fallback, not the common case
   { key: "terminal", id: "shell", label: "Terminal" },
 ];
@@ -135,10 +137,13 @@ if (typeof window !== "undefined") {
   }).catch(() => undefined);
 }
 
-/** The vault a plain Bare row click launches on: the last one used for this agent, else its stock vault. */
-export function defaultVault(agent: string): string {
-  return lastVault.get(agent) ?? `stock-${agent}`;
+/** The vault a plain Bare row click launches on: the last one used for this agent; none yet = undefined. */
+export function defaultVault(agent: string): string | undefined {
+  return lastVault.get(agent);
 }
+
+/** The refusal for a Raw Bare row that has no Last Vault to load (Q7). */
+const NO_LAST_VAULT = "No Last Vault for this agent yet. Open a Rendered tab and pick or make a Rune Vault first.";
 
 /** Records the vault a Bare launch used, so the next pick and plain click pre-pick it, after a relaunch too. */
 export function rememberVault(agent: string, vault: string): void {
@@ -147,11 +152,22 @@ export function rememberVault(agent: string, vault: string): void {
   void invoke("rune_vault_default_set", { agent, vault }).catch(() => undefined);
 }
 
+/** Bare-launch options: `vault` names the Rune Vault to load (wins over `pick`); `remember: false` keeps
+ *  the launch from overwriting the user's Last Vault (agent launches). */
+export interface BareLaunch {
+  vault?: string;
+  remember?: boolean;
+  /** Open a Rendered tab at once and hold its spawn until a vault is picked (`pickTabVault`); the pick remembers
+   *  the vault, so this launch does not. Unset (the default) spawns at once. */
+  pending?: boolean;
+}
+
 // `pick` is the set-list transition (a resumed thread's manifest sets, a reopened workspace's saved
 // sets): Rust makes a Custom vault from it. `vault` names the Rune Vault to load and wins over `pick`;
 // a Bare row with neither loads its recorded vault on resume, else defaultVault. A row's own `sets`
 // and a workspace's add-ons are never read (model R2: a session loads exactly one vault).
-export async function spawnFrom(t: AgentType, loc: Location, title?: string, resume?: string, draft?: string, onAdopted?: (ok: boolean, reason?: string) => void, pick?: SetRef[], vault?: string): Promise<string> {
+export async function spawnFrom(t: AgentType, loc: Location, title?: string, resume?: string, draft?: string, onAdopted?: (ok: boolean, reason?: string) => void, pick?: SetRef[], bare?: BareLaunch): Promise<string> {
+  const vault = bare?.vault;
   closeLauncher();
   // A launch profile belongs to a Claude or Codex row without a role (Raw in a PTY, Rendered on
   // Falcon or in-process) only: on a gateway row, another agent, the shell or a role it would open
@@ -165,9 +181,15 @@ export async function spawnFrom(t: AgentType, loc: Location, title?: string, res
     throw new Error("A Rune Vault loads only on a Bare row; this row would launch without it.");
   }
   const kind = agentKind(t.id);
-  const bareVault = !t.profile ? undefined
-    : vault ?? (pick !== undefined ? undefined : (resume ? await recordedVault("", null, resume) : null) ?? defaultVault(kind));
-  if (bareVault) rememberVault(kind, bareVault);
+  const recorded = !t.profile || vault || pick !== undefined || !resume ? null : await recordedVault("", null, resume);
+  const source = !t.profile ? undefined : vault ?? (pick !== undefined ? undefined : recorded ?? defaultVault(kind));
+  // A Raw row with no vault named, no set list, no recorded vault and no Last Vault has nothing to load: it refuses
+  if (t.profile && t.body !== "rendered" && !source && pick === undefined && !bare?.pending) throw new Error(NO_LAST_VAULT);
+  // A human launch records the source as the next pre-pick; an agent's (ctl.spawn) passes remember: false.
+  if (source && bare?.remember !== false && !bare?.pending) rememberVault(kind, source.split("@")[0]);
+  // A fresh launch loads its own copy (start-vault.ts); a resume loads the recorded vault, a pending tab none yet
+  // (`pickTabVault` makes it on the pick).
+  const bareVault = source && !bare?.pending ? await startVault(kind, source, recorded !== null) : source;
   const cwd = await resolveVidarCwd(t.cwd ?? loc.cwd);
   // once per fresh launch; the tab keeps it for Resume, Retry and body switches. A profiled row
   // ignores `rules` and sends no shell or args: the backend owns its spawn line (Design 9).
@@ -177,6 +199,7 @@ export async function spawnFrom(t: AgentType, loc: Location, title?: string, res
     profile: t.profile,
     rowKey: t.profile && t.key ? t.key : undefined,
     ...(bareVault ? { vault: bareVault } : t.profile && pick !== undefined ? { sets: pick } : {}),
+    ...(bare?.pending ? { pendingVault: true } : {}),
     agent: kind,
     art: t.id,
     shell: t.profile ? undefined : t.shell,

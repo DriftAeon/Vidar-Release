@@ -5,10 +5,9 @@
 //! settings::store: a unique tmp name so two writers never collide,
 //! `sync_all` before the rename so a crash right after doesn't leave the
 //! rename pointing at unflushed data, and the tmp file is removed on a
-//! failed rename instead of left behind. `bridge/{workbench.rs,display.rs}`
-//! still carries its own four copies of this pattern (write_workbench_png,
-//! write_workbench_entry, the decision-file write, and one more) — moving
-//! those onto this helper is not done here.
+//! failed rename instead of left behind. `atomic_write_with` adds a precheck
+//! that runs after the tmp is synced and before the rename; bridge/workbench
+//! already writes through this helper.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -58,24 +57,64 @@ fn reserve_tmp(path: &Path) -> std::io::Result<(PathBuf, File)> {
 /// behind for a scanner to trip over. Only a tmp this call created is ever
 /// removed.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let (tmp, mut f) = reserve_tmp(path).map_err(|e| e.to_string())?;
+    atomic_write_with(path, bytes, || Ok(())).map(|_| ()).map_err(|e| e.to_string())
+}
 
-    let write_result = (|| -> std::io::Result<()> {
+/// Which stage of `atomic_write_with` failed; the tmp file is already removed.
+#[derive(Debug)]
+pub enum AtomicError {
+    /// Reserving, writing or syncing the tmp file.
+    Write(String),
+    /// The caller's precheck returned `Err` (destination untouched).
+    Precheck(String),
+    /// The final rename over the destination.
+    Rename(String),
+}
+
+impl std::fmt::Display for AtomicError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AtomicError::Write(m) | AtomicError::Precheck(m) | AtomicError::Rename(m) => f.write_str(m),
+        }
+    }
+}
+
+/// `atomic_write` with a `precheck` that runs after the tmp is written and
+/// synced, right before the rename. An `Err` from it removes the tmp and
+/// leaves the destination as it was. Returns the tmp's metadata taken after
+/// `sync_all` (the published file's size and mtime).
+pub fn atomic_write_with(
+    path: &Path,
+    bytes: &[u8],
+    precheck: impl FnOnce() -> Result<(), String>,
+) -> Result<std::fs::Metadata, AtomicError> {
+    let (tmp, mut f) = reserve_tmp(path).map_err(|e| AtomicError::Write(e.to_string()))?;
+
+    let write_result = (|| -> std::io::Result<std::fs::Metadata> {
         f.write_all(bytes)?;
-        f.sync_all()
+        f.sync_all()?;
+        f.metadata()
     })();
     drop(f);
 
-    if let Err(e) = write_result {
+    let meta = match write_result {
+        Ok(m) => m,
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(AtomicError::Write(e.to_string()));
+        }
+    };
+
+    if let Err(e) = precheck() {
         let _ = std::fs::remove_file(&tmp);
-        return Err(e.to_string());
+        return Err(AtomicError::Precheck(e));
     }
 
     if let Err(e) = rename_retrying(&tmp, path) {
         let _ = std::fs::remove_file(&tmp);
-        return Err(e.to_string());
+        return Err(AtomicError::Rename(e.to_string()));
     }
-    Ok(())
+    Ok(meta)
 }
 
 /// Windows `ERROR_ACCESS_DENIED` / `ERROR_SHARING_VIOLATION`: what a rename over a file that
@@ -106,20 +145,17 @@ pub(crate) fn rename_retrying(tmp: &Path, path: &Path) -> std::io::Result<()> {
     std::fs::rename(tmp, path)
 }
 
-/// Strips a leading UTF-8 BOM (`\u{FEFF}`): some Windows editors and PowerShell 5 write one,
-/// and `serde_json` treats it as invalid JSON rather than whitespace.
+/// Strips every leading UTF-8 BOM (`\u{FEFF}`): some Windows editors and PowerShell 5 write one
+/// (a re-saved file can stack two), and `serde_json` treats it as invalid JSON, not whitespace.
 pub fn strip_bom(text: &str) -> &str {
-    text.strip_prefix('\u{FEFF}').unwrap_or(text)
+    text.trim_start_matches('\u{FEFF}')
 }
 
 /// Reads a UTF-8 text file with any leading BOM removed. The io error is returned as-is so a
 /// caller can still tell `NotFound` from a locked file.
 pub fn read_text(path: &Path) -> std::io::Result<String> {
     let text = std::fs::read_to_string(path)?;
-    Ok(match text.strip_prefix('\u{FEFF}') {
-        Some(rest) => rest.to_string(),
-        None => text,
-    })
+    Ok(strip_bom(&text).to_string())
 }
 
 /// Cap for agent-dropped request files (`read_text_capped`); config reads stay uncapped.
@@ -147,9 +183,46 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Strin
     serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// Serialises `value` as pretty JSON (`serde_json::to_string_pretty`), appends `"\n"` when
+/// `trailing_newline`, and `atomic_write`s it. The one home for config and state file writes.
+pub fn write_json_pretty<T: serde::Serialize + ?Sized>(
+    path: &Path,
+    value: &T,
+    trailing_newline: bool,
+) -> Result<(), String> {
+    atomic_write(path, &json_pretty_bytes(value, trailing_newline)?)
+}
+
+/// The bytes `write_json_pretty` would write, for callers that compare or journal before writing.
+pub fn json_pretty_bytes<T: serde::Serialize + ?Sized>(value: &T, trailing_newline: bool) -> Result<Vec<u8>, String> {
+    json_pretty_text(value, trailing_newline).map(String::into_bytes)
+}
+
+/// `json_pretty_bytes` as text, for callers that measure or return the string.
+pub fn json_pretty_text<T: serde::Serialize + ?Sized>(value: &T, trailing_newline: bool) -> Result<String, String> {
+    let mut text = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
+    if trailing_newline {
+        text.push('\n');
+    }
+    Ok(text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn write_json_pretty_keeps_pretty_bytes_with_or_without_newline() {
+        let dir = std::env::temp_dir().join(format!("vidar-fsx-wjp-{}", now_ms()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let v = serde_json::json!({ "a": 1 });
+        let (p0, p1) = (dir.join("a.json"), dir.join("b.json"));
+        write_json_pretty(&p0, &v, false).unwrap();
+        write_json_pretty(&p1, &v, true).unwrap();
+        assert_eq!(std::fs::read_to_string(&p0).unwrap(), "{\n  \"a\": 1\n}");
+        assert_eq!(std::fs::read_to_string(&p1).unwrap(), "{\n  \"a\": 1\n}\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn read_json_deserializes_and_tolerates_a_bom() {
@@ -269,6 +342,40 @@ mod tests {
         let errors: Vec<_> = results.iter().filter_map(|r| r.as_ref().err()).collect();
         assert!(errors.is_empty(), "concurrent writes failed: {errors:?}");
         assert!(payloads.contains(&published), "published file is not one complete payload");
+        assert!(leftovers.is_empty(), "tmp files left behind: {leftovers:?}");
+    }
+
+    #[test]
+    fn strip_bom_removes_every_leading_bom() {
+        assert_eq!(strip_bom("\u{FEFF}\u{FEFF}{}"), "{}");
+        assert_eq!(strip_bom("\u{FEFF}{}"), "{}");
+        assert_eq!(strip_bom("{}\u{FEFF}"), "{}\u{FEFF}");
+    }
+
+    #[test]
+    fn failing_precheck_keeps_destination_and_leaves_no_tmp() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("vidar-fsx-precheck-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("dest.json");
+        std::fs::write(&path, b"old").unwrap();
+        let err = atomic_write_with(&path, b"new", || Err("stale".to_string()));
+        let kept = std::fs::read(&path).unwrap();
+        let ok = atomic_write_with(&path, b"newer", || Ok(()));
+        let after = std::fs::read(&path).unwrap();
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(matches!(err, Err(AtomicError::Precheck(ref m)) if m == "stale"));
+        assert_eq!(kept, b"old");
+        assert_eq!(ok.expect("write").len(), 5);
+        assert_eq!(after, b"newer");
         assert!(leftovers.is_empty(), "tmp files left behind: {leftovers:?}");
     }
 

@@ -7,7 +7,7 @@ import { setupDom } from "./helpers/dom-mount.mjs";
 const calls = [];
 const state = { vault: null };
 const vaultOf = (o = {}) => ({ version: 1, id: "v1", name: "Custom", createdUtc: "", from: null, runesets: [],
-  runes: [{ library: "kit", id: "falcon-changed-zero-check" }], lockedUtc: null, lockedBy: null, hash: "h1", pins: {}, ...o });
+  runes: [{ library: "installed", id: "falcon-changed-zero-check" }], lockedUtc: null, lockedBy: null, hash: "h1", pins: {}, ...o });
 const dom = setupDom({ answers: {
   rune_vault_session: (args) => { calls.push(["rune_vault_session", args]); return { vault: { id: "v1", hash: "h1" } }; },
   rune_vault_read: () => ({ vault: structuredClone(state.vault), drift: [], runes: [], warnings: [] }),
@@ -67,7 +67,7 @@ test("Failed to Start card names the rune; Remove Rune edits the open vault befo
   assert.equal(f.attempts(), 1, "retry waits for the vault edit");
   await flush();
   assert.deepEqual(calls.filter(([n]) => n === "rune_vault_edit").map(([, a]) => a),
-    [{ id: "v1", ops: [{ op: "removeRune", ref: { library: "kit", id: "falcon-changed-zero-check" } }], mode: "unlocked" }]);
+    [{ id: "v1", ops: [{ op: "removeRune", ref: { library: "installed", id: "falcon-changed-zero-check" } }], mode: "unlocked" }]);
   assert.equal(f.attempts(), 2);
   assert.equal(f.S.sessionId, "s1", "an open vault's retry keeps the session");
   assert.equal(card(f), null);
@@ -110,13 +110,13 @@ test("Edit Original edits the locked vault in place and retries fresh, as Modify
 
 test("a rune that rides in a placed runeset goes out of the vault's copy through the member op", async () => {
   calls.length = 0;
-  state.vault = vaultOf({ runes: [], runesets: [{ file: "sets/kit--workflow.md", source: { library: "kit", set: "workflow" }, copiedUtc: "", sourceHash: "" }] });
+  state.vault = vaultOf({ runes: [], runesets: [{ file: "sets/installed--workflow.md", source: { library: "installed", set: "workflow" }, copiedUtc: "", sourceHash: "" }] });
   const f = failedSpawn();
   await f.spawn();
   press(card(f), "Remove Rune");
   await flush();
   assert.deepEqual(calls.filter(([n]) => n === "rune_vault_edit").map(([, a]) => a), [{ id: "v1", mode: "unlocked",
-    ops: [{ op: "member", ref: { library: "kit", runeset: "workflow", rune: { library: "kit", id: "falcon-changed-zero-check" }, on: false } }] }]);
+    ops: [{ op: "member", ref: { library: "installed", runeset: "workflow", rune: { library: "installed", id: "falcon-changed-zero-check" }, on: false } }] }]);
   assert.equal(f.attempts(), 2);
 });
 

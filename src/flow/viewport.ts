@@ -2,7 +2,8 @@
 // loop. Must not touch selection, edges or node data beyond S.nodes/nodeEls
 // for measuring bounding boxes.
 
-import { S, SCALE_MIN, SCALE_STOPS } from "./state";
+import { S, SCALE_STOPS } from "./state";
+import { fitScale } from "./fit-scale";
 import { createToast } from "../toast";
 import { flowStorage } from "./file-storage";
 import { createViewportMemory } from "./viewport-memory";
@@ -14,9 +15,9 @@ function stepStop(scale: number, zoomIn: boolean): number {
   return [...SCALE_STOPS].reverse().find((s) => s < scale - eps) ?? scale;
 }
 
-/** Largest stop that is at most `ratio`, so a fit never crops. */
-function floorStop(ratio: number): number {
-  return [...SCALE_STOPS].reverse().find((s) => s <= ratio + 1e-6) ?? SCALE_MIN;
+/** Largest stop that is at most `ratio`, so a fit never crops; `cap` bounds it from above. */
+function floorStop(ratio: number, cap = Infinity): number {
+  return fitScale(ratio, SCALE_STOPS, cap);
 }
 
 export function beginPan(e: PointerEvent) {
@@ -93,7 +94,7 @@ export function onWheel(e: WheelEvent) {
 
 /** Frames every node: scale to fit (min of width-fit/height-fit, clamped),
  *  pan so the bounding box centres in the canvas. No-op with an empty graph. */
-export function fitToView(quiet = false) {
+export function fitToView(quiet = false, maxScale = Infinity) {
   // A fit is a deliberate framing of the open graph, so later pans are its own.
   boundGraphId = S.activeGraphId;
   if (!S.nodes.length) return;
@@ -111,7 +112,7 @@ export function fitToView(quiet = false) {
   const bboxH = maxY - minY;
   const canvasW = S.canvasEl.offsetWidth;
   const canvasH = S.canvasEl.offsetHeight;
-  const next = floorStop(Math.min(canvasW / (bboxW + 80), canvasH / (bboxH + 80)));
+  const next = floorStop(Math.min(canvasW / (bboxW + 80), canvasH / (bboxH + 80)), maxScale);
   S.scale = next;
   S.panX = canvasW / 2 - ((minX + maxX) / 2) * S.scale;
   S.panY = canvasH / 2 - ((minY + maxY) / 2) * S.scale;

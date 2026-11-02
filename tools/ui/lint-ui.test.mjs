@@ -59,13 +59,14 @@ test("lint-ui: a scoped compound, a single class or one shared class passes", ()
 });
 
 test("lint-ui: baselined compounds pass on the real tree, a new one fails", () => {
-  assert.equal(spawnSync(process.execPath, [LINT], { encoding: "utf8" }).status, 0);
+  const real = spawnSync(process.execPath, [LINT], { encoding: "utf8" });
+  assert.equal(real.status, 0, `real-tree lint-ui exit ${real.status}\n${real.stdout}\n${real.stderr}`);
   const dir = mkdtempSync(join(tmpdir(), "lint-ui-"));
   try {
     const css = join(dir, "a.css");
     writeFileSync(css, ".ws-btn.ws-add { align-self: flex-start; }\n");
     const r = spawnSync(process.execPath, [LINT, "--file", css], { encoding: "utf8" });
-    assert.equal(r.status, 1);
+    assert.equal(r.status, 1, r.stderr);
     assert.match(r.stdout, /\[compound\]/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

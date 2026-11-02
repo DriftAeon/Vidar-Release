@@ -47,7 +47,7 @@ fn rack_from(home: Home, read: Result<Option<CodexConfig>, String>) -> McpRack {
 }
 
 /// Async on a blocking thread: resolves the Codex home and reads its config.toml, so a slow or
-/// unreachable share must not stall Tauri's main thread (as read_codex_loadout).
+/// unreachable share must not stall Tauri's main thread.
 #[tauri::command]
 pub async fn read_codex_mcp_servers(
     app: AppHandle,

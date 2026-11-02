@@ -7,13 +7,13 @@ type FlowNodeKind = V1NodeKind | ReservedNodeKind;
 export const V1_NODE_KINDS: readonly V1NodeKind[] = ["input", "agent", "output"];
 
 import type { FlowBackend } from "./runner";
+import type { AdapterModelId } from "./claude-models";
 
 // Provider id: the literal string sent to the sidecar's --model / used to pick the
 // gateway env. Display id/label live in roster.ts, not here — exactly one id space is kept
-// here and display strings map in roster.ts. Core ids are named; any other id is a
+// here and display strings map in roster.ts. Core ids come from the adapter; any other id is a
 // `flowModels` id from an agent module (modules.md), checked against the roster by validate.ts.
-export type CoreModelId =
-  | "claude-fable-5-1" | "claude-opus-5-5" | "claude-sonnet-5" | "claude-haiku-4-5-20251001";
+export type CoreModelId = AdapterModelId;
 export type ModelId = CoreModelId | (string & {});
 
 /** The modes a Flow Claude node can spawn in: the user's own mode, resolved once per run in Rust.
@@ -61,7 +61,7 @@ export interface FlowNode {
   x: number;
   y: number;
   model?: ModelId;              // required for kind:"agent" in v1; enforced by validate.ts
-  vault?: string;               // Rune Vault id the node loads (rune_vault_list); unset = the agent's stock vault
+  vault?: string;               // Rune Vault id the node loads (rune_vault_list); an agent node cannot Run until one is set
   backend?: FlowBackend;       // legacy field: ignored, engine.ts derives the backend from `model`
   fields: FlowField[];          // "task" (agent's prompt-with-placeholders text) lives here
   fieldSpecs?: FlowFieldSpec[];

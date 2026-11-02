@@ -6,7 +6,6 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -14,10 +13,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use crate::proc_job::JobChild;
-use crate::pty::SCRUBBED_ENV;
+use crate::proc_job::{JobChild, SpawnExt};
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const OVERALL_CAP: Duration = Duration::from_secs(10);
 const LABEL_MAX: usize = 80;
 const LIST_CAP: usize = 30;
@@ -204,13 +201,10 @@ fn list_home(cwd: &str, home: Option<&std::path::Path>) -> Result<Vec<ThreadRow>
     let mut cmd = Command::new("node");
     cmd.arg(js)
         .arg("app-server")
-        .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    for key in SCRUBBED_ENV {
-        cmd.env_remove(key);
-    }
+        .stderr(Stdio::null())
+        .scrubbed();
     if let Some(h) = home {
         cmd.env("CODEX_HOME", h);
     }

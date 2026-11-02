@@ -74,7 +74,7 @@ SENTENCES: list[tuple[str, str]] = [
 ]
 
 # Terms scored separately. PROMPT_TERMS are kept only if the live voice.prompt contains them.
-PROMPT_TERMS = ["Claude", "Codex", "git", "PowerShell", "Rider", "Yeti", "Tauri", "Rust", "Vidar", "tab", "pane", "mic"]
+PROMPT_TERMS = ["git", "PowerShell", "Rider", "Yeti", "Tauri", "Rust", "Vidar", "tab", "pane", "mic"]
 HELDOUT_TERMS = ["git diff", "npm run build", "cargo check", "worktree", "serde", "tracing", "Kubernetes", "Docker", "rebase"]
 
 # Candidate table: add rows here (W2: parakeet manifests, whisper --vad variants).
@@ -200,6 +200,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         return 2
     prompt = vidar_prompt()
     pterms = [t for t in PROMPT_TERMS if t.lower() in prompt.lower()]
+    pterms += [word for word in re.findall(r"\b[A-Z][a-z]+\b", prompt) if word not in pterms]
     only = set(a.only.split(",")) if a.only else None
     rows = []
     with tempfile.TemporaryDirectory() as td:

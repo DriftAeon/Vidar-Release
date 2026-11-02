@@ -28,6 +28,7 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | speaker-off.svg | noto-emoji/svg/emoji_u1f507.svg | Noto Emoji, Apache-2.0 |
 | refresh.svg | fluent-color/svg/ic_fluent_arrow_sync_24_color.svg | Fluent Color, MIT; Every Refresh button |
 | mic.svg | fluent-color/svg/ic_fluent_mic_24_color.svg | Fluent Color, MIT |
+| mic-off.png | own/mic-off.png | Vidar original art, own work; Listen button off state (user asset, muted-mic-256; cropped to the glyph on a transparent ground at 64px, 2026-10-31) |
 | copy.png | own/copy_v1.png | Vidar original art, own work (Copy_V1, downscaled from 1254 px) |
 | inspect.svg | tango/svg/actions-system-search.svg | Tango Icon Library (nigeltao/tango-icon-library-pngs 0a1564d), public domain per its COPYING |
 | trash.svg | tango/svg/places-user-trash.svg | Tango Icon Library (nigeltao/tango-icon-library-pngs 0a1564d), public domain per its COPYING |
@@ -93,10 +94,10 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | openai.png | apps/openai.png | Installed app icons (local copies), Vendor app icons, local use only; OpenAI launcher mark; local vendor asset |
 | filing-cabinet.svg | flat-color-icons/svg/filing_cabinet.svg | flat-color-icons (icons8), MIT |
 | cancel.svg | flat-color-icons/svg/cancel.svg | flat-color-icons (icons8), MIT; Interrupted chip |
-| hook.svg | noto-emoji/svg/emoji_u1fa9d.svg | Noto Emoji, Apache-2.0; Gear Hooks row |
-| memory-card.png | fatcow/32x32/sd_memory_adapter.png | FatCow Farm-Fresh Icons 3.9.2 (gammasoft/fatcow e6ee233), CC BY 3.0 US: credit FatCow, http://www.fatcow.com/free-icons; Gear Memory row |
-| ruler.svg | noto-emoji/svg/emoji_u1f4d0.svg | Noto Emoji, Apache-2.0; Gear Permissions row |
-| rules.svg | flat-color-icons/svg/rules.svg | flat-color-icons (icons8), MIT; Gear Instructions row |
+| hook.svg | noto-emoji/svg/emoji_u1fa9d.svg | Noto Emoji, Apache-2.0; Runes hook kind |
+| memory-card.png | fatcow/32x32/sd_memory_adapter.png | FatCow Farm-Fresh Icons 3.9.2 (gammasoft/fatcow e6ee233), CC BY 3.0 US: credit FatCow, http://www.fatcow.com/free-icons; Bare agent view and file heads, memory |
+| ruler.svg | noto-emoji/svg/emoji_u1f4d0.svg | Noto Emoji, Apache-2.0; Currently unused; kept |
+| rules.svg | flat-color-icons/svg/rules.svg | flat-color-icons (icons8), MIT; Bare agent view and file heads, rules |
 | changes.svg | fluent-color/svg/ic_fluent_database_24_color.svg | Fluent Color, MIT; Changes lab tab |
 | document-add.svg | fluent-color/svg/ic_fluent_document_add_24_color.svg | Fluent Color, MIT; Flow New button |
 | check-circle.svg | fluent-color/svg/ic_fluent_checkmark_circle_24_color.svg | Fluent Color, MIT |
@@ -121,5 +122,8 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | person.svg | fluent-color/svg/ic_fluent_person_24_color.svg | Fluent Color, MIT |
 | people-community.svg | fluent-color/svg/ic_fluent_people_community_24_color.svg | Fluent Color, MIT |
 | scales.svg | noto-emoji/svg/emoji_u2696.svg | Noto Emoji, Apache-2.0 |
+| safe.svg | flat-color-icons/svg/safe.svg | flat-color-icons (icons8), MIT |
+| safe-gold.svg | own/safe-gold.svg | Vidar original art, own work; recoloured from flat-color-icons safe.svg to a gold ramp (body #b19234); Start picker vault cards |
+| library.svg | flat-color-icons/svg/library.svg | flat-color-icons (icons8), MIT; Rune Library title marks |
 
 Loaded by `src/icon-img.ts` (`iconImg(name)`).

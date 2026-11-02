@@ -1,9 +1,9 @@
 // Shared rig for tests/falcon-prune-*.test.mjs: temp Vidar root + temp LOCALAPPDATA, and a runner for the real script.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeTree as tempDir } from "../helpers/tree.mjs";
 
 const SCRIPT = fileURLToPath(new URL("../../tools/release/falcon-prune.ps1", import.meta.url));
 const hasPwsh = process.platform === "win32" && !spawnSync("pwsh", ["-NoProfile", "-Command", "exit 0"]).error;
@@ -14,7 +14,7 @@ export const id = (c) => `0.1.0-${c.repeat(16)}`;
 
 // a registry, b previous, c current, d old (deleted), e no manifest, f newer than current (in flight).
 export function makeTree() {
-  const tmp = mkdtempSync(join(tmpdir(), "vidar-prune-"));
+  const tmp = tempDir("vidar-prune-");
   const root = join(tmp, "vidar");
   const lad = join(tmp, "lad");
   const falcon = join(root, "runtime", "bridge", "falcon");

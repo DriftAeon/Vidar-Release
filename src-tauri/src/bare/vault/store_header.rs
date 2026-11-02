@@ -10,7 +10,7 @@ use super::store::header_value;
 pub(crate) const RECALL_OFF: &str = "recall-off";
 
 /// The header key a placed runeset copy holds its switched-off slot members in, as slot tokens (`id` for
-/// the copy's own library, `library/id` otherwise): `slot-off: [a, stock/b]`. Taking a slot line out
+/// the copy's own library, `library/id` otherwise): `slot-off: [a, vidar/b]`. Taking a slot line out
 /// records its token here, so the view still lists the rune off; putting it back drops the token. Only a
 /// vault's `sets/` copy carries it; resolve reads slot lines only, so it never loads.
 pub(crate) const SLOT_OFF: &str = "slot-off";
@@ -18,7 +18,7 @@ pub(crate) const SLOT_OFF: &str = "slot-off";
 /// A header list key's entries; none when the key is absent.
 pub(super) fn header_list(bytes: &[u8], key: &str) -> Vec<String> {
     let text = String::from_utf8_lossy(bytes).replace('\r', "");
-    let Some(v) = header_value(text.trim_start_matches('\u{FEFF}'), key) else { return Vec::new() };
+    let Some(v) = header_value(crate::fsx::strip_bom(&text), key) else { return Vec::new() };
     let inner = v.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or(&v);
     inner.split(',').map(|s| s.trim().trim_matches('"').to_string()).filter(|s| !s.is_empty()).collect()
 }
@@ -47,7 +47,7 @@ pub(super) fn with_recall_off(bytes: &[u8], ids: &[String], label: &str) -> Resu
 pub(super) fn with_header_list(bytes: &[u8], key: &str, ids: &[String], label: &str) -> Result<Vec<u8>, String> {
     let text = String::from_utf8(bytes.to_vec()).map_err(|_| format!("runeset {label} copy is not UTF-8"))?;
     let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let bare = |l: &str| l.trim_end_matches(['\n', '\r']).trim_start_matches('\u{FEFF}').to_string();
+    let bare = |l: &str| crate::fsx::strip_bom(l.trim_end_matches(['\n', '\r'])).to_string();
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
     let close = match lines.first() {
         Some(l) if bare(l) == "---" => lines.iter().skip(1).position(|l| bare(l) == "---").map(|i| i + 1),

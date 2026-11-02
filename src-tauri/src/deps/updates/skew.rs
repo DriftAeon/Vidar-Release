@@ -5,6 +5,7 @@
 //! second only, so the two differ until a Falcon refresh builds a bundle on the new copy.
 //! Both versions are read from package.json files: no process spawn.
 use std::path::{Path, PathBuf};
+use crate::agent::codex::{npm_package, store_dir};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -24,7 +25,7 @@ fn read_json(path: &Path) -> Option<Value> {
 /// `version` of a Codex native package dir, only when its package.json names `@openai/codex`.
 fn package_version(dir: &Path) -> Option<String> {
     let json = read_json(&dir.join("package.json"))?;
-    if json["name"].as_str()? != "@openai/codex" { return None; }
+    if Some(json["name"].as_str()?) != npm_package() { return None; }
     let version = json["version"].as_str()?;
     (!version.is_empty() && version.len() < 100).then(|| version.to_string())
 }
@@ -40,9 +41,9 @@ pub(crate) fn hosted_version(pointer: &Path, bundles: &Path, store: &Path) -> Op
     let bundle_id = read_json(pointer)?["bundle_id"].as_str()?.to_string();
     if !plain_name(&bundle_id) { return None; }
     let manifest = read_json(&bundles.join(&bundle_id).join("runtime-manifest.json"))?;
-    let store_id = manifest["codex"]["store_id"].as_str()?;
+    let store_id = manifest[store_dir()]["store_id"].as_str()?;
     if store_id.len() != 64 || !store_id.bytes().all(|b| b.is_ascii_hexdigit()) { return None; }
-    package_version(&store.join("codex").join(store_id))
+    package_version(&store.join(store_dir()).join(store_id))
 }
 
 /// The Codex version new tabs run: the native package under the npm-global `@openai/codex`

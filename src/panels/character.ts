@@ -12,6 +12,7 @@ import { getFocusedSession, type FocusedSession } from "./sessions";
 import { watchCodexModel } from "./codex-model";
 import type { View } from "../character/view";
 import { openPopover, type ClosePopover } from "../modules/popover";
+import { errText } from "../err-text";
 
 interface SessionCharacterState {
   agent: string;
@@ -238,7 +239,7 @@ export function initCharacter(
         // A matched pack that fails to build (bad GLB, renderer error) shows the same
         // placeholder notice as an unusable one; the detail goes to the console.
         console.warn(`character ${id ?? "-"}: load failed`, error);
-        report(res.entry ? placeholderNote(res) : error instanceof Error ? error.message : String(error));
+        report(res.entry ? placeholderNote(res) : errText(error));
         setControls(!!renderer);
       }
     } finally {
@@ -332,7 +333,7 @@ export function initCharacter(
       hostSeen = true;
       // The default stage shows with no character.
       ensureArena().then((created) => created.render(), (error) => {
-        if (!disposed) report(error instanceof Error ? error.message : String(error));
+        if (!disposed) report(errText(error));
       });
       if (loadWaiting) { loadWaiting = false; void load(); }
     }

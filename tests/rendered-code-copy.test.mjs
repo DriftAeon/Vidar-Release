@@ -8,7 +8,7 @@ setupDom({
   stubs: {
     clipboard: `export function copyText(t) { (globalThis.__copied ??= []).push(t); return Promise.resolve(true); }`,
     // minimal fence parser: ```\n...(\n```)? -> <div class=doc-md><pre><code>raw</code></pre></div>
-    "panels/document": `export function renderMarkdownOrText(_n, md) {
+    "panels/markdown-build": `export function renderMarkdownOrText(_n, md) {
       const root = document.createElement("div"); root.className = "doc-md";
       const m = /\`\`\`[^\\n]*\\n([\\s\\S]*?)(\\n\`\`\`|$)/.exec(md);
       if (m) { const pre = document.createElement("pre"); const code = document.createElement("code"); code.textContent = m[1]; pre.appendChild(code); root.appendChild(pre); }
@@ -18,6 +18,7 @@ setupDom({
   },
 });
 const { createTextStream } = await import("../src/panels/rendered/text-stream.ts");
+await (await import("../src/panels/markdown-lazy.ts")).markdownReady(); // the parser loads on first use; these tests paint synchronously
 
 function mk() {
   const transcript = document.createElement("div");

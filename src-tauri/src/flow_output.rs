@@ -46,12 +46,12 @@ fn write_in(root: &Path, run_id: &str, node_id: &str, text: &str) -> Result<(), 
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("create output dir: {e}"))?;
     }
-    let tmp = path.with_extension("md.tmp");
-    fs::write(&tmp, text.as_bytes()).map_err(|e| format!("write output: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        format!("replace output: {e}")
-    })
+    crate::fsx::atomic_write_with(&path, text.as_bytes(), || Ok(()))
+        .map(|_| ())
+        .map_err(|e| match e {
+            crate::fsx::AtomicError::Rename(m) => format!("replace output: {m}"),
+            e => format!("write output: {e}"),
+        })
 }
 
 fn read_in(root: &Path, run_id: &str, node_id: &str) -> Result<Option<String>, String> {

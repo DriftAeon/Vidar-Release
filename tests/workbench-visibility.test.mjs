@@ -27,7 +27,8 @@ function view(id, mount, prefix, extra = '') {
 const dom = setupDom({ stubs: {
   prefs: `export function getPref(key) {
     return key === 'modules.hidden' ? globalThis.__workbenchVisibility.saved : undefined;
-  }`,
+  }
+  export function setPref() { return true; }`,
   ipc: 'export function getCurrentWebview() { return { onDragDropEvent() { return Promise.resolve(() => {}); } }; }',
   'modules/registry': `export const moduleListed = (id) => !globalThis.__workbenchVisibility.unlisted.has(id);
     export const onModulesChange = (fn) => {
@@ -176,6 +177,20 @@ test('optional-off refuses selection, retires listener and pending work, then re
   assert.equal(body('runelib').isConnected, true);
   assert.equal(body('lab').isConnected, true);
   await dom.flush();
+});
+
+test('a tab waiting for its Rune Vault force-reveals a hidden Runes tab and selects it', async () => {
+  bench.revealWorkbenchTab('relay');
+  assert.equal(bench.setWorkbenchTabVisibility('runelib', false), true);
+  assert.equal(bench.revealWorkbenchTab('runelib'), false, 'a plain reveal refuses the hidden tab');
+  assert.equal(control('runelib').style.display, 'none');
+  assert.equal(bench.revealRunesForPick(), true);
+  await dom.flush();
+  assert.equal(selected(), 'runelib');
+  assert.notEqual(control('runelib').style.display, 'none');
+  assert.equal(body('runelib').isConnected, true);
+  assert.equal(bench.revealRunesForPick(), true, 'a shown Runes tab just takes focus');
+  bench.revealWorkbenchTab('relay');
 });
 
 test('saved-hidden Tray selects Relay before the pane first opens while Tray stays mounted', () => {

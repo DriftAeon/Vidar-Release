@@ -31,8 +31,8 @@ test("a paths rune names its trigger's basename, or none", () => {
 });
 
 test("a vault card marks a read rune is-read and carries the reason in its tooltip", () => {
-  const set = { library: "kit", set: "kit" };
-  const mk = (id) => ({ set, library: "kit", id, kind: "fact", activate: "recall", description: "D", section: [], recall: true, body: "b", drift: false });
+  const set = { library: "installed", set: "installed" };
+  const mk = (id) => ({ set, library: "installed", id, kind: "fact", activate: "recall", description: "D", section: [], recall: true, body: "b", drift: false });
   const view = { vault: { id: "v", runesets: [{ source: set }], runes: [], lockedUtc: null }, runes: [mk("seen"), mk("unseen")], drift: [], warnings: [] };
   const root = document.createElement("div");
   root.append(...vaultModify({ view, removed: [], pending: null, busy: false, loads: loads({ runeReads: ["seen"] }),

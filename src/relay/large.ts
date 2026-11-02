@@ -6,6 +6,7 @@
 import { iconImg } from "../icon-img";
 import { sessionTitle } from "../panels/sessions/lookup";
 import { items as relayItems, type RelayItem } from "./store";
+import { span } from "../dom";
 import { createRelayStrip, type RelayStrip } from "./strip";
 import { mountRelayView, relayCurrent, relayViewState, showRelayItem } from "./view";
 
@@ -33,11 +34,6 @@ let prev: string | null = null;
  *  left bar leaves this as the only record of the tab the user came from */
 let lastFocusedId: string | null = null;
 
-function span(cls: string): HTMLElement {
-  const e = document.createElement("span");
-  e.className = cls;
-  return e;
-}
 
 function largeItem(): RelayItem | null {
   return openId === null ? null : relayItems().find((i) => i.id === openId) ?? null;

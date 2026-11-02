@@ -1,21 +1,9 @@
 /* Jira bench tab (panels/jira.ts, jira/view.ts): the Changes pane's frame (changes.css :5-7, :10-17),
    head, rows, notes, empty state and text fields, reused by class; only the Jira parts are new. */
-.jira-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
-.jira-pane [hidden] { display: none; }
-.jira-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
-
-/* bench compact buttons: the .wb-actions look at the bar size (workbench.css .wb-block .wb-actions button) */
-.jira-pane .wb-actions button {
-  box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); white-space: nowrap;
-  font-family: var(--font-ui);
-}
-.jira-pane .wb-actions button.cx-ico { width: var(--row-24); padding: 0; }
 /* Sheen Cap face (workbench.css .wb-actions > button.wb-card-btn) at the bar's 24px size; the face itself is not edited here */
 .jira-pane .cx-head .wb-actions > button.wb-card-btn, .jira-pane .jx-filters > button.wb-card-btn, .jira-pane .jx-scope > button.wb-card-btn {
   box-sizing: border-box; height: var(--row-24); min-height: 0; padding: 0 var(--space-8);
 }
-.jira-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 
 .jira-pane .cx-head { min-width: 0; overflow: hidden; gap: var(--space-8); }
 .jx-site { color: var(--fg); font-family: var(--font-mono); }

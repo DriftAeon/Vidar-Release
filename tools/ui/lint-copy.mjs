@@ -9,7 +9,7 @@
 //   attr        `setAttribute("title" | "aria-label" | "placeholder", "…")`
 //   button      first literal argument of `button(` / `btn(`, and the third argument of
 //               `button(doc, cls, "…")`
-//   html        inside any literal (and in index.html): text of <button|label|option|th|span|p|a|
+//   html        inside any literal (and in src/pages/index.html): text of <button|label|option|th|span|p|a|
 //               summary|legend|h1-6|strong|em|b> and title= / aria-label= / placeholder= values
 //   label       `"label": "…"` in contracts/*.json
 //   key         object-literal `placeholder: "…"` (dialog options); judged for Title Case too
@@ -60,10 +60,11 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { root as repoRoot } from "../lib/paths.mjs";
 import { DIM_TOKENS, SKIP_DIRS, SMALL, dimClasses, isDim, judgeNote } from "./lint-copy-note.mjs";
 export { citeOk, dimClasses, dimClassesFromCss, judgeNote, valueOnly } from "./lint-copy-note.mjs";
 
-const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 const BASELINE = join(REPO, "tools", "ui", "copy-baseline.json");
 const RULE = ".claude/rules/ui-copy.md";
 const SRC_EXT = /\.(ts|tsx|js|mjs)$/i;
@@ -444,7 +445,7 @@ function walk(dir, out = []) {
 // True when the whole-tree scan would cover this repo-relative path.
 export function covers(relPath) {
   const p = relPath.split("\\").join("/");
-  if (p === "index.html") return true;
+  if (p === "src/pages/index.html") return true;
   if (/^contracts\/[^/]+\.json$/.test(p)) return true;
   if (!p.startsWith("src/")) return false;
   const parts = p.split("/");
@@ -476,9 +477,9 @@ function collect(root, dim, noteOks = [], only = null, staged = false) {
     add(p, scanSource(src, dim, { root, file: rel(p) }));
     for (const o of noteOkLines(src)) noteOks.push({ file: rel(p), ...o });
   }
-  const html = join(root, "index.html");
-  if (!sel || sel.has("index.html")) {
-    try { const t = read(html); if (t !== null) add(html, scanHtml(t)); } catch { /* no index.html */ }
+  const html = join(root, "src/pages/index.html");
+  if (!sel || sel.has("src/pages/index.html")) {
+    try { const t = read(html); if (t !== null) add(html, scanHtml(t)); } catch { /* no src/pages/index.html */ }
   }
   let contracts = [];
   if (sel) contracts = [...sel].filter((p) => p.startsWith("contracts/")).map((p) => p.slice("contracts/".length)).sort();

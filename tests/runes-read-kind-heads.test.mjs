@@ -1,4 +1,4 @@
-// The Bare read view groups each runeset card's runes under nested kind heads (Modify keeps its flat tray).
+// The Bare vault views (read and Modify) group each runeset card's runes under nested kind heads.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -8,8 +8,8 @@ setupDom();
 const { vaultModify } = await import("../src/runes/bare/view-vault.ts");
 const kindGroups = await import("../src/runes/kind-groups.ts");
 
-const set = { library: "kit", set: "kit" };
-const m = (id, kind) => ({ set, library: "kit", id, kind, activate: "always", description: id, section: [], recall: false, body: "b", drift: false });
+const set = { library: "installed", set: "installed" };
+const m = (id, kind) => ({ set, library: "installed", id, kind, activate: "always", description: id, section: [], recall: false, body: "b", drift: false });
 const view = (runes) => ({ vault: { id: "v", runesets: [{ source: set }], runes: [], lockedUtc: null }, runes, drift: [], warnings: [] });
 function draw(runes, extra = {}) {
   const root = document.createElement("div");
@@ -25,10 +25,10 @@ const heads = (root) => [...root.querySelectorAll("details[data-kind-head]")].ma
 test("read mode: kind heads in Modify order, then KINDS order, each with its cards", () => {
   const { root, tracked } = draw([m("p", "plugin"), m("m", "mcp"), m("h", "hook"), m("s", "skill"), m("a", "agent"), m("r", "rule")], { readOnly: true });
   assert.deepEqual(heads(root), [
+    ["rule", "Rules", "1/1", "runes-set hue-rule", ["r"]],
     ["skill", "Skills", "1/1", "runes-set hue-skill", ["s"]],
     ["agent", "Agents", "1/1", "runes-set hue-agent", ["a"]],
     ["hook", "Hooks", "1/1", "runes-set hue-hook", ["h"]],
-    ["rule", "Rules", "1/1", "runes-set hue-rule", ["r"]],
     ["mcp", "MCPs", "1/1", "runes-set hue-mcp", ["m"]],
     ["plugin", "Plugins", "1/1", "runes-set hue-plugin", ["p"]],
   ]);
@@ -56,8 +56,12 @@ test("a kind group sorts on before off, then by name ignoring case; the kind gro
   assert.deepEqual(sortRunes([{ n: "b", off: true }, { n: "C", off: false }, { n: "a", off: true }, { n: "c2", off: false }], (x) => x.off, (x) => x.n).map((x) => x.n), ["C", "c2", "a", "b"]);
 });
 
-test("Modify keeps its flat tray with no kind heads", () => {
-  const { root } = draw([m("s", "skill"), m("r", "rule")]);
-  assert.equal(root.querySelectorAll("details[data-kind-head]").length, 0);
-  assert.equal(root.querySelectorAll(".runes-rn").length, 2);
+test("Modify draws the same kind heads, plain, with the rows' checkboxes inside them and the open keys shared", () => {
+  const mod = draw([m("s", "skill"), m("r", "rule")]);
+  const read = draw([m("s", "skill"), m("r", "rule")], { readOnly: true });
+  assert.deepEqual(heads(mod.root).map((h) => h.slice(0, 4)), heads(read.root).map((h) => h.slice(0, 4)));
+  assert.deepEqual(heads(mod.root).map((h) => h[0]), ["rule", "skill"]);
+  assert.equal(mod.root.querySelectorAll("details[data-kind-head] > .runes-set-head.has-check").length, 0);
+  assert.equal(mod.root.querySelectorAll("details[data-kind-head] .runes-row > .runes-check").length, 2);
+  assert.deepEqual(mod.tracked.filter(([k]) => k.startsWith("kind:")), read.tracked.filter(([k]) => k.startsWith("kind:")));
 });

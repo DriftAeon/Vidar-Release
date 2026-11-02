@@ -88,8 +88,14 @@ test("the Lock button calls rune_vault_lock with lockedBy button from the Runes 
   assert.ok(ipc.includes("rune_vault_lock"), "no rune_vault_lock IPC entry");
   assert.ok(ipc.includes("rune_vault_session"), "no rune_vault_session IPC entry");
   const panel = src("src", "panels", "runes.ts");
-  assert.match(panel, /invoke\("rune_vault_lock", \{ id, by: "button", expectHash \}\)/);
+  assert.match(src("src", "runes", "bare", "vault-io.ts"), /invoke\("rune_vault_lock", \{ id, by: "button", expectHash \}\)/);
+  assert.match(panel, /tabVaultIo\(/, "the Runes panel binds its vault calls through vault-io.ts");
   assert.ok(panel.includes("e.handle.lockButton"), "the Runes head does not seat the Lock button");
+  assert.match(panel, /actsEl\.replaceChildren\(e\.handle\.lockButton, e\.handle\.modeButton, e\.handle\.cancelButton\)/,
+    "Lock, Modify (Done) and Cancel sit in the head's acts span, in that order");
+  assert.match(panel, /shell\.head\.append\([^)]*actsEl\)/, "the acts span is the head's last child");
+  assert.ok(!/keyEl\.append\([^)]*lockButton/.test(panel), "the Key strip no longer seats the head buttons");
+  assert.match(panel, /function dropBare\([^)]*\) \{[^}]*actsEl\?\.replaceChildren\(\)/, "every non-Bare draw path clears the head buttons");
   const callers = [];
   const walk = (dir) => {
     for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
@@ -99,8 +105,8 @@ test("the Lock button calls rune_vault_lock with lockedBy button from the Runes 
     }
   };
   walk("src");
-  // L3a's launcher lock is the one other caller the plan allows; the Runes panel is the only button
-  assert.deepEqual(callers.filter((f) => f !== "src/ipc.ts" && !f.startsWith("src/launcher/")), ["src/panels/runes.ts"]);
+  // L3a's launcher lock is the one other caller the plan allows; vault-io.ts binds the Runes panel's button
+  assert.deepEqual(callers.filter((f) => f !== "src/ipc.ts" && !f.startsWith("src/launcher/")), ["src/runes/bare/vault-io.ts"]);
 });
 
 test("fixture vault.json v1 carries every contract field", () => {

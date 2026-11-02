@@ -23,7 +23,8 @@ use sha2::{Digest, Sha256};
 
 use super::local::{file, listed, readable_md, Guard, LocalEnv, LocalFile};
 use super::sources::{self, AGENTS_OVERRIDE, MAX_BYTES};
-use crate::bare::bundles::{Bundles, Mcp};
+use crate::agent_spec::Agent;
+use crate::bare::bundles::{self, Bundles, Mcp};
 
 /// The Codex home's offer, grouped by where each group sits in `local::discover`.
 #[derive(Default)]
@@ -115,8 +116,7 @@ fn agents(env: &LocalEnv, home: &Path) -> Vec<LocalFile> {
 
 /// The catalog server whose http url equals `url` and that Codex may load.
 fn catalog_match<'a>(catalog: &'a Bundles, url: &str) -> Option<&'a Mcp> {
-    let codex = |m: &Mcp| m.agents.is_empty() || m.agents.iter().any(|a| a.eq_ignore_ascii_case("codex"));
-    catalog.bundles.values().flat_map(|b| b.mcp.iter()).find(|m| codex(m) && m.http.as_ref().is_some_and(|h| h.url == url))
+    catalog.bundles.values().flat_map(|b| b.mcp.iter()).find(|m| bundles::serves(m, Agent::Codex) && m.http.as_ref().is_some_and(|h| h.url == url))
 }
 
 /// The MCP rows of `<home>\config.toml`; any read or parse failure gives none.

@@ -1,10 +1,19 @@
 // Unreal bench tab DOM. The panel owns reads and actions; this view only draws status and reports clicks.
+import { el } from "../dom";
 import { iconImg, type ColorIcon } from "../icon-img";
 import { lucide } from "../icons";
-import type { UnrealDiag, UnrealStatus } from "../ipc";
+import type { UnrealDiag, UnrealEngineChoice, UnrealEnginePin, UnrealMcpPills, UnrealStatus } from "../ipc";
+import { openPopover } from "../modules/popover";
+import { placeBelow } from "../panels/dropdown";
 import type { UnrealGroups } from "./model";
+import { buildAssetSection } from "./asset-view";
+import { pillViews, pinView } from "./pills";
 
 export interface ViewState {
+  mcp: UnrealMcpPills | null;
+  pin: UnrealEnginePin | null;
+  /** The last refusal from the pin commands; shown as an error row. */
+  pinError: string | null;
   status: UnrealStatus | null;
   groups: UnrealGroups | null;
   /** Keys of the dismissed diagnostics, so a dismiss repaints. */
@@ -19,17 +28,16 @@ interface Handlers {
   open(diag: UnrealDiag): void;
   dismiss(diag: UnrealDiag): void;
   dismissAll(diags: UnrealDiag[]): void;
+  /** Past pins, for the pin menu. */
+  pinChoices(): Promise<UnrealEngineChoice[]>;
+  /** null clears the pin. */
+  pinSet(engine: string | null): void;
+  pinPick(): void;
 }
 
 export interface View {
   root: HTMLElement;
   render(state: ViewState): void;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = cls;
-  return node;
 }
 
 type Signal = "ok" | "warn" | "alert";
@@ -42,6 +50,21 @@ function statusPart(icon: ColorIcon, label: string, detail: string, signal: Sign
   const dot = el("span", "ux-dot");
   dot.dataset.state = signal;
   part.append(dot, iconImg(icon)); // dot left, logo right: the logo lines up with the larger action buttons
+  return part;
+}
+
+/** A head chip with a visible label: the Document picker's face (.pick-face), a dot on the left when it has a signal. */
+function chip(tag: "span" | "button", label: string, tooltip: string, signal?: Signal): HTMLElement {
+  const part = el(tag, "pick-face ux-chip");
+  part.title = tooltip;
+  if (signal) {
+    const dot = el("span", "ux-dot");
+    dot.dataset.state = signal;
+    part.append(dot);
+  }
+  const text = el("span", "ux-chip-label");
+  text.textContent = label;
+  part.append(text);
   return part;
 }
 
@@ -70,9 +93,47 @@ export function buildView(handlers: Handlers): View {
   const head = el("div", "cx-head");
   const list = el("div", "cx-list");
   const empty = el("div", "cx-empty");
-  root.append(head, list, empty);
+  const notes = el("div", "cx-strip");
+  // Outside the region render() redraws, so the poll keeps its fields and results.
+  const asset = buildAssetSection();
+  root.append(head, notes, list, asset.root, empty);
 
-  function drawHead(status: UnrealStatus) {
+  /** The pin menu is mounted on body by the popover core, so a head redraw leaves it open. */
+  function openPinMenu(button: HTMLElement, pinned: boolean, current: string | null) {
+    void handlers.pinChoices().then((choices) => {
+      const menu = el("div");
+      menu.id = "flow-pick-menu"; // the shared dropdown menu look (menus.css)
+      menu.setAttribute("role", "menu");
+      menu.setAttribute("aria-label", "Engine");
+      let close: () => void = () => {};
+      const row = (text: string, active: boolean, run: () => void) => {
+        const b = el("button", active ? "display-pick-row active" : "display-pick-row");
+        b.type = "button";
+        const nm = el("span", "nm");
+        nm.textContent = text;
+        b.append(nm);
+        b.addEventListener("click", () => { close(); run(); });
+        menu.append(b);
+      };
+      for (const c of choices) {
+        const b = el("button", c.engine === current ? "display-pick-row active" : "display-pick-row");
+        b.type = "button";
+        b.title = c.engine;
+        const nm = el("span", "nm");
+        nm.textContent = `Engine ${c.engineVersion}`;
+        b.append(nm);
+        b.addEventListener("click", () => { close(); handlers.pinSet(c.engine); });
+        menu.append(b);
+      }
+      row("Choose Folder…", false, () => handlers.pinPick());
+      if (pinned) row("Clear Pin", false, () => handlers.pinSet(null));
+      close = openPopover({ el: menu, anchor: button, restoreFocus: null });
+      placeBelow(menu, button, head);
+      menu.querySelector<HTMLElement>(".display-pick-row")?.focus();
+    }).catch(console.error);
+  }
+
+  function drawHead(status: UnrealStatus, state: ViewState) {
     head.replaceChildren();
     const project = status.project;
     if (!project) return;
@@ -80,6 +141,13 @@ export function buildView(handlers: Handlers): View {
     name.textContent = project.name;
     name.title = project.uproject;
     head.append(name, el("span", "cx-grow"));
+    for (const pill of pillViews(state.mcp)) head.append(chip("span", pill.label, pill.tooltip, pill.signal));
+    const pin = pinView(state.pin);
+    const pinButton = chip("button", pin.label, pin.tooltip) as HTMLButtonElement;
+    pinButton.type = "button";
+    pinButton.setAttribute("aria-haspopup", "menu");
+    pinButton.addEventListener("click", () => openPinMenu(pinButton, pin.pinned, state.pin?.engine ?? null));
+    head.append(pinButton);
     const editorLabel = status.editor === "running" ? "Editor Running"
       : status.editor === "unclean" ? "Editor Closed Unclean" : "Editor Closed";
     const editorTip = status.editor === "unclean"
@@ -166,11 +234,22 @@ export function buildView(handlers: Handlers): View {
 
   let key = "";
   function render(state: ViewState) {
+    asset.setRoot(state.status?.project && !state.error ? state.status.project.root : null);
     const targetNames = state.status?.diags.map((diag) => handlers.target(diag)?.name ?? null);
-    const nextKey = JSON.stringify([state.status, state.error, state.rider, targetNames, state.dismissed]);
+    const nextKey = JSON.stringify([state.status, state.error, state.rider, targetNames, state.dismissed, state.mcp, state.pin, state.pinError]);
     if (nextKey === key) return;
     key = nextKey;
     head.replaceChildren();
+    notes.replaceChildren();
+    if (state.pinError && state.status?.project && !state.error) {
+      const line = el("div", "cx-note");
+      line.setAttribute("role", "alert");
+      line.append(lucide("circle-alert"));
+      const msg = el("span", "cx-note-msg");
+      msg.textContent = state.pinError;
+      line.append(msg);
+      notes.append(line);
+    }
     list.replaceChildren();
     empty.replaceChildren();
     if (state.error) {
@@ -182,14 +261,16 @@ export function buildView(handlers: Handlers): View {
     } else if (!state.status?.project) {
       empty.removeAttribute("role");
       empty.removeAttribute("title");
-      empty.append(lucide("folder", "icn cx-empty-icon"));
+      const icon = iconImg("folder");
+      icon.classList.add("cx-empty-icon");
+      empty.append(icon);
       const message = el("span", "cx-empty-title");
       message.textContent = "No Unreal Project Here"; // note-ok: plan D6 (bench-tab-plan.md)
       empty.append(message);
     } else {
       empty.removeAttribute("role");
       empty.removeAttribute("title");
-      drawHead(state.status);
+      drawHead(state.status, state);
       if (state.groups?.errors.length) list.append(drawGroup("Errors", state.groups.errors, state.rider, "warning"));
       if (state.groups?.warnings.length) list.append(drawGroup("Warnings", state.groups.warnings, state.rider));
     }

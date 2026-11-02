@@ -3,6 +3,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { readJson } from "../lib/json.mjs";
 
 const RAW_FLAGS = ["clip", "scale", "jpeg", "out"];
 
@@ -52,9 +53,6 @@ export const MASK_OFF_JS = `(() => { document.getElementById(${JSON.stringify(MA
 
 export const explorerRun = (env = process.env) => env.VIDAR_EXPLORER_RUN || null;
 
-function readJson(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
-}
 function writeJson(file, v) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(v, null, 2));

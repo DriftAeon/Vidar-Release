@@ -51,10 +51,16 @@ pub struct Loaded {
     pub rune_triggers: BTreeMap<String, String>,
     pub skills: Vec<String>,
     pub truncated: bool,
+    /// Codex only: the repo skills Vidar turned off at launch (the launch manifest's `repoSkillsOff`).
+    #[serde(rename = "repoSkillsOff", skip_serializing_if = "Vec::is_empty")]
+    pub repo_skills_off: Vec<String>,
+    /// Codex only: the trusted launch folder's `.codex` files (the launch manifest's `codexFiles`).
+    #[serde(rename = "codexFiles", skip_serializing_if = "Vec::is_empty")]
+    pub codex_files: Vec<String>,
 }
 
 pub(crate) fn none(reason: &str) -> Loaded {
-    Loaded { source: "none", reason: Some(reason.into()), files: Vec::new(), reads: Vec::new(), rune_reads: Vec::new(), rune_triggers: BTreeMap::new(), skills: Vec::new(), truncated: false }
+    Loaded { source: "none", reason: Some(reason.into()), files: Vec::new(), reads: Vec::new(), rune_reads: Vec::new(), rune_triggers: BTreeMap::new(), skills: Vec::new(), truncated: false, repo_skills_off: Vec::new(), codex_files: Vec::new() }
 }
 
 #[derive(Clone)]
@@ -198,12 +204,12 @@ fn codex_line(scan: &mut Scan, v: &Value) {
 
 fn read_line(scan: &mut Scan, line: &[u8]) {
     let has = |needle: &[u8]| line.windows(needle.len()).any(|w| w == needle);
-    let codex = has(b"\"CommandExecution\"");
-    if !codex && !has(b"\"instructions\"") && !has(b"\"nested_memory\"") && !has(b"\"tool_use\"") {
+    let exec_line = has(b"\"CommandExecution\"");
+    if !exec_line &&!has(b"\"instructions\"") && !has(b"\"nested_memory\"") && !has(b"\"tool_use\"") {
         return;
     }
     let Ok(v) = serde_json::from_slice::<Value>(line) else { return };
-    if codex { return codex_line(scan, &v) }
+    if exec_line { return codex_line(scan, &v) }
     if v["isSidechain"] == true { return }
     if v["type"] == "assistant" {
         let file_tools: Vec<&Value> = v["message"][CONTENT_KEY].as_array().into_iter().flatten()
@@ -309,7 +315,7 @@ fn run(path: &Path, scan: &mut Scan) -> std::io::Result<()> {
 }
 
 fn done(s: &Scan) -> Loaded {
-    Loaded { source: "transcript", reason: None, files: s.files.clone(), reads: s.reads.clone(), rune_reads: s.rune_reads.clone(), rune_triggers: s.rune_triggers.clone(), skills: s.skills.clone(), truncated: s.truncated }
+    Loaded { source: "transcript", reason: None, files: s.files.clone(), reads: s.reads.clone(), rune_reads: s.rune_reads.clone(), rune_triggers: s.rune_triggers.clone(), skills: s.skills.clone(), truncated: s.truncated, repo_skills_off: Vec::new(), codex_files: Vec::new() }
 }
 
 /// `<projects>\*\<sid>.jsonl`, the first folder holding it. `sid` is grammar-checked by the caller.
@@ -350,10 +356,10 @@ fn loaded_in(
             return Err(format!("invalid session id `{s}`"));
         }
     }
-    match crate::agent_spec::parse(agent) {
-        Some(crate::agent_spec::Agent::Claude) => {}
-        Some(crate::agent_spec::Agent::Codex) => return Ok(crate::bare::codex_runes_loaded::loaded(root, tab, session_id)),
-        None => return Ok(none("No Agent in This Tab")),
+    let Some(agent) = crate::agent_spec::parse(agent) else { return Ok(none("No Agent in This Tab")) };
+    match agent {
+        crate::agent_spec::Agent::Claude => {}
+        crate::agent_spec::Agent::Codex => return Ok(crate::bare::codex_runes_loaded::loaded(root, tab, session_id)),
     }
     let payload: Option<Value> = std::fs::read_to_string(sessions.join(format!("{tab}.json")))
         .ok()

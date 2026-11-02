@@ -14,16 +14,16 @@
     }
   },
   "packs": {
-    "gemini": [
+    "pi": [
       {
         "release": "1.1.0",
-        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-gemini-v1.1.0/pack-gemini-1.1.0.zip",
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-pi-v1.1.0/pack-pi-1.1.0.zip",
         "sha256": "5d2b8f0a6c4e1d3b5a7c9e1f3b5d7a9c1e3f5b7d9a1c3e5f7b9d1a3c5e7f9b1d",
         "requires": { "contract": 1, "minCore": "0.2.0" }
       },
       {
         "release": "1.0.0",
-        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-gemini-v1.0.0/pack-gemini-1.0.0.zip",
+        "url": "https://github.com/DriftAeon/Vidar-Release/releases/download/pack-pi-v1.0.0/pack-pi-1.0.0.zip",
         "sha256": "c4a6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4c6",
         "requires": { "contract": 1, "minCore": "0.1.0", "maxCore": "0.1.9" }
       }

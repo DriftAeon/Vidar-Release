@@ -2,6 +2,8 @@
 import type { FlowGraph, FlowNode } from "../flow/model";
 import type { NodeGrants, NodeModes } from "../flow/permission-mode";
 import type { MatrixFact, NodeMatrix } from "./node-matrix";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { errText } from "../err-text.ts";
 // Title Case card values for the modes a node can run in (kept here: this file loads under node --test).
 const MODE_LABELS: Record<string, string> = { default: "Default", acceptEdits: "Accept Edits", auto: "Auto" };
 // This is a field key; the paths gate counts its whole literal as a folder.
@@ -69,6 +71,6 @@ export async function flowCardDecision(
     const runId = await approve();
     return { ok: true, line: `started graph=${graphId} run=${runId}`, verdict: "approved" };
   } catch (error) {
-    return { ok: false, line: `err ${error instanceof Error ? error.message : String(error)}`, verdict: "failed" };
+    return { ok: false, line: `err ${errText(error)}`, verdict: "failed" };
   }
 }

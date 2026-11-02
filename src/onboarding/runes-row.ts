@@ -1,4 +1,4 @@
-// src\onboarding\runes-row.ts — which launcher row the First Runeset step builds for. Pure, no runtime
+// src\onboarding\runes-row.ts — which launcher row the Runeset step builds for. Pure, no runtime
 // imports, so `node --test` loads it. The row is the launcher's own Rendered Bare variant of the primary
 // agent (roster.ts BUILTIN_AGENTS: `<id>-rendered-bare`); its `key` is the Bare row key, read from the
 // rows the launcher shows, never rebuilt from a format.

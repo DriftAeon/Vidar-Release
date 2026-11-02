@@ -68,6 +68,7 @@ interface VoiceSlotModel {
 export interface VoiceCommands {
   // voice (push-to-talk)
   voice_devices: Cmd<undefined, string[]>;
+  /** A refused chord rejects with a HotkeyError (voice-hotkey-error.ts), not text. */
   voice_register: Cmd<{ chord: string }, void>;
   voice_start: Cmd<{ device: string }, void>;
   /** Transcribes through the `stt` slot, which Rust resolves from vidar.json. */

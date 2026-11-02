@@ -23,6 +23,7 @@
 import { copyFileSync, existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { root as repoRoot } from "../lib/paths.mjs";
 
 export const DEFAULT_ROOT = process.env.VIDAR_ICON_LIBRARY || resolve(defaultRepo(), "..", "..", "Claude", "icons").replaceAll("\\", "/");
 export const BRAND_FILL = "#e6e6e6";
@@ -31,7 +32,7 @@ const MANIFEST_REL = "contracts/icons.json";
 const COLOR_REL = "public/icons/color";
 
 export function defaultRepo() {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  return repoRoot();
 }
 
 export function extOf(source) {

@@ -2,12 +2,15 @@
 // last one is over 60 s old, on Refresh and after Connect; there is no interval poll (rate limits).
 // The token goes from the form to slack_connect once and is never held here. Plan:
 // docs/projects/slack/inbox-tab-plan.md. Model: slack/model.ts; DOM: slack/view.ts.
+import { errText } from "../err-text";
 import { invoke } from "../ipc";
-import type { SlackItem } from "../slack/ipc";
+import { callOrNetwork, networkError } from "../integration-call";
+import type { SlackErrorKind, SlackItem } from "../slack/ipc";
 import { copyText } from "../clipboard";
 import { laterTs, looksLikeUserToken, newestTs, sendText } from "../slack/model";
 import { SLACK_MANIFEST } from "../slack/manifest";
-import { buildView, type ErrorKind, type View, type ViewState } from "../slack/view";
+import { buildView, type View, type ViewState } from "../slack/view";
+import { hideModule } from "../modules/hidden";
 import { getPref, setPref } from "../prefs";
 import { getFocusedSession } from "./sessions/lookup";
 import { writeToSession } from "./sessions";
@@ -31,18 +34,11 @@ function draw() {
   view?.render(state);
 }
 
-function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
-type Fetched = { items: SlackItem[]; truncated: boolean } | { error: { kind: ErrorKind; message: string } };
+type Fetched = { items: SlackItem[]; truncated: boolean } | { error: { kind: SlackErrorKind; message: string } };
 
 async function fetchInbox(): Promise<Fetched> {
-  try {
-    return await invoke("slack_inbox");
-  } catch (e) {
-    return { error: { kind: "network", message: errText(e) } };
-  }
+  return callOrNetwork(() => invoke("slack_inbox"));
 }
 
 function showNotice() {
@@ -76,7 +72,7 @@ async function refresh() {
     }
   } catch (e) {
     if (mine !== seq) return;
-    state = { ...state, mode: "list", items: [], truncated: false, error: { kind: "network", message: errText(e) } };
+    state = { ...state, mode: "list", items: [], truncated: false, error: networkError(e) };
   } finally {
     if (mine === seq) loading = false;
   }
@@ -84,10 +80,7 @@ async function refresh() {
 }
 
 function hideTab() {
-  const key = "bench:slack";
-  const hidden = getPref("modules.hidden") ?? [];
-  if (hidden.includes(key)) return;
-  if (setPref("modules.hidden", [...hidden, key])) document.dispatchEvent(new document.defaultView!.CustomEvent("vidar-modules-change"));
+  hideModule("bench:slack");
 }
 
 function formFail(error: NonNullable<ViewState["formError"]>) {

@@ -10,8 +10,15 @@ import { LAB_KIND_ICONS, itemDetail, type LabLib } from "../lab/view";
 import { labItems, type LabGroup, type LabRuneItem, type LabTarget } from "../lab/items";
 import { moduleOn } from "../modules/registry";
 import claudeIcon from "../assets/claude.png";
+import { el } from "../dom";
 import openaiIcon from "../assets/openai.png";
 import type { RuneItem, RunesCatalog } from "../runes/types";
+
+import { AGENT_IDS, type AgentId } from "../agents/id";
+import { AGENTS } from "../agents/descriptor";
+
+/** The brand mark an agent's rune items carry when several agents are on. */
+const AGENT_ICON: Record<AgentId, string> = { claude: claudeIcon, codex: openaiIcon };
 
 const GROUP_NAME: Record<string, string> = { global: "Global", vidar: "Vidar" };
 
@@ -40,12 +47,6 @@ function syncRetry() {
   refreshBtn.hidden = !(catalogErr || itemErr);
 }
 
-function el(tag: string, cls: string, text?: string): HTMLElement {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 
 /** The Lab's items for the agents that are on, per library, catalog order. */
 const groups = (c: RunesCatalog): LabGroup[] => labItems(c.libraries, moduleOn);
@@ -53,9 +54,10 @@ const groups = (c: RunesCatalog): LabGroup[] => labItems(c.libraries, moduleOn);
 /** With both agents on, an item's icon names its agent (Claude or Codex); with one, the rune icon. */
 function itemIcon(it: LabRuneItem): HTMLImageElement {
   const img = iconImg(LAB_KIND_ICONS.rune);
-  if (moduleOn("claude") && moduleOn("codex")) {
-    img.src = it.target === "AGENTS.md" ? openaiIcon : claudeIcon;
-    img.title = it.target === "AGENTS.md" ? "Codex" : "Claude";
+  const id = AGENT_IDS.find((a) => AGENTS[a].instructionsFile === it.target);
+  if (id && AGENT_IDS.every(moduleOn)) {
+    img.src = AGENT_ICON[id];
+    img.title = AGENTS[id].name;
   }
   return img;
 }
@@ -108,7 +110,7 @@ async function loadItem() {
   stateEl.textContent = p ? runeName(p.rune) : "";
   if (!p) {
     const none = catalog && !groups(catalog).some((g) => g.items.length);
-    detailEl.replaceChildren(...(catalog ? [el("div", "lab-empty", none ? "No Lab Runes" : "No Suite Yet")] : []));
+    detailEl.replaceChildren(...(catalog && !none ? [el("div", "lab-empty", "No Suite Yet")] : []));
     return;
   }
   if (!visible) return; // never query while hidden

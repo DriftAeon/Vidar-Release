@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use super::scan::{Broken, Listed, Scan};
+use super::scan::{Listed, Scan};
 
 #[derive(Debug, PartialEq)]
 pub struct ReleaseSet {
@@ -34,7 +34,7 @@ fn strings(v: Option<&Value>, key: &str) -> Result<BTreeSet<String>, String> {
 
 /// `Ok(None)`: the manifest has no `set` block. `Err`: unreadable JSON or a malformed `set`.
 fn parse(text: &str) -> Result<Option<ReleaseSet>, String> {
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())?;
+    let v: Value = serde_json::from_str(crate::fsx::strip_bom(text)).map_err(|e| e.to_string())?;
     let Some(set) = v.get("set") else { return Ok(None) };
     let id = set.get("id").and_then(Value::as_str).ok_or("set.id is not a string")?;
     let included = strings(set.get("included"), "included")?;
@@ -97,44 +97,19 @@ impl ReleaseSet {
         let rows: Vec<&Listed> = s.modules.iter().chain(s.pending.iter().map(|(m, _)| m)).collect();
         // id -> broken reason for its folder.
         let mut gone: BTreeMap<String, String> = rows.iter().filter(|m| self.excludes(m)).map(|m| (m.decl.id.clone(), self.left_out())).collect();
-        for (id, _) in s.changed.values() {
+        for (id, _, _) in s.changed.values() {
             if !self.included.contains(id) || self.dropped.contains(id) {
                 gone.insert(id.clone(), self.left_out());
             }
         }
-        loop {
-            let more: Vec<(String, String)> = rows
-                .iter()
-                .filter(|m| m.decl.level != "core" && !gone.contains_key(&m.decl.id))
-                .filter_map(|m| m.decl.depends_on.iter().flatten().find(|d| gone.contains_key(*d)).map(|d| (m.decl.id.clone(), format!("Needs {d}"))))
-                .collect();
-            if more.is_empty() {
-                break;
-            }
-            gone.extend(more);
-        }
-        let mut rows_out: Vec<Broken> = rows
-            .iter()
-            .filter_map(|m| Some(Broken { folder: m.folder.clone()?, reason: gone.get(&m.decl.id)?.clone() }))
-            .collect();
-        for (folder, (id, _)) in &s.changed {
-            if let Some(reason) = gone.get(id) {
-                s.broken.retain(|b| &b.folder != folder);
-                rows_out.push(Broken { folder: folder.clone(), reason: reason.clone() });
-            }
-        }
-        s.modules.retain(|m| !gone.contains_key(&m.decl.id));
-        s.pending.retain(|(m, _)| !gone.contains_key(&m.decl.id));
-        s.changed.retain(|_, (id, _)| !gone.contains_key(id));
-        s.broken.extend(rows_out);
-        s.broken.sort_by(|a, b| a.folder.cmp(&b.folder));
+        s.drop_modules(gone);
         s.set = Some(self.id.clone());
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{contract, scan::scan};
+    use super::super::{contract, scan::{scan, Broken}};
     use super::*;
     use crate::voice_slots::pins::Store;
     use std::path::PathBuf;
@@ -152,7 +127,7 @@ mod tests {
     fn registry(root: &Path) -> Scan {
         let packs = root.join("mod-packs");
         for (id, needs) in [("extra", vec![]), ("mid", vec![]), ("child", vec!["mid"]), ("late", vec![]), ("late-needs", vec!["lab"])] {
-            let text = serde_json::json!({ "id": id, "module": { "id": id, "label": id, "level": "optional", "kind": contract().implicit_pack_module.kind, "dependsOn": needs } });
+            let text = serde_json::json!({ "id": id, "version": 1, "module": { "id": id, "label": id, "level": "optional", "kind": contract().implicit_pack_module.kind, "dependsOn": needs } });
             std::fs::create_dir_all(packs.join(id)).unwrap();
             std::fs::write(packs.join(id).join("pack.json"), text.to_string()).unwrap();
         }

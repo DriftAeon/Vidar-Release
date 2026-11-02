@@ -6,7 +6,6 @@
    No other module invokes read_config. */
 import { invoke, listen } from "./ipc";
 import type { Effort, PermissionMode } from "./agents/protocol";
-import type { Macro } from "./panels/macros";
 import type { VoiceCfg } from "./voice";
 import type { WakewordCfg } from "./panels/listen";
 import type { AgentId } from "./agents/id";
@@ -82,7 +81,6 @@ export interface VidarConfig {
   flowGridOpacity?: number;
   agents?: AgentType[];
   locations?: Location[];
-  macros?: Macro[];
   // shortcut id -> chord; only overrides of the built-in defaults are stored
   shortcuts?: Record<string, string>;
   // always filled in by Rust (defaults applied); absent only if read_config itself failed

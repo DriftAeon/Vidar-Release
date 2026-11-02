@@ -43,7 +43,6 @@
 @import "./styles/relay.css";
 @import "./styles/decision-pair.css";
 @import "./styles/title-bar.css";
-@import "./styles/loadout.css";
 @import "./styles/rail.css";
 @import "./styles/startup-updates.css";
 @import "./styles/changes.css";
@@ -60,6 +59,7 @@
 @import "./styles/empty-state.css";
 @import "./styles/release-build.css";
 @import "./styles/runes-bare.css";
+@import "./styles/vault-pick.css";
 @import "./styles/onboarding-shell.css";
 @import "./styles/onboarding-primary.css";
 @import "./styles/onboarding-workspace.css";
@@ -67,4 +67,3 @@
 @import "./styles/onboarding-modules.css";
 @import "./styles/onboarding-runes.css";
 @import "./styles/caption.css";
-@import "./styles/set-pick.css";

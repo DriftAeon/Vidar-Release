@@ -159,7 +159,7 @@ pub fn named_set_text(library: &str, set: &str, sections: &[Section], on: &[Stri
 }
 
 pub fn generate_json_text(g: &GenerateJson) -> String {
-    serde_json::to_string_pretty(g).unwrap_or_default() + "\n"
+    crate::fsx::json_pretty_text(g, true).unwrap_or_else(|_| "\n".into())
 }
 
 /// Render a checked envelope plus `meta.items`. `Err` for a library or set name outside the id grammar, or an

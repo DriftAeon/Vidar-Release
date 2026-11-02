@@ -5,6 +5,8 @@
 // document past it renders as plain text, capped at 100 000 characters.
 import { el, inertLink } from "../browser/rich";
 import type { RenderCtx, RichRenderer } from "../browser/types";
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, str, type Json } from "../json.ts";
 
 const MAX_DEPTH = 64;
 const MAX_NODES = 20_000;
@@ -14,19 +16,10 @@ class OverBudget extends Error {}
 
 interface Budget { nodes: number }
 
-type Json = Record<string, unknown>;
-
-function obj(v: unknown): Json | null {
-  return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null;
-}
-
 function kids(n: Json): unknown[] {
   return Array.isArray(n.content) ? n.content : [];
 }
 
-function str(v: unknown): string {
-  return typeof v === "string" ? v : "";
-}
 
 function attr(n: Json, name: string): unknown {
   return obj(n.attrs)?.[name];

@@ -56,7 +56,6 @@ function paint(el: HTMLElement, tint: Tint, title: string) {
 function row(labels: string[]): HTMLElement[] {
   const pills: HTMLElement[] = [];
   labels.forEach((label, i) => {
-    if (i > 0) root!.lastElementChild!.append(Object.assign(document.createElement("div"), { className: "vm-arrow" }));
     const p = document.createElement("span");
     const icon = ICON_CARDS[label];
     if (icon) { p.dataset.icon = label; p.append(iconImg(icon)); } else p.textContent = label;
@@ -104,7 +103,8 @@ function paintReply() {
  *  arrives, null when the read failed. No backend is assumed. */
 let rewriteRow: VoiceSlotStatus | null | undefined;
 
-const OPENAI_COMPAT = "voice-stock/openai-compat";
+/** The stock rewrite adapter that talks to a local model server (its module id). */
+const LOCAL_SERVER_ADAPTER = "voice-stock/openai-compat";
 
 function paintRewrite(lm: LmStatus | null) {
   const r = rewriteRow;
@@ -113,7 +113,7 @@ function paintRewrite(lm: LmStatus | null) {
   if (r.state === "empty") { paint(rewritePill, "grey", "Verbatim (Rewrite Slot Empty)"); return; }
   if (r.state !== "filled") { paint(rewritePill, "red", r.reason || (r.state === "missing" ? "Missing" : "Broken")); return; }
   // An adapter's label is quoted as written (`claude -p` stays lowercase: it is the command).
-  if (r.adapter !== OPENAI_COMPAT) { paint(rewritePill, "green", r.label || r.adapter || "Filled"); return; }
+  if (r.adapter !== LOCAL_SERVER_ADAPTER) { paint(rewritePill, "green", r.label || r.adapter || "Filled"); return; }
   if (!lm || lm.state !== "up") { paint(rewritePill, "red", lm?.detail || lm?.state || "Down"); return; }
   // The slot's model id is what the server serves, passed verbatim (openai-compat modelIds).
   const loaded = !!r.model && lm.models?.some((m) => m.id === r.model && m.state === "loaded");

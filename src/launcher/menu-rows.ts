@@ -2,7 +2,6 @@
 // two-line rows, the permission-mode labels. Split from menu.ts; imports only icon assets.
 import openaiIcon from "../assets/openai.png";
 import claudeIcon from "../assets/claude.png";
-import geminiIcon from "../assets/gemini.png";
 import piIcon from "../assets/pi.png";
 import terminalIcon from "../assets/terminal.png";
 import localIcon from "../assets/local.png";
@@ -23,8 +22,6 @@ export interface VendorMark {
 const LAUNCHER_ICONS: VendorMark[] = [
   { match: /\bcodex\b/i, icon: openaiIcon, tint: "var(--agent-codex)" },
   { match: /\bclaude\b/i, icon: claudeIcon, tint: "var(--agent-claude)" },
-  // four-point sparkle drawn by Astra Code through the Display gate (tools/tab-art/gemini.svg)
-  { match: /\bgemini\b/i, icon: geminiIcon, tint: "var(--agent-gemini)" },
   // PI_V1 from the user's CAS-Icons set, resized to 128 px; the same file also
   // backs the "Pi Playground" desktop shortcut via CAS-Icons\ico\PI_V1.ico.
   { match: /\bpi\b/i, icon: piIcon, tint: "var(--agent-pi)" },

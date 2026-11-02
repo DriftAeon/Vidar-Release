@@ -1,9 +1,14 @@
 import { invoke, listen } from "../ipc";
 import type { CodexLimits } from "../ipc";
 import type { FocusedSession } from "./sessions";
-import { prettyModel } from "../format";
-import { ago } from "../launcher/ago";
+import { agoSecs as ago, prettyModel } from "../format";
 import { dispatchCharacterStatus } from "../character/events";
+import { AGENT_IDS, unknownAgent, type AgentId } from "../agents/id";
+import { AGENTS } from "../agents/descriptor";
+
+/** Agents whose raw tab keeps a rollout the native side can read for model and meters (codex-model.ts). */
+export const READS_ROLLOUT: Record<AgentId, boolean> = { claude: false, codex: true };
+const ROLLOUT_AGENT: AgentId = AGENT_IDS.find((id) => READS_ROLLOUT[id]) ?? unknownAgent(undefined as never);
 
 // One entry per Vidar tab that has a live Claude statusline. Written by the
 // statusline script (keyed on VIDAR_TAB), watched by status.rs, which emits only when a file
@@ -24,7 +29,7 @@ const STALE_SECS = 60;
 let latest = new Map<string, TabStatus>();
 // Raw Codex tabs: written by codex-model.ts from the rollout, kept apart so a Claude `status-update`
 // (which replaces `latest` whole) cannot wipe them.
-const codexLatest = new Map<string, TabStatus>();
+const rolloutLatest = new Map<string, TabStatus>();
 let focusedTab: string | null = null;
 let compact: HTMLElement;
 let expanded: HTMLElement;
@@ -55,14 +60,14 @@ function untilStale(s: TabStatus): number {
 
 /** A raw Codex tab's rollout reading (`read_codex_limits`), or null to forget it. No model, no entry. */
 export function setCodexStatus(tab: string, payload: CodexLimits | null): void {
-  if (!payload) codexLatest.delete(tab);
+  if (!payload) rolloutLatest.delete(tab);
   else if (payload.model) {
-    codexLatest.set(tab, {
+    rolloutLatest.set(tab, {
       tab,
       age_secs: 0,
       mtime_ms: payload.observed_ms,
       payload: {
-        session_name: "Codex",
+        session_name: AGENTS[ROLLOUT_AGENT].name,
         model: { id: payload.model },
         rate_limits: { five_hour: payload.five_hour ?? undefined, seven_day: payload.seven_day ?? undefined },
       },
@@ -114,7 +119,7 @@ function setCompact(html: string) {
 function render() {
   clearTimeout(timer);
   timer = undefined;
-  const s = focusedTab ? (latest.get(focusedTab) ?? codexLatest.get(focusedTab)) : undefined;
+  const s = focusedTab ? (latest.get(focusedTab) ?? rolloutLatest.get(focusedTab)) : undefined;
   if (!s) {
     compact.dataset.tier = "idle";
     // nothing to open: the CSS hides the opener rather than leave a dead control
@@ -192,7 +197,7 @@ export async function initStatus(
   expanded = expandedEl;
   clearTimeout(timer);
   latest = new Map();
-  codexLatest.clear();
+  rolloutLatest.clear();
   focusedTab = null;
   lastCharacterStatus = "";
   compactHtml = "";

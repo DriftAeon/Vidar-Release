@@ -85,7 +85,7 @@ pub fn is_codex_launch(shell: Option<&str>, args: Option<&[String]>) -> bool {
 fn names_codex(word: &str) -> bool {
     let word = word.trim_matches(|c| c == '"' || c == '\'');
     let leaf = word.rsplit(['\\', '/']).next().unwrap_or(word).to_ascii_lowercase();
-    matches!(leaf.as_str(), "codex" | "codex.exe" | "codex.cmd" | "codex.ps1")
+    crate::agent_spec::spec(crate::agent_spec::Agent::Codex).commands.contains(&leaf.as_str())
 }
 
 #[cfg(test)]

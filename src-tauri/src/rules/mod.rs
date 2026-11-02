@@ -10,34 +10,28 @@ pub mod check;
 pub mod codex;
 pub mod context;
 pub mod generate;
-pub mod fork;
 pub mod import;
 pub mod library;
 pub mod load_history;
 pub mod loaded;
 pub mod rune;
 pub mod set;
+pub mod slug;
 
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use codex::CodexRules;
+use crate::agent_spec::Agent;
+use codex::{choose, codex_home, CodexRules};
 use library::Library;
-
-#[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum Client {
-    Claude,
-    Codex,
-}
 
 #[derive(Serialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RulesPrepared {
     /// Absolute path of the built (or last-good) file; `None` = launch without rules.
     pub file: Option<String>,
-    /// Set only for `client = codex` when there is a file.
+    /// Set only for `client = codex` when there is a file (wire name `codex`, read by `src/falcon.ts` and the launcher).
     pub codex: Option<CodexRules>,
     pub warnings: Vec<String>,
 }
@@ -47,7 +41,7 @@ fn failed(rules_dir: &Path, key: &str, mut warnings: Vec<String>, errors: Vec<St
     match build::last_good(rules_dir, key) {
         build::LastGood::Found(file) => {
             warnings.push("Launched with the last good rules for this tab.".into());
-            RulesPrepared { file: Some(file.to_string_lossy().into_owned()), codex: None, warnings }
+            RulesPrepared { file: Some(file.to_string_lossy().into_owned()), warnings, ..Default::default() }
         }
         build::LastGood::Missing => {
             warnings.push("Launched without rules: the last good build is missing.".into());
@@ -66,7 +60,7 @@ pub fn prepare_in(
     codex_home: Option<&Path>,
     key: &str,
     ids: &[String],
-    client: Client,
+    client: Agent,
 ) -> RulesPrepared {
     if ids.is_empty() {
         return RulesPrepared::default();
@@ -95,20 +89,23 @@ pub fn prepare_in(
             Ok((file, note)) => {
                 let mut warnings = built.warnings;
                 warnings.extend(note);
-                RulesPrepared { file: Some(file.to_string_lossy().into_owned()), codex: None, warnings }
+                RulesPrepared { file: Some(file.to_string_lossy().into_owned()), warnings, ..Default::default() }
             }
             Err(e) => failed(rules_dir, key, built.warnings, vec![e]),
         },
     };
-    if client == Client::Codex {
-        if let Some(file) = prepared.file.clone() {
-            let path = Path::new(&file);
-            let hash = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
-            match crate::fsx::read_text(path).map_err(|e| e.to_string()).and_then(|t| codex::choose(&t, hash, codex_home)) {
-                Ok(c) => prepared.codex = Some(c),
-                Err(e) => {
-                    prepared.file = None;
-                    prepared.warnings.push(format!("Launched without rules: Codex form failed: {e}"));
+    match client {
+        Agent::Claude => {}
+        Agent::Codex => {
+            if let Some(file) = prepared.file.clone() {
+                let path = Path::new(&file);
+                let hash = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+                match crate::fsx::read_text(path).map_err(|e| e.to_string()).and_then(|t| choose(&t, hash, codex_home)) {
+                    Ok(c) => prepared.codex = Some(c),
+                    Err(e) => {
+                        prepared.file = None;
+                        prepared.warnings.push(format!("Launched without rules: Codex form failed: {e}"));
+                    }
                 }
             }
         }
@@ -120,7 +117,7 @@ pub fn prepare_in(
 /// only because this command is sync (Tauri runs sync commands on the main thread). If it ever goes
 /// async, a mutex must wrap `prepare_in`.
 #[tauri::command]
-pub fn rules_prepare(key: String, ids: Vec<String>, client: Client) -> RulesPrepared {
+pub fn rules_prepare(key: String, ids: Vec<String>, client: Agent) -> RulesPrepared {
     if ids.is_empty() {
         return RulesPrepared::default();
     }
@@ -132,7 +129,7 @@ pub fn rules_prepare(key: String, ids: Vec<String>, client: Client) -> RulesPrep
     prepare_in(
         lib_root.as_deref(),
         &crate::paths::rules_dir(),
-        codex::codex_home().as_deref(),
+        codex_home().as_deref(),
         &key,
         &ids,
         client,
@@ -176,7 +173,7 @@ mod tests {
         }
         fn run(&self, key: &str, ids: &[&str]) -> RulesPrepared {
             let ids: Vec<String> = ids.iter().map(|s| s.to_string()).collect();
-            prepare_in(Some(&self.lib), &self.rules, None, key, &ids, Client::Claude)
+            prepare_in(Some(&self.lib), &self.rules, None, key, &ids, Agent::Claude)
         }
         fn built_files(&self) -> usize {
             std::fs::read_dir(self.rules.join("built")).map(|d| d.count()).unwrap_or(0)
@@ -358,7 +355,7 @@ mod tests {
     fn codex_client_gets_inline_value() {
         let fx = Fx::new("codex-client");
         fx.rule("core", "Core \"rule\".\n");
-        let p = prepare_in(Some(&fx.lib), &fx.rules, None, "k", &["core".to_string()], Client::Codex);
+        let p = prepare_in(Some(&fx.lib), &fx.rules, None, "k", &["core".to_string()], Agent::Codex);
         assert_eq!(p.codex, Some(CodexRules::C { value: "\"Core \\\"rule\\\".\\n\"".into() }));
         let json = serde_json::to_value(&p).unwrap();
         assert_eq!(json["codex"]["mode"], "c");

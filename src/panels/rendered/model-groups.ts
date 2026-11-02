@@ -1,14 +1,21 @@
 // Model picker grouping: which CLI model rows are "Latest" and which fold under "Legacy".
 // Pure; the status bar maps the CLI's list through it before the menu draws.
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { AGENT_IDS } from "../../agents/id.ts";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { AGENTS } from "../../agents/descriptor.ts";
 
 /** "Default (recommended)" → "Default": the CLI's display text minus its trailing hint. */
 export const menuLabel = (label: string): string => label.replace(/\s*\(recommended\)\s*$/i, "");
 
 type Parsed = { family: string; version: number[] };
 
-/** Same parse as `prettyModel` (src/format.ts): drop "claude-", "[1m]" and date stamps. */
+/** An agent's model-id prefix (descriptor `modelPrefix`), as a start-anchored pattern; empty when none has one. */
+const MODEL_PREFIX = new RegExp(`^(?:${AGENT_IDS.map((id) => AGENTS[id].modelPrefix).filter((p): p is string => p !== null).join("|")})`);
+
+/** Same parse as `prettyModel` (src/format.ts): drop the agent prefix, "[1m]" and date stamps. */
 function parseModel(id: string): Parsed | null {
-  const parts = id.toLowerCase().replace(/\[1m\]$/, "").replace(/^claude-/, "").split(/[-\s]+/)
+  const parts = id.toLowerCase().replace(/\[1m\]$/, "").replace(MODEL_PREFIX, "").split(/[-\s]+/)
     .filter((p) => p && !/^\d{8}$/.test(p));
   if (!parts.length || !/^[a-z]/.test(parts[0])) return null;
   const version = parts.slice(1).filter((p) => /^\d+$/.test(p)).map(Number);

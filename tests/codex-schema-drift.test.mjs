@@ -4,11 +4,16 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { KNOWN_NOTIFICATIONS, REFUSALS, SERVER_REQUESTS, UNSUPPORTED } from "../src/agents/codex-methods.ts";
 import { contract, diffMethods, GROUPS } from "../tools/codex-schema/manifest.mjs";
+import { fileURLToPath } from "node:url";
 import { missingInputs, guard } from "./helpers/optional-input.mjs";
 
 const skipValidate = missingInputs(import.meta.url, "../tools/codex-schema/validate.mjs");
 const { assertSupported, matches } = skipValidate ? {} : await import("../tools/codex-schema/validate.mjs");
 const testV = guard(test, skipValidate);
+// called.mjs is dev-only (export-ignored), like validate.mjs.
+const skipCalled = missingInputs(import.meta.url, "../tools/codex-schema/called.mjs");
+const { calledMethods } = skipCalled ? {} : await import("../tools/codex-schema/called.mjs");
+const testC = guard(test, skipCalled);
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const manifest = JSON.parse(read("../tools/codex-schema/manifest.json"));
@@ -131,6 +136,12 @@ testV("trimming keeps validation and data names, pruning descriptions and unreac
   assert.equal(matches(trimmed, { description: "accept" }), false);
   assert.equal(JSON.stringify(contract(trimmed)), JSON.stringify(trimmed));
   assert.throws(() => contract({ $ref: "#/definitions/Absent" }), /Unresolved/);
+});
+
+testC("the pinned `called` list is the client requests Vidar's sources quote, and every method has a shape", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  assert.deepEqual(manifest.called, calledMethods(root, names(manifest.clientRequests)), refresh);
+  for (const group of GROUPS) assert.deepEqual(Object.keys(manifest.shapes[group]).sort(), names(manifest[group]), `${group} shapes; ${refresh}`);
 });
 
 test("refresh diff distinguishes additions, removals, contract changes and possible renames", () => {

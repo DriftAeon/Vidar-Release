@@ -2,6 +2,7 @@
 // listen.ts can mark a wake-word transcript without pulling the dictation service into the entry
 // chunk). Uses only session helpers.
 import { hasOpenMessage, markMessageOpen, renderedBody, sessionKind } from "./panels/sessions";
+import { isAgentId, PTY_ONLY_IDS } from "./agents/id";
 
 // A model that knows a line was dictated can read through the garble; without
 // the marker it treats "sauce-tori-sauce-openup.is" as the user's own spelling
@@ -23,7 +24,7 @@ const MARK = "[Voice] ";
 export function markVoice(target: string, text: string): string {
   const k = sessionKind(target);
   if (k?.body === "rendered") return renderedBody(target)?.draft().trim() === "" ? MARK + text : text;
-  const spoken = k?.body === "terminal" && (k.agent === "claude" || k.agent === "codex" || k.agent === "gemini" || k.agent === "pi");
+  const spoken = k?.body === "terminal" && (isAgentId(k.agent) || (PTY_ONLY_IDS as readonly string[]).includes(k.agent));
   if (!spoken) return text;
   const first = !hasOpenMessage(target);
   markMessageOpen(target);

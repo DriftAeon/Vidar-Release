@@ -8,9 +8,8 @@ use std::time::{Duration, Instant};
 
 /// The gap between two sends.
 pub const SLOT: Duration = Duration::from_millis(350);
-/// Hold bounds in seconds; a missing or unreadable wait holds the minimum.
-pub const HOLD_MIN_SECS: u64 = 1;
-pub const HOLD_MAX_SECS: u64 = 600;
+/// Hold bounds come from `net::hold`; a missing or unreadable wait holds the minimum.
+pub use crate::net::{ceil_secs, HOLD_MAX_SECS, HOLD_MIN_SECS};
 
 pub trait Clock: Send + Sync {
     fn now(&self) -> Instant;
@@ -111,11 +110,6 @@ impl Pacer {
         let now = self.clock.now();
         self.lock().hold_until.is_some_and(|until| until > now)
     }
-}
-
-/// Whole seconds, rounded up, at least 1.
-fn ceil_secs(d: Duration) -> u64 {
-    (d.as_secs() + u64::from(d.subsec_nanos() > 0)).max(1)
 }
 
 /// The one pacer every live command shares.

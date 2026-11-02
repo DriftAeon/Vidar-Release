@@ -1,22 +1,22 @@
 // Kind heads for the Runes read view: a runeset card's runes grouped under nested set heads, one per kind, the
-// same `details.runes-set hue-<kind>` + `setHead` shape Modify's tick lists use (bare/set-attach.ts). Pure
-// grouping plus the one DOM shell; each caller keeps its own open-state tracking.
+// same `details.runes-set hue-<kind>` + `setHead` shape the Generate Runes file lists use (bare/view-files.ts, which
+// takes its names and hues from here). Pure grouping plus the one DOM shell; each caller keeps its own open-state tracking.
 import { setHead } from "./set-card";
 import { KIND_ICON, KIND_NAME, KINDS } from "./kind-icons";
 import { titleWords } from "../format";
 
+// PINNED kinds sit above every other head: the user's pick on 2026-10-30 (Rules first, against their own earlier
+// advice), kept as an override list so Facts can join later without reordering the rest.
+const PINNED = ["rule"];
 // Modify's order (skills, agents, hooks), then the other kinds as KINDS lists them
 const FIRST = ["skill", "agent", "hook"];
-const ORDER = [...FIRST, ...Object.keys(KINDS).filter((k) => !FIRST.includes(k))];
-// Modify's head names (set-attach.ts, view-files.ts), plurals of KIND_NAME for the kinds it does not head
-const PLURAL: Readonly<Record<string, string>> = {
-  skill: "Skills", agent: "Agents", hook: "Hooks", mcp: "MCPs", rule: "Rules", fact: "Facts", procedure: "Procedures",
-  permission: "Permissions", plugin: "Plugins", "output-style": "Output Styles", model: "Models",
-};
+const ORDER = [...PINNED, ...FIRST.filter((k) => !PINNED.includes(k)), ...Object.keys(KINDS).filter((k) => !PINNED.includes(k) && !FIRST.includes(k))];
 // kinds with a colour token (runes.css `.runes-set.hue-<kind>`); the rest stay grey
 const HUED = new Set(["skill", "agent", "hook", "mcp", "rule", "plugin"]);
 
-export const kindHeadName = (kind: string): string => PLURAL[kind] ?? `${KIND_NAME[kind] ?? titleWords(kind)}s`;
+/** A kind group's head: the kind's plural (kind-icons.ts), as Modify's heads read (Skills, MCPs). */
+export const kindHeadName = (kind: string): string =>
+  KINDS[kind]?.plural ?? `${KIND_NAME[kind] ?? titleWords(kind)}s`.replace(/([^aeiou])ys$/i, "$1ies");
 export const kindHue = (kind: string): string => (HUED.has(kind) ? `hue-${kind}` : "hue-none");
 
 /** Within a kind group: loaded (on) before off, then by display name, case-insensitive; stable for ties. */

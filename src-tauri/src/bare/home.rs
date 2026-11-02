@@ -259,6 +259,29 @@ pub struct SettingsExtras {
     pub output_style: Option<super::rune_items::OutputStyle>,
     /// The vault's model rune, as top-level `model` (the session's default model).
     pub model: Option<String>,
+    /// The built-in switches (`builtin_off::settings_keys`): top-level keys the setting file already holds, set to
+    /// the vault's values.
+    pub builtin: Vec<(&'static str, Value)>,
+}
+
+/// The refusal for a setting file without a key its agent needs (a vault locked before the key was required).
+fn lacks_key() -> String {
+    "This locked vault predates a required setting; start a new Rune Vault.".to_string()
+}
+
+/// A Claude setting file (`path`, rune `id`) holds every key in `keys`.
+pub fn check_settings_keys(_id: &str, path: &Path, keys: &[&str]) -> Result<(), String> {
+    let text = crate::fsx::read_text(path).map_err(|e| format!("Bare settings template {}: {e}", path.display()))?;
+    let doc: Value = serde_json::from_str(crate::fsx::strip_bom(&text)).map_err(|e| format!("Bare settings template {}: {e}", path.display()))?;
+    let obj = doc.as_object().ok_or_else(|| format!("Bare settings template {}: not a JSON object", path.display()))?;
+    keys.iter().find(|k| !obj.contains_key(**k)).map_or(Ok(()), |_| Err(lacks_key()))
+}
+
+/// A Codex config file (`path`, rune `id`) holds every key in `keys` (dotted for a table's key).
+pub fn check_config_keys(_id: &str, path: &Path, keys: &[&str]) -> Result<(), String> {
+    let text = crate::fsx::read_text(path).map_err(|e| format!("Bare Codex template {}: {e}", path.display()))?;
+    let doc = parse_toml_lite(crate::fsx::strip_bom(&text)).map_err(|e| format!("Bare Codex template {}: {e}", path.display()))?;
+    keys.iter().find(|k| !doc.iter().any(|(n, _)| n == **k)).map_or(Ok(()), |_| Err(lacks_key()))
 }
 
 /// `generate_settings` plus a launch's `extras`. The file is written only when its bytes differ;
@@ -289,7 +312,7 @@ pub fn generate_settings_with(
         t.insert("outputStyle".into(), Value::String(style.name.clone()));
     }
     if let (Some(m), Some(t)) = (&extras.model, template.as_object_mut()) { t.insert("model".into(), Value::String(m.clone())); }
-    let bytes = serde_json::to_vec_pretty(&generated).map_err(|e| e.to_string())?;
+    let bytes = crate::fsx::json_pretty_bytes(&generated, false)?;
     if std::fs::read(target).ok().as_deref() != Some(bytes.as_slice()) {
         crate::fsx::atomic_write(target, &bytes).map_err(|e| format!("Bare settings {}: {e}", target.display()))?;
     }
@@ -323,6 +346,9 @@ fn apply_extras(settings: &mut Value, extras: &SettingsExtras) -> Result<(), Str
         obj.insert("outputStyle".into(), Value::String(style.name.clone()));
     }
     if let Some(m) = &extras.model { obj.insert("model".into(), Value::String(m.clone())); }
+    for (key, value) in &extras.builtin {
+        obj.insert((*key).into(), value.clone());
+    }
     Ok(())
 }
 
@@ -532,10 +558,6 @@ fn fill_placeholders(text: &str, values: &[(&str, String)]) -> String {
     out
 }
 
-/// The vidar-drive server's `env_vars`, by name only: the in-process tab's control token, and the
-/// session id and secret Falcon pushes for a hosted tab (`tools/control/client.mjs` reads either).
-pub const CTL_ENV_VARS: &[&str] = &["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_CTL_SECRET"];
-
 /// The parsed-back Codex config: the template's keys exactly, the isolation keys at their bare
 /// values, `developer_instructions` = the payload, `notify`
 /// ending in the repo's `tools\desks\codex-notify.ps1` by absolute path, and no user-profile path
@@ -577,7 +599,7 @@ pub(crate) fn trusted_project_table(key: &str) -> String {
 /// other `projects.*` key; when `None`, any `projects.*` key refuses. Test-only: the generator
 /// validates through `validate_codex_with`.
 #[cfg(test)]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // forwards to validate_codex_with with the default hook trust
 pub fn validate_codex_for(doc: &TomlDoc, template: &TomlDoc, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, trusted: Option<&str>, mcp: &McpTables) -> Result<(), String> {
     validate_codex_with(doc, template, root, home, pwsh, payload, guard, trusted, mcp, &HookTrust::default())
 }
@@ -696,35 +718,9 @@ pub fn validate_codex_with(doc: &TomlDoc, template: &TomlDoc, root: &Path, home:
                 && matches!(argv.last(), Some(Toml::Str(s)) if s.ends_with(notify_script) && Path::new(s).is_absolute()) => {}
         _ => return Err(format!("{L}: notify must be the template's argv ending in an absolute codex-notify.ps1")),
     }
-    // The stock vidar-drive rune adds this pinned table only for vaults that carry it. Its
-    // env_vars name the control identity; no token value is written into the table or argv.
-    // The vault's other MCP tables are compared against exactly what the launch wrote.
-    let hosted_keys = extra.clone();
-    let is_hosted = |k: &String| hosted_keys.contains(k);
-    if doc.iter().any(|(k, _)| k.starts_with("mcp_servers.") && !is_hosted(k)) {
-        const T: &str = "mcp_servers.vidar_drive.";
-        let server = format!("{root_s}\\tools\\mcp\\vidar-drive\\server.mjs");
-        let mcp_pins = [
-            ("command", Toml::Str("node".into())),
-            ("args", Toml::Array(vec![Toml::Str(server)])),
-            ("env_vars", Toml::Array(CTL_ENV_VARS.iter().map(|v| Toml::Str((*v).into())).collect())),
-            ("tool_timeout_sec", Toml::Int(3700)),
-        ];
-        for (k, _) in doc.iter().filter(|(k, _)| k.starts_with("mcp_servers.") && !is_hosted(k)) {
-            match k.strip_prefix(T) {
-                Some(f) if mcp_pins.iter().any(|(n, _)| *n == f) => {}
-                Some(_) => return Err(format!("{L}: {k} is not a pinned vidar_drive key; spawn refused")),
-                None => return Err(format!("{L}: {k}: only mcp_servers.vidar_drive is allowed; spawn refused")),
-            }
-        }
-        for (f, want) in &mcp_pins {
-            let k = format!("{T}{f}");
-            if get(&k) != Some(want) {
-                return Err(format!("{L}: {k} must be {want:?}; spawn refused"));
-            }
-        }
-    }
+    // Every MCP table (vidar_drive's included) is compared against exactly what the launch wrote.
     codex_mcp::check(doc, mcp)?;
+    let hosted_keys = extra.clone();
     let mut all: Vec<&str> = Vec::new();
     let mut instr: Vec<&str> = Vec::new();
     fn walk<'a>(v: &'a Toml, out: &mut Vec<&'a str>) {
@@ -773,7 +769,7 @@ pub fn generate_codex_config(template_path: &Path, target: &Path, root: &Path, h
 /// `generate_codex_config` plus a trusted `[projects]` entry for the launch folder `cwd` (Codex
 /// would otherwise ask about trusting it at every start, since this file is rewritten per launch).
 #[cfg(test)]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // forwards to generate_codex_config_with with the default hook trust
 pub fn generate_codex_config_for(template_path: &Path, target: &Path, root: &Path, home: &Path, pwsh: &Path, payload: &str, guard: &Guard, cwd: Option<&str>, mcp: &McpTables) -> Result<(), String> {
     generate_codex_config_with(template_path, target, root, home, pwsh, payload, guard, cwd, mcp, &HookTrust::default(), None)
 }
@@ -889,8 +885,7 @@ pub fn mirror_claude_seen(normal: &Path, bare: &Path) -> Result<bool, String> {
         }
     }
     if changed {
-        let bytes = serde_json::to_vec_pretty(&to).map_err(|e| format!("{}: {e}", bare.display()))?;
-        crate::fsx::atomic_write(bare, &bytes).map_err(|e| format!("{}: {e}", bare.display()))?;
+        crate::fsx::write_json_pretty(bare, &to, false).map_err(|e| format!("{}: {e}", bare.display()))?;
     }
     Ok(changed)
 }
@@ -943,8 +938,7 @@ pub fn seed_claude_json(legacy: &Path, combo: &Path) -> Result<bool, String> {
         }
     }
     if changed {
-        let bytes = serde_json::to_vec_pretty(&Value::Object(to)).map_err(|e| format!("{}: {e}", combo.display()))?;
-        crate::fsx::atomic_write(combo, &bytes).map_err(|e| format!("{}: {e}", combo.display()))?;
+        crate::fsx::write_json_pretty(combo, &Value::Object(to), false).map_err(|e| format!("{}: {e}", combo.display()))?;
     }
     Ok(changed)
 }
@@ -1179,7 +1173,7 @@ mod tests {
     }
 
     fn template() -> PathBuf {
-        crate::paths::root().join("profiles").join("bare").join("claude.settings.template.json")
+        crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("claude-settings.json")
     }
 
     #[test]
@@ -1407,7 +1401,7 @@ mod tests {
     }
 
     fn codex_template() -> PathBuf {
-        crate::paths::root().join("profiles").join("bare").join("codex.config.template.toml")
+        crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("codex-config.toml")
     }
 
     const PAYLOAD: &str = "Line one with \"quotes\" and a back\\slash.\nVIDAR-PAYLOAD-0123456789ab\n";
@@ -1702,64 +1696,6 @@ mod tests {
     }
 
     #[test]
-    fn the_vidar_drive_mcp_table_is_pinned_and_any_other_refuses() {
-        let (root, home) = (Path::new(r"D:\vidar"), Path::new(r"D:\vidar\runtime\homes"));
-        let notify = Toml::Array(vec![Toml::Str(PWSH.into()), Toml::Str(r"D:\vidar\tools\desks\codex-notify.ps1".into())]);
-        let ctl = |names: &[&str]| Toml::Array(names.iter().map(|n| Toml::Str((*n).into())).collect());
-        let mut base: TomlDoc = vec![
-            ("project_doc_max_bytes".into(), Toml::Int(0)),
-            ("project_root_markers".into(), Toml::Array(vec![])),
-            ("developer_instructions".into(), Toml::Str("p".into())),
-            ("notify".into(), notify),
-            ("skills.include_instructions".into(), Toml::Bool(false)),
-            ("windows.sandbox".into(), Toml::Str("unelevated".into())),
-            ("sandbox_mode".into(), Toml::Str("workspace-write".into())),
-            ("suppress_unstable_features_warning".into(), Toml::Bool(true)),
-            ("cli_auth_credentials_store".into(), Toml::Str("file".into())),
-            ("mcp_oauth_credentials_store".into(), Toml::Str("file".into())),
-            ("sandbox_workspace_write.writable_roots".into(), Toml::Array(vec![])),
-            ("sandbox_workspace_write.network_access".into(), Toml::Bool(false)),
-            ("sandbox_workspace_write.exclude_tmpdir_env_var".into(), Toml::Bool(true)),
-            ("sandbox_workspace_write.exclude_slash_tmp".into(), Toml::Bool(true)),
-            ("features.daemon_auto_start".into(), Toml::Bool(false)),
-            ("features.prefer_mxc".into(), Toml::Bool(true)),
-        ];
-        let server = Toml::Array(vec![Toml::Str(r"D:\vidar\tools\mcp\vidar-drive\server.mjs".into())]);
-        base.extend([
-            ("mcp_servers.vidar_drive.command".into(), Toml::Str("node".into())),
-            ("mcp_servers.vidar_drive.args".into(), server),
-            ("mcp_servers.vidar_drive.env_vars".into(), ctl(&["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_CTL_SECRET"])),
-            ("mcp_servers.vidar_drive.tool_timeout_sec".into(), Toml::Int(3700)),
-        ]);
-        validate_codex(&base, &base, root, home, pwsh(), "p", &guard()).unwrap();
-        let with = |k: &str, v: Toml| -> TomlDoc { base.iter().map(|(n, x)| (n.clone(), if n == k { v.clone() } else { x.clone() })).collect() };
-        for (k, v) in [
-            ("command", Toml::Str("pwsh".into())),
-            ("args", Toml::Array(vec![Toml::Str(r"C:\elsewhere\tools\mcp\vidar-drive\server.mjs".into())])),
-            ("args", Toml::Array(vec![Toml::Str(r"D:\vidar\tools\mcp\vidar-drive\server.mjs".into()), Toml::Str("--x".into())])),
-            ("env_vars", ctl(&["VIDAR_CTL_TOKEN", "FALCON_SESSION", "VIDAR_CTL_SECRET", "PATH"])),
-            // The in-process token alone: a hosted tab would lose its control identity.
-            ("env_vars", ctl(&["VIDAR_CTL_TOKEN"])),
-            ("env_vars", ctl(&["VIDAR_CTL_TOKEN", "VIDAR_CTL_SECRET", "FALCON_SESSION"])),
-            ("env_vars", Toml::Array(vec![])),
-            ("tool_timeout_sec", Toml::Int(60)),
-        ] {
-            let k = format!("mcp_servers.vidar_drive.{k}");
-            let d = with(&k, v.clone());
-            assert!(validate_codex(&d, &d, root, home, pwsh(), "p", &guard()).unwrap_err().contains(&k), "{k} = {v:?} passed");
-        }
-        // A missing pinned key, an extra key in the table, or another server refuses.
-        let partial: TomlDoc = base.iter().filter(|(k, _)| k != "mcp_servers.vidar_drive.tool_timeout_sec").cloned().collect();
-        assert!(validate_codex(&partial, &partial, root, home, pwsh(), "p", &guard()).unwrap_err().contains("tool_timeout_sec"));
-        let mut env = base.clone();
-        env.push(("mcp_servers.vidar_drive.env".into(), Toml::Str("x".into())));
-        assert!(validate_codex(&env, &env, root, home, pwsh(), "p", &guard()).unwrap_err().contains("not a pinned"));
-        let mut other = base.clone();
-        other.push(("mcp_servers.other.command".into(), Toml::Str("node".into())));
-        assert!(validate_codex(&other, &other, root, home, pwsh(), "p", &guard()).unwrap_err().contains("only mcp_servers.vidar_drive"));
-    }
-
-    #[test]
     fn a_root_placeholder_in_the_payload_is_filled() {
         let t = TempDir::new("codex-gen-root");
         let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
@@ -1804,10 +1740,12 @@ mod tests {
         let mcp = |name: &str, http: Option<&str>, args: &[&str]| Mcp {
             name: name.into(),
             http: http.map(|u| Http { url: u.into(), oauth: None }),
-            stdio: http.is_none().then(|| Stdio { command: "p4mcp-server".into(), args: args.iter().map(|a| a.to_string()).collect(), env_from: vec!["P4USER".into()] }),
+            stdio: http.is_none().then(|| Stdio { command: "p4mcp-server".into(), args: args.iter().map(|a| a.to_string()).collect(), env_from: vec!["P4USER".into()], env_pass: Vec::new() }),
             agents: Vec::new(),
             reads: Reads::Names(Vec::new()),
             optional: false,
+            approval: None,
+            timeout_sec: None,
         };
         // P4USER is the account name: a value Vidar wrote from the env, not a leak.
         let env = |k: &str| (k == "P4USER").then(|| "testuser".to_string());

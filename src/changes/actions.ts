@@ -1,13 +1,17 @@
 // Changes tab IPC: the changes_* commands (src-tauri/src/changes.rs). Every call takes the repo
 // root the caller captured at click time, never a fresh read of the focused tab.
 import { invoke } from "../ipc";
-import type { ChangesCommitResult, ChangesStatus, ChangesSyncResult, P4Status } from "../ipc";
+import type { ChangesCommitResult, ChangesStatus, ChangesSyncResult, P4Status, UnrealAssetDiff } from "../ipc";
 
 export type ActVerb = "stage" | "unstage" | "revert";
 export type SyncMode = "sync" | "pull" | "push";
 
 export function readP4Status(cwd: string): Promise<P4Status> {
   return invoke("changes_p4_status", { cwd });
+}
+
+export function readAssetDiff(root: string, path: string, staged: boolean): Promise<UnrealAssetDiff> {
+  return invoke("unreal_asset_diff", { cwd: root, path, staged });
 }
 
 export function readStatus(cwd: string): Promise<ChangesStatus> {
@@ -30,7 +34,3 @@ export function renameBranch(root: string, name: string): Promise<void> {
   return invoke("changes_rename_branch", { cwd: root, name });
 }
 
-/** A rejected invoke carries the backend's String error; shown exactly as it came. */
-export function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}

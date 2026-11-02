@@ -4,10 +4,21 @@
 //! Jira (through `jira/http.rs`) consume it.
 
 pub mod deadline;
+pub mod error;
+pub mod hold;
 pub mod https;
+pub mod text;
+pub mod tiers;
+pub mod token;
+pub mod transport;
 
 pub use deadline::{with_deadline, Elapsed};
+pub use error::{send_error, timeout_message, Answer, ApiError, NetKind};
+pub use hold::{ceil_secs, RateHold, HOLD_MAX_SECS, HOLD_MIN_SECS};
 pub use https::{send, Limits, Reply, Request, SendError};
+pub use text::{clean_redacted, pct};
+pub use token::{printable, TOKEN_MAX_BYTES};
+pub use transport::{Live, Transport};
 
 /// Text that must not leak into `{:?}`, logs or error strings. Debug prints `Secret(***)`;
 /// there is no Display.

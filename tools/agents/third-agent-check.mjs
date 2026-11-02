@@ -12,10 +12,11 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { root as repoRoot } from "../lib/paths.mjs";
 import { gather } from "./key-words.mjs";
 import { enumsOf, lex } from "./rust-keys.mjs";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const ROOT = repoRoot();
 const FIXTURE = join(ROOT, "tests", "fixtures", "third-agent-tables.json");
 const norm = (p) => p.replaceAll("\\", "/").replace(/^\.\//, "");
 const siteKey = (s) => `${s.file}\0${s.kind}\0${s.anchor ?? s.lines?.join("-")}`;
@@ -45,6 +46,17 @@ function tsBlocks(src) {
     const c = src[i], n = src[i + 1];
     if (c === "/" && n === "/") { i = src.indexOf("\n", i + 2); if (i < 0) break; continue; }
     if (c === "/" && n === "*") { i = src.indexOf("*/", i + 2) + 1; if (i === 0) break; continue; }
+    if (c === "/" && /[(,=:[!&|?{};]$|^$/.test(src.slice(Math.max(0, i - 40), i).trimEnd().slice(-1))) {
+      // a regex literal: its quotes and braces are not source structure
+      let inClass = false;
+      for (i++; i < src.length && src[i] !== "\n"; i++) {
+        if (src[i] === "\\") { i++; continue; }
+        if (src[i] === "[") inClass = true;
+        else if (src[i] === "]") inClass = false;
+        else if (src[i] === "/" && !inClass) break;
+      }
+      continue;
+    }
     if (c === '"' || c === "'" || c === "`") {
       const q = c;
       for (i++; i < src.length; i++) { if (src[i] === "\\") { i++; continue; } if (src[i] === q) break; }
@@ -63,7 +75,15 @@ function tsSite(src, file, line, col, code) {
   const blocks = tsBlocks(src).filter((b) => b.start <= pos && pos <= b.end).sort((a, b) => a.end - a.start - (b.end - b.start));
   const switchBlock = blocks.find((b) => /\bswitch\s*\([^)]*\)\s*$/.test(src.slice(Math.max(0, b.start - 200), b.start)));
   const recordBlock = blocks.find((b) => /\bRecord\s*<[^>]+>[\s\S]*?=\s*$/.test(src.slice(Math.max(0, b.start - 300), b.start)) || pos === b.start);
-  const block = Number(code) === 2345 ? switchBlock : recordBlock ?? switchBlock;
+  // TS reports a missing key outside the literal: at the declared name of `NAME: Record<AgentId, T> = {...}` (or a
+  // `[A in AgentId]` mapped annotation), or at the `satisfies` keyword of `{...} satisfies Record<AgentId, T>`.
+  const declLiteral = () => {
+    const m = /^[\w$]+\s*:\s*(?:[^;]|;(?!\s*\n)){0,200}?(?:\bRecord\s*<|\[\s*\w+\s+in\s+AgentId\s*\])(?:[^;]|;(?!\s*\n)){0,200}?[>}]\s*=\s*\{/.exec(src.slice(pos, pos + 500));
+    if (m) return tsBlocks(src).find((b) => b.start === pos + m[0].length - 1);
+    if (/^satisfies\s+Record\s*</.test(src.slice(pos, pos + 40))) return tsBlocks(src).find((b) => b.end <= pos && /^\s*$/.test(src.slice(b.end, pos)));
+    return undefined;
+  };
+  const block = Number(code) === 2345 ? switchBlock : recordBlock ?? switchBlock ?? (Number(code) === 2741 ? declLiteral() : undefined);
   if (!block) return null;
   const start = Number(code) === 2345 ? src.lastIndexOf("switch", block.start) : block.start;
   const startLine = lineOf(src, start), startCol = start - src.lastIndexOf("\n", start);
@@ -128,8 +148,9 @@ export function compareSites(expected, actual) {
   return { missing: sortSites([...want].filter(([k]) => !got.has(k)).map(([, s]) => s)), extra: sortSites([...got].filter(([k]) => !want.has(k)).map(([, s]) => s)) };
 }
 
+/** Forced keys and St-arm keys (their arm is forced) that sit outside every compiler error site. */
 export function forcedOutside(entries, sites) {
-  return entries.filter((e) => e.forced && !sites.some((s) => s.file === e.file && e.line >= s.lines[0] && e.line <= s.lines[1] && ((e.lang === "rs") === (s.kind === "rust-match"))));
+  return entries.filter((e) => (e.forced || e.st === "arm") &&!sites.some((s) => s.file === e.file && e.line >= s.lines[0] && e.line <= s.lines[1] && ((e.lang === "rs") === (s.kind === "rust-match"))));
 }
 
 export function fixtureDiff(oldDoc, sites) {

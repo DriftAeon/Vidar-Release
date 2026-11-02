@@ -688,7 +688,7 @@ pub(crate) fn codex_session(tag: &str) -> (TempJournalDir, Arc<Session>) {
         profile: None,
         payload_file: None, mcp_file: None,
         row_key: None, sets: None,
-        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
     };
     let driver = AgentDriver::codex(&params);
     if let AgentDriver::Codex(codex) = &driver {
@@ -708,7 +708,7 @@ fn adopting_during_codex_history_sees_the_outcome_before_live_output() {
         model: None, effort: None, permission_mode: "default".into(),
         resume: Some("thread-1".into()), ctl_secret: None, rules_file: None,
         tab_name: None, gateway: None, profile: None, payload_file: None, mcp_file: None, row_key: None, sets: None,
-        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+        set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
     };
     let session = new_session(
         &reservation, "codex", params.cwd.clone(), params.resume.clone(),

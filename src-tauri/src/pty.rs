@@ -91,47 +91,10 @@ fn size(rows: u16, cols: u16) -> PtySize {
     PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }
 }
 
-// Child processes inherit Vidar's environment, and Vidar may itself have been
-// launched FROM an agent's tool shell (tools\release\swap-release.ps1 run by a Claude
-// or Codex session). Those shells mark themselves so tool output comes back
-// plain: Claude exports NO_COLOR=1 plus its child-session markers; Codex's
-// exec sandbox sets TERM=dumb and a blank COLORTERM (a
-// Claude resumed from a Codex-launched Vidar came up in an all-white tab, because
-// the child inherits its caller's env and only NO_COLOR was scrubbed).
-//
-// A terminal emulator's sessions must look like a fresh top-level shell, not
-// like children of whatever happened to start the app. Scrubbed, not overridden:
-// removing these restores normal detection rather than forcing colour on — a
-// real Windows Terminal tab has neither TERM nor COLORTERM set, and chalk's
-// detector picks truecolor on win32 once TERM=dumb is out of the way.
-// Shared with agent.rs (the sidecar spawn). Codex's own markers (CODEX_CI,
-// CODEX_SESSION_ID, CODEX_SANDBOX_*) also ride through; left alone until what a
-// resumed codex does with them is known. VIDAR_ROOT is scrubbed like VIDAR_CTL_TOKEN:
-// spawn_pty sets its own after the scrub, and nothing else should inherit a stale one
-// (an adopted shell, the sidecar, the Falcon host, a Vidar started from a Vidar tab).
-// WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS carries the DevTools port (swap-release -Debug); a Vidar
-// started from a tab must not inherit it, since the port hands spawn_pty to any local process.
-pub const SCRUBBED_ENV: &[&str] = &[
-    "NO_COLOR",
-    "TERM",
-    "COLORTERM",
-    "CLAUDECODE",
-    "CLAUDE_CODE_CHILD_SESSION",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_PID",
-    "VIDAR_CTL_TOKEN",
-    "VIDAR_CTL_SECRET",
-    "VIDAR_ROOT",
-    // The tab name rides beside VIDAR_TAB (set per spawn below); never inherited from a parent tab.
-    "VIDAR_TAB_NAME",
-    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-    // A Vidar started from a Falcon-hosted session carries that session's id;
-    // a raw tab, the sidecar or a new Falcon host must not claim it.
-    "FALCON_SESSION",
-];
+// The env scrub list (`SCRUBBED_ENV`) lives in `crate::proc_job::scrub`; the PTY spawn reads it.
+// Re-exported because src-falcon/src/protocol/agent_env.rs (a host input, shared with this crate's
+// tests) names `crate::pty::SCRUBBED_ENV`; no Vidar code uses this path.
+pub use crate::proc_job::SCRUBBED_ENV;
 
 /// A tab name as `VIDAR_TAB_NAME`: trimmed, capped at 128 chars, and left out entirely when blank
 /// or holding a control character (cosmetic, so it never fails a spawn). Same rule as
@@ -152,11 +115,24 @@ fn spawn_dir(cwd: Option<String>, fallback: impl FnOnce() -> Option<PathBuf>) ->
 
 /// A profiled PTY spawn's prepared launch: Raw Claude (a pwsh line) or Raw Codex (the TUI under
 /// node). Holds the home lock until dropped, after the spawn.
-enum BareSpawn {
+pub(crate) enum BareSpawn {
     /// A pwsh line (Raw Claude).
     Line(crate::bare::Launch),
     /// The TUI under node (Raw Codex).
     Tui(crate::bare::CodexLaunch),
+}
+
+/// An agent's Raw prepare (`AgentSpec.raw_prepare`): profile, options and the launch folder in; the
+/// folder (Codex needs one and resolves it) and the launch out.
+pub(crate) type RawPrepare = fn(&str, &crate::bare::LaunchOpts, Option<PathBuf>) -> Result<(Option<PathBuf>, BareSpawn), String>;
+
+pub(crate) fn raw_prepare_claude(profile: &str, opts: &crate::bare::LaunchOpts, dir: Option<PathBuf>) -> Result<(Option<PathBuf>, BareSpawn), String> {
+    Ok((dir, BareSpawn::Line(crate::bare::prepare(profile, opts)?)))
+}
+
+pub(crate) fn raw_prepare_codex(profile: &str, opts: &crate::bare::LaunchOpts, dir: Option<PathBuf>) -> Result<(Option<PathBuf>, BareSpawn), String> {
+    let (d, launch) = codex_bare_prepare(dir, |cwd| crate::bare::prepare_codex_tui(profile, opts, cwd))?;
+    Ok((Some(d), BareSpawn::Tui(launch)))
 }
 
 impl BareSpawn {
@@ -182,6 +158,13 @@ impl BareSpawn {
         match self {
             BareSpawn::Line(l) => l.write_manifest(tab, env_names),
             BareSpawn::Tui(l) => l.write_manifest(tab, env_names),
+        }
+    }
+    /// Whether this launch's loadout mints a control token (`bare::ctl_for`, read at prepare).
+    fn ctl(&self) -> bool {
+        match self {
+            BareSpawn::Line(l) => l.ctl,
+            BareSpawn::Tui(l) => l.ctl,
         }
     }
     /// The TUI launch warning as a yellow terminal line; a pwsh line's rides the line instead.
@@ -256,7 +239,7 @@ pub async fn spawn_pty(
     .map_err(|e| format!("spawn task failed: {e}"))?
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // one per spawn input; the async spawn_pty hands them over as received
 fn spawn_pty_blocking(
     app: &AppHandle,
     id: String,
@@ -294,13 +277,9 @@ fn spawn_pty_blocking(
     }
     let target = bare_target(profile.as_deref(), agent.as_deref())?;
     // A Codex Bare key must name a Codex Bare row (as the Rendered spawn checks it, agent.rs).
-    let row_key = match target {
-        None => row_key,
-        Some((p, agent)) => match agent {
-            Agent::Codex => crate::bare::admit_row_key(row_key, Some(p), None)?,
-            Agent::Claude => row_key,
-        },
-    };
+    if let Some((p, agent)) = target {
+        crate::bare::admit_row_key_for(agent, row_key, Some(p), None)?;
+    }
     // The folder first: a Codex Bare prepare writes it into config.toml as the trusted project,
     // so the home-folder refusals run on this same folder before that write.
     let mut dir = spawn_dir(cwd, crate::config::default_cwd);
@@ -310,17 +289,14 @@ fn spawn_pty_blocking(
     // A named vault is the whole loadout (model R2); the transition pick is read only without one.
     // Raw locks at spawn (`bare::vault_spawn::lock_at_spawn`).
     let custom_sets = if vault.is_some() { None } else { sets.as_deref() };
-    let opts = crate::bare::LaunchOpts { row_key: row_key.as_deref(), custom_sets, vault: vault.as_deref(), ..Default::default() };
+    let opts = crate::bare::LaunchOpts { custom_sets, vault: vault.as_deref(), ..Default::default() };
     let mut bare = match target {
         None => None,
-        Some((p, agent)) => Some(match agent {
-            Agent::Codex => {
-                let (d, launch) = codex_bare_prepare(dir.take(), |cwd| crate::bare::prepare_codex_tui(p, &opts, cwd))?;
-                dir = Some(d);
-                BareSpawn::Tui(launch)
-            }
-            Agent::Claude => BareSpawn::Line(crate::bare::prepare(p, &opts)?),
-        }),
+        Some((p, agent)) => {
+            let (d, launch) = (crate::agent_spec::spec(agent).raw_prepare)(p, &opts, dir.take())?;
+            dir = d;
+            Some(launch)
+        }
     };
 
     let _guard = state.spawn_lock.lock().unwrap_or_else(|e| e.into_inner());
@@ -381,15 +357,23 @@ fn spawn_pty_blocking(
     // The control surface's requester secret (control/policy.rs): VIDAR_TAB is
     // a name any process can claim, this is 16 OS-random bytes only this tree
     // was given. Registered before spawn so a first-command call can resolve.
-    let token = mint_ctl_token()?;
-    cmd.env("VIDAR_CTL_TOKEN", &token);
+    // A Bare tab mints only when its loadout carries a `ctl: yes` rune (`bare::ctl_for`); a plain tab always does.
+    let token = match bare.as_ref().map_or(true, BareSpawn::ctl) {
+        true => Some(mint_ctl_token()?),
+        false => None,
+    };
+    if let Some(token) = &token {
+        cmd.env("VIDAR_CTL_TOKEN", token);
+    }
     // The launch record (create-new) names the final env, tab variables included; no record, no spawn.
     if let Some(launch) = bare.as_mut() {
         let names: Vec<String> = cmd.iter_full_env_as_str().map(|(k, _)| k.to_string()).collect();
         launch.write_manifest(&id, names.iter().map(String::as_str))?;
     }
     let policy = app.state::<crate::control::policy::PolicyState>();
-    crate::control::policy::register(&policy, token, id.clone());
+    if let Some(token) = token {
+        crate::control::policy::register(&policy, token, id.clone());
+    }
 
     // Any failure from here on unregisters the token: a tab that never got a
     // pty must not leave a live requester secret behind.
@@ -799,5 +783,3 @@ mod tests {
         assert_eq!(send_input(&map, "x", vec![2], |t| (&*t.flow, &t.input)).unwrap_err(), "pty input closed");
     }
 }
-
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;

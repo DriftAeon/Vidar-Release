@@ -10,11 +10,22 @@ use std::time::Duration;
 
 use super::{CodexLaunch, Env};
 
-/// One `codex-accepted.json` entry: the pin a Codex version was checked against and whether its protocol matched.
+/// One `codex-accepted.json` entry: the pin a Codex version was checked against, whether its protocol
+/// matched, and whether a drift is compatible (verify.mjs: nothing Vidar sends or reads broke). The entry
+/// also keeps `breaking` and `diff` for whoever explains the verdict; Vidar reads only these three.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Accepted {
     pub pinned: String,
     pub same: bool,
+    /// `None` on an entry written before the compatibility rule: no verdict, so it is checked again.
+    pub compatible: Option<bool>,
+}
+
+impl Accepted {
+    /// `Some(true)` when the version launches quietly, `Some(false)` on a breaking drift, `None` when unjudged.
+    pub(crate) fn verdict(&self) -> Option<bool> {
+        if self.same { Some(true) } else { self.compatible }
+    }
 }
 
 pub(crate) type AcceptedMap = BTreeMap<String, Accepted>;
@@ -24,11 +35,17 @@ pub(crate) fn read_accepted(path: &Path) -> AcceptedMap {
     let Ok(v) = crate::fsx::read_json::<serde_json::Value>(path) else { return AcceptedMap::new() };
     let Some(obj) = v.as_object() else { return AcceptedMap::new() };
     obj.iter()
-        .filter_map(|(k, e)| Some((k.clone(), Accepted { pinned: e.get("pinned")?.as_str()?.to_string(), same: e.get("same")?.as_bool()? })))
+        .filter_map(|(k, e)| {
+            let compatible = e.get("compatible").and_then(serde_json::Value::as_bool);
+            Some((k.clone(), Accepted { pinned: e.get("pinned")?.as_str()?.to_string(), same: e.get("same")?.as_bool()?, compatible }))
+        })
         .collect()
 }
 
-/// The banner for a Codex launch, `None` when quiet. An entry recorded against an older pin never counts.
+/// The banner for a Codex launch, `None` when quiet. Only a breaking verdict against this pin shows one.
+/// A version with no verdict yet (the first launch on it: the background verify writes the verdict after
+/// this read) stays quiet too, so a compatible release never flashes a banner; a breaking verdict
+/// surfaces from the next launch on. An entry recorded against an older pin never counts.
 pub(crate) fn codex_warning(version: Option<&str>, pinned: &str, accepted: &AcceptedMap) -> Option<String> {
     let name = super::codex_profile::AGENT.as_str();
     let name = format!("{}{}", name[..1].to_uppercase(), &name[1..]);
@@ -36,14 +53,11 @@ pub(crate) fn codex_warning(version: Option<&str>, pinned: &str, accepted: &Acce
         Some(v) => v,
         None => return Some(format!("{name} Version Unreadable (Verified {pinned}) - Launching Anyway")),
     };
-    let entry = accepted.get(v).filter(|a| a.pinned == pinned);
-    let verdict = match (v == pinned, entry.map(|a| a.same)) {
-        (true, _) => return None,
-        (false, Some(true)) => return None,
-        (false, Some(false)) => "Changed Its Protocol Since",
-        (false, None) => "Differs from",
-    };
-    Some(format!("{name} {v} {verdict} the Verified {pinned} - Launching Anyway"))
+    if v == pinned {
+        return None;
+    }
+    let verdict = accepted.get(v).filter(|a| a.pinned == pinned).and_then(Accepted::verdict);
+    (verdict == Some(false)).then(|| format!("{name} {v} Changed Its Protocol Since the Verified {pinned} - Launching Anyway"))
 }
 
 /// Versions already checked in this Vidar process, so a launch loop starts at most one check per version.
@@ -62,13 +76,14 @@ pub(super) struct VerifyJob {
 }
 
 /// The verify a launch on `version` needs, `None` when it is the pin, already has a verdict against
-/// this pin in `accepted_path`, or the script is missing (logged).
+/// this pin in `accepted_path`, or the script is missing (logged). A pre-rule entry (no `compatible`)
+/// is no verdict: it is checked again.
 pub(super) fn verify_job(version: Option<&str>, pinned: &str, program: &Path, codex: &str, env: &Env, root: &Path, accepted_path: &Path) -> Option<VerifyJob> {
     let version = version?;
     if version == pinned {
         return None;
     }
-    if read_accepted(accepted_path).get(version).is_some_and(|a| a.pinned == pinned) {
+    if read_accepted(accepted_path).get(version).is_some_and(|a| a.pinned == pinned && a.verdict().is_some()) {
         return None;
     }
     let script = root.join("tools/codex-schema/verify.mjs");
@@ -101,30 +116,28 @@ pub(super) fn verify_new_codex(launch: &CodexLaunch, root: &Path) {
 }
 
 fn run_verify(node: &Path, script: &Path, js: &str, out: &Path, env: &Env, version: &str) {
-    use std::os::windows::process::CommandExt;
+    use crate::proc_job::{spawn_into, wait_bounded, Job, SpawnExt};
     use std::process::{Command, Stdio};
     let mut cmd = Command::new(node);
     cmd.arg(script).arg("--codex").arg(js).arg("--out").arg(out);
-    cmd.env_clear().stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    for (k, v) in env.iter() {
-        cmd.env(k, v);
-    }
-    let mut child = match cmd.spawn() {
+    cmd.exact_env(env.iter()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    let job = match Job::new() {
+        Ok(j) => j,
+        Err(e) => return eprintln!("codex verify {version}: spawn failed: {e}"),
+    };
+    let mut child = match spawn_into(&mut cmd, &job) {
         Ok(c) => c,
         Err(e) => return eprintln!("codex verify {version}: spawn failed: {e}"),
     };
     let deadline = std::time::Instant::now() + Duration::from_secs(120);
-    loop {
-        match child.try_wait() {
-            Ok(Some(s)) => return eprintln!("codex verify {version}: {s}"),
-            Ok(None) if std::time::Instant::now() < deadline => std::thread::sleep(Duration::from_millis(200)),
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return eprintln!("codex verify {version}: timed out after 120 s");
-            }
-            Err(e) => return eprintln!("codex verify {version}: {e}"),
+    match wait_bounded(&mut child, deadline) {
+        Ok(Some(s)) => eprintln!("codex verify {version}: {s}"),
+        Ok(None) => {
+            job.terminate();
+            let _ = child.kill();
+            let _ = child.wait();
+            eprintln!("codex verify {version}: timed out after 120 s");
         }
+        Err(e) => eprintln!("codex verify {version}: {e}"),
     }
 }

@@ -32,8 +32,8 @@ export function authCheck(loginCheck: boolean, hostCan: boolean, run: () => Prom
 }
 
 export interface LoginDeps {
-  /** Only a Claude tab reads replies for the CLI's diagnostic; a Codex reply never sets it. */
-  claude: boolean;
+  /** Only a tab whose CLI prints a not-logged-in reply reads replies for it (agent-profile `loginCheck`); other replies never set it. */
+  readsTurnReplies: boolean;
   /** The tab's way back in (claude-login.ts `reach`); unset reads as "card". Picks the tip's wording. */
   reach?: () => LoginReach;
   /** The agent profile's tip wording (agents/agent-profile.ts `loginTip`). */
@@ -63,7 +63,7 @@ export function createLogin(S: { loggedOut: boolean; disposed: boolean }, deps: 
     },
     /** On each live turn's end: the CLI's not-logged-in reply sets it, a clean turn clears it. */
     sawTurn(resultText: string, clean: boolean): void {
-      if (!deps.claude) return;
+      if (!deps.readsTurnReplies) return;
       seq++;
       if (saysNotLoggedIn(resultText) || saysAuthFailed(resultText, clean)) set(true);
       else if (clean) set(false);

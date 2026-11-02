@@ -63,6 +63,26 @@ pub(crate) fn git(cwd: &Path, args: &[&str], opts: &GitOpts) -> Result<GitOut, S
 /// `git` without the exit-status check: Ok((exit code, output)) whenever git
 /// ran to the end; Err only for a spawn failure or a timeout.
 pub(crate) fn run(cwd: &Path, args: &[&str], opts: &GitOpts) -> Result<(Option<i32>, GitOut), String> {
+    let (code, kept, stderr, truncated) = run_raw(cwd, args, opts)?;
+    Ok((code, GitOut { text: String::from_utf8_lossy(&kept).into_owned(), stderr, truncated }))
+}
+
+/// `git` returning stdout as raw bytes (blobs hold NULs and non-UTF-8). Same spawn, timeout and
+/// kill as `git`; Err on a non-zero exit, a timeout, or when the output hit the cap (a cut
+/// blob must never be read as the whole file).
+pub(crate) fn git_bytes(cwd: &Path, args: &[&str], opts: &GitOpts) -> Result<Vec<u8>, String> {
+    let verb = args.first().copied().unwrap_or("");
+    let (code, kept, stderr, truncated) = run_raw(cwd, args, opts)?;
+    if code != Some(0) {
+        if !stderr.is_empty() { return Err(stderr); }
+        let shown = code.map_or("no exit code".to_string(), |c| format!("exit code {c}"));
+        return Err(format!("git {verb} failed ({shown})"));
+    }
+    if truncated { return Err(format!("git {verb} output exceeded {} bytes", opts.cap)); }
+    Ok(kept)
+}
+
+fn run_raw(cwd: &Path, args: &[&str], opts: &GitOpts) -> Result<(Option<i32>, Vec<u8>, String, bool), String> {
     let verb = args.first().copied().unwrap_or("");
     let mut cmd = Command::new("git");
     cmd.args(["-c", "core.pager=cat", "-c", "diff.external=", "--no-optional-locks"])
@@ -122,18 +142,10 @@ pub(crate) fn run(cwd: &Path, args: &[&str], opts: &GitOpts) -> Result<(Option<i
         let _ = std::io::copy(&mut stderr, &mut std::io::sink());
         buf
     });
-    let started = Instant::now();
-    let waited: Result<std::process::ExitStatus, String> = loop {
-        match child.try_wait() {
-            Ok(Some(st)) => break Ok(st),
-            Ok(None) => {
-                if started.elapsed() > opts.timeout {
-                    break Err(format!("git {verb} timed out after {}s", opts.timeout.as_secs()));
-                }
-                thread::sleep(Duration::from_millis(20));
-            }
-            Err(e) => break Err(format!("git wait failed: {e}")),
-        }
+    let waited: Result<std::process::ExitStatus, String> = match child.wait_bounded(Instant::now() + opts.timeout) {
+        Ok(Some(st)) => Ok(st),
+        Ok(None) => Err(format!("git {verb} timed out after {}s", opts.timeout.as_secs())),
+        Err(e) => Err(format!("git wait failed: {e}")),
     };
     // ends the job (every process git started) on every path, not only a timeout:
     // a hook's leftover background process holding stdout would otherwise keep the
@@ -148,7 +160,7 @@ pub(crate) fn run(cwd: &Path, args: &[&str], opts: &GitOpts) -> Result<(Option<i
     let (kept, truncated) = out_joined.map_err(|_| "stdout reader panicked")?;
     let err = err_joined.map_err(|_| "stderr reader panicked")?;
     let err_text = String::from_utf8_lossy(&err).trim().to_string();
-    Ok((status.code(), GitOut { text: String::from_utf8_lossy(&kept).into_owned(), stderr: err_text, truncated }))
+    Ok((status.code(), kept, err_text, truncated))
 }
 
 #[cfg(test)]
@@ -173,6 +185,30 @@ mod tests {
     fn gitrun_failure_names_the_error() {
         let err = git(Path::new("."), &["rev-parse", "--verify", "refs/heads/no-such-branch-vidar"], &GitOpts::read(Duration::from_secs(15), 4096)).unwrap_err();
         assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn git_bytes_reads_a_blob_with_nul_bytes_and_refuses_a_cut_one() {
+        let base = std::env::temp_dir().join(format!("vidar-gitbytes-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let o = GitOpts::read(Duration::from_secs(15), 1 << 20);
+        git(&base, &["init", "-q"], &o).unwrap();
+        let payload: Vec<u8> = vec![0, 1, 2, 0, 0xff, 0xfe, b'a', 0, 0x80];
+        let w = GitOpts { stdin: Some(&payload), ..GitOpts::read(Duration::from_secs(15), 4096) };
+        let oid = git(&base, &["hash-object", "-w", "--stdin"], &w).unwrap().text.trim().to_string();
+        let got = git_bytes(&base, &["cat-file", "blob", &oid], &o).unwrap();
+        // a payload that outgrows the cap is an Err, never a short read
+        let big: Vec<u8> = vec![7u8; 200_000];
+        let wb = GitOpts { stdin: Some(&big), ..GitOpts::read(Duration::from_secs(15), 4096) };
+        let big_oid = git(&base, &["hash-object", "-w", "--stdin"], &wb).unwrap().text.trim().to_string();
+        let small_cap = GitOpts::read(Duration::from_secs(15), 1024);
+        let cut = git_bytes(&base, &["cat-file", "blob", &big_oid], &small_cap);
+        let missing = git_bytes(&base, &["cat-file", "blob", "0000000000000000000000000000000000000001"], &o);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(got, payload);
+        assert!(cut.unwrap_err().contains("exceeded"));
+        assert!(missing.is_err());
     }
 
     #[test]

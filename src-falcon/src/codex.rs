@@ -194,7 +194,7 @@ impl CodexRuntime {
     /// A Bare spawn: profile `bare` only, never with a rules file or gateway; the profile is
     /// `<root>\profiles\bare\codex.json`, the home Vidar's own placement (`bare_home`), which
     /// Vidar must already have prepared (its `CODEX_HOME\config.toml`). The env is
-    /// `bare_env::codex` (allowlist plus the profile overlay, so no inherited `CODEX_*`) with
+    /// `bare_env::app_server` (allowlist plus the profile overlay, so no inherited `CODEX_*`) with
     /// the WindowsApps folders dropped from Path, then `FALCON_SESSION` and `VIDAR_CTL_SECRET`.
     /// A `payload_file` is admitted only under `<home>\layer\` (`codex_payload`), read once and
     /// passed as `-c developer_instructions=`. The executable is the installed Codex the Bare
@@ -317,7 +317,7 @@ struct BareHome {
 }
 
 /// The Bare home and env from `<root>\profiles\<profile>\codex.json`: the home is Vidar's own
-/// placement (`bare_home::resolve_for`), the env `bare_env::codex` over the profile's `overlay`
+/// placement (`bare_home::resolve_for`), the env `bare_env::app_server` over the profile's `overlay`
 /// with `{{root}}`/`{{home}}` filled. A `codex_home` (`SpawnParams.codex_home`) is admitted under
 /// that home by `codex_payload::admit_codex_home` and replaces the overlay's `CODEX_HOME` and
 /// `VIDAR_AGENT_HOME`. Refuses a profile that is not the Codex one, carries a `sharedLogin`, sets
@@ -336,7 +336,7 @@ fn bare_codex(
     let home = crate::bare_home::resolve_for(root, lad);
     let path = root.join("profiles").join(profile).join("codex.json");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("launch profile {}: {e}", path.display()))?;
-    let doc: Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+    let doc: Value = serde_json::from_str(crate::util::strip_bom(&text))
         .map_err(|e| format!("launch profile {}: {e}", path.display()))?;
     if doc.get("id").and_then(Value::as_str) != Some(profile) || doc.get("agent").and_then(Value::as_str) != Some("codex") {
         return Err(format!("launch profile {} is not the Codex {profile:?} profile", path.display()));
@@ -366,7 +366,7 @@ fn bare_codex(
         }
         None => None,
     };
-    let env = crate::bare_env::codex(inherited, &overlay)?;
+    let env = crate::bare_env::app_server(inherited, &overlay)?;
     let codex_home = PathBuf::from(overlay.get("CODEX_HOME").cloned().unwrap_or_default());
     let parts = |p: &Path| -> Vec<String> {
         p.components().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).collect()
@@ -464,7 +464,7 @@ fn installed_default(appdata: Option<&OsStr>, path: Option<&OsStr>) -> Option<In
 
 fn package_version(package_json: &Path) -> Option<String> {
     let text = std::fs::read_to_string(package_json).ok()?;
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let v: Value = serde_json::from_str(crate::util::strip_bom(&text)).ok()?;
     v.get("version")?.as_str().map(str::to_string)
 }
 
@@ -591,7 +591,7 @@ mod tests {
             mcp_file: None,
             row_key: None,
             sets: None,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
         }
     }
 

@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateFindingLine, validateRunLogLine } from "../drive/explorer-contracts.mjs";
 
-const INPUTS = new Set(["press", "key", "act", "paste", "send"]);
+const INPUTS = new Set(["press", "context", "dblclick", "key", "act", "paste", "send", "drag"]);
 const stamp = (item) => Date.parse(item.value.t);
 
 async function lines(file, label, validate, problems) {

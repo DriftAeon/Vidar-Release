@@ -37,7 +37,12 @@ export function characterLoop(_active: boolean, lowContext: boolean, model?: str
    past a finished Astra review. No cheap frame signal separates the two
    (frames are ANSI deltas; an idle repaint still differs byte for byte), so these agents get
    no run loop at all in a raw tab. Rendered Codex is unaffected: it has protocol turns. */
-const IDLE_REPAINT_AGENTS = new Set(["codex", "gemini"]);
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENT_IDS } from "../agents/id.ts";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENTS } from "../agents/descriptor.ts";
+
+const IDLE_REPAINT_AGENTS: ReadonlySet<string> = new Set(AGENT_IDS.filter((id) => !AGENTS[id].flowSdk));
 
 export function rawOutputMeansWork(agent: string): boolean {
   return !IDLE_REPAINT_AGENTS.has(agent);

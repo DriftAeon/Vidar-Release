@@ -3,13 +3,13 @@
    fake pty that plays scrollback. Fidelity is "renders", not "behaves".
    No @tauri-apps imports here: ipc.ts stays the only file allowed them. */
 
-import { rel } from "./paths";
+import { basename, rel } from "./paths";
 import type { BareRuneGuardRefusal } from "./ipc";
 
 /** Browser fixture for the structured part of a Bare spawn guard refusal. */
 export const MOCK_RUNE_GUARD_REFUSAL: BareRuneGuardRefusal = {
   reason: "Bare rune skill: holds the account name",
-  id: "falcon-changed-zero-check", library: "kit", set: "workflow",
+  id: "falcon-changed-zero-check", library: "installed", set: "workflow",
 };
 
 const mockPath = (id: string) => `C:\\Main\\Apps\\Vidar\\${rel(id).replace(/\//g, "\\")}\\`;
@@ -85,13 +85,13 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
     }
     // Document tab: the same .md entries display-update advertises as docs.
     case "list_documents":
-      return displayEntries().docs.map((d) => ({ path: d.path, name: d.path.split("\\").pop(), mtime_ms: d.mtime_ms }));
+      return displayEntries().docs.map((d) => ({ path: d.path, name: basename(d.path), mtime_ms: d.mtime_ms }));
     case "read_document": {
       const p = String(args?.path);
       const f = DISPLAY_FILES[p];
       if (!f) throw `mock: no such document: ${p}`;
       const mtimeMs = displayEntries().docs.find((d) => d.path === p)?.mtime_ms ?? Date.now();
-      return { name: p.split("\\").pop(), bytes: f.content.length, mtimeMs, text: f.content, lossy: false };
+      return { name: basename(p), bytes: f.content.length, mtimeMs, text: f.content, lossy: false };
     }
     case "stat_document":
       return displayEntries().docs.find((d) => d.path === String(args?.path))?.mtime_ms ?? null;
@@ -190,9 +190,7 @@ export async function mockInvoke(cmd: string, args?: Record<string, unknown>): P
         guardsKey: false,
       };
     case "bare_sets_list":
-      return [{ set: "app-core" }, { library: "kit", set: "base" }, { library: "kit", set: "workflow" }];
-    case "bare_items_import":
-      return { runes: [], dropped: [] };
+      return [{ set: "app-core" }, { library: "installed", set: "base" }, { library: "installed", set: "workflow" }];
     case "rules_generate":
       return { library: "gen-0a1b2c3d", set: "generated-20261017", runes: 2, on: 2, encodedChars: null, costUsd: null,
         inputTokens: 12000, outputTokens: 3000, durationMs: 130000, warnings: [] };
@@ -222,10 +220,6 @@ const MOCK_CONFIG = {
   fontSize: 14,
   defaultCwd: "",
   riderPath: "",
-  macros: [
-    { label: "Claude", command: "claude", submit: false },
-    { label: "Git Status", command: "git status", submit: true },
-  ],
   // no `voice`: keeps initVoice (and voice_register) off in the browser
 };
 
@@ -271,7 +265,7 @@ const DISPLAY_FILES: Record<string, { kind: string; content: string }> = {
   <text x="230" y="148" fill="#d7b254" font-family="monospace" font-size="14" text-anchor="middle">terminal</text>
   <text x="454" y="164" fill="#8888a0" font-family="monospace" font-size="11" text-anchor="middle">rightbar</text>
   <text x="36" y="164" fill="#8888a0" font-family="monospace" font-size="11" text-anchor="middle" transform="rotate(-90 36 164)">leftbar</text>
-  <text x="230" y="296" fill="#8888a0" font-family="monospace" font-size="10" text-anchor="middle">macros · statusline</text>
+  <text x="230" y="296" fill="#8888a0" font-family="monospace" font-size="10" text-anchor="middle">statusline</text>
 </svg>`,
   },
   [DISPLAY_DIR + "build-report.html"]: {

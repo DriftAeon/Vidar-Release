@@ -18,7 +18,7 @@ import type { ReleaseReply, ReleaseRow } from "./release";
 /** The CLI check's offline deadline; the release check starts once it has passed. */
 const CLI_DEADLINE_MS = 12_000;
 
-/** True when an open tab runs this CLI. Tab agent kinds match update ids (claude, codex, gemini,
+/** True when an open tab runs this CLI. Tab agent kinds match update ids (claude, codex,
  *  pi); a gateway tab is agent "claude", so its art needs no separate match. */
 function liveTabs(u: CliUpdate): boolean {
   return driveSnapshot().tabs.some((t) => t.agent === u.id);

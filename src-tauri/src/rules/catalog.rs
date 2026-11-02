@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use super::library::Library;
+use crate::agent_spec::{spec, Agent, ALL};
 use super::rune::{Rune, State};
 use super::set;
 
@@ -127,10 +128,22 @@ fn target_abs(base: &Path, target: &str) -> Option<String> {
     Some(clean(&out))
 }
 
+/// Whether a set's target sits in an agent's own folder of path-scoped rules (`<user_dir>/...`). Only Claude Code has
+/// path-scoped rule files; Codex has none.
+fn scoped_target(target: &str) -> bool {
+    ALL.into_iter().any(|a| {
+        let scoped = match a {
+            Agent::Claude => true,
+            Agent::Codex => false,
+        };
+        scoped && target.strip_prefix(spec(a).user_dir).is_some_and(|rest| rest.starts_with('/'))
+    })
+}
+
 fn tier_of(target: Option<&str>, has_recall: bool) -> u8 {
     match target {
         Some(t) if t.starts_with("plugins/") => 5,
-        Some(t) if t.starts_with(".claude/") => 2,
+        Some(t) if scoped_target(t) => 2,
         Some(_) => 1,
         None if has_recall => 3,
         None => 4,
@@ -253,7 +266,7 @@ mod tests {
         got["libraries"][0]["root"] = Value::String("<missing>".into());
         let want: Value =
             serde_json::from_str(&std::fs::read_to_string(fixtures().join("golden.json")).unwrap()).unwrap();
-        assert_eq!(got, want, "actual:\n{}", serde_json::to_string_pretty(&got).unwrap());
+        assert_eq!(got, want, "actual:\n{}", format!("{got:#}"));
     }
 
     #[test]

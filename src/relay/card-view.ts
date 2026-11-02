@@ -6,6 +6,7 @@ import { btn, el } from "../panels/rendered/dom";
 import type { RelayItem } from "./store";
 import { renderNodeMatrix } from "../control/node-matrix";
 import { isMonoField, parseSteps, splitUnverified, type Step } from "./card-fields";
+import { errText } from "../err-text";
 
 /** One field: a bold label over its value; piped text becomes steps, Windows paths become chips. */
 function fieldRow(label: string, raw: string): HTMLElement {
@@ -79,7 +80,7 @@ export function createCardForm(host: HTMLElement, item: RelayItem, opts: { onNot
     try {
       await item.resolve({ verdict, comment: (commentEl?.value ?? "").trim() });
     } catch (e) {
-      opts.onNote?.(e instanceof Error ? e.message : String(e));
+      opts.onNote?.(errText(e));
       approve.disabled = false;
       deny.disabled = false;
       if (commentEl) commentEl.disabled = false;

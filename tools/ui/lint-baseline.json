@@ -378,22 +378,6 @@
       "count": 1
     },
     {
-      "file": "src/panels/loadout-launch.css",
-      "selector": ".launch-facts > div",
-      "property": "padding",
-      "value": "7px 0",
-      "check": "token",
-      "count": 1
-    },
-    {
-      "file": "src/panels/loadout-launch.css",
-      "selector": ".launch-facts dt",
-      "property": "font-size",
-      "value": "var(--font-10)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
       "file": "src/panels/preview-fixtures.ts",
       "selector": "ts:runFixtures",
       "property": "height",
@@ -459,22 +443,6 @@
     },
     {
       "file": "src/styles/bottombar.css",
-      "selector": ".macro-btn",
-      "property": "border-radius",
-      "value": "var(--radius-5)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/bottombar.css",
-      "selector": ".macro-btn",
-      "property": "padding",
-      "value": "var(--space-2) var(--space-10)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/bottombar.css",
       "selector": "#bottombar",
       "property": "gap",
       "value": "var(--space-10)",
@@ -486,14 +454,6 @@
       "selector": "#bottombar",
       "property": "padding",
       "value": "0 var(--space-10)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/bottombar.css",
-      "selector": "#macro-strip",
-      "property": "gap",
-      "value": "var(--space-6)",
       "check": "legacy",
       "count": 1
     },
@@ -1234,70 +1194,6 @@
       "count": 1
     },
     {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-bar",
-      "property": "border-radius",
-      "value": "var(--radius-3)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-bar",
-      "property": "height",
-      "value": "6px",
-      "check": "token",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-bar",
-      "property": "margin-bottom",
-      "value": "var(--space-6)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-legend-kb",
-      "property": "font-family",
-      "value": "\"Cascadia Mono\", Consolas, monospace",
-      "check": "family",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-legend-row",
-      "property": "gap",
-      "value": "var(--space-6)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-legend-swatch",
-      "property": "height",
-      "value": "8px",
-      "check": "token",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-mono",
-      "property": "font-family",
-      "value": "\"Cascadia Mono\", Consolas, monospace",
-      "check": "family",
-      "count": 1
-    },
-    {
-      "file": "src/styles/loadout.css",
-      "selector": ".loadout-shade-b",
-      "property": "background",
-      "value": "var(--accent2)",
-      "check": "legacy",
-      "count": 1
-    },
-    {
       "file": "src/styles/menus.css",
       "selector": ".launcher-col button.launcher-session.has-sub",
       "property": "padding-right",
@@ -1797,7 +1693,7 @@
       "file": "src/styles/rendered.css",
       "selector": ".rendered-state[data-state=\"working\"]::before",
       "property": "animation",
-      "value": "state-pulse 1.2s ease-in-out infinite",
+      "value": "dim-pulse 1.2s ease-in-out infinite",
       "check": "motion",
       "count": 1
     },
@@ -2605,7 +2501,7 @@
       "file": "src/styles/voice-buttons.css",
       "selector": "#listen-btn[data-state=\"starting\"]",
       "property": "animation",
-      "value": "listen-pulse 0.6s ease-in-out infinite",
+      "value": "dim-pulse 0.6s ease-in-out infinite",
       "check": "motion",
       "count": 1
     },
@@ -2613,7 +2509,7 @@
       "file": "src/styles/voice-buttons.css",
       "selector": "#listen-btn[data-state=\"transcribing\"], #listen-btn[data-state=\"delivering\"]",
       "property": "animation",
-      "value": "listen-pulse 1.2s ease-in-out infinite",
+      "value": "dim-pulse 1.2s ease-in-out infinite",
       "check": "motion",
       "count": 1
     },
@@ -2621,7 +2517,7 @@
       "file": "src/styles/voice-buttons.css",
       "selector": "#speak-btn.busy",
       "property": "animation",
-      "value": "speak-pulse 1.2s ease-in-out infinite",
+      "value": "dim-pulse 1.2s ease-in-out infinite",
       "check": "motion",
       "count": 1
     },
@@ -2645,7 +2541,7 @@
       "file": "src/styles/voice-map.css",
       "selector": ".vm-pill.vm-orange",
       "property": "animation",
-      "value": "speak-pulse 1.2s ease-in-out infinite",
+      "value": "dim-pulse 1.2s ease-in-out infinite",
       "check": "motion",
       "count": 1
     },

@@ -160,6 +160,6 @@ pub fn review_workspace(cwd: String) -> Result<ReviewResult, String> {
     let out_dir = crate::bridge::display_dir();
     let _ = fs::create_dir_all(&out_dir);
     let out_path = out_dir.join(format!("review-workspace-{}-{}.md", leaf.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>(), fnv8(&root_str)));
-    fs::write(&out_path, head.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+    crate::fsx::atomic_write(&out_path, head.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
     Ok(ReviewResult { path: out_path.to_string_lossy().into_owned(), files, truncated })
 }

@@ -57,10 +57,9 @@ pub async fn claude_auth_status() -> Option<bool> {
 /// home), and Vidar's own `USERPROFILE` is the real one: the dir is always passed, never inherited.
 fn logged_in_in(program: &OsStr, config_dir: &Path) -> Option<bool> {
     use std::io::Read;
-    use std::os::windows::process::CommandExt;
+    use crate::proc_job::{wait_bounded, SpawnExt};
     use std::process::{Command, Stdio};
     use std::time::Instant;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let deadline = Instant::now() + AUTH_TIMEOUT;
     let mut child = Command::new(program)
         .args(["auth", "status", "--json"])
@@ -68,7 +67,7 @@ fn logged_in_in(program: &OsStr, config_dir: &Path) -> Option<bool> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        .quiet()
         .spawn()
         .ok()?;
     let mut stdout = child.stdout.take()?;
@@ -78,16 +77,10 @@ fn logged_in_in(program: &OsStr, config_dir: &Path) -> Option<bool> {
         let _ = stdout.read_to_end(&mut buf);
         let _ = tx.send(buf);
     });
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-        }
+    if !matches!(wait_bounded(&mut child, deadline), Ok(Some(_))) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return None;
     }
     let buf = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).ok()?;
     parse_status(&String::from_utf8_lossy(&buf))

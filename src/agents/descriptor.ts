@@ -15,11 +15,31 @@ export interface AgentDescriptor {
   /** tab art of a plain session ("claude", "codex") */
   art: string;
   modelPref: "claudeModels" | "codexModels";
+  /** the project instructions file name (agent_spec.rs `instructions_file`) */
+  instructionsFile: string;
+  /** the per-user folder under the home directory (`user_dir`; not the Bare home's config folder) */
+  userDir: string;
+  /** the env var naming the agent's home (protocol/agent_env.rs `home_env`) */
+  homeEnv: string;
+  /** the prefix of the agent's model ids, null when it has none (`model_prefix`) */
+  modelPrefix: string | null;
+  /** Flow's backend word (flow/bare.rs `backend_of`). */
+  flowBackend: "sdk" | "codex";
+  /** This agent runs through the Claude SDK sidecar. */
+  flowSdk: boolean;
 }
 
 export const AGENTS: Readonly<Record<AgentId, AgentDescriptor>> = {
-  claude: { id: "claude", name: "Claude", product: "Claude Code", art: "claude", modelPref: "claudeModels" },
-  codex: { id: "codex", name: "Codex", product: "Codex", art: "codex", modelPref: "codexModels" },
+  claude: {
+    id: "claude", name: "Claude", product: "Claude Code", art: "claude", modelPref: "claudeModels",
+    instructionsFile: "CLAUDE.md", userDir: ".claude", homeEnv: "CLAUDE_CONFIG_DIR", modelPrefix: "claude-",
+    flowBackend: "sdk", flowSdk: true,
+  },
+  codex: {
+    id: "codex", name: "Codex", product: "Codex", art: "codex", modelPref: "codexModels",
+    instructionsFile: "AGENTS.md", userDir: ".codex", homeEnv: "CODEX_HOME", modelPrefix: null,
+    flowBackend: "codex", flowSdk: false,
+  },
 } satisfies Record<AgentId, AgentDescriptor>;
 
 export { isAgentId };

@@ -261,7 +261,7 @@ fn sync_inner(home: &Path, shared: &Path, entries: &[SharedLogin], _lock: &HomeL
         let mine: BTreeMap<&String, &FileId> = state.iter().filter(|(k, _)| owned(k, a)).collect();
         let kept = std::fs::create_dir_all(&logs)
             .map_err(|e| e.to_string())
-            .and_then(|_| serde_json::to_vec_pretty(&mine).map_err(|e| e.to_string()))
+            .and_then(|_| crate::fsx::json_pretty_bytes(&mine, false))
             .and_then(|json| {
                 let path = logs.join(record_name(a));
                 if std::fs::read(&path).ok().as_deref() == Some(json.as_slice()) { Ok(()) }
@@ -282,7 +282,7 @@ fn sync_inner(home: &Path, shared: &Path, entries: &[SharedLogin], _lock: &HomeL
     result.map(|_| warnings)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // 7 args: paths, entries and the three output accumulators, passed separately
 fn sync_entries(home: &Path, shared: &Path, entries: &[SharedLogin], state: &mut BTreeMap<String, FileId>, lines: &mut Vec<String>, warnings: &mut Vec<String>, sweep: bool) -> Result<(), String> {
     // The `Vidar` folder: every folder from it down to either name is checked for a reparse point.
     let top = shared.parent().and_then(Path::parent).unwrap_or(shared).to_path_buf();

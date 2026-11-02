@@ -1,11 +1,13 @@
 // The Brainstorm starter plus the six linear starters, authored v1 graphs (input/agent/output only, every agent node
 // with a ModelId, a `preset` field, and an explicit-placeholder task per §4.2). Leaf module — no
-// value imports (node --test rule, §7); `FlowTemplate`/`FlowNode`/`FlowEdge` cross only as types.
+// value imports except the model id adapter (node --test rule, §7); graph shapes cross only as types.
 // Seeded into `vidar.flow.templates.v1` by store.ts via store-core.ts's `seedTemplatesIfAbsent`
 // when the templates key is absent (§4.1). Node ids and default tasks are frozen verbatim (§6);
 // only the wording may be tuned later, never the placeholders.
 
 import type { AgentPreset, FlowEdge, FlowNode, FlowTemplate } from "./model";
+// @ts-ignore TS5097: node --test imports this leaf module directly
+import { FLOW_MODELS } from "./claude-models.ts";
 
 function inputNode(x: number, y: number): FlowNode {
   return {
@@ -104,7 +106,7 @@ const BRAINSTORM_FORMAT_REVIEW_EXECUTE: FlowTemplate = {
       agentNode({
         id: "format",
         title: "Format",
-        model: "claude-sonnet-5",
+        model: FLOW_MODELS.sonnet,
         preset: "brainstorm-format",
         task: "Turn this brain dump into one specific, structured task prompt.\n\n{{input}}",
         x: 0,
@@ -113,7 +115,7 @@ const BRAINSTORM_FORMAT_REVIEW_EXECUTE: FlowTemplate = {
       agentNode({
         id: "review",
         title: "Review",
-        model: "claude-opus-5-5",
+        model: FLOW_MODELS.opus,
         preset: "review",
         task: "Review this task prompt for ambiguity, missing constraints and risk. List findings with fixes.\n\nTask prompt:\n{{format}}",
         x: 0,
@@ -122,7 +124,7 @@ const BRAINSTORM_FORMAT_REVIEW_EXECUTE: FlowTemplate = {
       agentNode({
         id: "execute",
         title: "Execute",
-        model: "claude-sonnet-5",
+        model: FLOW_MODELS.sonnet,
         preset: "execute",
         task: `Carry out this task, applying the review notes. ${EDIT_RULE} End with a short report.\n\nTask:\n{{format}}\n\nReview notes:\n{{review}}`,
         x: 0,
@@ -141,9 +143,9 @@ const BRAINSTORM_FORMAT_REVIEW_EXECUTE: FlowTemplate = {
 
 type Stage = { id: string; title: string; model: FlowNode["model"]; preset: AgentPreset; task: string };
 
-const OPUS: FlowNode["model"] = "claude-opus-5-5";
-const SONNET: FlowNode["model"] = "claude-sonnet-5";
-const MODEL_NAMES: Record<string, string> = { "claude-opus-5-5": "Opus 5.5", "claude-sonnet-5": "Sonnet 5" };
+const OPUS: FlowNode["model"] = FLOW_MODELS.opus;
+const SONNET: FlowNode["model"] = FLOW_MODELS.sonnet;
+const MODEL_NAMES: Record<string, string> = { [OPUS]: "Opus 5.5", [SONNET]: "Sonnet 5" };
 
 function analyzeStage(prior: Stage[]): Stage {
   const outputs = prior.map((s) => `${s.title}:\n{{${s.id}}}`).join("\n\n");

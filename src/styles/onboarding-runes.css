@@ -1,4 +1,4 @@
-/* Onboarding First Runeset step (variant A, Runes Tab As Is): the Runes tab's Bare view fitted into the
+/* Onboarding Runeset step (variant A, Runes Tab As Is): the Runes tab's Bare view fitted into the
    body. Fit only: a centred column that scrolls inside the body, no new look. */
 .ob-runes {
   flex: 1; min-width: 0; min-height: 0; overflow: auto;

@@ -39,7 +39,7 @@ test("a path containing ' has the quote doubled", () => {
 });
 
 test('unknown shape: args unchanged plus a warning', () => {
-  for (const args of [undefined, ['-NoExit', '-Command', 'gemini'], ['-NoProfile', '-Command', '& x.ps1 -Vendor acme'], ['-NoExit'], cmd('claudex')]) {
+  for (const args of [undefined, ['-NoExit', '-Command', 'pi'], ['-NoProfile', '-Command', '& x.ps1 -Vendor acme'], ['-NoExit'], cmd('claudex')]) {
     const r = injectRules(args, claudeRules);
     assert.equal(r.args, args);
     assert.match(r.warning, /^Rules not applied to this terminal launch/);
@@ -62,7 +62,7 @@ test('malformed rules or key warn instead of throwing', () => {
 });
 
 test('vendor and other non-claude/codex rows get the generic warning', () => {
-  for (const id of ['acme', 'beta', 'gemini']) {
+  for (const id of ['acme', 'beta', 'pi']) {
     const r = rulesPlan({ id, key: id, label: id, rules: ['core'] });
     assert.match(r.warning, /is not a Claude or Codex row/);
   }

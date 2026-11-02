@@ -9,13 +9,11 @@
 
 import { isPermissionMode, type AdapterStart, type AgentAdapter, type AgentEvent, type Effort, type PermissionMode } from "./protocol";
 import { CodexAdapter } from "./codex";
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, type Json } from "../json.ts";
 
-type Json = Record<string, unknown>;
 type Decision = { behavior: "allow"; updatedInput?: unknown } | { behavior: "deny"; message?: string };
 
-function obj(v: unknown): Json | null {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null;
-}
 /** The line as a JSON-RPC reply (an id and no method), else null: everything else is the view's. */
 function reply(line: string): Json | null {
   let m: Json | null;

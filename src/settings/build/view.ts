@@ -2,11 +2,14 @@
 // disabled, phase and elapsed time, log tail, Cancel), Result and Failure. Reuses the Modules page rows
 // and switch (settings/modules.css) and the decision pair (styles/decision-pair.css); its own layout is
 // styles/release-build.css. Rendering only: page.ts owns the state and the IPC.
+import { button, el } from "../../dom";
 import { iconImg, type ColorIcon } from "../../icon-img";
-import { SURFACE_ICONS } from "../../panels/workbench-modules";
+import { BENCH_ICONS } from "../../panels/workbench-modules";
 import openaiIcon from "../../assets/openai.png";
 import claudeIcon from "../../assets/claude.png";
 import pickerIcon from "../../assets/picker.png";
+import falconIcon from "../../assets/falcon.png";
+import { markFor } from "../../launcher/menu-rows";
 import type { ReleaseBuildSet } from "../../ipc-settings";
 import { failureLine, GROUPS, phaseLabel, summarize, type RunModel, type Toggle } from "./state";
 
@@ -41,34 +44,19 @@ export interface BuildHandlers {
 }
 
 const ICONS: Record<string, ColorIcon> = {
-  tray: "tray", doc: "doc", flow: "flow", runelib: "runelib",
-  lab: "lab", changes: "changes", unreal: "unreal", ...SURFACE_ICONS, marquee: "marquee",
+  ...BENCH_ICONS, marquee: "marquee",
   "voice-stock": "mic",
 };
-/** Rows whose mark is a bundled asset, not a manifest icon: the launcher's vendor marks and the toolbar's picker. */
+/** Rows whose mark is a bundled asset, not a manifest icon: the launcher's vendor marks, Falcon's app art and the
+ *  toolbar's picker. Agent rows take the launcher's mark for their label (markFor). */
 const ASSET_ICONS: Record<string, string> = {
-  "codex-profiles": openaiIcon, "agent-profiles": claudeIcon, eyedropper: pickerIcon,
+  "codex-profiles": openaiIcon, "agent-profiles": claudeIcon, eyedropper: pickerIcon, falcon: falconIcon,
 };
 
 function assetImg(src: string): HTMLImageElement {
   const img = iconImg("mic"); // same class and a11y attributes as every other row mark
   img.src = src;
   return img;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-/** Label first, so lint-copy's `button(` sink judges the label. */
-function button(label: string, cls: string, onClick: () => void): HTMLButtonElement {
-  const b = el("button", cls, label);
-  b.type = "button";
-  b.addEventListener("click", onClick);
-  return b;
 }
 
 function picker(v: BuildView, h: BuildHandlers): HTMLSelectElement {
@@ -104,7 +92,7 @@ function groups(v: BuildView, h: BuildHandlers): HTMLElement {
       }
       const name = el("span", "module-settings__name");
       const icon = ICONS[t.id];
-      const asset = ASSET_ICONS[t.id];
+      const asset = ASSET_ICONS[t.id] ?? (t.group === "Agents" ? markFor(t.label)?.icon : undefined);
       if (icon) name.appendChild(iconImg(icon));
       else if (asset) name.appendChild(assetImg(asset));
       name.appendChild(el("span", "", t.label));

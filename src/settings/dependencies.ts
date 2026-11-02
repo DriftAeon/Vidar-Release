@@ -18,6 +18,7 @@ import "../styles/voice-slots.css";
 import { asideForPage, backOnPageClose } from "../onboarding/aside";
 import { closeShortcutsModal } from "./modal";
 import { addSettingRow, registerCategory } from "./registry";
+import { errText } from "../err-text";
 
 const DEPENDENCIES_CATEGORY = "dependencies";
 const PAGE_ID = "dependencies";
@@ -97,7 +98,7 @@ export function mountDependencies(root: HTMLElement): () => void {
           .then((m) => m.checkUpdatesNow())
           .then(
             (n) => { checkNote = n === 0 ? "All CLIs Up to Date" : ""; },
-            (e) => { checkNote = `Check Failed: ${e instanceof Error ? e.message : String(e)}`; },
+            (e) => { checkNote = `Check Failed: ${errText(e)}`; },
           )
           .then(() => { checking = false; paint(); });
       },

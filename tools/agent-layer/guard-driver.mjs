@@ -1,6 +1,6 @@
 // Driver Mode guard for bare Claude tabs: the Vidar-layer copy of the global PreToolUse hook
 // ~\.claude\hooks\guard-driver.mjs, delivered by path from the generated settings of a bare home
-// (profiles/bare/claude.settings.template.json). A Falcon-hosted session that is only meant to
+// (profiles/bare/vidar-runes/settings/claude-settings.json). A Falcon-hosted session that is only meant to
 // drive lanes must not build or edit the install itself.
 //
 // Usage (Claude's PreToolUse command; Claude pipes the hook JSON on stdin):

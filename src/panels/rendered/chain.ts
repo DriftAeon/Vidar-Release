@@ -60,7 +60,7 @@ function mcpDisplay(name: string): { icons: ColorIcon[]; label: string } | null 
   if (proxyUnreal) {
       return { icons: ["vidar" as ColorIcon, "unreal" as ColorIcon], label: toolWords(toolName.replace(/^unreal[_-]/i, "")) };
   }
-  // a Claude Code plugin server is `plugin_<plugin>_<server>` (plugin_vidar_drive): look it up as vidar-drive
+  // the drive server is `vidar_drive`; a Claude Code plugin server is `plugin_<plugin>_<server>`: look both up as vidar-drive
   const server = backendLookupName(rawServer);
   const icons: ColorIcon[] = [];
   const serverIcons = BACKEND_ICONS_MAP.get(server.toLowerCase());

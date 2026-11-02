@@ -247,8 +247,7 @@ fn run_at(file: &Path, transcripts: &[PathBuf], bare: &[(u64, Vec<String>)], tod
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("Load history {}: {e}", clean(dir)))?;
     }
-    let bytes = serde_json::to_vec_pretty(&h).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(file, &bytes)?;
+    crate::fsx::write_json_pretty(file, &h, false)?;
     Ok(h)
 }
 

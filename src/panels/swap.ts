@@ -16,6 +16,7 @@
      chose to trust the press (2026-10-07). */
 import { invoke } from "../ipc";
 import { iconImg } from "../icon-img";
+import { confirmRow } from "../dom";
 import { getPref, setPref } from "../prefs";
 import { openPopover } from "../modules/popover";
 import { placeAbove } from "../modules/place-menu";
@@ -224,14 +225,12 @@ export function initSwap(btn: HTMLButtonElement, signal: AbortSignal) {
     tile.append(iconImg("swap"));
     head.append(tile, Object.assign(document.createElement("strong"), { textContent: TITLE }));
     const body = Object.assign(document.createElement("div"), { className: "swap-confirm-body" });
-    const text = Object.assign(document.createElement("p"), { textContent: "Would you like to rebuild Vidar now?" });
-    const actions = Object.assign(document.createElement("div"), { className: "swap-confirm-actions" });
-    const yes = Object.assign(document.createElement("button"), { type: "button", className: "swap-yes", textContent: "Yes" });
-    const no = Object.assign(document.createElement("button"), { type: "button", className: "swap-no", textContent: "No" });
-    yes.addEventListener("click", () => { closePopup(true); void run(); });
-    no.addEventListener("click", () => closePopup(true));
-    actions.append(yes, no);
-    body.append(text, actions);
+    const { yes } = confirmRow({
+      root: body,
+      note: Object.assign(document.createElement("p"), { textContent: "Would you like to rebuild Vidar now?" }),
+      yes: { label: "Yes", run: () => { closePopup(true); void run(); } },
+      no: { label: "No", run: () => closePopup(true) },
+    });
     box.append(head, body);
     openPopup(box, yes);
   };

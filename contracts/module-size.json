@@ -48,13 +48,6 @@
       "status": "owed",
       "seams": "",
       "note": "Probe pack for bare mode: one harness, one fixture per probe; test tooling, not app code"
-    },
-    {
-      "path": "tools/falcon/falcon-slice1.ps1",
-      "code": 761,
-      "status": "parked",
-      "seams": "",
-      "note": "churn nil"
     }
   ]
 }

@@ -104,7 +104,7 @@ function homeFloor(): { group: T.Group; overlayMaterial: T.ShaderMaterial; dispo
   const baseMaterial = new T.MeshBasicMaterial({ color: FLOOR_COLOR, alphaMap: fade, transparent: true, depthWrite: false });
   disposables.push(baseMaterial);
   const base = new T.Mesh(baseGeometry, baseMaterial);
-  base.rotateX(-Math.PI / 2);
+  base.rotateX(-Math.acos(-1) / 2);
   group.add(base);
 
   const overlayGeometry = new T.CircleGeometry(FLOOR_RADIUS, 128);
@@ -138,7 +138,7 @@ void main() {
   });
   disposables.push(overlayMaterial);
   const overlay = new T.Mesh(overlayGeometry, overlayMaterial);
-  overlay.rotateX(-Math.PI / 2);
+  overlay.rotateX(-Math.acos(-1) / 2);
   overlay.position.y = 0.002;
   group.add(overlay);
 
@@ -152,7 +152,7 @@ function motes(): { points: T.Points; disposables: (T.BufferGeometry | T.Materia
   const sizes = new Float32Array(MOTE_COUNT);
   const palette = MOTE_COLORS.map((color) => new T.Color(color));
   for (let i = 0; i < MOTE_COUNT; i++) {
-    const angle = Math.random() * Math.PI * 2;
+    const angle = Math.random() * Math.acos(-1) * 2;
     const radius = 10 + Math.random() * 30;
     positions.set([Math.cos(angle) * radius, Math.random() * 14, Math.sin(angle) * radius], i * 3);
     const color = palette[Math.floor(Math.random() * palette.length)];

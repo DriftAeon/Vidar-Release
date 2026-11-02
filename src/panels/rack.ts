@@ -18,8 +18,9 @@ import { skillLabel } from "./skill-label";
 import { mcpFocus, mcpFocusRead, type McpFocus } from "./mcp-focus";
 import { applyOrder, enableReorder } from "./reorder";
 import { getFocusedSession, type FocusedSession } from "./sessions";
+import { notifyModulesChanged } from "../modules/hidden";
 import { getPref, setPref } from "../prefs";
-import { backendLookupName, dedupeRackServers, isLoopbackHttp, rackServerId, rackToolsKey, reconcileRackOrder } from "./rack-modules";
+import { backendLookupName, dedupeRackServers, isLoopbackHttp, isProjectScope, rackServerId, rackToolsKey, reconcileRackOrder } from "./rack-modules";
 import { openModuleContextMenu, type ModuleContextMenu, type ModuleMenuAction } from "../modules/context-menu";
 
 const ORDER_KEY = "order.rack";
@@ -86,7 +87,7 @@ function queryable(s: McpServer): boolean {
 function fetchTools(s: McpServer, profile: string | null, tab: string | null): Promise<McpTool[]> {
   if (s.transport !== "stdio") return invoke("list_mcp_tools", { url: s.target });
   // Rust re-reads command, args and cwd from the config and refuses an unapproved project server
-  const project = s.scope === "user" || s.scope === "codex" ? null : s.project;
+  const project = isProjectScope(s.scope) ? s.project : null;
   return invoke("list_mcp_tools_stdio", { name: s.name, scope: s.scope, project, profile, tab });
 }
 
@@ -132,7 +133,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
     const hidden = new Set(getPref("modules.hidden") ?? []);
     if (hide) hidden.add(id);
     else hidden.delete(id);
-    if (setPref("modules.hidden", [...hidden])) document.dispatchEvent(new CustomEvent("vidar-modules-change"));
+    if (setPref("modules.hidden", [...hidden])) notifyModulesChanged();
   };
   const menuActions = (row?: HTMLElement): ModuleMenuAction[] => {
     const hidden = new Set(getPref("modules.hidden") ?? []);
@@ -245,7 +246,7 @@ export async function initRack(root: HTMLElement, opts: RackOptions = {}, signal
     const saved = getPref(ORDER_KEY) ?? [];
     const order = reconcileRackOrder(saved, rack.servers);
     if (order.length !== saved.length || order.some((id, index) => id !== saved[index])) {
-      if (setPref(ORDER_KEY, order)) document.dispatchEvent(new CustomEvent("vidar-modules-change"));
+      if (setPref(ORDER_KEY, order)) notifyModulesChanged();
     }
   }
   const only = opts.only;

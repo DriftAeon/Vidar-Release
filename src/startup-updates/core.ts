@@ -1,4 +1,6 @@
 // Startup update policy: version ordering, remembered skips and a bounded check.
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENT_IDS, PTY_ONLY_IDS } from "../agents/id.ts";
 export interface CliUpdate {
   id: string;
   label: string;
@@ -37,7 +39,7 @@ export function compareVersions(a: string, b: string): number | null {
 
 export function skippedVersions(state: Record<string, unknown>): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const id of ["gemini", "codex", "claude", "pi"]) {
+  for (const id of [...AGENT_IDS, ...PTY_ONLY_IDS]) {
     const value = state[`startupUpdates.skip.${id}`];
     if (typeof value === "string" && version(value)) result[id] = value;
   }

@@ -24,8 +24,8 @@ test("set_loadout.rs holds the one Not Carried format; both launches call it", (
 for (const id of AGENT_IDS) {
   const agent = AGENTS[id].name;
   test(`${agent} line parses`, () => {
-    const p = parseNotCarried(`output-style kit-brief Not Carried by ${agent}: ${agent} has no output style`);
-    assert.deepEqual(p, { kind: "output-style", id: "kit-brief", agent, reason: `${agent} has no output style` });
+    const p = parseNotCarried(`output-style team-brief Not Carried by ${agent}: ${agent} has no output style`);
+    assert.deepEqual(p, { kind: "output-style", id: "team-brief", agent, reason: `${agent} has no output style` });
   });
 }
 
@@ -50,7 +50,7 @@ test("a rune line renders icon, mono id, prose", () => {
 test("non-rune kinds and tool names stay plain prose", () => {
   for (const w of [
     "guard Stop Not Carried by Codex: Codex has no Stop hook event",
-    "permission mcp__plugin_vidar_drive Not Carried by Codex: Codex has no per-tool list",
+    "permission mcp__vidar_drive Not Carried by Codex: Codex has no per-tool list",
     "permission acceptEdits Not Carried by Codex: Codex has no permission mode",
     "outputStyle Explanatory Not Carried by Codex: Codex has no output style",
     "Resumed thread note",
@@ -63,8 +63,8 @@ test("non-rune kinds and tool names stay plain prose", () => {
   }
 });
 
-test("all eleven kinds have an icon and a Title Case name", () => {
-  assert.deepEqual(Object.keys(KINDS).sort(), ["agent", "fact", "hook", "mcp", "model", "output-style", "permission", "plugin", "procedure", "rule", "skill"]);
+test("all twelve kinds have an icon and a Title Case name", () => {
+  assert.deepEqual(Object.keys(KINDS).sort(), ["agent", "fact", "hook", "mcp", "model", "output-style", "permission", "plugin", "procedure", "rule", "setting", "skill"]);
   assert.equal(KIND_NAME["mcp"], "MCP Server");
   assert.equal(KINDS.permission.icon, "shield");
   assert.equal(KINDS.rule.icon, "scales");

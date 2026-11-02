@@ -10,16 +10,12 @@ import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
+import { ipcStubSource } from "./ipc-stub.mjs";
 
 const SRC = new URL("../../src/", import.meta.url).href;
 const EMPTY = "data:text/javascript,";
 
-const IPC_STUB = `export function invoke(cmd, args) {
-    const h = globalThis.__domMount; h.invoked.push(cmd);
-    if (Object.hasOwn(h.answers, cmd)) { const a = h.answers[cmd]; return Promise.resolve(typeof a === "function" ? a(args) : a); }
-    return Promise.reject(new Error("unstubbed invoke: " + cmd));
-  }
-  export function listen(ev, cb) { const h = globalThis.__domMount; h.invoked.push("listen:" + ev); h.listeners[ev] = cb; return Promise.resolve(() => {}); }`;
+const IPC_STUB = ipcStubSource();
 
 const GLOBALS = ["Node", "Element", "HTMLElement", "HTMLButtonElement", "HTMLInputElement", "HTMLTextAreaElement",
   "HTMLSelectElement", "HTMLDivElement", "SVGElement", "SVGSVGElement", "Text", "Range", "DocumentFragment",

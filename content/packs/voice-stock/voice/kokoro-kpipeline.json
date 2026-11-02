@@ -33,5 +33,5 @@
   ],
   "licence": "Apache-2.0 (Kokoro-82M weights and the kokoro package)",
   "source": "https://huggingface.co/hexgrad/Kokoro-82M at revision f3ff3571791e39611d31c381e3a41a3af07b4987, through content/local-voice/tts_kokoro.py and kokoro_sidecar.py (this repo)",
-  "fill": "pwsh -File {vidar}/tools/voice/setup-voice.ps1 -Speak, then fetch hexgrad/Kokoro-82M revision f3ff3571791e39611d31c381e3a41a3af07b4987 (kokoro-v1_0.pth, config.json, voices/{model}.pt) into {vidar}/content/local-voice/.cache/huggingface. Vidar never downloads."
+  "fill": "pwsh -File {vidar}/tools/voice/setup-voice.ps1 -Only venv -Speak, then fetch hexgrad/Kokoro-82M revision f3ff3571791e39611d31c381e3a41a3af07b4987 (kokoro-v1_0.pth, config.json, voices/{model}.pt) into {vidar}/content/local-voice/.cache/huggingface. Vidar never downloads."
 }

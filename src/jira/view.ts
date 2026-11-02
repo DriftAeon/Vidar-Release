@@ -2,6 +2,7 @@
 // clicks. All remote text (summary, status, error message) goes in through textContent or title.
 // The token is read from its field once, on submit, and the field is emptied at once: no state,
 // attribute or later render holds it.
+import { el, iconBtn, textBtn } from "../dom";
 import { lucide } from "../icons";
 import { iconImg, type ColorIcon } from "../icon-img";
 import { brandIcon, clearEmptyState, connectActions, fillEmptyState } from "../panels/empty-state";
@@ -69,29 +70,6 @@ export function errorTitle(kind: ErrorKind): string | null {
   return kind === "unset" ? null : kind === "site" ? TITLES.endpoint : TITLES[kind];
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = cls;
-  return node;
-}
-
-function iconBtn(icon: Node, label: string, tip: string, cls = "cx-ico"): HTMLButtonElement {
-  const b = el("button", cls);
-  b.type = "button";
-  b.title = tip;
-  b.setAttribute("aria-label", label);
-  b.append(icon);
-  return b;
-}
-
-function textBtn(label: string, cls: string, tip?: string): HTMLButtonElement {
-  const b = el("button", cls);
-  b.type = "button";
-  b.textContent = label;
-  if (tip) b.title = tip;
-  return b;
-}
-
 export function buildView(h: Handlers): View {
   const root = el("div", "jira-pane");
   root.id = "jira-view";
@@ -156,7 +134,6 @@ export function buildView(h: Handlers): View {
 
   let formShown = false;
   const collapsed = new Set<string>(); // section keys (level plus name), in memory only
-  let last: ViewState | null = null;
 
   function drawHead(state: ViewState) {
     head.replaceChildren();
@@ -275,7 +252,6 @@ export function buildView(h: Handlers): View {
   }
 
   function render(state: ViewState) {
-    last = state;
     const connected = state.mode === "list";
     head.hidden = !connected && state.mode !== "loading";
     list.hidden = !connected || !!state.error || !state.issues.length;

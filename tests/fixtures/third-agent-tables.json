@@ -1,11 +1,1000 @@
 {
-  "note": "The only files tsc may fail on once \"grok\" joins AGENT_IDS (the table files). panels/mcp-focus.ts and panels/loadout.ts stand in for the focus reader and the loadout reader, which stay in panels/.",
-  "files": [
-    "src/agents/agent-profile.ts",
-    "src/agents/descriptor.ts",
-    "src/launcher/row-facts.ts",
-    "src/panels/loadout.ts",
-    "src/panels/mcp-focus.ts",
-    "src/panels/rendered/tool-class.ts"
+  "note": "Compiler sites after adding Grok to AGENT_IDS and scanner-derived Rust enums.",
+  "sites": [
+    {
+      "file": "src-falcon/src/protocol.rs",
+      "lines": [
+        93,
+        96
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/protocol/agent_env.rs",
+      "lines": [
+        16,
+        27
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/protocol/agent_env.rs",
+      "lines": [
+        32,
+        35
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/protocol/agent_env.rs",
+      "lines": [
+        40,
+        43
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/protocol/agent_env.rs",
+      "lines": [
+        48,
+        51
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/replay.rs",
+      "lines": [
+        227,
+        472
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/replay.rs",
+      "lines": [
+        294,
+        297
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve.rs",
+      "lines": [
+        103,
+        106
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve.rs",
+      "lines": [
+        554,
+        564
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve.rs",
+      "lines": [
+        86,
+        89
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve.rs",
+      "lines": [
+        94,
+        97
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/dispatch.rs",
+      "lines": [
+        179,
+        182
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/dispatch.rs",
+      "lines": [
+        196,
+        201
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/idle.rs",
+      "lines": [
+        412,
+        415
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/probe.rs",
+      "lines": [
+        129,
+        134
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        106,
+        109
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        229,
+        242
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        285,
+        290
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        308,
+        311
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        36,
+        39
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        51,
+        57
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "lines": [
+        67,
+        74
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        101,
+        104
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        109,
+        112
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        117,
+        120
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        125,
+        128
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        138,
+        141
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        148,
+        153
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        163,
+        166
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        171,
+        174
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        180,
+        185
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        189,
+        192
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        198,
+        201
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        207,
+        210
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        214,
+        217
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        220,
+        223
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        231,
+        234
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        243,
+        248
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        251,
+        254
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        257,
+        260
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        263,
+        266
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        269,
+        272
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        275,
+        278
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        281,
+        284
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        55,
+        58
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        61,
+        64
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        67,
+        70
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        73,
+        76
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        79,
+        82
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session.rs",
+      "lines": [
+        88,
+        95
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/dispatch.rs",
+      "lines": [
+        155,
+        158
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/dispatch.rs",
+      "lines": [
+        295,
+        306
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/history.rs",
+      "lines": [
+        39,
+        49
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/history.rs",
+      "lines": [
+        53,
+        61
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/history.rs",
+      "lines": [
+        65,
+        73
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/history.rs",
+      "lines": [
+        77,
+        86
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-falcon/src/session/history.rs",
+      "lines": [
+        90,
+        105
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/agent_spec.rs",
+      "lines": [
+        257,
+        260
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/agent.rs",
+      "lines": [
+        100,
+        103
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/bare/copies.rs",
+      "lines": [
+        241,
+        250
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/bare/copies.rs",
+      "lines": [
+        636,
+        639
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/bare/login_link.rs",
+      "lines": [
+        194,
+        197
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/codex_config.rs",
+      "lines": [
+        38,
+        41
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/codex_models.rs",
+      "lines": [
+        92,
+        95
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/ops.rs",
+      "lines": [
+        151,
+        154
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "lines": [
+        152,
+        155
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "lines": [
+        157,
+        160
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "lines": [
+        167,
+        181
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "lines": [
+        192,
+        211
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "lines": [
+        215,
+        221
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "lines": [
+        233,
+        236
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/flow.rs",
+      "lines": [
+        159,
+        162
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/flow/bare.rs",
+      "lines": [
+        103,
+        109
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/flow/bare.rs",
+      "lines": [
+        46,
+        49
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/flow/bare.rs",
+      "lines": [
+        60,
+        69
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/mcp.rs",
+      "lines": [
+        661,
+        664
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/catalog.rs",
+      "lines": [
+        135,
+        138
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/commands.rs",
+      "lines": [
+        479,
+        488
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/home.rs",
+      "lines": [
+        157,
+        160
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/home.rs",
+      "lines": [
+        217,
+        220
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/payload.rs",
+      "lines": [
+        23,
+        31
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "lines": [
+        158,
+        164
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "lines": [
+        461,
+        464
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "lines": [
+        95,
+        101
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/validate.rs",
+      "lines": [
+        166,
+        169
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/import/local.rs",
+      "lines": [
+        141,
+        144
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/import/local.rs",
+      "lines": [
+        348,
+        351
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/import/sources.rs",
+      "lines": [
+        116,
+        119
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/import/sources.rs",
+      "lines": [
+        125,
+        128
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/import/sources.rs",
+      "lines": [
+        133,
+        139
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/loaded.rs",
+      "lines": [
+        360,
+        363
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/rules/mod.rs",
+      "lines": [
+        97,
+        112
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/speak.rs",
+      "lines": [
+        209,
+        212
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src-tauri/src/usage_ledger.rs",
+      "lines": [
+        125,
+        131
+      ],
+      "kind": "rust-match"
+    },
+    {
+      "file": "src/agents/agent-profile.ts",
+      "anchor": "115:74",
+      "lines": [
+        115,
+        188
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/agents/descriptor.ts",
+      "anchor": "32:67",
+      "lines": [
+        32,
+        43
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/asks/record.ts",
+      "anchor": "70:67",
+      "lines": [
+        70,
+        70
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/asks/record.ts",
+      "anchor": "71:58",
+      "lines": [
+        71,
+        71
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/control/open-ask.ts",
+      "anchor": "13:51",
+      "lines": [
+        13,
+        13
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/lab/items.ts",
+      "anchor": "42:51",
+      "lines": [
+        42,
+        42
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/agent-kind.ts",
+      "anchor": "8:48",
+      "lines": [
+        8,
+        8
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/codex-restore.ts",
+      "anchor": "11:53",
+      "lines": [
+        11,
+        11
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/fix-tab.ts",
+      "anchor": "10:42",
+      "lines": [
+        10,
+        10
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/hosted.ts",
+      "anchor": "32:69",
+      "lines": [
+        32,
+        35
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/locations.ts",
+      "anchor": "30:119",
+      "lines": [
+        30,
+        33
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/readopt.ts",
+      "anchor": "24:55",
+      "lines": [
+        24,
+        27
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/readopt.ts",
+      "anchor": "28:55",
+      "lines": [
+        28,
+        31
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/recent.ts",
+      "anchor": "21:46",
+      "lines": [
+        21,
+        21
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/roster.ts",
+      "anchor": "24:46",
+      "lines": [
+        24,
+        24
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/launcher/row-facts.ts",
+      "anchor": "25:53",
+      "lines": [
+        25,
+        40
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/lab.ts",
+      "anchor": "21:45",
+      "lines": [
+        21,
+        21
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/mcp-focus.ts",
+      "anchor": "28:47",
+      "lines": [
+        28,
+        37
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/rendered/events.ts",
+      "anchor": "106:71",
+      "lines": [
+        106,
+        109
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/rendered/events.ts",
+      "anchor": "111:55",
+      "lines": [
+        111,
+        111
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/rendered/events.ts",
+      "anchor": "113:50",
+      "lines": [
+        113,
+        113
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/rendered/tool-class.ts",
+      "anchor": "10:87",
+      "lines": [
+        10,
+        30
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/runes.ts",
+      "anchor": "235:73",
+      "lines": [
+        235,
+        238
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/sessions/astra-sandbox.ts",
+      "anchor": "13:48",
+      "lines": [
+        13,
+        13
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/panels/sessions/types.ts",
+      "anchor": "133:3",
+      "lines": [
+        133,
+        137
+      ],
+      "kind": "ts-switch"
+    },
+    {
+      "file": "src/panels/status.ts",
+      "anchor": "10:56",
+      "lines": [
+        10,
+        10
+      ],
+      "kind": "ts-record"
+    },
+    {
+      "file": "src/rules/inject.ts",
+      "anchor": "48:74",
+      "lines": [
+        48,
+        51
+      ],
+      "kind": "ts-record"
+    }
   ]
 }

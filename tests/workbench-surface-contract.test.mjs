@@ -23,8 +23,9 @@ test('Jira, Notion and Slack declare an icon in the contract and the maps read i
     assert.ok(entry?.surface.icon, `${id} has surface.icon`);
   }
   for (const file of ['../src/settings/modules.ts', '../src/settings/build/view.ts']) {
-    assert.match(read(file), /\.\.\.SURFACE_ICONS/, file);
+    assert.match(read(file), /BENCH_ICONS/, file);
   }
+  assert.doesNotMatch(read('../src/panels/workbench-modules.ts'), /tray: "tray"/);
   const icons = JSON.parse(read('../contracts/icons.json')).icons;
   for (const { id, surface } of core.filter((e) => e.surface?.icon)) {
     assert.ok(surface.icon in icons, `${id} icon ${surface.icon} is in contracts/icons.json`);
@@ -33,11 +34,8 @@ test('Jira, Notion and Slack declare an icon in the contract and the maps read i
 
 test('every optional workbench tab resolves to an icon in both maps', () => {
   const icons = JSON.parse(read('../contracts/icons.json')).icons;
-  const maps = ['../src/settings/modules.ts', '../src/settings/build/view.ts'].map((f) => [f, read(f)]);
   for (const { id, surface } of optional) {
-    const icon = surface.icon ?? id;
-    assert.ok(icon in icons, `${id} icon ${icon} is in contracts/icons.json`);
-    if (surface.icon) continue;
-    for (const [file, src] of maps) assert.match(src, new RegExp(`\\b${id}: "${id}"`), `${file} maps ${id}`);
+    assert.ok(surface.icon, `${id} declares surface.icon`);
+    assert.ok(surface.icon in icons, `${id} icon ${surface.icon} is in contracts/icons.json`);
   }
 });

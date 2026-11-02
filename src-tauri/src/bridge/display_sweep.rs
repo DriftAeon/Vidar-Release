@@ -34,7 +34,7 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 
 use super::display::{decision_sidecar, read_decision_in, request_id_of, sidecar_is_plain_file};
 use super::drop::validate_drop_path;
@@ -115,9 +115,7 @@ fn is_old(stamp_ms: u64, now_ms: u64) -> bool {
     now_ms.saturating_sub(stamp_ms) > MAX_AGE.as_millis() as u64
 }
 
-fn wall_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
+use crate::fsx::now_ms as wall_ms;
 
 /// The shared classifier, uncached (every move-time check). None for anything that is not a display item
 /// (folders, sidecars, other types).
@@ -393,6 +391,7 @@ fn move_pair(ctx: &Ctx, rename: Rename, within: &Path, media: &Path, side: Optio
 }
 
 /// Clear: the pair into `shown\<month of the Clear>\`. The caller holds the lock.
+#[cfg(test)]
 pub(super) fn clear_core(ctx: &Ctx, rename: Rename, media: &Path, name: &str, now_ms: u64) -> Result<PathBuf, String> {
     let side = decision_sidecar(media, name);
     let side = sidecar_is_plain_file(&side).then_some(side);
@@ -509,7 +508,7 @@ mod tests {
     static SEQ: AtomicUsize = AtomicUsize::new(0);
 
     fn real_now() -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
+        std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
     }
 
     /// A fresh display folder, archive and move log under a temp root.

@@ -34,9 +34,5 @@
   },
   "agents": [
     { "key": "local", "id": "local", "label": "Local", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-NoExit", "-Command", "if (-not $env:VIDAR_ROOT) { throw 'VIDAR_ROOT is not set: this Vidar build predates Local tabs' }; & \"$env:VIDAR_ROOT/tools/local/local-tab.ps1\""] }
-  ],
-  "macros": [
-    { "label": "Claude", "command": "claude", "submit": false },
-    { "label": "Git Status", "command": "git status", "submit": true }
   ]
 }

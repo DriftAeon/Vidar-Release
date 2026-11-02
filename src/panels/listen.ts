@@ -22,10 +22,10 @@
    Mounted by the capability registry (capabilities/mounts/listen.ts, gated on the voice
    dependency); everything here is undone when `signal` aborts. */
 import { invoke, listen as ipcListen } from "../ipc";
-import { lucide } from "../icons";
 import { iconImg } from "../icon-img";
 import { clearOpenMessage, getActiveSessionId, isPageTab, writeToSession } from "./sessions";
 import { markVoice } from "../voice-mark";
+import { WAKE_NONE, wakeActive } from "../wake-none";
 import { playChime, primeChime } from "../chime";
 import { openVoiceMap } from "./voice-map";
 import { addSettingRow } from "../shortcuts";
@@ -89,7 +89,7 @@ export function initListen(
   // Sticks in the tooltip when a transcript has nowhere to go (no focused tab);
   // replaced the moment the next utterance lands.
   let pending: string | null = null;
-  const glyph = { off: lucide("mic-off"), on: iconImg("mic") };
+  const glyph = { off: iconImg("mic-off"), on: iconImg("mic") };
   btn.append(glyph.off);
 
   const paint = (next: State, err?: string) => {
@@ -119,6 +119,7 @@ export function initListen(
   const start = async (fromClick: boolean): Promise<boolean> => {
     const v = voice();
     if (!v) return false;
+    if (!wakeActive(cfg.model)) { paint("off", "Wake Word Is None"); return false; }
     // Priming an AudioContext needs a real user gesture; a config-driven auto-start
     // (cfg.enabled on load) has none, so the first pointerdown anywhere primes it instead.
     if (fromClick) primeChime();
@@ -170,8 +171,9 @@ export function initListen(
           const models = rows.find((r) => r.slot === "wake")?.models ?? [];
           for (const m of models) labels.set(m.id, m.label ?? m.id);
           const installed = models.filter((m) => m.installed);
+          sel.append(new Option("None", WAKE_NONE));
           for (const m of installed) sel.append(new Option(label(m.id), m.id));
-          if (cfg.model && !installed.some((m) => m.id === cfg.model)) {
+          if (cfg.model && cfg.model !== WAKE_NONE && !installed.some((m) => m.id === cfg.model)) {
             sel.append(new Option(`${label(cfg.model)} (Not Installed)`, cfg.model));
           }
           sel.value = cfg.model;
@@ -196,7 +198,7 @@ export function initListen(
             }
             cfg.model = next;
             await invoke("save_wakeword", { cfg });
-            if (wasRunning && !(await start(false))) throw new Error(`${label(next)} Failed to Start`);
+            if (wasRunning && wakeActive(next) && !(await start(false))) throw new Error(`${label(next)} Failed to Start`);
           } catch (e) {
             cfg.model = previous;
             sel.value = previous;

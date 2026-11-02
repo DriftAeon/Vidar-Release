@@ -7,10 +7,10 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, basename, resolve, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { resolve as resolveId } from "../lib/paths.mjs";
+import { resolve as resolveId, root as repoRoot } from "../lib/paths.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, "..", "..");
+const ROOT = repoRoot();
 const CARD_STATUS = ["todo", "doing", "decide", "done"];
 const ROW_STATUS = ["open", "pass", "fail"];
 const TEXT_MAX = 300;

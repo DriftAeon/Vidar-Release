@@ -11,7 +11,6 @@ const BUILTINS = [
   { key: 'codex-bare', id: 'codex', label: 'Codex', profile: 'bare', requires: ['codex', 'node'] },
   { key: 'codex-rendered-bare', id: 'codex', label: 'Rendered', under: 'codex', body: 'rendered', profile: 'bare', requires: ['codex', 'node'] },
   { key: 'astra', id: 'codex', label: 'Astra', under: 'codex', role: 'astra', requires: ['codex'], cwd: '{vidar}\\bridge\\display', args: ['-NoExit', '-Command', 'codex -a never -s workspace-write'] },
-  { key: 'gemini', id: 'gemini', label: 'Gemini', requires: ['gemini'], args: ['-NoExit', '-Command', 'gemini'] },
   { key: 'pi', id: 'pi', label: 'Pi', requires: ['pi'], args: ['-NoExit', '-Command', 'pi'] },
   { key: 'terminal', id: 'shell', label: 'Terminal' },
 ];
@@ -64,13 +63,13 @@ test('toWire strips a null effort and keeps a set one', () => {
 });
 
 test('ordering: off with two entries hitting one built-in removes the row and appends nothing', () => {
-  const overlay = [...OVERLAY, read({ id: 'gemini', label: 'Gemini' }), read({ key: 'gemini', cwd: 'C:\\Work' })];
+  const overlay = [...OVERLAY, read({ id: 'pi', label: 'Pi' }), read({ key: 'pi', cwd: 'C:\\Work' })];
   const hits = attributeOverlay(BUILTINS, overlay);
-  assert.deepEqual(hits.slice(-2), ['gemini', 'gemini']);
+  assert.deepEqual(hits.slice(-2), ['pi', 'pi']);
   const customs = hits.filter((h) => h?.startsWith('#')).length; // Astra Code
-  const rows = overlayAgents(BUILTINS, setEnabled(overlay, hits, BUILTINS, 'gemini', false));
+  const rows = overlayAgents(BUILTINS, setEnabled(overlay, hits, BUILTINS, 'pi', false));
   assert.equal(rows.length, BUILTINS.length - 1 + customs);
-  assert.equal(rows.some((a) => a.id === 'gemini'), false);
+  assert.equal(rows.some((a) => a.id === 'pi'), false);
 });
 
 test('removeCustom takes every entry of a keyed custom row, and spares variants another custom root hosts', () => {

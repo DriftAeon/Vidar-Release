@@ -1,11 +1,13 @@
 // Shared agent-key vocabulary for the lexical scanners. Every language scanner
 // (rust-keys.mjs, ts-keys.mjs, ps-keys.mjs, py-keys.mjs) returns [{file, line, tok, cls, anchor, forced, tier}] and
 // asks this module for ids, words, tiers, classes and anchors. Frozen contract (A1r):
-//   ids(root)            -> { ids, ptyOnly, aliases, enumIds } read from src/agents/id.ts, agent-kind.ts, protocol.rs
+//   ids(root)            -> { ids, ptyOnly, aliases, enumIds } read from src/agents/id.ts (AGENT_IDS, PTY_ONLY_IDS,
+//                           VENDOR_ALIASES), agent-kind.ts, protocol.rs; no id is spelled here (DEFAULT_IDS = the repo's table)
 //   words(tok)           -> lowercased words (camelCase, ACRONYMWord, letter/digit, all-caps id prefix)
 //   tierOf(path)         -> table | adapter:<id> | test | harness | devtool | other
 //   classOf(tok, ctx)    -> S1 | S2 | S3 | S4 | F | C | none; ctx { kind, condition, negated, fallbackArm, forcedArm,
-//                           mergesNone }; kind is ident | literal | regex | positional
+//                           mergesNone, comparison }; kind is ident | literal | regex | positional. The structural
+//                           class St (free; rust-structural.mjs, ts-keys.mjs import specifiers) is set by the scanners.
 //   anchor(tokens, i, itemName) -> "<item>: <key +-3 tokens>"
 // Beyond the contract: strictOf(entry) decides strict | cap | free | skip (R1, R2, R3, R9); pins, caps and the
 // schema-3 fixture helpers live here so the CLI stays thin.
@@ -16,34 +18,50 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-export const DEFAULT_IDS = { ids: ["claude", "codex"], ptyOnly: ["gemini", "pi"], aliases: { anthropic: "claude", openai: "codex" }, enumIds: [] };
-let CUR = DEFAULT_IDS;
-export const useIds = (x) => { CUR = x ?? DEFAULT_IDS; };
-const idList = () => [...CUR.ids, ...CUR.ptyOnly];
-export const isIdWord = (w) => idList().includes(w) || w in CUR.aliases;
-const canon = (w) => (idList().includes(w) ? w : CUR.aliases[w] ?? null);
-
 const rd = (root, rel) => { const p = join(root, rel); return existsSync(p) ? readFileSync(p, "utf8") : null; };
 const quoted = (s) => [...s.matchAll(/["']([\w-]+)["']/g)].map((m) => m[1]);
 
-/** Id set read from the table at scan time; also becomes the current set for words/classOf. */
-export function ids(root) {
-  const out = { ids: DEFAULT_IDS.ids, ptyOnly: DEFAULT_IDS.ptyOnly, aliases: { ...DEFAULT_IDS.aliases }, enumIds: [] };
+/** Ids, PTY-only ids and vendor aliases as src/agents/id.ts spells them (`base` fills what the file lacks). */
+function readIdTs(root, base) {
+  const out = { ids: base.ids, ptyOnly: base.ptyOnly, aliases: { ...base.aliases }, enumIds: [] };
   const idTs = rd(root, "src/agents/id.ts");
   if (idTs) {
     const a = idTs.match(/AGENT_IDS\s*=\s*\[([^\]]*)\]/);
     if (a) out.ids = quoted(a[1]);
     const p = idTs.match(/PTY_ONLY_IDS\s*=\s*\[([^\]]*)\]/);
     if (p) out.ptyOnly = quoted(p[1]);
+    const v = idTs.match(/VENDOR_ALIASES\s*=\s*\{([^}]*)\}/);
+    if (v) out.aliases = Object.fromEntries([...v[1].matchAll(/["']?(\w+)["']?\s*:\s*["']([\w-]+)["']/g)].map((m) => [m[1], m[2]]));
   }
+  return { out, idTs };
+}
+
+/** The repo's own table: the default id set (inline-source tests, scans without a root). */
+export const DEFAULT_IDS = readIdTs(join(HERE, "..", ".."), { ids: [], ptyOnly: [], aliases: {} }).out;
+let CUR = DEFAULT_IDS;
+export const useIds = (x) => { CUR = x ?? DEFAULT_IDS; };
+const idList = () => [...CUR.ids, ...CUR.ptyOnly];
+// Own keys only: `w in aliases` also matched Object.prototype names (`constructor`, `toString`).
+const aliasOf = (w) => (Object.hasOwn(CUR.aliases, w) ? CUR.aliases[w] : null);
+export const isIdWord = (w) => idList().includes(w) || aliasOf(w) !== null;
+const canon = (w) => (idList().includes(w) ? w : aliasOf(w));
+
+/** Id set read from the table, without making it current. */
+export function tableIds(root) {
+  const { out, idTs } = readIdTs(root, DEFAULT_IDS);
   if (!idTs?.includes("PTY_ONLY_IDS")) {
     const f = rd(root, "src/launcher/agent-kind.ts")?.match(/function agentKind[\s\S]*?\n\}/);
     if (f) out.ptyOnly = [...f[0].matchAll(/id === ["'](\w+)["']/g)].map((m) => m[1]);
   }
   const en = rd(root, "src-falcon/src/protocol.rs")?.match(/pub enum Agent\s*\{([^}]*)\}/);
   if (en) out.enumIds = [...en[1].matchAll(/^\s*([A-Z]\w*)/gm)].map((m) => m[1].toLowerCase());
-  CUR = out;
   return out;
+}
+
+/** Id set read from the table at scan time; also becomes the current set for words/classOf. */
+export function ids(root) {
+  CUR = tableIds(root);
+  return CUR;
 }
 
 /** Lowercased words: split on non-alphanumerics, camelCase, ACRONYMWord, letter/digit; an id is also split off the
@@ -66,15 +84,18 @@ export function words(tok) {
 /** Canonical ids named by the words of a token (aliases mapped: anthropic -> claude). */
 export const idsIn = (tok) => [...new Set(words(tok).map(canon).filter(Boolean))];
 
-const TABLE_FILES = new Set(["src-tauri/src/agent_spec.rs", "src/agents/id.ts", "src/agents/descriptor.ts", "tools/lib/FalconRuntimes.ps1"]);
+const TABLE_FILES = new Set(["src-tauri/src/agent_spec.rs", "src/agents/id.ts", "src/agents/descriptor.ts", "tools/lib/FalconRuntimes.ps1", "tools/runes/agents.mjs"]);
 const DEV_EXEMPT = /^tools\/(release|falcon|lib|runes|agents|gate)\/|^tools\/[^/]*sidecar[^/]*\.mjs$|^tools\/sandbox\/write-audit\.ps1$/;
+
+const STRICT_TOOLS = /^tools\/(release|falcon|lib)\//;
 
 export function tierOf(path) {
   const p = path.replace(/\\/g, "/");
   const file = p.split("/").pop();
   const stem = file.replace(/\.[^.]+$/, "");
   if (/(^|\/)tests\//.test(p) || /\.test\.mjs$/.test(file) || file === "tests.rs" || /_tests\.rs$/.test(file) || /^test_.*\.py$/.test(file)) return "test";
-  if (!/^tools\/[^/]*sidecar-seed\.mjs$/.test(p) && ((p.startsWith("tools/sandbox/") && p !== "tools/sandbox/write-audit.ps1") || /(-smoke|-e2e|_smoke|smoke_test|-seed-data)$/.test(stem))) return "harness";
+  // Harness files are the test tier too; the strict tool paths stay strict even when a name matches.
+  if (!STRICT_TOOLS.test(p) && (p.startsWith("tools/sandbox/") || /-(seed|e2e|smoke)|_smoke|smoke_test/.test(stem))) return "harness";
   if (TABLE_FILES.has(p)) return "table";
   // Dev tools stay capped even when their path names one agent (dev tools are capped).
   if (/^tools\//.test(p) && !DEV_EXEMPT.test(p)) return "devtool";
@@ -119,18 +140,23 @@ export function anchor(tokens, i, item) {
 export function strictOf(e) {
   const t = e.tier;
   if (t === "test" || t === "harness") return "skip";
-  if (t === "table" || e.cls === "F") return "free";
-  if (t === "devtool") return "cap";
+  if (t === "table") return "free";
   const c = e.ctx ?? {};
+  if (c.idUnion) return "strict";
+  if (e.cls === "F" || e.cls === "St") return "free";
+  if (t === "devtool") return "cap";
   const own = t.startsWith("adapter:") && e.ids.length > 0 && e.ids.every((i) => i === t.slice(8));
   const r1 = c.negated || c.fallbackArm || c.condition;
-  if (e.cls[0] === "S") {
+  if (e.cls === "S1" || e.cls === "S2" || e.cls === "S3" || e.cls === "S4") {
     if (c.mergesNone || c.wild) return "strict";
     return own && !r1 ? "free" : "strict";
   }
-  if (c.condition) return "strict";
-  if (own) return r1 ? "strict" : "free";
-  return "cap";
+  // Q2 (b): an own-id C key is free in an adapter, condition or not. Q2 (a): a prose literal is strict only as a
+  // direct comparison operand; a scanner that sets no ctx.comparison keeps the condition rule.
+  if (own) return "free";
+  const prose = c.kind === "literal" && /\s/.test(e.tok ?? "") && c.comparison !== undefined;
+  if (prose) return c.comparison ? "strict" : "cap";
+  return c.condition ? "strict" : "cap";
 }
 
 // ---- files, scanners ----
@@ -152,6 +178,7 @@ export function scopeFiles(root) {
 export async function gather(root, langs, files = null) {
   const idv = ids(root);
   const all = scopeFiles(root);
+  const adapters = all.filter((f) => tierOf(f).startsWith("adapter:")).sort();
   const entries = [], missing = [], loaded = [];
   let enums = new Map();
   for (const lang of langs) {
@@ -159,22 +186,24 @@ export async function gather(root, langs, files = null) {
     if (!existsSync(mp)) { missing.push(lang); continue; }
     const mod = await import(pathToFileURL(mp).href);
     loaded.push(lang);
-    const live = all.filter((f) => LANGS[lang].re.test(f) && !["test", "harness"].includes(tierOf(f)))
+    const ctx = { root, ids: idv, enums: new Map(), all: new Set(all), adapters: new Set(adapters) };
+    const cand = all.filter((f) => LANGS[lang].re.test(f) && !["test", "harness"].includes(tierOf(f)))
       .map((path) => ({ path, src: readFileSync(join(root, path), "utf8") }));
-    const ctx = { root, ids: idv, enums: new Map() };
+    // Test tier by declaration: a file reached only through `#[cfg(test)] mod x;` is test code.
+    const byDecl = mod.testDeclared ? mod.testDeclared(cand, ctx) : new Set();
+    const live = cand.filter((f) => !byDecl.has(f.path));
     if (mod.enumsOf) ctx.enums = mod.enumsOf(live, ctx);
     if (lang === "rs") enums = ctx.enums;
     const sub = files ? live.filter((f) => files.includes(f.path)) : live;
     for (const e of mod.scan(sub, ctx)) entries.push({ ...e, lang, strictness: strictOf(e) });
   }
-  const adapters = all.filter((f) => tierOf(f).startsWith("adapter:")).sort();
   return { entries, missing, loaded, idv, enums, adapters, all };
 }
 
 // ---- pins ----
 
-export const WHY = ["blank-is-claude", "history-data", "dev-probe", "wire-name"];
-const NEEDS_TEST = new Set(["blank-is-claude", "history-data"]);
+export const WHY = ["blank-default", "history-data", "dev-probe", "wire-name"];
+const NEEDS_TEST = new Set(["blank-default", "history-data"]);
 
 export function pinRefusal(p) {
   if (!p.file || !p.anchor || !Number.isInteger(p.n)) return "needs file, anchor and integer n";
@@ -201,6 +230,12 @@ export function applyPins(entries, pins, loaded, only = null) {
   return { unpinned: strict.filter((e) => !pinned.has(`${e.file}\0${e.anchor}`)), problems };
 }
 
+/** Inline AgentId unions outside table files (the old TWO_UNION guard); a pin never clears one. */
+export function idUnionProblems(entries) {
+  const at = new Set(entries.filter((e) => e.ctx?.idUnion && e.tier !== "table").map((e) => `${e.file}:${e.line}`));
+  return [...at].map((l) => `inline AgentId union ${l}: alias AgentId from src/agents/id.ts`);
+}
+
 // ---- schema-3 fixture: caps, strict ratchet, derived lists ----
 
 export function capsOf(entries) {
@@ -223,7 +258,7 @@ const idSet = (idv) => [...new Set([...idv.ids, ...idv.ptyOnly])].sort();
 
 /** Derived header: $ids, $enums, $adapters. */
 export function derived(g) {
-  return { $ids: idSet(g.idv), $enums: [...g.enums.keys()].sort(), $adapters: g.adapters };
+  return { $ids: idSet(g.idv), $enums: [...g.enums.keys()].sort(), $closed: [...(g.enums.closed ?? [])].sort(), $adapters: g.adapters };
 }
 
 /** Problems of a schema-3 fixture against the current scan; `inScope(file)` limits the files checked. */
@@ -232,6 +267,8 @@ export function checkFixture(fx, g, cur, inScope = () => true) {
   const d = derived(g);
   if (!same(fx.$ids, d.$ids)) out.push(`$ids drift: fixture ${JSON.stringify(fx.$ids)}, table ${JSON.stringify(d.$ids)}`);
   if (g.loaded.includes("rs") && !same(fx.$enums, d.$enums)) out.push(`$enums drift: fixture ${JSON.stringify(fx.$enums)}, derived ${JSON.stringify(d.$enums)}`);
+  // $closed is new in v3.1 (no schema bump): a fixture written before it carries none and is not checked until --write.
+  if (g.loaded.includes("rs") && fx.$closed && !same(fx.$closed, d.$closed)) out.push(`$closed drift: fixture ${JSON.stringify(fx.$closed)}, derived ${JSON.stringify(d.$closed)}`);
   for (const a of d.$adapters) if (inScope(a) && !(fx.$adapters ?? []).includes(a)) out.push(`new adapter path ${a} (review it, then --write)`);
   for (const [file, c] of Object.entries(cur.caps)) {
     if (!inScope(file)) continue;

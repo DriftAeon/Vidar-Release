@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { validateSnapshot } from "../tools/drive/explorer-contracts.mjs";
 import { snapshot, snapshotVerb } from "../tools/drive/verbs/snapshot.mjs";
+import { resolveJs } from "../tools/drive/drive-input.mjs";
 import {
   zeroSize, offViewport, clippedText, occluded, overlap, lowContrast, brokenImage, fgEqualsBg,
 } from "../tools/drive/snapshot-reader.mjs";
@@ -11,6 +12,7 @@ function page(html = "<button>A</button><button>B</button>") {
   const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, { runScripts: "outside-only" });
   dom.window.WeakRef = WeakRef;
   dom.window.document.elementFromPoint = () => null;
+  dom.window.Element.prototype.scrollIntoView = () => {};
   // CDP returnByValue serializes page objects into the caller's realm.
   const ctx = { PORT: 9222, evalJs: async (expression) => JSON.parse(JSON.stringify(dom.window.eval(expression))) };
   return { dom, ctx, doc: dom.window.document };
@@ -98,6 +100,89 @@ test("snapshot: a control inside a closed details is absent, its summary stays, 
   assert.ok(!closed.includes("State"));
   doc.getElementById("g").open = true;
   assert.ok((await names()).includes("State"));
+});
+
+const rebuild = (doc, html) => { doc.body.innerHTML = html; };
+
+test("refs: a rebuilt control with data-keep keeps its ref, marked rebound, listed as changed", async () => {
+  const { ctx, doc } = page('<div data-keep="vault:a"><button>Open</button></div><button>X1</button><button>X2</button><button>X3</button><button>X4</button><button>X5</button>');
+  const first = await snapshot(ctx);
+  const ref = first.nodes.find((n) => n.name === "Open").ref;
+  doc.querySelector("[data-keep]").innerHTML = "<button>Open Now</button>";
+  const next = await snapshot(ctx);
+  const node = next.nodes.find((n) => n.ref === ref);
+  assert.ok(node, "old ref reused");
+  assert.equal(node.rebound, true);
+  assert.equal(node.name, "Open Now");
+  assert.ok(!(next.removed ?? []).includes(ref));
+});
+
+test("refs: a control replaced after the snapshot resolves through relocate with rebound", async () => {
+  const { ctx, doc } = page('<div data-keep="lib:x"><button>Pick</button></div>');
+  const ref = (await snapshot(ctx)).nodes[0].ref;
+  doc.querySelector("[data-keep]").innerHTML = "<button>Pick</button>";
+  const r = await ctx.evalJs(resolveJs(ref));
+  assert.equal(r.found, true);
+  assert.equal(r.hit.rebound, true);
+  assert.equal(doc.defaultView.__vidarExplorer.byRef.get(ref).deref(), doc.querySelector("button"));
+});
+
+test("refs: a removed control stays stale", async () => {
+  const { ctx, doc } = page('<div data-keep="lib:x"><button>Pick</button></div>');
+  const ref = (await snapshot(ctx)).nodes[0].ref;
+  doc.querySelector("[data-keep]").innerHTML = "";
+  const r = await ctx.evalJs(resolveJs(ref));
+  assert.deepEqual(r, { found: false, stale: true });
+});
+
+test("refs: state-named checkboxes without data-keep never land on another box", async () => {
+  const box = '<input type="checkbox" aria-label="State: Off">';
+  const { ctx, doc } = page(`${box}${box}`);
+  const refs = (await snapshot(ctx)).nodes.map((n) => n.ref);
+  rebuild(doc, `<input type="checkbox" aria-label="State: On">${box}`);
+  for (const ref of refs) assert.deepEqual(await ctx.evalJs(resolveJs(ref)), { found: false, stale: true });
+  const next = await snapshot(ctx);
+  assert.ok(next.nodes.every((n) => !refs.includes(n.ref) && !n.rebound));
+});
+
+test("refs: state-named checkboxes with data-keep each rebind to their own box", async () => {
+  const box = (k, s) => `<div data-keep="vault:${k}"><input type="checkbox" aria-label="State: ${s}"></div>`;
+  const { ctx, doc } = page(`${box("a", "Off")}${box("b", "Off")}`);
+  const [a, b] = (await snapshot(ctx)).nodes.map((n) => n.ref);
+  rebuild(doc, `${box("a", "On")}${box("b", "Off")}`);
+  const ra = await ctx.evalJs(resolveJs(a));
+  const rb = await ctx.evalJs(resolveJs(b));
+  assert.equal(ra.hit.rebound, true);
+  assert.equal(rb.hit.rebound, true);
+  const boxes = doc.querySelectorAll("input");
+  const map = doc.defaultView.__vidarExplorer.byRef;
+  assert.equal(map.get(a).deref(), boxes[0]);
+  assert.equal(map.get(b).deref(), boxes[1]);
+});
+
+test("refs: a unique role+name button rebuilt without data-keep rebinds", async () => {
+  const { ctx, doc } = page("<button>Done</button><button>Other</button>");
+  const first = await snapshot(ctx);
+  const ref = first.nodes.find((n) => n.name === "Done").ref;
+  rebuild(doc, "<button>Done</button><button>Other</button>");
+  const next = await snapshot(ctx);
+  const done = next.nodes.find((n) => n.name === "Done");
+  assert.equal(done.ref, ref);
+  assert.equal(done.rebound, true);
+});
+
+test("snapshot: a pane head yields one heading node with its text, its button stays its own element", async () => {
+  const { ctx, doc } = page('<div class="pane-head-card"><span class="runes-vault-name-text">Mixed Vault</span><button aria-label="Rename">Edit</button></div><button>A</button><button>B</button><button>C</button><button>D</button>');
+  const snap = await snapshot(ctx);
+  assert.deepEqual(validateSnapshot(snap), []);
+  const heads = snap.nodes.filter((n) => n.role === "heading");
+  assert.equal(heads.length, 1);
+  assert.equal(heads[0].name, "Mixed Vault");
+  assert.ok(snap.nodes.some((n) => n.role === "button" && n.name === "Rename"));
+  doc.querySelector(".runes-vault-name-text").textContent = "Renamed Vault";
+  const next = await snapshot(ctx);
+  assert.equal(next.full, false);
+  assert.deepEqual(next.nodes.map((n) => n.name), ["Renamed Vault"]);
 });
 
 test("flags: zero-size true and false", () => {

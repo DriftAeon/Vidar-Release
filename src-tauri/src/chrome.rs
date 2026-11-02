@@ -189,16 +189,15 @@ fn next_step(app: &DocApp, prev: Option<bool>) -> OpenStep {
 }
 
 /// Spawn, never wait (like `open_in_editor`): the file is one argv entry, no shell. The child
-/// gets Vidar's env minus `pty::SCRUBBED_ENV`, so agent-session markers never reach the app.
+/// gets Vidar's env minus `proc_job::SCRUBBED_ENV`, so agent-session markers never reach the app.
 fn spawn_app(exe: &str, file: &str) -> Result<(), String> {
+    use crate::proc_job::SpawnExt;
     let mut cmd = std::process::Command::new(exe);
     cmd.arg(file)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    for key in crate::pty::SCRUBBED_ENV {
-        cmd.env_remove(key);
-    }
+        .stderr(std::process::Stdio::null())
+        .scrubbed();
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 

@@ -58,13 +58,6 @@ impl LaunchItems {
         let (skills, agents) = plan.item_sources();
         LaunchItems { skills, agents, guards: Vec::new(), mcp, shadow }
     }
-
-    /// A launch resolved through `set_loadout::resolve`: the loadout's skill and agent sources, its guard
-    /// objects and its MCP server names.
-    #[allow(dead_code)] // W2's launch paths adopt it.
-    pub fn from_loadout(l: &super::set_loadout::Loadout) -> LaunchItems {
-        LaunchItems { skills: l.skills.clone(), agents: l.agents.clone(), guards: l.guard_items.clone(), mcp: l.mcp.clone(), shadow: l.shadow.clone() }
-    }
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -125,6 +118,14 @@ pub struct Manifest {
     /// and no config key turns it off (P6 probe rules); only the bare tab's own approvals write it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codex_rules: Option<Vec<String>>,
+    /// Codex only: the repo skills (`.agents/skills`) turned off in config.toml at launch; the Runes
+    /// panel lists them. Absent when none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repo_skills_off: Vec<String>,
+    /// Codex only: the files directly inside the launch folder's `.codex` directories (relative to the
+    /// folder holding each, `/` separators), recorded only when the folder is trusted. Absent when none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub codex_files: Vec<String>,
     /// Falcon-hosted Rendered Bare only: the host's session id, whose spawn reply supplied
     /// `env_names` (the env is built in Falcon, not here).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,7 +163,7 @@ pub fn stamps() -> (String, String) {
 /// Writes the manifest with create-new; an existing file of the same name is an error, never
 /// overwritten.
 pub fn write(dir: &Path, file_stamp: &str, m: &Manifest) -> Result<PathBuf, String> {
-    let bytes = serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?;
+    let bytes = crate::fsx::json_pretty_bytes(m, false)?;
     write_bytes(dir, file_stamp, m, &bytes)
 }
 
@@ -173,7 +174,7 @@ pub fn write_hosted(dir: &Path, file_stamp: &str, m: &Manifest, mcp_file: Option
     if let Some(path) = mcp_file {
         value["mcpFile"] = serde_json::Value::String(path.to_string_lossy().into_owned());
     }
-    let bytes = serde_json::to_vec_pretty(&value).map_err(|e| e.to_string())?;
+    let bytes = crate::fsx::json_pretty_bytes(&value, false)?;
     write_bytes(dir, file_stamp, m, &bytes)
 }
 
@@ -258,6 +259,21 @@ fn newest_in(dir: &Path, tab: &str, all: bool, hit: impl Fn(&serde_json::Value) 
     })
 }
 
+/// The repo skills the newest launch of `tab` by `agent` (Codex) turned off (`repoSkillsOff`) and the trusted
+/// folder's `.codex` files it listed (`codexFiles`); when the session record names a Falcon session, only a
+/// manifest of that session counts. Both empty when none.
+pub fn repo_skills_off_in(dir: &Path, tab: &str, agent: crate::agent_spec::Agent, falcon_session: Option<&str>) -> (Vec<String>, Vec<String>) {
+    if !crate::rules::loaded::plain_id(tab, &['_']) {
+        return Default::default();
+    }
+    let hit = |v: &serde_json::Value| {
+        is_agent(v["agent"].as_str(), agent)
+            && v["tab"].as_str() == Some(tab)
+            && falcon_session.filter(|s| !s.is_empty()).is_none_or(|s| v["falconSession"].as_str() == Some(s))
+    };
+    newest_in(dir, tab, false, hit).map(|v| (strs(&v["repoSkillsOff"]), strs(&v["codexFiles"]))).unwrap_or_default()
+}
+
 /// A record's agent id parsed once; an unknown id is no Claude launch, never a Claude one.
 fn is_agent(record: Option<&str>, want: crate::agent_spec::Agent) -> bool {
     record.and_then(crate::agent_spec::parse) == Some(want)
@@ -301,8 +317,7 @@ mod tests {
         let plan = super::super::copies::Plan::default();
         let guarded = LaunchItems::with_guards(&plan, &[], Vec::new(), loadout.shadow.clone());
         let plain = LaunchItems::without_guards(&plan, Vec::new(), loadout.shadow.clone());
-        let from = LaunchItems::from_loadout(&loadout);
-        for items in [guarded, plain, from] {
+        for items in [guarded, plain] {
             assert_eq!(serde_json::to_value(items).unwrap()["shadow"], serde_json::json!(["lib/memo"]));
         }
         assert!(serde_json::to_value(loadout).unwrap().get("shadow").is_none());
@@ -324,7 +339,7 @@ mod tests {
             env_names: vec!["Path".into()],
             homes: Homes { home: "h".into(), claude_config: "c".into(), codex_home: String::new(), user_home: "u".into(), settings: "s".into() },
             payload: Payload { path: "p".into(), sha256: "x".into(), marker: "m".into(), sets: Vec::new(), warnings: Vec::new() },
-            plugins: vec!["vidar-app".into()],
+            plugins: vec!["roster".into()],
             guards: Vec::new(),
             skills: Vec::new(),
             items: None,
@@ -332,6 +347,8 @@ mod tests {
             warnings: Vec::new(),
             managed_policy: Policy { path: "q".into(), present: false },
             codex_rules: None,
+            repo_skills_off: Vec::new(),
+            codex_files: Vec::new(),
             falcon_session: None,
             loadout_hash: None,
             thread_id: None,

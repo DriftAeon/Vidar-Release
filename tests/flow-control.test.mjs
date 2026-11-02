@@ -12,10 +12,19 @@ import { flowStatusLine, waitForFlow } from "../src/flow/control-observe.ts";
 
 const cwd = "D:\\Work";
 const wiredIds = ["claude-sonnet-5", "claude-opus-5-5"];
-const deps = () => ({ templates: STARTER_TEMPLATES, wiredIds: [...wiredIds], instantiateTemplate, adaptModelsToWired,
+// A Flow agent node with no vault can't run (plan rev4 §3.4), so fixtures name one.
+const withVault = (graph) => { for (const n of graph.nodes) if (n.kind === "agent" && !n.vault) n.vault = "v1"; return graph; };
+const VAULTED = STARTER_TEMPLATES.map((t) => ({ ...t, graph: withVault(structuredClone(t.graph)) }));
+const deps = () => ({ templates: VAULTED, wiredIds: [...wiredIds], instantiateTemplate, adaptModelsToWired,
   validateGraph, autoLayout, now: () => "2026-10-18T00:00:00.000Z", newId: () => "graph-control" });
 const templateRequest = (id = STARTER_TEMPLATES[0].id) => ({ action: "start", template_id: id, input: "Do the work", cwd });
-const custom = () => structuredClone(STARTER_TEMPLATES[1].graph);
+const custom = () => structuredClone(VAULTED[1].graph);
+
+test("a starter run with no vault on its agent nodes is refused", () => {
+  const bare = { ...deps(), templates: STARTER_TEMPLATES };
+  const agent = STARTER_TEMPLATES[0].graph.nodes.find((n) => n.kind === "agent");
+  assert.throws(() => prepareFlow(templateRequest(), bare), new RegExp(`Node "${agent.id}" has no vault selected`));
+});
 
 test("all seven starters pass the agent cap after preparation", () => {
   const counts = new Map([["tpl-brainstorm-format-review-execute", 3], ["tpl-planned-implementation", 6],
@@ -41,7 +50,7 @@ test("invalid and oversized requests fail before a card", () => {
   const oversizedNested = custom();
   oversizedNested.nodes[1].fields[0].v = "x".repeat(66_000);
   assert.throws(() => prepareFlow({ action: "start", graph: oversizedNested, cwd }, deps()), /65536/);
-  const expanded = structuredClone(STARTER_TEMPLATES[0]);
+  const expanded = structuredClone(VAULTED[0]);
   expanded.graph.nodes[1].fields.find((field) => field.k === "task").v += "x".repeat(65_000);
   assert.ok(new TextEncoder().encode(JSON.stringify(templateRequest(expanded.id))).length < 65_536);
   assert.throws(() => prepareFlow(templateRequest(expanded.id), { ...deps(), templates: [expanded] }), /snapshot exceeds 65536 bytes/);
@@ -78,10 +87,10 @@ test("the documented minimal graph parses and needs no x or y", async () => {
   const { readFileSync } = await import("node:fs");
   const doc = JSON.parse(readFileSync(new URL("./fixtures/flow-minimal-graph.json", import.meta.url), "utf8"));
   assert.equal(doc.nodes.every((n) => n.x === undefined && n.y === undefined), true);
-  const graph = prepareFlow({ action: "start", graph: doc, cwd }, deps());
+  const graph = prepareFlow({ action: "start", graph: withVault(structuredClone(doc)), cwd }, deps());
   assert.deepEqual(orderedNodes(graph).map((n) => n.id), ["input", "summarize", "output"]);
   assert.equal(validateGraph(graph).valid, true);
-  const skill = readFileSync(new URL("../plugins/vidar-app/skills/vidar-control/SKILL.md", import.meta.url), "utf8");
+  const skill = readFileSync(new URL("../profiles/bare/codex-skills/vidar-control/SKILL.md", import.meta.url), "utf8");
   const block = /```json\r?\n([\s\S]*?)\r?\n```/.exec(skill.slice(skill.indexOf("A custom graph is")))[1];
   assert.deepEqual(JSON.parse(block), doc);
 });
@@ -114,7 +123,7 @@ test("every prepared graph is laid out top to bottom, ignoring sent positions", 
 });
 
 test("snapshot, model adaptation, working directory and card text stay fixed", () => {
-  const template = structuredClone(STARTER_TEMPLATES[1]);
+  const template = structuredClone(VAULTED[1]);
   template.graph.nodes[1].fields.find((f) => f.k === "task").v += `\n${"padding\n".repeat(35)}${"z".repeat(4100)} MALICIOUS SUFFIX`;
   const source = { action: "start", template_id: template.id, input: `Input ${"x".repeat(4200)} TAIL`, cwd };
   const models = [...wiredIds];
@@ -251,12 +260,12 @@ test("grants ask with the node's vault and agent; the card names the vault and i
   let asked;
   const grants = await resolveNodeGrants(prepared, async (nodes) => {
     asked = nodes;
-    return nodes.map((n) => ({ node: n.node, vault: n.vault ?? "stock-claude", mode: "auto", allow: ["Read", "Glob"], hash: `h-${n.node}` }));
+    return nodes.map((n) => ({ node: n.node, vault: n.vault ?? "main-claude", mode: "auto", allow: ["Read", "Glob"], hash: `h-${n.node}` }));
   }, () => "claude");
   assert.equal(asked.length, agents.length);
   assert.ok(asked.every((n) => n.agent === "claude" && typeof n.model === "string"));
   assert.equal(asked.find((n) => n.node === agents[0].id).vault, "reviewer");
-  assert.equal("vault" in asked.find((n) => n.node !== agents[0].id), false);
+  assert.equal(asked.find((n) => n.node !== agents[0].id).vault, "v1");
   assert.equal(grants[agents[0].id].hash, `h-${agents[0].id}`);
   const rows = flowCardRows(prepared, "Caller", orderedNodes, modesOfGrants(grants), grants);
   assert.equal(rows.find(([k]) => k === "Vault")[1], "reviewer");

@@ -1,11 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { agentFiles, codexTicks, createBareFlow, defaultTicks, classifyGenError } from "../src/runes/bare/flow.ts";
+import { agentFiles, nonSdkTicks, createBareFlow, defaultTicks, classifyGenError } from "../src/runes/bare/flow.ts";
 
 const file = (path, kind, rest = {}) => ({ path, shown: path, kind, scope: "global", ticked: true, pickable: true, ...rest });
 const io = {
   localSources: async () => ({ files: [], memoryDir: null, guardsKey: false }),
-  itemsImport: async () => ({ runes: [], dropped: [] }),
   generate: async (a) => ({ library: "gen", set: "set", runes: a.paths.length, on: 1,
     encodedChars: null, costUsd: null, inputTokens: null, outputTokens: null, durationMs: 1, warnings: [] }),
   generateCancel: async () => null,
@@ -53,6 +52,6 @@ test("Local source preselection and errors remain agent scoped", () => {
   assert.deepEqual(agentFiles([shared, claude, codex], true), [codex]);
   assert.deepEqual(agentFiles([shared, claude, codex], false), [shared, claude]);
   assert.deepEqual(defaultTicks([claude]).has("/claude"), true);
-  assert.deepEqual(codexTicks([file("/AGENTS.md", "rules")]).has("/AGENTS.md"), true);
+  assert.deepEqual(nonSdkTicks([file("/AGENTS.md", "rules")]).has("/AGENTS.md"), true);
   assert.deepEqual(classifyGenError("invalid: bad"), { state: "rejected", error: "bad" });
 });

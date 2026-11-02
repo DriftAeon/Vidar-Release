@@ -1,0 +1,17 @@
+{
+  "id": "w-first-run-orient",
+  "title": "Find My Way Around on First Open",
+  "style": "first-time",
+  "scope": "vidar",
+  "surfaces": ["launcher", "tabstrip", "settings"],
+  "tags": ["launcher", "orientation"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "without any instructions, work out how to start a new Claude tab" },
+    { "intent": "find where I would type my first message, without sending it" },
+    { "intent": "find where the settings live and get back to the tab" },
+    { "intent": "say what was unclear or took more than one try" }
+  ]
+}

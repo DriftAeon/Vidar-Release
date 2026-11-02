@@ -27,16 +27,17 @@
 // @anthropic-ai/claude-agent-sdk (run npm ci); repointing current.json while the registry names a live
 // falcon.exe for this checkout (the bundle is still staged and nothing is pruned; quit Vidar, let the host
 // exit, rerun).
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { delimiter, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolve as contractPath } from "../lib/paths.mjs";
+import { resolve as contractPath, root as repoRoot } from "../lib/paths.mjs";
+import { readJson, writeJsonAtomic } from "../lib/json.mjs";
+import { renameWithRetry } from "../lib/rename-retry.mjs";
 
 const SCHEME = "falcon-source-bundle/1";
-const SDK = ["node_modules", "@anthropic-ai", "claude-agent-sdk"];
-// No CLI is pinned: an all-zero hash names a store entry that never exists, so claude.rs goes to the installed CLI.
+// No CLI is pinned: an all-zero hash names a store entry that never exists, so the host goes to the installed CLI.
 const NO_PINNED_CLI = "0".repeat(64);
 // The sidecar scripts' folder under a checkout root: this file's grandparent, taken relative to the repo.
 const TOOLS_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -55,12 +56,6 @@ function filesUnder(dir, base = dir) {
   return out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
-function writeJsonAtomic(path, value) {
-  const tmp = `${path}.tmp-${randomUUID().replaceAll("-", "")}`;
-  writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", "utf8");
-  renameSync(tmp, path);
-}
-
 /** Frontend digest as falcon-inputs.ps1 Get-FalconFrontendDigest: "<path>|<sha256>" lines, "\n"-joined, no trailing newline. */
 export function frontendDigest(dir) {
   const top = new Set(["falcon.html", "assets", "icons"]);
@@ -68,18 +63,45 @@ export function frontendDigest(dir) {
   return sha256Text(lines.join("\n"));
 }
 
-/** The installed-CLI lookup Falcon uses (content/packs/claude/pack.json probe; *.exe names only), as falcon-inputs.ps1 does. */
-export function claudeInstalled(root) {
+/**
+ * The runtime ids, read from the one table (tools/lib/FalconRuntimes.ps1) as text, so this script needs no pwsh for
+ * them. Chosen over importing src/agents/id.ts because src/ is not in every release set while tools/lib is;
+ * tests/agent-ids-parity.test.mjs pins the table's ids to AGENT_IDS.
+ */
+export function runtimeIds(table = join(TOOLS_DIR, "lib", "FalconRuntimes.ps1")) {
+  const body = /\$script:FalconRuntimes\s*=\s*\[ordered\]@\{([\s\S]*?)\r?\n\}/.exec(readFileSync(table, "utf8"))?.[1] ?? "";
+  const ids = [...body.matchAll(/^ {2}(\w+)\s*=\s*@\{/gm)].map((m) => m[1]);
+  if (ids.length === 0) throw new Error(`${table} declares no runtimes.`);
+  return ids;
+}
+
+/** The runtime ids that ship a sidecar script (tools/<id>-sidecar.mjs) in this checkout. */
+function sidecarRuntimes(tools) {
+  return runtimeIds().filter((id) => existsSync(join(tools, `${id}-sidecar.mjs`)));
+}
+
+/** The runtime's agent SDK folder under node_modules (<scope>/<id>-agent-sdk), or null when none is installed. */
+function sdkFolder(root, id) {
+  const modules = join(root, "node_modules");
+  if (!existsSync(modules)) return null;
+  for (const scope of readdirSync(modules).filter((n) => n.startsWith("@"))) {
+    if (existsSync(join(modules, scope, `${id}-agent-sdk`))) return ["node_modules", scope, `${id}-agent-sdk`];
+  }
+  return null;
+}
+
+/** The installed-CLI lookup Falcon uses (content/packs/<id>/pack.json probe; *.exe names only), as falcon-inputs.ps1 does. */
+export function installedCli(root, id) {
   let names = [], candidates = [];
   try {
-    const pack = JSON.parse(readFileSync(join(root, "content", "packs", "claude", "pack.json"), "utf8").replace(/^\uFEFF/, ""));
-    const probe = (pack.module?.deps ?? []).find((d) => d?.id === "claude")?.probe;
+    const pack = readJson(join(root, "content", "packs", id, "pack.json"));
+    const probe = (pack.module?.deps ?? []).find((d) => d?.id === id)?.probe;
     const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]).map(String);
     names = list(probe?.names).filter((n) => n.toLowerCase().endsWith(".exe") && !/[\\/]/.test(n) && n !== ".exe" && !n.includes(".."));
     candidates = list(probe?.candidates);
   } catch { /* no pack: the defaults below */ }
-  if (names.length === 0) names = ["claude.exe"];
-  if (candidates.length === 0) candidates = ["%USERPROFILE%\\.local\\bin\\claude.exe"];
+  if (names.length === 0) names = [`${id}.exe`];
+  if (candidates.length === 0) candidates = [`%USERPROFILE%\\.local\\bin\\${id}.exe`];
   return { names, candidates };
 }
 
@@ -87,7 +109,7 @@ export function claudeInstalled(root) {
 export function liveHost(registryPath, imageOf = tasklistImage) {
   if (!existsSync(registryPath)) return null;
   let pid;
-  try { pid = JSON.parse(readFileSync(registryPath, "utf8").replace(/^\uFEFF/, "")).pid; } catch { return null; }
+  try { pid = readJson(registryPath).pid; } catch { return null; }
   if (!Number.isInteger(pid) || pid <= 0) return null;
   const image = imageOf(pid);
   if (image === undefined) return { pid, image: "unknown" };   // could not tell: treat as running
@@ -106,20 +128,27 @@ function tasklistImage(pid) {
  * Returns { bundleId, bundleDir, manifest, pointerPath, reused, repointed, refusal }.
  */
 export function stageBundle({ root, exe, distFalcon = join(root, "dist-falcon"), imageOf } = {}) {
-  const sdkDir = join(root, ...SDK);
-  for (const f of ["package.json", "sdk.mjs"]) {
-    if (!existsSync(join(sdkDir, f))) throw new Error(`${join(...SDK, f)} is missing. Run npm ci (or npm ci --offline) first.`);
-  }
   const tools = join(root, TOOLS_REL);
-  const sidecar = readdirSync(tools).filter((n) => /^claude-sidecar.*\.mjs$/.test(n) && !n.endsWith(".test.mjs")).sort();
-  if (!sidecar.includes("claude-sidecar.mjs")) throw new Error(`${join(tools, "claude-sidecar.mjs")} is missing.`);
+  const ids = runtimeIds();
+  // Each runtime that ships a sidecar stages its scripts and the SDK it imports.
+  const staged = sidecarRuntimes(tools).map((id) => {
+    const sdk = sdkFolder(root, id) ?? ["node_modules", "<scope>", `${id}-agent-sdk`];
+    for (const f of ["package.json", "sdk.mjs"]) {
+      if (!existsSync(join(root, ...sdk, f))) throw new Error(`${join(...sdk, f)} is missing. Run npm ci (or npm ci --offline) first.`);
+    }
+    const scripts = readdirSync(tools).filter((n) => new RegExp(`^${id}-sidecar.*\\.mjs$`).test(n) && !n.endsWith(".test.mjs")).sort();
+    return { id, sdk, scripts };
+  });
+  if (staged.length === 0) throw new Error(`${tools} holds no runtime sidecar script (<id>-sidecar.mjs).`);
   const config = join(root, "src-falcon", "tauri.conf.json");
   const identifier = JSON.parse(readFileSync(config, "utf8")).identifier;
 
   // Bundle-relative path -> source file.
   const sources = new Map([["falcon.exe", exe], ["tauri.conf.json", config]]);
-  for (const n of sidecar) sources.set(`sidecar/${n}`, join(tools, n));
-  for (const f of ["package.json", "sdk.mjs"]) sources.set(`sidecar/${SDK.join("/")}/${f}`, join(sdkDir, f));
+  for (const { scripts, sdk } of staged) {
+    for (const n of scripts) sources.set(`sidecar/${n}`, join(tools, n));
+    for (const f of ["package.json", "sdk.mjs"]) sources.set(`sidecar/${sdk.join("/")}/${f}`, join(root, ...sdk, f));
+  }
   const files = [...sources.keys()].sort().map((path) => ({ path, sha256: sha256File(sources.get(path)) }));
   const bundleId = `src-${sha256Text(`${SCHEME}\n${files.map((f) => `${f.path}|${f.sha256}`).join("\n")}\n`).slice(0, 16)}`;
 
@@ -141,7 +170,7 @@ export function stageBundle({ root, exe, distFalcon = join(root, "dist-falcon"),
     manifest = {
       schema_version: 4,
       schema: 4,
-      runtimes: ["claude", "codex"],
+      runtimes: ids,
       bundle_id: bundleId,
       built_by: "npm run build:falcon",
       ...(existsSync(join(distFalcon, "falcon.html")) ? { frontend_digest: frontendDigest(distFalcon) } : {}),
@@ -150,13 +179,13 @@ export function stageBundle({ root, exe, distFalcon = join(root, "dist-falcon"),
       frontend: { mode: "embedded", entrypoint: "falcon.html" },
       inputs: { scheme: SCHEME },
       files,
-      claude: {
-        sidecar: "sidecar/claude-sidecar.mjs",
-        sdk: `sidecar/${SDK.join("/")}/sdk.mjs`,
+      ...Object.fromEntries(staged.map(({ id, sdk }) => [id, {
+        sidecar: `sidecar/${id}-sidecar.mjs`,
+        sdk: `sidecar/${sdk.join("/")}/sdk.mjs`,
         exe_sha256: NO_PINNED_CLI,
-        store_exe: "claude.exe",
-        installed: claudeInstalled(root),
-      },
+        store_exe: `${id}.exe`,
+        installed: installedCli(root, id),
+      }])),
     };
     // Stage in the falcon build folder, then rename into bundles/: a half-copied folder never sits where pick_bundle scans.
     const scratch = join(contractPath("falconBuild", { root }), `source-stage-${randomUUID().replaceAll("-", "")}`);
@@ -167,12 +196,12 @@ export function stageBundle({ root, exe, distFalcon = join(root, "dist-falcon"),
     }
     writeFileSync(join(scratch, "runtime-manifest.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
     mkdirSync(bundles, { recursive: true });
-    renameSync(scratch, bundleDir);
+    renameWithRetry(scratch, bundleDir);
   }
 
   const pointerPath = contractPath("falconPointer", { root });
   let previous = null;
-  try { previous = JSON.parse(readFileSync(pointerPath, "utf8").replace(/^\uFEFF/, "")).bundle_id ?? null; } catch { /* none yet */ }
+  try { previous = readJson(pointerPath).bundle_id ?? null; } catch { /* none yet */ }
   if (previous === bundleId) return { bundleId, bundleDir, manifest, pointerPath, reused, repointed: false, refusal: null };
   const host = liveHost(contractPath("falconRegistry", { root }), imageOf);
   if (host) {
@@ -213,7 +242,7 @@ function onPath(name) {
 }
 
 function main() {
-  const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const repo = repoRoot();
   const noPrune = process.argv.includes("--no-prune");
   const cargoArgs = process.argv.slice(2).filter((a) => a !== "--no-prune");
   const dist = join(repo, "dist");
@@ -225,8 +254,10 @@ function main() {
       process.exit(1);
     }
   }
-  if (!existsSync(join(repo, ...SDK, "sdk.mjs"))) {
-    console.error(`build:falcon: ${join(...SDK)} is missing. Run npm ci (or npm ci --offline) first.`);
+  for (const id of sidecarRuntimes(join(repo, TOOLS_REL))) {
+    const sdk = sdkFolder(repo, id);
+    if (sdk && existsSync(join(repo, ...sdk, "sdk.mjs"))) continue;
+    console.error(`build:falcon: the ${id} agent SDK (node_modules/<scope>/${id}-agent-sdk) is missing. Run npm ci (or npm ci --offline) first.`);
     process.exit(1);
   }
   rmSync(staged, { recursive: true, force: true });
@@ -254,10 +285,13 @@ function main() {
   if (result.refusal) { console.error(`build:falcon: not repointed: ${result.refusal}`); process.exit(settleStage({ root: repo, result, noPrune })); }
   console.log(`build:falcon: ${result.pointerPath} ${result.repointed ? "now names" : "already names"} ${result.bundleId}`);
   settleStage({ root: repo, result, noPrune });
-  const installed = result.manifest.claude.installed;
-  const claude = installed.names.map(onPath).find(Boolean)
-    ?? installed.candidates.map((c) => c.replace(/%([^%]+)%/g, (_, v) => process.env[v] ?? "\0")).find((p) => !p.includes("\0") && existsSync(p));
-  console.log(`build:falcon: at run time Falcon needs node on PATH (${onPath("node.exe") ?? "not found"}), the Claude CLI (${claude ?? "not found"}) and, for Codex, the npm-global @openai/codex.`);
+  const clis = runtimeIds().filter((id) => result.manifest[id]?.installed).map((id) => {
+    const installed = result.manifest[id].installed;
+    const found = installed.names.map(onPath).find(Boolean)
+      ?? installed.candidates.map((c) => c.replace(/%([^%]+)%/g, (_, v) => process.env[v] ?? "\0")).find((p) => !p.includes("\0") && existsSync(p));
+    return `the ${id[0].toUpperCase()}${id.slice(1)} CLI (${found ?? "not found"})`;
+  });
+  console.log(`build:falcon: at run time Falcon needs node on PATH (${onPath("node.exe") ?? "not found"}), ${clis.join(", ")} and, for Codex, the npm-global @openai/codex.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

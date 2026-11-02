@@ -10,9 +10,9 @@
   "source": [],
   "steps": [
     { "intent": "start a Claude Bare tab on a vault, open Runes and check Lock reads Lock, so the vault is still open" },
-    { "intent": "press Modify, press Add Rune and add a rune the vault does not have, then check it shows in the view" },
-    { "intent": "press the State switch on one rune until it reads State: Off, and check the rune stays listed as off" },
-    { "intent": "press Delete Rune on a rune from the store, press Cancel on the notice, then press Delete Rune again and confirm with Delete" },
-    { "intent": "press Done and check the deleted rune is gone from the view and from Add Rune's list, and the rune I switched off still reads State: Off" }
+    { "intent": "press Modify, tick a rune in the Rune Library that the vault does not have, then check it shows in the vault view as a pending change" },
+    { "intent": "press the checkbox on one rune in the vault view until it reads State: Off, and check the rune stays listed as a pending change" },
+    { "intent": "in the Rune Library, press Delete Rune on a rune from the store, press Cancel on the notice, then press Delete Rune again and confirm with Delete" },
+    { "intent": "press Done, leave Modify and check the deleted rune is gone from the view, the added rune is listed, and the rune I switched off reads State: Off" }
   ]
 }

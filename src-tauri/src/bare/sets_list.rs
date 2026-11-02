@@ -79,11 +79,11 @@ mod tests {
         std::fs::create_dir_all(&imports).unwrap();
         std::fs::write(crate::paths::config_path_in(&root), r#"{"rulesLibrary":"rules"}"#).unwrap();
         set(&root.join("rules"), "app-core");
-        set(&imports.join("kit"), "workflow");
-        set(&imports.join("kit"), "base");
+        set(&imports.join("installed"), "workflow");
+        set(&imports.join("installed"), "base");
         set(&imports.join("other"), "solo");
-        set(&imports.join("kit.pre-split"), "old");
-        set(&imports.join("kit.deleted-20261028-101500"), "gone");
+        set(&imports.join("installed.pre-split"), "old");
+        set(&imports.join("installed.deleted-20261028-101500"), "gone");
         // A cook recipe lives in `recipes/`, a folder `Library::open` never reads: never listed.
         let rec = root.join("rules").join("recipes");
         std::fs::create_dir_all(&rec).unwrap();
@@ -91,6 +91,6 @@ mod tests {
         let got = sets_in(&root);
         let _ = std::fs::remove_dir_all(&root);
         let pair = |l: Option<&str>, s: &str| SetEntry { library: l.map(str::to_string), set: s.to_string() };
-        assert_eq!(got, vec![pair(None, "app-core"), pair(Some("kit"), "base"), pair(Some("kit"), "workflow"), pair(Some("other"), "solo")]);
+        assert_eq!(got, vec![pair(None, "app-core"), pair(Some("installed"), "base"), pair(Some("installed"), "workflow"), pair(Some("other"), "solo")]);
     }
 }

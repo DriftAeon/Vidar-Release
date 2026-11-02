@@ -51,7 +51,7 @@ test("Get-FalconManifestRuntimes: absent or no manifest means both", () => {
 
 test("every caller passes the runtimes of the bundle it builds or reads", () => {
   const build = read("tools/release/falcon-build.ps1");
-  assert.ok(build.includes("-CodexFiles $codexFiles -Runtimes $runtimeList"));
+  assert.ok(build.includes("-Identities $identities -Runtimes $runtimeList"));
   assert.ok(build.includes("Get-FalconShellKey -RepoRoot $repoRoot -Runtimes $runtimeList"));
   assert.ok(build.includes("$runtimeList = Resolve-FalconRuntimes $Runtimes"), "-Runtimes codex resolves to the codex list");
   assert.ok(read("tools/release/pending.ps1").includes("Get-FalconShellInputLines -RepoRoot $root -Runtimes (Get-FalconManifestRuntimes $pBundle)"));

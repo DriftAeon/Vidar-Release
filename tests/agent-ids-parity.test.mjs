@@ -54,6 +54,16 @@ test("AGENT_IDS and PTY_ONLY_IDS do not overlap", () => {
   assert.deepEqual(pty.filter((p) => tsIds().includes(p)), []);
 });
 
+test("the Falcon runtime table lists AGENT_IDS in order, and build.mjs reads the same ids", async () => {
+  const table = read("tools/lib/FalconRuntimes.ps1");
+  const body = /\$script:FalconRuntimes\s*=\s*\[ordered\]@\{([\s\S]*?)\r?\n\}/.exec(table)?.[1];
+  assert.ok(body, "FalconRuntimes table shape changed; update this test with it");
+  const rows = [...body.matchAll(/^ {2}(\w+)\s*=\s*@\{/gm)].map((m) => m[1]);
+  assert.deepEqual(rows, tsIds(), "tools/lib/FalconRuntimes.ps1 rows");
+  const { runtimeIds } = await import("../tools/falcon/build.mjs");
+  assert.deepEqual(runtimeIds(), tsIds(), "build.mjs runtimeIds()");
+});
+
 test("the gateway runner is a full agent", () => {
   const runner = JSON.parse(read("contracts/modules.json")).gateway.runner;
   assert.ok(tsIds().includes(runner), `gateway runner ${runner}`);
@@ -68,6 +78,38 @@ test("Agent::as_str arms match the variants", () => {
 
 test("Agent keeps rename_all lowercase", () => {
   assert.match(proto, /#\[serde\(rename_all = "lowercase"\)\]\s*pub enum Agent\b/);
+});
+
+test("table fields: AgentSpec, the env leaf, descriptor.ts and the packs agree", async () => {
+  const { AGENTS } = await import("../src/agents/descriptor.ts");
+  const leaf = read("src-falcon/src/protocol/agent_env.rs");
+  const homeEnv = /pub const fn home_env\(self\) -> &'static str \{\s*match self \{([^}]*)\}/.exec(leaf);
+  assert.ok(homeEnv, "home_env shape changed in agent_env.rs; update this test with it");
+  const homes = Object.fromEntries([...homeEnv[1].matchAll(/Self::(\w+) => "([^"]+)"/g)].map((x) => [x[1].toLowerCase(), x[2]]));
+  for (const id of tsIds()) {
+    const block = new RegExp(`static ${id.toUpperCase()}: AgentSpec = AgentSpec \\{([\\s\\S]*?)\\n\\};`).exec(spec);
+    assert.ok(block, `static ${id.toUpperCase()} shape changed in agent_spec.rs`);
+    const opt = (k) => {
+      const m = new RegExp(`\\n    ${k}: (Some\\("([^"]*)"\\)|None),`).exec(block[1]);
+      assert.ok(m, `${k} shape changed in agent_spec.rs`);
+      return m[2] ?? null;
+    };
+    const str = (k) => new RegExp(`\\n    ${k}: "([^"]*)"`).exec(block[1])?.[1];
+    const list = (k) => {
+      const m = new RegExp(`\\n    ${k}: &\\[([^\\]]*)\\]`).exec(block[1]);
+      assert.ok(m, `${k} shape changed in agent_spec.rs`);
+      return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+    };
+    const d = AGENTS[id];
+    assert.equal(d.instructionsFile, str("instructions_file"), "instructionsFile");
+    assert.equal(d.userDir, str("user_dir"), "userDir");
+    assert.equal(d.modelPrefix, opt("model_prefix"), "modelPrefix");
+    assert.equal(d.homeEnv, homes[id], "homeEnv");
+    assert.equal(list("commands")[0], id, "commands[0] is the bare id");
+    let pack = null;
+    try { pack = JSON.parse(read(`content/packs/${id}/pack.json`)); } catch { /* no pack */ }
+    assert.equal(opt("npm_package"), (pack?.module?.deps ?? []).find((e) => e.id === id)?.update?.package ?? null, "npm_package vs pack.json update.package");
+  }
 });
 
 test("each spec agrees with profiles/bare/<id>.json", () => {

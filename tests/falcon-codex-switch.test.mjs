@@ -20,7 +20,7 @@ rig.real = { createFalconAdoptTransport: transport.createFalconAdoptTransport, f
 const { AGENT_PROFILE } = await import("../src/agents/agent-profile.ts");
 const { HostedCodexAdapter } = await import("../src/agents/codex-hosted.ts");
 const { CodexAdapter } = await import("../src/agents/codex.ts");
-const { attachRenderedBody, codexHostCapabilities, codexMayHost } = await import("../src/panels/sessions/rendered-body.ts");
+const { attachRenderedBody, codexHostCapabilities, mayHostInFalcon } = await import("../src/panels/sessions/rendered-body.ts");
 const { resolveBodyKind } = await import("../src/panels/sessions/body-kind.ts");
 const readopt = await import("../src/launcher/readopt.ts");
 const { createHostPayload } = await import("../src/panels/rendered/host-payload.ts");
@@ -53,17 +53,17 @@ test("gate parse: only falcon.hostedCodex === true turns it on", () => {
 
 test("gate off: a Codex tab stays in-process whatever the host can do", () => {
   assert.equal(picked(tab(), CAPS, false), null);
-  assert.equal(codexMayHost(tab()), false, "no probe, so no host launch, with the gate off");
+  assert.equal(mayHostInFalcon(tab()), false, "no probe, so no host launch, with the gate off");
   assert.equal(AGENT_PROFILE.codex.falconHosted({ hostedCodex: false, capabilities: CAPS, rulesFile: null, profile: null }), false);
 });
 
 test("gate on: hosted only with codex_turns, no rules file and no profile", async () => {
   readopt.setHostedCodexGate(true);
-  assert.equal(codexMayHost(tab()), true);
-  assert.equal(codexMayHost(tab({ rules })), false, "a rules file stays in-process (Q5)");
-  assert.equal(codexMayHost(tab({ profile: "bare" })), true, "Bare may host (codex_bare is checked at attach)");
-  assert.equal(codexMayHost(tab({ profile: "other" })), false);
-  assert.equal(codexMayHost(tab({ falconSession: "s1" })), false, "an adopt is already hosted");
+  assert.equal(mayHostInFalcon(tab()), true);
+  assert.equal(mayHostInFalcon(tab({ rules })), false, "a rules file stays in-process (Q5)");
+  assert.equal(mayHostInFalcon(tab({ profile: "bare" })), true, "Bare may host (codex_bare is checked at attach)");
+  assert.equal(mayHostInFalcon(tab({ profile: "other" })), false);
+  assert.equal(mayHostInFalcon(tab({ falconSession: "s1" })), false, "an adopt is already hosted");
   readopt.setHostedCodexGate(false);
 
   const hosted = picked(tab(), CAPS, true);
@@ -114,8 +114,8 @@ test("adopt kind: the session's agent with the gate on; gate off a Codex session
   readopt.setHostedCodexGate(true);
   assert.equal(readopt.adoptAgent(codex), "codex");
   assert.equal(readopt.adoptRefusal(codex), null);
-  assert.equal(readopt.adoptAgent({ agent: "gemini" }), "claude");
-  assert.notEqual(readopt.adoptRefusal({ agent: "gemini" }), null);
+  assert.equal(readopt.adoptAgent({ agent: "pi" }), "claude");
+  assert.notEqual(readopt.adoptRefusal({ agent: "pi" }), null);
   readopt.setHostedCodexGate(false);
   assert.deepEqual(resolveBodyKind({ falconSession: "s1", agent: "codex" }), { kind: "codex", body: "rendered" });
   assert.deepEqual(resolveBodyKind({ falconSession: "s1", agent: "claude" }), { kind: "claude", body: "rendered" });
@@ -136,7 +136,7 @@ test("readopt filter: Codex sessions come back only with the gate on", () => {
   readopt.setHostedCodexGate(true);
   assert.equal(readopt.shouldReadopt(base), true);
   assert.equal(readopt.shouldReadoptHeld(base, held), true);
-  assert.equal(readopt.shouldReadopt({ ...base, agent: "gemini" }), false);
+  assert.equal(readopt.shouldReadopt({ ...base, agent: "pi" }), false);
   assert.equal(readopt.shouldReadopt({ ...base, agent: "claude" }), true);
   readopt.setHostedCodexGate(false);
   assert.equal(readopt.shouldReadopt({ ...base, agent: "claude" }), true);

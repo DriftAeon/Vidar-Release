@@ -13,6 +13,9 @@ export const releaseDir = (root) => join(resolve("tools", { root }), "release");
 /** The docs folder's repo-relative prefix, with a trailing slash. */
 export const docsPrefix = () => `${rel("docs")}/`;
 
+/** The tools folder's repo-relative prefix, with a trailing slash. */
+export const toolsPrefix = () => `${rel("tools")}/`;
+
 /** True when `root` is an exported source tree (zip, or a git checkout of one): tools/release/ is
  *  export-ignored, so only the private repo has export.ps1. */
 export const isExportedTree = (root) => !existsSync(join(releaseDir(root), "export.ps1"));

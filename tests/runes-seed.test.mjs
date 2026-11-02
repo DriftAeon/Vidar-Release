@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
-import { DEL_LIBRARY, DEL_RUNES, MANIFEST, delFiles, run, tokensFor } from "../tools/sandbox/runes-seed.mjs";
+import { DEL_LIBRARY, DEL_RUNES, DEL_SET, MANIFEST, delFiles, run, tokensFor } from "../tools/sandbox/runes-seed.mjs";
 
 // realpath expands 8.3 short TEMP names (RUNNER~1) to the long form the scripts report
 const fresh = () => realpathSync.native(mkdtempSync(join(tmpdir(), "runes-seed-")));
@@ -85,11 +85,11 @@ test("seed empties saved Codex tabs an earlier run left, keeping the rest of the
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
-test("seed empties vault state an earlier run left: custom vault, edited stock vault, session record, defaults", () => {
+test("seed empties vault state an earlier run left: custom vault, named vault, session record, defaults", () => {
   const base = fresh();
   try {
     const vaults = join(tokensFor(base)["<APP>"], "runtime", "vaults");
-    const stale = [join(vaults, "custom-ddf9b7", "vault.json"), join(vaults, "stock-claude", "vault.json"),
+    const stale = [join(vaults, "custom-ddf9b7", "vault.json"), join(vaults, "team-main", "vault.json"),
       join(vaults, "sessions", "s1.json"), join(vaults, "defaults.json")];
     for (const f of stale) { mkdirSync(join(f, ".."), { recursive: true }); writeFileSync(f, "{}\n"); }
     const dry = run({ base, dryRun: true });
@@ -101,14 +101,15 @@ test("seed empties vault state an earlier run left: custom vault, edited stock v
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
 
-test("default seed adds case 11's throwaway import library with two runes, and no other library changes", () => {
+test("default seed adds case 11's throwaway import library with two runes and a runeset, and no other library changes", () => {
   const base = fresh();
   try {
     assert.equal(run({ base }).code, 0);
     const imports = join(tokensFor(base)["<APP>"], "runtime/runes", DEL_LIBRARY);
     assert.deepEqual(readdirSync(join(imports, "rules")).sort(), DEL_RUNES.map((id) => `${id}.md`));
     assert.match(text(join(imports, "rules", "del-a.md")), /^---\nname: del-a\nkind: rule\n/);
-    assert.equal(delFiles().length, 2);
+    assert.equal(delFiles().length, 3);
+    assert.match(text(join(imports, "sets", `${DEL_SET}.md`)), /kind: set\n[\s\S]*- <\?rune del-b\?>/);
     assert.ok(existsSync(join(tokensFor(base)["<APP>"], "runes-e2e", "rules", "one-off.md")));
     assert.equal(run({ base }).code, 0, "a reseed restores a deleted throwaway library");
   } finally { rmSync(base, { recursive: true, force: true }); }

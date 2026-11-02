@@ -1,5 +1,4 @@
 //! The checked-in module item catalog and its per-launch availability filter.
-#![allow(dead_code)] // Spawn and Settings callers are adopted in later lanes.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -7,7 +6,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::guards::BareGuard;
-use crate::agent_spec;
+use crate::agent_spec::{self, Agent};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -38,7 +37,17 @@ pub struct Mcp {
     pub reads: Reads,
     #[serde(default, skip_serializing_if = "is_false")]
     pub optional: bool,
+    /// `none`: the writer pins no tool-approval mode for this server (Codex's `default_tools_approval_mode`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval: Option<Approval>,
+    /// Seconds a tool call may run (Codex `tool_timeout_sec`; Claude `timeout`, in ms).
+    #[serde(default, rename = "timeoutSec", skip_serializing_if = "Option::is_none")]
+    pub timeout_sec: Option<u32>,
 }
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Approval { None }
 
 fn is_false(v: &bool) -> bool { !*v }
 
@@ -63,20 +72,14 @@ pub struct Stdio {
     pub command: String,
     pub args: Vec<String>,
     pub env_from: Vec<String>,
+    /// Variable names the spawning process forwards by name (Codex `env_vars`); no value is read here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env_pass: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
 pub enum Reads { All(String), Names(Vec<String>) }
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct ModuleTick {
-    #[serde(default)]
-    pub off: Vec<String>,
-}
-
-pub type SetModules = BTreeMap<String, ModuleTick>;
 
 /// A catalog server as the frontend sees it: which transport it has, never its url or command line
 /// (an MCP url can carry a token; secrets never reach IPC).
@@ -124,17 +127,14 @@ pub fn bare_module_bundles() -> BareModuleBundles {
     wire(catalog, warnings)
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Resolved {
-    pub skills: Vec<String>,
-    pub agents: Vec<String>,
-    pub guards: Vec<BareGuard>,
-    pub mcp: Vec<Mcp>,
-}
-
 /// The first agent tag of `m` that names no agent: such a server is skipped, never handed to an agent.
 pub(crate) fn unknown_tag(m: &Mcp) -> Option<&str> {
     m.agents.iter().map(String::as_str).find(|a| agent_spec::parse(a).is_none())
+}
+
+/// Whether `agent` loads `m`: no tag names an unknown agent, and `agents` is empty or names `agent`.
+pub(crate) fn serves(m: &Mcp, agent: Agent) -> bool {
+    unknown_tag(m).is_none() && (m.agents.is_empty() || m.agents.iter().any(|a| agent_spec::parse(a) == Some(agent)))
 }
 
 fn item_name(path: &str) -> String {
@@ -195,58 +195,29 @@ pub fn validate(b: &Bundles) -> Result<(), String> {
     Ok(())
 }
 
+/// `{{root}}` in a stdio command or arg becomes the install root, so every MCP writer gets the
+/// expanded form and no `{{` reaches a Codex config.
+fn expand_root(mut b: Bundles, root: &Path) -> Bundles {
+    let root = root.to_string_lossy();
+    for s in b.bundles.values_mut().flat_map(|bundle| bundle.mcp.iter_mut()).filter_map(|m| m.stdio.as_mut()) {
+        s.command = s.command.replace("{{root}}", &root);
+        for a in &mut s.args { *a = a.replace("{{root}}", &root); }
+    }
+    b
+}
+
 /// A broken catalog never blocks a launch; it contributes no items.
 pub fn load(root: &Path) -> (Bundles, Vec<String>) {
     let path = root.join("contracts/module-bundles.json");
     let parsed = crate::fsx::read_text(&path)
         .map_err(|e| e.to_string())
         .and_then(|s| serde_json::from_str::<Bundles>(crate::fsx::strip_bom(&s)).map_err(|e| e.to_string()))
-        .and_then(|b| { validate(&b)?; Ok(b) });
+        .and_then(|b| { validate(&b)?; Ok(b) })
+        .map(|b| expand_root(b, root));
     match parsed {
         Ok(b) => (b, Vec::new()),
         Err(e) => (Bundles::default(), vec![format!("Module bundles {} are unreadable or invalid ({e}); no bundle items loaded", path.display())]),
     }
-}
-
-pub fn resolve(set_modules: &SetModules, bundles: &Bundles, agent: &str) -> (Resolved, Vec<String>) {
-    let mut result = Resolved::default();
-    let mut warnings = Vec::new();
-    let Some(agent) = agent_spec::parse(agent) else {
-        warnings.push(format!("Unknown agent {agent:?} for module bundles; nothing resolved"));
-        return (result, warnings);
-    };
-    for (module, tick) in set_modules {
-        let Some(bundle) = bundles.bundles.get(module) else {
-            warnings.push(format!("Unknown module {module:?} in set layer; skipped"));
-            continue;
-        };
-        let known: BTreeSet<String> = bundle.mcp.iter().map(|m| format!("mcp:{}", m.name))
-            .chain(bundle.skills.iter().map(|s| format!("skill:{}", item_name(s))))
-            .chain(bundle.agents.iter().map(|s| format!("agent:{}", item_name(s))))
-            .chain(bundle.guards.iter().map(guard_key)).collect();
-        for item in &tick.off {
-            if !known.contains(item) { warnings.push(format!("Module {module:?} has unknown off item {item:?}; ignored")); }
-        }
-        let excluded: BTreeSet<&str> = tick.off.iter().filter(|s| known.contains(*s)).map(String::as_str).collect();
-        for m in &bundle.mcp {
-            if let Some(tag) = unknown_tag(m) {
-                warnings.push(format!("Module {module:?} server {:?} names unknown agent {tag:?} in module-bundles.json; skipped", m.name));
-                continue;
-            }
-            if !excluded.contains(format!("mcp:{}", m.name).as_str()) && (m.agents.is_empty() || m.agents.iter().any(|a| agent_spec::parse(a) == Some(agent)))
-                && !result.mcp.iter().any(|old| old.name.eq_ignore_ascii_case(&m.name)) { result.mcp.push(m.clone()); }
-        }
-        for s in &bundle.skills {
-            if !excluded.contains(format!("skill:{}", item_name(s)).as_str()) && !result.skills.iter().any(|old| item_name(old) == item_name(s)) { result.skills.push(s.clone()); }
-        }
-        for s in &bundle.agents {
-            if !excluded.contains(format!("agent:{}", item_name(s)).as_str()) && !result.agents.iter().any(|old| item_name(old) == item_name(s)) { result.agents.push(s.clone()); }
-        }
-        for g in &bundle.guards {
-            if !excluded.contains(guard_key(g).as_str()) && !result.guards.iter().any(|old| guard_key(old) == guard_key(g)) { result.guards.push(g.clone()); }
-        }
-    }
-    (result, warnings)
 }
 
 #[cfg(test)]
@@ -292,54 +263,126 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
-    #[test]
-    fn unknown_module_item_availability_and_agent_filter() {
-        let b = fixture();
-        let ticks: SetModules = [
-            ("missing".into(), ModuleTick::default()),
-            ("slack".into(), ModuleTick { off: vec!["mcp:absent".into()] }),
-            ("unreal".into(), ModuleTick::default()),
-        ].into();
-        let (r, w) = resolve(&ticks, &b, "codex");
-        assert_eq!(r.mcp.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["proxy"]);
-        assert!(w.iter().any(|s| s.contains("Unknown module")) && w.iter().any(|s| s.contains("unknown off item")));
-        let (r, _) = resolve(&ticks, &b, "claude");
-        assert!(r.mcp.iter().any(|m| m.name == "slack"), "{:?}", r.mcp);
-    }
-
     fn mcp(name: &str, agents: &[&str]) -> Mcp {
-        Mcp { name: name.into(), http: Some(Http { url: "https://example.test".into(), oauth: None }), stdio: None, agents: agents.iter().map(|a| a.to_string()).collect(), reads: Reads::All("*".into()), optional: false }
-    }
-
-    fn catalog_of(servers: Vec<Mcp>) -> (Bundles, SetModules) {
-        let bundle = Bundle { mcp: servers, ..Default::default() };
-        (Bundles { version: 1, bundles: [("m".to_string(), bundle)].into() }, [("m".to_string(), ModuleTick::default())].into())
+        Mcp { name: name.into(), http: Some(Http { url: "https://example.test".into(), oauth: None }), stdio: None, agents: agents.iter().map(|a| a.to_string()).collect(), reads: Reads::All("*".into()), optional: false, approval: None, timeout_sec: None }
     }
 
     #[test]
-    fn a_grok_tagged_server_is_skipped_with_a_warning_for_every_agent() {
-        let (b, ticks) = catalog_of(vec![mcp("g", &["grok"]), mcp("both", &["claude", "grok"]), mcp("any", &[])]);
-        validate(&b).unwrap();
-        for agent in ["claude", "codex"] {
-            let (r, w) = resolve(&ticks, &b, agent);
-            assert_eq!(r.mcp.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["any"], "{agent}");
-            assert_eq!(w.len(), 2, "{w:?}");
-            assert!(w.iter().all(|s| s.contains("\"grok\"") && s.contains("module-bundles.json")), "{w:?}");
+    fn serves_follows_the_agent_tags_and_never_widens_an_unknown_one() {
+        assert!(serves(&mcp("any", &[]), Agent::Claude) && serves(&mcp("any", &[]), Agent::Codex));
+        assert!(serves(&mcp("c", &["claude"]), Agent::Claude) && !serves(&mcp("c", &["claude"]), Agent::Codex));
+        assert!(serves(&mcp("x", &["codex"]), Agent::Codex) && !serves(&mcp("x", &["codex"]), Agent::Claude));
+        for agent in [Agent::Claude, Agent::Codex] {
+            assert!(!serves(&mcp("g", &["grok"]), agent) && !serves(&mcp("both", &["claude", "grok"]), agent));
         }
     }
 
     #[test]
-    fn an_unknown_agent_asking_to_resolve_gets_nothing() {
-        let (b, ticks) = catalog_of(vec![mcp("any", &[])]);
-        let (r, w) = resolve(&ticks, &b, "grok");
-        assert!(r.mcp.is_empty() && w.len() == 1, "{w:?}");
+    fn the_catalog_expands_root_in_stdio_commands_and_args() {
+        let dir = std::env::temp_dir().join(format!("vidar-bundles-root-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("contracts")).unwrap();
+        std::fs::write(dir.join("contracts/module-bundles.json"), r#"{"version":1,"bundles":{"x":{"mcp":[{"name":"a","stdio":{"command":"{{root}}\\n.exe","args":["{{root}}\\s.mjs"],"envFrom":[],"envPass":["T"]},"approval":"none","timeoutSec":9,"reads":"*"}],"skills":[],"agents":[],"guards":[]}}}"#).unwrap();
+        let (b, w) = load(&dir);
+        assert!(w.is_empty(), "{w:?}");
+        let m = &b.bundles["x"].mcp[0];
+        let root = dir.to_string_lossy().into_owned();
+        assert_eq!((m.approval, m.timeout_sec), (Some(Approval::None), Some(9)));
+        let s = m.stdio.as_ref().unwrap();
+        assert_eq!((s.command.as_str(), s.args[0].as_str(), s.env_pass.as_slice()), (format!("{root}\\n.exe").as_str(), format!("{root}\\s.mjs").as_str(), &["T".to_string()][..]));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn runes_dir() -> std::path::PathBuf {
+        crate::paths::rune_vidar_dir_in(&crate::paths::root())
+    }
+
+    /// Every rune file under the vidar library's kind folders, parsed.
+    fn library_runes() -> Vec<(String, crate::rules::rune::Rune)> {
+        fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() { walk(&p, out); } else if p.extension().is_some_and(|x| x == "md") { out.push(p); }
+            }
+        }
+        let mut files = Vec::new();
+        for e in std::fs::read_dir(runes_dir()).unwrap().flatten().filter(|e| e.path().is_dir()) { walk(&e.path(), &mut files); }
+        files.sort();
+        files.into_iter().map(|p| {
+            let text = std::fs::read_to_string(&p).unwrap().replace('\r', "");
+            let rune = crate::rules::rune::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
+            (p.to_string_lossy().into_owned(), rune)
+        }).collect()
     }
 
     #[test]
-    fn each_known_agent_keeps_its_own_servers() {
-        let (b, ticks) = catalog_of(vec![mcp("c", &["claude"]), mcp("x", &["codex"]), mcp("any", &[])]);
-        let names = |agent: &str| resolve(&ticks, &b, agent).0.mcp.into_iter().map(|m| m.name).collect::<Vec<_>>();
-        assert_eq!(names("claude"), ["c", "any"]);
-        assert_eq!(names("codex"), ["x", "any"]);
+    fn every_bundle_resolves_for_each_agent_that_serves_it() {
+        let catalog = fixture();
+        assert!(catalog.bundles.contains_key("vidar-drive"));
+        for (id, bundle) in &catalog.bundles {
+            assert!(!bundle.mcp.is_empty(), "{id} holds no server");
+            for m in &bundle.mcp {
+                assert!(unknown_tag(m).is_none(), "{id}/{} names an unknown agent", m.name);
+                assert!([Agent::Claude, Agent::Codex].iter().any(|a| serves(m, *a)), "{id}/{} serves no agent", m.name);
+                let names = [m.name.clone()];
+                if serves(m, Agent::Claude) { assert_eq!(super::super::claude_mcp::for_launch(&names, &catalog).len(), 1, "{id}/{}", m.name); }
+                if serves(m, Agent::Codex) { assert_eq!(super::super::codex_mcp::for_launch(&names, &catalog).len(), 1, "{id}/{}", m.name); }
+            }
+        }
+    }
+
+    #[test]
+    fn every_mcp_rune_names_a_catalog_server_and_carries_its_agents() {
+        let catalog = fixture();
+        let runes: Vec<_> = library_runes().into_iter().filter(|(_, r)| r.kind == "mcp").collect();
+        for (path, r) in &runes {
+            let (module, server) = (r.item.module.as_deref().unwrap(), r.item.server.as_deref().unwrap());
+            let m = catalog.bundles.get(module).and_then(|b| b.mcp.iter().find(|m| m.name == server))
+                .unwrap_or_else(|| panic!("{path}: no catalog server {module}/{server}"));
+            // One agent tag on the server means the rune carries it; none, or both, means the rune is untagged.
+            let want = match m.agents.as_slice() { [one] => Some(one.as_str()), _ => None };
+            assert_eq!(r.agent.as_deref(), want, "{path}: agent differs from the server's agents {:?}", m.agents);
+        }
+        // Uniform shape: each catalog server has exactly one rune.
+        for (id, bundle) in &catalog.bundles {
+            for m in &bundle.mcp {
+                let n = runes.iter().filter(|(_, r)| r.item.module.as_deref() == Some(id.as_str()) && r.item.server.as_deref() == Some(m.name.as_str())).count();
+                assert_eq!(n, 1, "{id}/{} has {n} mcp runes", m.name);
+            }
+        }
+    }
+
+    #[test]
+    fn rune_ids_are_unique_across_the_vidar_library() {
+        let mut seen = BTreeSet::new();
+        for (path, r) in library_runes() {
+            assert!(seen.insert(r.id.clone()), "{path}: id {} repeats", r.id);
+        }
+    }
+
+    #[test]
+    fn the_codex_vidar_drive_table_has_no_approval_key_and_validates() {
+        use super::super::{codex_mcp, home};
+        let catalog = fixture();
+        let servers = codex_mcp::for_launch(&["vidar_drive".to_string()], &catalog);
+        assert_eq!(servers.len(), 1);
+        let (tables, warnings) = codex_mcp::Tables::servers(&servers, &|_| None).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(tables.names, ["vidar_drive"]);
+        assert!(!tables.text.contains(codex_mcp::APPROVAL_KEY) && !tables.text.contains("{{"), "{}", tables.text);
+        assert!(tables.text.contains("env_vars = [\"VIDAR_CTL_TOKEN\",\"FALCON_SESSION\",\"VIDAR_CTL_SECRET\"]") && tables.text.contains("tool_timeout_sec = 3700"), "{}", tables.text);
+        let (root, tmp) = (crate::paths::root(), std::env::temp_dir().join(format!("vidar-bundles-drive-{}", std::process::id())));
+        let agent_home = tmp.join("agent-home");
+        home::prepare_dirs(&agent_home, &["codex-home".into()]).unwrap();
+        let template = crate::paths::rune_vidar_dir_in(&root).join("settings").join("codex-config.toml");
+        let target = agent_home.join("codex-home/config.toml");
+        let pwsh = Path::new(r"C:\Users\testuser\AppData\Local\Microsoft\WindowsApps\pwsh.exe");
+        let guard = home::Guard::from_vidar_env();
+        let payload = "p\nVIDAR-PAYLOAD-0123456789ab\n";
+        home::generate_codex_config_for(&template, &target, &root, &agent_home, pwsh, payload, &guard, None, &tables).unwrap();
+        let doc = home::parse_toml_lite(&std::fs::read_to_string(&target).unwrap()).unwrap();
+        let tpl = home::parse_toml_lite(&std::fs::read_to_string(&template).unwrap()).unwrap();
+        home::validate_codex_with(&doc, &tpl, &root, &agent_home, pwsh, payload, &guard, None, &tables, &home::HookTrust::default()).unwrap();
+        assert!(!doc.iter().any(|(k, _)| k.starts_with("mcp_servers.vidar_drive.") && k.ends_with(codex_mcp::APPROVAL_KEY)));
+        std::fs::remove_dir_all(tmp).ok();
     }
 }

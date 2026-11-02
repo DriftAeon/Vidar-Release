@@ -2,9 +2,8 @@
 // Nothing here reads the repo's own fixtures; the scanner runs the TypeScript 7 API on an in-memory project.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { rmSync } from "node:fs";
+import { makeTree, writeTree } from "./helpers/tree.mjs";
 import { DEFAULT_IDS, strictOf, useIds } from "../tools/agents/key-words.mjs";
 import { lexTokens, scan } from "../tools/agents/ts-keys.mjs";
 import { DETECTORS } from "../tools/sweep/lanes-systems.mjs";
@@ -34,6 +33,11 @@ test("regex literal is S2 (reScanSlashToken), division is not a regex", () => {
 test("property access x.codex is S1; a compound property is C", () => {
   const es = K("const a = x.codex;\nconst b = x.codexHome;\n");
   assert.deepEqual(es.map((e) => `${e.line}:${row(e)}`), ["1:codex:S1:strict", "2:codexHome:C:cap"]);
+});
+
+test("Math.PI is not the agent id pi; other PI accesses still are", () => {
+  assert.deepEqual(K("const r = 2 * Math.PI * 6;\n"), []);
+  assert.deepEqual(K("const a = x.PI;\nconst b = PI;\n").map((e) => `${e.line}:${e.tok}`), ["1:PI", "2:PI"]);
 });
 
 test("computed key value is S2 on the value", () => {
@@ -90,10 +94,11 @@ test("!== claude in an adapter file is strict (R1); a bare use there is free", (
   assert.equal(es[1].ctx.negated, true);
 });
 
-test("?.codexHome in an if is strict (R2); outside a condition it is free in an adapter", () => {
+test("?.codexHome in an if is still a condition, and free in an adapter (Q2 b)", () => {
   const p = "src/bare/codex-home.ts";
   const es = K("if (cfg?.codexHome) { go(); }\nconst h = cfg.codexHome;\n", p);
-  assert.deepEqual(es.map((e) => `${e.line}:${row(e)}`), ["1:codexHome:C:strict", "2:codexHome:C:free"]);
+  assert.deepEqual(es.map((e) => `${e.line}:${row(e)}`), ["1:codexHome:C:free", "2:codexHome:C:free"]);
+  assert.equal(strictOf({ ...es[0], tier: "other" }), "strict");
   assert.equal(es[0].ctx.condition, true);
 });
 
@@ -121,16 +126,13 @@ test("comments and module specifiers are not keys", () => {
 });
 
 test("sys-agent-branch delegates to the scanner and agrees with it on a fixture", () => {
-  const root = mkdtempSync(join(tmpdir(), "ts-keys-"));
+  const root = makeTree("ts-keys-");
   try {
     const files = {
       "src/agents/codex.ts": 'if (agent === "codex") {}\n',
       "src/launcher/x.ts": 'const a = agent === "codex" ? 1 : 2;\nconst b = agent === "codex";\nconst c = tab.kind !== "claude";\nconst d = other === "plain";\n',
     };
-    for (const [rel, text] of Object.entries(files)) {
-      mkdirSync(dirname(join(root, rel)), { recursive: true });
-      writeFileSync(join(root, rel), text);
-    }
+    writeTree(root, files);
     const r = DETECTORS["sys-agent-branch"]({ root });
     assert.equal(r.ok, true, r.error);
     const viaScanner = K(files["src/launcher/x.ts"], "src/launcher/x.ts").filter((e) => e.cls === "S2" && e.ctx.cmp).map((e) => `${e.ctx.cmp.subject} ${e.ctx.cmp.op} "${e.tok}"`);

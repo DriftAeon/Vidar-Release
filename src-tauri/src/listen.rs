@@ -41,6 +41,10 @@ const DELIVER_TIMEOUT_MS: u64 = 5_000;
 
 /* ---- config ---- */
 
+/// `wakeword.model` value for "no wake word": Listen never starts, so no mic is held for wake
+/// detection (keybind or push-to-talk input is unaffected).
+pub const WAKE_NONE: &str = "none";
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WakewordCfg {
@@ -849,6 +853,9 @@ fn start_session(app: AppHandle, listen_state: ListenState, cfg: WakewordCfg, pr
 #[tauri::command]
 pub async fn listen_start(app: AppHandle, state: State<'_, ListenState>, cfg: WakewordCfg, prompt: String) -> Result<(), String> {
     let _ = LISTEN.set(state.inner().clone());
+    if cfg.model == WAKE_NONE {
+        return Err("Wake Word Is None".into());
+    }
     {
         let mut slot = state.0.lock().unwrap_or_else(|p| p.into_inner());
         reap_if_dead(&mut slot); // backstop: a session whose reader already died is not "on"
@@ -893,17 +900,9 @@ pub async fn listen_stop(state: State<'_, ListenState>) -> Result<(), String> {
         let _ = session.writer_join.join(); // stdin closes when this returns
 
         let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            match session.child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) if Instant::now() >= deadline => {
-                    let _ = session.child.kill();
-                    let _ = session.child.wait();
-                    break;
-                }
-                Ok(None) => thread::sleep(Duration::from_millis(50)),
-                Err(_) => break,
-            }
+        if let Ok(None) = session.child.wait_bounded(deadline) {
+            session.child.kill();
+            let _ = session.child.wait();
         }
 
         let _ = session.ctx.capture_tx.lock().unwrap().send(CaptureMsg::Stop);

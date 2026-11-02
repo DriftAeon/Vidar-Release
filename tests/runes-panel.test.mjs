@@ -1,5 +1,4 @@
-// Runes tab refresh: one query per switch, and open sets and cards
-// survive a redraw. Catalog fixture from runes-trace.test.mjs.
+// Runes tab refresh: one query per switch, and a classic tab draws state only (no load trace).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -9,7 +8,8 @@ const LOOKUP = `
 export const getFocusedSession = () => globalThis.__focus ?? null;
 export const renderedSessionId = () => null;
 export const renderedBody = () => null;
-export const sessionLaunchInfo = () => null;`;
+export const sessionLaunchInfo = () => null;
+export const pendingVaultTab = () => null;`;
 
 const dom = setupDom({ stubs: { "panels/sessions/lookup": LOOKUP } });
 const { mountRunesView, onRunesShown, onRunesHidden, disposeRunesView } = await import("../src/panels/runes.ts");
@@ -43,43 +43,26 @@ test("showing the tab and a focus event in one task query the transcript once", 
   document.dispatchEvent(new window.CustomEvent("vidar-focus"));
   await settle();
   assert.equal(count("runes_loaded") - before, 1);
-  assert.ok(parent.querySelector("details.runes-set"), "the sets drew");
 });
 
-test("with no focused session the list is empty and the strip hidden", async () => {
+test("a classic tab draws no load trace: the list stays empty, the state line follows the focus", async () => {
+  const list = () => parent.querySelector(".runes-list");
+  assert.equal(list().children.length, 0, "no trace drew");
+  assert.equal(parent.querySelector(".runes-state").textContent, "No Loads Recorded");
+  assert.ok(parent.querySelector(".runes-strip").hidden);
+  dom.ipc.answers.runes_loaded = { source: "transcript", truncated: false, files: [{ path: `${BASE.replaceAll("\\", "/")}/CLAUDE.md`, memoryType: "Project", when: "start" }] };
+  replyDone();
+  await settle();
+  assert.equal(list().children.length, 0, "loads draw no groups or cards");
+  assert.ok(!parent.querySelector(".runes-strip").hidden, "the strip names the tab");
   const focus = globalThis.__focus;
   globalThis.__focus = null;
   document.dispatchEvent(new window.CustomEvent("vidar-focus"));
   await settle();
-  assert.equal(parent.querySelector(".runes-list").children.length, 0, "no sets drew");
+  assert.equal(list().children.length, 0);
   assert.equal(parent.querySelector(".runes-state").textContent, "");
   assert.ok(parent.querySelector(".runes-strip").hidden);
   globalThis.__focus = focus;
-  document.dispatchEvent(new window.CustomEvent("vidar-focus"));
-  await settle();
-  assert.ok(parent.querySelector("details.runes-set"), "the sets draw again with a session");
-});
-
-test("an open set and card survive a redraw; a changed answer redraws them open", async () => {
-  const set = () => parent.querySelector("details.runes-set");
-  const card = () => set().querySelector("details.runes-rn");
-  set().open = true;
-  card().open = true;
-  card().dispatchEvent(new window.Event("toggle"));
-  await settle();
-  assert.ok(card().querySelector(".runes-rb"), "body built on open");
-  const oldSet = set();
-  replyDone();
-  await settle();
-  assert.equal(set(), oldSet, "same answers: no DOM write");
-  assert.ok(set().open && card().open);
-  dom.ipc.answers.runes_loaded = { source: "transcript", truncated: false, files: [{ path: `${BASE.replaceAll("\\", "/")}/CLAUDE.md`, memoryType: "Project", when: "start" }] };
-  replyDone();
-  await settle();
-  assert.notEqual(set(), oldSet, "a changed answer redraws");
-  assert.ok(set().open, "set open in the new DOM");
-  assert.ok(card().open, "card open in the new DOM");
-  assert.equal(card().querySelectorAll(".runes-rb").length, 1, "exactly one body");
   onRunesHidden();
   disposeRunesView();
 });

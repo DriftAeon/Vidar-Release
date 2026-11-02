@@ -356,7 +356,7 @@ mod tests {
             profile: None,
             payload_file: None, mcp_file: None,
             row_key: None, sets: None,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
         });
         driver.ready_for_test("thread-1");
         driver

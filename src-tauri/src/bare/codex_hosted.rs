@@ -43,6 +43,10 @@ pub(super) struct CodexHome {
     /// The set items Codex cannot carry (`Loadout.unsupported`), one warning each, chained after the
     /// login warnings.
     pub(super) unsupported_warnings: Vec<String>,
+    /// The repo skills (`.agents/skills`) switched off in config.toml, for the manifest's `repo_skills_off`.
+    repo_skills_off: Vec<String>,
+    /// The files directly inside the trusted launch folder's `.codex` directories, for the manifest's `codex_files`.
+    codex_files: Vec<String>,
     /// MCP warnings; both Codex surfaces load server tables from this vault's config.toml.
     pub(super) mcp: codex_mcp::LaunchArgs,
     git: identity::GitIdentity,
@@ -51,6 +55,8 @@ pub(super) struct CodexHome {
     /// The vault the launch loaded (`launch_row::vault_for`); `None` only for the test no-vault spawn.
     pub(super) vault: Option<super::vault::Vault>,
     pub(super) loadout_hash: String,
+    /// `ctl_for(&loadout)`.
+    pub(super) ctl: bool,
     /// The vault's model rune, written as config.toml's top-level `model`.
     pub(super) model: Option<String>,
     pub lock: home::HomeLock,
@@ -90,21 +96,45 @@ pub(super) fn project_override_warning(cwd: Option<&str>) -> Option<String> {
 /// Shown when the launch folder is not trusted in the user's own Codex config.
 pub(super) const UNTRUSTED_FOLDER_WARNING: &str = "Trust this Folder in your Codex Config to Load its Project Settings.";
 
+/// The files directly inside each `.codex` directory on the walk to the git root, as paths relative to the top
+/// folder of that walk (the git root, or the launch folder when there is none; `/` separators), sorted per
+/// directory. Every path is unique, since each names its own folder: a parent's and a child's `.codex/config.toml`
+/// are two entries, and Codex reads both.
+pub(super) fn codex_files_in(dir: &Path) -> Vec<String> {
+    let folders = folders_to_git_root(dir);
+    let top = folders.last().copied().unwrap_or(dir);
+    let mut out: Vec<String> = Vec::new();
+    for folder in folders {
+        let Ok(rd) = std::fs::read_dir(folder.join(".codex")) else { continue };
+        let mut names: Vec<String> = rd.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_file())).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        let prefix = folder.strip_prefix(top).map(|p| p.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/")).unwrap_or_default();
+        for n in names {
+            out.push(if prefix.is_empty() { format!(".codex/{n}") } else { format!("{prefix}/.codex/{n}") });
+        }
+    }
+    out
+}
+
+/// A vault skill's Codex name: its SKILL.md frontmatter `name`, else its folder name.
+fn skill_key(s: &copies::SkillCopy) -> String {
+    let md = s.files.iter().find(|(rel, _, _)| rel == "SKILL.md");
+    let text = md.map(|(_, bytes, _)| String::from_utf8_lossy(bytes).into_owned());
+    text.and_then(|t| copies::frontmatter(crate::fsx::strip_bom(&t)).0).unwrap_or_else(|| s.name.clone())
+}
+
 /// Whether trust would unlock anything: a `.codex` directory (project config, hooks, exec policies)
 /// in `dir` or an ancestor up to and including the nearest git root (a folder holding `.git`); with
 /// no git root above, `dir` alone.
 pub(super) fn has_codex_settings(dir: &Path) -> bool {
-    let settings_dir = ".codex";
+    folders_to_git_root(dir).into_iter().any(|a| a.join(".codex").is_dir())
+}
+
+/// `dir` and each parent up to and including the nearest git root (a folder holding `.git`); `dir`
+/// alone when no git root is above. The walk Codex makes for project config and repo skills.
+pub(super) fn folders_to_git_root(dir: &Path) -> Vec<&Path> {
     let root = dir.ancestors().find(|a| a.join(".git").exists()).unwrap_or(dir);
-    for a in dir.ancestors() {
-        if a.join(settings_dir).is_dir() {
-            return true;
-        }
-        if a == root {
-            break;
-        }
-    }
-    false
+    dir.ancestors().take_while(|a| *a != root).chain(std::iter::once(root)).collect()
 }
 
 /// Whether the user's Codex config (`config`, the caller's path) trusts `cwd`; tests add folders
@@ -147,6 +177,7 @@ pub(super) fn prepare_home(
     cwd: Option<&str>,
     payload_route: PayloadRoute,
     hosted: bool,
+    surface: Option<crate::rules::rune::Surface>,
 ) -> Result<CodexHome, String> {
     let _ = hosted; // Both surfaces now use vault-owned MCP tables.
     let mut overlay: BTreeMap<String, String> = p.overlay.iter().map(|(k, v)| (k.clone(), fill_placeholders(v, root, home_dir))).collect();
@@ -155,14 +186,12 @@ pub(super) fn prepare_home(
     // each item rune through rune_items::map_items(Agent::Codex, ...): skills, agents, guards, env and
     // MCP. What Codex cannot carry (`Loadout.unsupported`: mode, plugins) is named in the warnings.
     let config = config_of(opts);
-    let resolve_env = set_loadout::ResolveEnv { root, config: &config, home: home_dir, user_home: ambient.user_home.as_deref() };
-    let set_loadout::VaultLoadout { mut loadout, warnings: loadout_warnings, text, sets } = vault_spawn::resolve(&resolve_env, Agent::Codex, root, vault.as_ref())?;
+    let resolve_env = set_loadout::ResolveEnv { root, config: &config, user_home: ambient.user_home.as_deref() };
+    let set_loadout::VaultLoadout { mut loadout, warnings: loadout_warnings, text, sets } = vault_spawn::resolve(&resolve_env, Agent::Codex, surface, root, vault.as_ref())?;
     if !loadout.refusals.is_empty() {
         return Err(format!("Rune Vault failed to resolve: {}; Bare spawn refused", loadout.refusals.join("; ")));
     }
-    // Codex's bundled skills are runes too: their markers leave the copy list, the config switch is appended last.
-    let off_held = vault.as_ref().is_some_and(super::codex_builtin::holds_off);
-    let builtins = super::codex_builtin::take(Agent::Codex, root, &mut loadout.skills, off_held);
+    let template = vault_spawn::setting_file(&loadout, Agent::Codex, root)?;
     // The launch's vault picks its Codex home (`agent_homes::pick_vault`, keyed `vault:<id>`; read-only
     // here, recorded under the lock). The test no-vault spawn stays on the profile's home; a hosted
     // spawn hands its pick to Falcon (`SpawnParams.codex_home`, W9).
@@ -177,12 +206,9 @@ pub(super) fn prepare_home(
     }
     let inherited: Vec<(OsString, OsString)> = inherited.into_iter().collect();
     // Before the home is touched: an overlay without an absolute CODEX_HOME refuses here.
-    let mut env = env::codex(inherited.iter().cloned(), &overlay)?;
-    for (name, value) in &loadout.env {
-        if overlay.keys().any(|key| key.eq_ignore_ascii_case(name)) {
-            return Err(format!("Rune Vault env {name} conflicts with the Codex home overlay; Bare spawn refused"));
-        }
-        env.set(name, value.expose());
+    let mut env = env::app_server(inherited.iter().cloned(), &overlay)?;
+    for (name, value) in env::rune_env("Codex", &loadout, &overlay)? {
+        env.set(name, value);
     }
     // pwsh on the full allowlisted Path first (the Store alias included: notify runs outside the
     // sandbox), then the WindowsApps folders leave the Path so Codex's own shell lookup cannot pick the
@@ -222,21 +248,14 @@ pub(super) fn prepare_home(
     // Skill sources read and hashed before the lock, as the Claude prepares do.
     let skill_plan = copies::plan_for(Agent::Codex, &copies::codex_skills_in(root, &loadout.skills), &loadout.agents, Some(home_dir));
     let selected_skills: Vec<String> = skill_plan.skills.iter().map(|s| s.name.clone()).collect();
+    // Codex keys a skill on its frontmatter `name` (the folder name when it has none), as a repo skill is.
+    let selected_skill_names: Vec<String> = skill_plan.skills.iter().map(|s| skill_key(s)).collect();
     let selected_agents: Vec<String> = skill_plan.agents.iter().map(|a| a.name.clone()).collect();
     // MCP tables live in this vault's Codex home for both surfaces. Server URLs and env values
-    // never enter argv. vidar_drive has no bundle entry: its stock rune toggles the pinned table.
+    // never enter argv. vidar_drive is a catalog server like the rest: its rune names it.
     let (catalog, _) = bundles::load(root);
     let servers = codex_mcp::for_launch(&loadout.mcp, &catalog);
-    let drive = match vault.as_ref() {
-        Some(v) => vault::store::Store::open(&vault_spawn::store_root(root)).resolve(&v.id)?.runes.iter().any(|r| {
-            r.library == "stock" && r.id == "vidar-drive" && loadout.mcp.iter().any(|m| m == "vidar_drive")
-        }),
-        None => false,
-    };
-    let (mut table_mcp, mut mcp_warnings) = codex_mcp::Tables::servers(&servers, &process_env)?;
-    if drive {
-        table_mcp = table_mcp.with_vidar_drive(root)?;
-    }
+    let (table_mcp, mut mcp_warnings) = codex_mcp::Tables::servers(&servers, &process_env)?;
     for name in &loadout.mcp {
         if !table_mcp.names.iter().any(|n| n.eq_ignore_ascii_case(name)) {
             mcp_warnings.push(format!("MCP server {name}: no Codex server definition for this Rune Vault; not carried"));
@@ -290,7 +309,7 @@ pub(super) fn prepare_home(
     let built = match vault.is_none() && text.is_none() && listing.trim().is_empty() {
         // The test-only no-vault spawn (`launch_row::TEST_NO_VAULT`) with nothing to carry.
         true => None,
-        false => codex_instructions(&lock, &p, root, home_dir, text.as_deref(), &sets, &listing, guard)?,
+        false => codex_instructions(&lock, root, home_dir, text.as_deref(), &sets, &listing, guard)?,
     };
     let profile = match (&built, payload_route) {
         (Some(b), PayloadRoute::ProfileFile) => Some(home::write_codex_profile(&lock, &codex_home, &String::from_utf8_lossy(&b.bytes), root, home_dir, guard)?),
@@ -306,15 +325,25 @@ pub(super) fn prepare_home(
         true => under(home_dir, &p.config_target),
         false => codex_home.join("config.toml"),
     };
-    let template = under(root, &p.config_template);
     // Only a folder the user's own Codex config trusts gets the trust table; any other still runs,
     // with its project config, hooks and exec policies not loaded, and the tab says so, but only when
     // the folder has a `.codex` to load (otherwise trusting it would change nothing).
     let launch_dir = cwd.filter(|c| !c.trim().is_empty());
+    // Codex's bundled skills are runes too (`built-in:`), and a repo's `.agents/skills` load trusted or
+    // not: the vault's unplaced built-ins and the launch folder's repo skills the vault does not place
+    // (a placed skill of the same name keeps its name on) become a config block, appended last.
+    let repo_skills: Vec<String> = match (launch_dir, loadout.built_ins.managed) {
+        (Some(c), true) => builtin_off::repo_skill_names(Path::new(c)).into_iter().filter(|n| !selected_skill_names.contains(n)).collect(),
+        _ => Vec::new(),
+    };
+    let builtin_off = (crate::agent_spec::spec(Agent::Codex).carries.builtin_off)(&loadout.built_ins, &repo_skills);
+    let repo_skills_off = builtin_off::repo_off(&loadout.built_ins, &repo_skills);
     let trusted_cwd = launch_dir.filter(|c| trust_of(ambient.codex_config.as_deref(), c));
     let settings_found = launch_dir.is_some_and(|c| has_codex_settings(Path::new(c)));
     let trust_warning = (settings_found && trusted_cwd.is_none()).then(|| UNTRUSTED_FOLDER_WARNING.to_string());
     let untrusted_dir = launch_dir.filter(|_| trust_warning.is_some()).map(str::to_string);
+    // The Runes panel lists what a trusted folder's `.codex` loads; an untrusted one has the Trust Folder card.
+    let codex_files = trusted_cwd.map(|c| codex_files_in(Path::new(c))).unwrap_or_default();
     // Both surfaces: exactly the vault's server tables (none when it carries no MCP rune).
     let model = loadout.model.clone();
     home::generate_codex_config_with(&template, &config, root, home_dir, &pwsh, &payload, guard, trusted_cwd, &table_mcp, &home::HookTrust::default(), model.as_deref())?;
@@ -331,7 +360,7 @@ pub(super) fn prepare_home(
         };
         codex_hooks::trust(&ctx, &hooks_json, handlers, &mut write_trusted)?;
     }
-    builtins.apply(&config)?;
+    super::builtin_off::apply_toml(&config, &builtin_off.toml, loadout.built_ins.managed)?;
     Ok(CodexHome {
         p,
         env,
@@ -352,11 +381,14 @@ pub(super) fn prepare_home(
         untrusted_dir,
         login_warnings,
         unsupported_warnings,
+        repo_skills_off,
+        codex_files,
         mcp,
         git,
         config,
         home_dir: home_dir.to_path_buf(),
         vault,
+        ctl: super::ctl_for(&loadout),
         loadout_hash: loadout.hash,
         model,
         lock,
@@ -416,6 +448,8 @@ impl CodexHome {
             warnings: self.guard_warnings.iter().chain(&self.copy_warnings).cloned().chain(self.git.warning.clone()).collect(),
             managed_policy: manifest::managed_policy(),
             codex_rules: Some(rules),
+            repo_skills_off: self.repo_skills_off.clone(),
+            codex_files: self.codex_files.clone(),
             falcon_session: None,
             loadout_hash: Some(self.loadout_hash.clone()),
             thread_id: None,
@@ -445,6 +479,8 @@ pub struct CodexHostedLaunch {
     /// it for the notice card's Trust Folder action (`codex_trust`).
     untrusted_dir: Option<String>,
     seed: Option<SessionSeed>,
+    /// `ctl_for` of the launch's loadout.
+    pub ctl: bool,
     /// The profile's host (node) name, its env and the install root: what `record_host` runs
     /// `verify.mjs` with on a new Codex version, as the in-process prepare does (`verify_new_codex`).
     /// Node is looked up only then, so the prepare itself still probes no binary.
@@ -548,7 +584,7 @@ pub(super) fn prepare_codex_hosted_with(
     // The host sends the payload on `thread/start`, so no length is refused here; the marker and
     // path admission below stay.
     let legacy = codex_home_of(&p, root, home_dir);
-    let h = prepare_home(p, root, home_dir, inherited, ambient, guard, find, &resolve_codex, opts, Some(cwd), PayloadRoute::ThreadStart, true)?;
+    let h = prepare_home(p, root, home_dir, inherited, ambient, guard, find, &resolve_codex, opts, Some(cwd), PayloadRoute::ThreadStart, true, Some(opts.surface.unwrap_or(crate::rules::rune::Surface::Rendered)))?;
     // A combination home goes to Falcon by path, checked here by the host's own rule first.
     let codex_home = match legacy.as_ref() == Some(&h.codex_home) {
         true => None,
@@ -569,7 +605,7 @@ pub(super) fn prepare_codex_hosted_with(
     let (manifest, file_stamp) = h.manifest(binary, "falcon".into(), Vec::new());
     let seed = SessionSeed::new(root, Agent::Codex, "hosted", h.vault.as_ref(), &h.loadout_hash);
     Ok(CodexHostedLaunch {
-        payload_file, codex_home, model: h.model.clone(), manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), seed,
+        payload_file, codex_home, model: h.model.clone(), manifest, file_stamp, manifests_dir: home_dir.join("manifests"), untrusted_dir: h.untrusted_dir.clone(), seed, ctl: h.ctl,
         verify_host: h.p.host.name.clone(), verify_env: h.env.clone(), root: root.to_path_buf(), _lock: h.lock,
     })
 }

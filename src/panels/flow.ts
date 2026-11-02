@@ -35,6 +35,7 @@ import { onFlowNodeEvent } from "../flow/runner-adapter";
 import { flushFlowStorage, onFlowStorageError } from "../flow/file-storage";
 import { resetRunView, initRunView } from "../flow/run-view";
 import { buildRunControls } from "../flow/run-controls";
+import { loadVaultNames } from "../flow/vault-names";
 
 /** What a mount registered outside its own root (observer, subscriptions, window/document
  *  listeners), undone by disposeFlowView. */
@@ -153,6 +154,7 @@ export function mountFlowView(parent: HTMLElement, openPathInDocument: (path: st
   // a node opens a card anchored beside it (popover.ts), positioned in the same screen-space
   // coordinate system pan/zoom/drag already use, so it must mount after S.canvasEl exists.
   initPopover(openPathInDocument);
+  void loadVaultNames(); // agent faces name their vault; the first card open reuses this read
   // repositionPopover rides the same dirty-frame loop redrawEdges already uses (pan/zoom/drag all
   // set S.edgesDirty) — the card tracks the node exactly like an edge does.
   initFrameLoop(() => {
@@ -323,7 +325,7 @@ export function mountFlowView(parent: HTMLElement, openPathInDocument: (path: st
     flushGraphSave();
     renderPopover();
     scheduleFrame();
-    fitToView();
+    fitToView(false, 1); // Reset Layout: 100% unless the graph needs less
     runControls.updateRunGate();
   });
 

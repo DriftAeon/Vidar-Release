@@ -19,42 +19,17 @@ use super::names::{self, Key, NameCache};
 use super::parse::{self, host_ok, Merged};
 use super::vault::{self, team_ok, LoadError};
 use crate::credman::Store;
-use crate::net::{self, Limits, Reply, Request, Secret, SendError};
+use crate::net::{self, Limits, Request, Secret};
 
 /// The whole budget of one command.
-pub const DEADLINE: Duration = Duration::from_secs(20);
+pub const DEADLINE: Duration = net::tiers::COMMAND;
 /// Fetches closer together than this return the last result (one refresh is up to 4 searches).
 pub const SPACING: Duration = Duration::from_secs(30);
 
-/// The send seam: `Live` is `net::send`; tests answer from a closure.
-pub trait Transport: Send + Sync {
-    fn send(&self, req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, SendError>;
-}
-
-pub struct Live;
-
-impl Transport for Live {
-    fn send(&self, req: &Request, headers: &Secret, limits: Limits) -> Result<Reply, SendError> {
-        net::send(req, headers, limits)
-    }
-}
+pub use crate::net::{Live, Transport};
 
 /// `T` or `{ error: { kind, message, retryAfter? } }`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
-pub enum Answer<T> {
-    Ok(T),
-    Error { error: ApiError },
-}
-
-impl<T> From<Result<T, ApiError>> for Answer<T> {
-    fn from(r: Result<T, ApiError>) -> Self {
-        match r {
-            Ok(v) => Answer::Ok(v),
-            Err(error) => Answer::Error { error },
-        }
-    }
-}
+pub type Answer<T> = net::Answer<T, ErrorKind>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -176,11 +151,11 @@ impl Core {
         }
         let left = budget.remaining();
         if left.is_zero() {
-            return Err(network("no reply within 20 s"));
+            return Err(network(&net::timeout_message(DEADLINE)));
         }
         let reply = net
             .send(req, &api::headers(token), Limits { cap, body_deadline: left })
-            .map_err(|e| api::send_error(&e, token))?;
+            .map_err(|e| net::send_error(&e, token, "Slack"))?;
         api::classify(reply.status, reply.retry_after, &reply.body, token).map_err(|mut e| {
             if e.kind == ErrorKind::Rate {
                 e.retry_after = Some(self.hold.set(Instant::now(), e.retry_after.unwrap_or(hold::HOLD_DEFAULT_SECS)));
@@ -208,7 +183,7 @@ impl Core {
             return Err(endpoint("connect was superseded"));
         }
         if budget.remaining().is_zero() {
-            return Err(network("no reply within 20 s"));
+            return Err(network(&net::timeout_message(DEADLINE)));
         }
         vault::save(store, &token, &user, &team, &host).map_err(|e| endpoint(api::clean_redacted(&e, &token)))?;
         s.generation += 1;
@@ -251,7 +226,7 @@ impl Core {
                 joined.get_or_insert(f.seq);
                 let left = budget.remaining();
                 if left.is_zero() {
-                    return Err(network("no reply within 20 s"));
+                    return Err(network(&net::timeout_message(DEADLINE)));
                 }
                 f = self.flight_done.wait_timeout(f, left).unwrap_or_else(|e| e.into_inner()).0;
                 continue;
@@ -367,7 +342,7 @@ pub fn status_with(store: &dyn Store) -> Status {
 
 fn elapsed_error(e: net::Elapsed) -> ApiError {
     match e {
-        net::Elapsed::Timeout => network("no reply within 20 s"),
+        net::Elapsed::Timeout => network(&net::timeout_message(DEADLINE)),
         _ => network("request stopped without a reply"),
     }
 }
@@ -377,7 +352,7 @@ fn elapsed_error(e: net::Elapsed) -> ApiError {
 pub fn connect_deadline(
     core: Arc<Core>,
     store: Arc<dyn Store + Send + Sync>,
-    net: Arc<dyn Transport>,
+    net: Arc<dyn Transport + Send + Sync>,
     token: Secret,
     deadline: Duration,
 ) -> Answer<Connected> {
@@ -393,7 +368,7 @@ pub fn connect_deadline(
     }
 }
 
-fn inbox_deadline(core: Arc<Core>, store: Arc<dyn Store + Send + Sync>, net: Arc<dyn Transport>, deadline: Duration) -> Answer<Merged> {
+fn inbox_deadline(core: Arc<Core>, store: Arc<dyn Store + Send + Sync>, net: Arc<dyn Transport + Send + Sync>, deadline: Duration) -> Answer<Merged> {
     let budget = Budget::new(deadline);
     let now = budget.started;
     match net::with_deadline("slack-inbox", deadline, move || core.inbox(&*store, &*net, now, &budget)) {

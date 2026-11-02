@@ -40,6 +40,25 @@ export function brokenImage(complete, naturalWidth) { return complete && natural
 const ELEMENTS = 'button,a[href],input,select,textarea,summary,[role="button"],[role="tab"],[role="menuitem"],[role="menuitemcheckbox"],[role="checkbox"],[role="switch"],[role="option"],[role="link"],[role="combobox"],[role="slider"],[tabindex]:not([tabindex="-1"]),[contenteditable="true"]';
 const LANDMARKS = '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[role="tablist"],[role="toolbar"],dialog';
 
+const HEAD = ".pane-head-card";
+
+// Ref identity across a re-render: data-keep first, else a role+name unique on the page that carries no state.
+export function stateBearing(role, name) {
+  return /State:\s*(On|Off)/i.test(name) || (/^(checkbox|switch|radio)$/.test(role) && /^(on|off|true|false|checked|unchecked)$/i.test(name.trim()));
+}
+// ident = {keep, role, name}; items = [{el, role, name, keep}] of the visible controls now on the page.
+export function matchIdent(ident, items) {
+  if (ident.keep) {
+    const keep = items.filter((i) => i.keep === ident.keep && i.role === ident.role);
+    if (keep.length === 1) return keep[0].el;
+    const named = keep.filter((i) => i.name === ident.name);
+    return named.length === 1 ? named[0].el : null;
+  }
+  if (stateBearing(ident.role, ident.name)) return null;
+  const same = items.filter((i) => i.role === ident.role && i.name === ident.name);
+  return same.length === 1 ? same[0].el : null;
+}
+
 export function pageSnapshot(port, delta = true) {
   const doc = document;
   const win = globalThis;
@@ -47,11 +66,11 @@ export function pageSnapshot(port, delta = true) {
   const origin = performance.timeOrigin;
   const fresh = !previousState || previousState.timeOrigin !== origin;
   const state = fresh
-    ? { next: 1, refOf: new WeakMap(), byRef: new Map(), baseline: null, timeOrigin: origin }
+    ? { next: 1, refOf: new WeakMap(), byRef: new Map(), ident: new Map(), baseline: null, timeOrigin: origin }
     : previousState;
   win.__vidarExplorer = state;
   const viewport = { w: win.innerWidth, h: win.innerHeight };
-  const candidates = [...doc.querySelectorAll(`${ELEMENTS},${LANDMARKS}`)];
+  const candidates = [...doc.querySelectorAll(`${ELEMENTS},${LANDMARKS},${HEAD}`)];
   const interactive = new Set(doc.querySelectorAll(ELEMENTS));
   const visible = (el) => {
     let child = null;
@@ -124,20 +143,73 @@ export function pageSnapshot(port, delta = true) {
       relation: positioned && sameScroll ? "ancestor-sibling" : "other",
     };
   };
-  const nodes = [];
-  const counts = new Map();
+  // Visible text of a pane head, interactive descendants excluded (they are their own nodes).
+  const headText = (el) => {
+    const parts = [];
+    const walk = (n) => {
+      for (const c of n.childNodes) {
+        if (c.nodeType === 3) parts.push(c.textContent);
+        else if (c.nodeType === 1 && !c.matches(ELEMENTS) && !c.matches("script,style") && visible(c)) walk(c);
+      }
+    };
+    walk(el);
+    return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 80);
+  };
+  const entries = [];
   for (const el of candidates) {
     if (!visible(el)) continue;
+    if (el.matches(HEAD) && !interactive.has(el) && !el.matches(LANDMARKS)) {
+      const text = headText(el);
+      if (text) entries.push({ el, role: "heading", name: text, heading: true });
+      continue;
+    }
+    entries.push({ el, role: roleOf(el), name: nameOf(el), keep: el.closest("[data-keep]")?.getAttribute("data-keep") ?? "" });
+  }
+  const items = entries.filter((e) => !e.heading);
+  const bind = (ref, el) => {
+    state.refOf.set(el, ref);
+    state.byRef.set(ref, new WeakRef(el));
+  };
+  const live = (ref) => { const el = state.byRef.get(ref)?.deref(); return !!el && el.isConnected; };
+  state.relocate = (ref) => {
+    const ident = state.ident.get(ref);
+    if (!ident || live(ref)) return null;
+    const el = matchIdent(ident, collectItems());
+    if (el) { state.byRef.set(ref, new WeakRef(el)); if (!state.refOf.get(el)) state.refOf.set(el, ref); }
+    return el;
+  };
+  function collectItems() {
+    return [...doc.querySelectorAll(`${ELEMENTS},${LANDMARKS}`)].filter(visible)
+      .map((el) => ({ el, role: roleOf(el), name: nameOf(el), keep: el.closest("[data-keep]")?.getAttribute("data-keep") ?? "" }));
+  }
+  // A new element that matches a disconnected ref's identity takes that ref; two refs wanting one element rebind neither.
+  const rebindTo = new Map();
+  const wanted = new Map();
+  for (const [ref, ident] of state.ident) {
+    if (live(ref)) continue;
+    const el = matchIdent(ident, items);
+    if (el && !state.refOf.get(el)) wanted.set(el, [...(wanted.get(el) ?? []), ref]);
+  }
+  for (const [el, refs] of wanted) if (refs.length === 1) rebindTo.set(el, refs[0]);
+  const nodes = [];
+  const counts = new Map();
+  for (const entry of entries) {
+    const { el, role, name } = entry;
     const tag = el.tagName.toLowerCase();
-    const role = roleOf(el);
-    const name = nameOf(el);
     const key = `${role}\u0000${name}`;
     const nth = counts.get(key) ?? 0;
     counts.set(key, nth + 1);
     let ref = state.refOf.get(el);
-    if (!ref) { ref = `e${state.next++}`; state.refOf.set(el, ref); state.byRef.set(ref, new WeakRef(el)); }
+    let rebound = false;
+    if (!ref && rebindTo.has(el)) { ref = rebindTo.get(el); bind(ref, el); rebound = true; }
+    if (!ref) { ref = `e${state.next++}`; bind(ref, el); }
+    if (!entry.heading) state.ident.set(ref, { keep: entry.keep, role, name });
     const r = el.getBoundingClientRect();
     const bbox = { x: r.x, y: r.y, w: r.width, h: r.height };
+    if (entry.heading) {
+      nodes.push({ ref, role, name, state: { enabled: true, focused: false }, locator: { role, name, nth }, flags: [], bbox });
+      continue;
+    }
     const css = win.getComputedStyle(el);
     let bg = null;
     for (let p = el; p; p = p.parentElement) {
@@ -173,6 +245,7 @@ export function pageSnapshot(port, delta = true) {
         ...(el.hasAttribute("aria-expanded") ? { expanded: el.getAttribute("aria-expanded") === "true" } : {}),
         ...(el.hasAttribute("aria-selected") ? { selected: el.getAttribute("aria-selected") === "true" } : {}) },
       locator: { role, name, nth }, flags, bbox,
+      ...(rebound ? { rebound: true } : {}),
       ...(cover ? { cover } : {}),
     };
     nodes.push(node);

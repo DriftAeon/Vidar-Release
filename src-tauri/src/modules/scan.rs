@@ -23,6 +23,9 @@ pub struct Listed {
     /// SHA-256 of the pack.json bytes this declaration was parsed from (packs only).
     #[serde(skip)]
     pub pack_sha256: Option<String>,
+    /// The pack's `release` from the same bytes (packs only; None when it declares none).
+    #[serde(skip)]
+    pub release: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -47,12 +50,55 @@ pub struct Scan {
     #[serde(skip)]
     pub pending: Vec<(Listed, Pin)>,
     /// Gateway packs broken only by `Changed Since Pinned`: folder -> (module id, the pin of
-    /// the declaration as it is now). Trust Current re-pins from here (`module_trust_current`).
+    /// the declaration as it is now, the installed release for the load floor). Trust Current
+    /// re-pins from here (`module_trust_current`).
     #[serde(skip)]
-    pub changed: BTreeMap<String, (String, Pin)>,
+    pub changed: BTreeMap<String, (String, Pin, Option<String>)>,
+    /// Pack folders broken only because their release is below the load floor: folder -> the
+    /// installed release. `module_accept_release` (Use This Release) works on these.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub older: BTreeMap<String, String>,
+    /// Pack folders with a kept previous release `module_restore_previous` can swap in:
+    /// folder -> that release.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub restorable: BTreeMap<String, String>,
 }
 
 impl Scan {
+    /// Drops the modules in `gone` (module id -> broken reason) from `modules`, `pending` and
+    /// `changed`, then every non-core module whose dependsOn names one dropped, transitively
+    /// (reason `Needs <id>`). Each dropped pack folder gets a broken row; a `changed` gateway
+    /// pack that is gone reads the same instead of Changed Since Pinned. Other broken rows stay.
+    pub fn drop_modules(&mut self, mut gone: BTreeMap<String, String>) {
+        let rows: Vec<&Listed> = self.modules.iter().chain(self.pending.iter().map(|(m, _)| m)).collect();
+        loop {
+            let more: Vec<(String, String)> = rows
+                .iter()
+                .filter(|m| m.decl.level != "core" && !gone.contains_key(&m.decl.id))
+                .filter_map(|m| m.decl.depends_on.iter().flatten().find(|d| gone.contains_key(*d)).map(|d| (m.decl.id.clone(), format!("Needs {d}"))))
+                .collect();
+            if more.is_empty() {
+                break;
+            }
+            gone.extend(more);
+        }
+        let mut rows_out: Vec<Broken> = rows
+            .iter()
+            .filter_map(|m| Some(Broken { folder: m.folder.clone()?, reason: gone.get(&m.decl.id)?.clone() }))
+            .collect();
+        for (folder, (id, _, _)) in &self.changed {
+            if let Some(reason) = gone.get(id) {
+                self.broken.retain(|b| &b.folder != folder);
+                rows_out.push(Broken { folder: folder.clone(), reason: reason.clone() });
+            }
+        }
+        self.modules.retain(|m| !gone.contains_key(&m.decl.id));
+        self.pending.retain(|(m, _)| !gone.contains_key(&m.decl.id));
+        self.changed.retain(|_, (id, _, _)|!gone.contains_key(id));
+        self.broken.extend(rows_out);
+        self.broken.sort_by(|a, b| a.folder.cmp(&b.folder));
+    }
+
     /// Records the pending first-sight pins through `record` (the pin store's `record` in
     /// production). Success moves those modules into `modules`; failure makes each a broken
     /// row `Pin Not Recorded`, so an unpersisted pin never grants trust.
@@ -92,10 +138,10 @@ pub fn pin_key(id: &str) -> PathBuf {
 pub fn scan(packs: &Path, c: &Contract, catalog: &CatalogClaims, store: &Result<Store, String>) -> Scan {
     let mut out = Scan::default();
     for decl in &c.core {
-        out.modules.push(Listed { decl: decl.clone(), source: "core", folder: None, pack_sha256: None });
+        out.modules.push(Listed { decl: decl.clone(), source: "core", folder: None, pack_sha256: None, release: None });
     }
     let mut found: Vec<(String, ModuleDecl)> = Vec::new();
-    let mut hashes: BTreeMap<String, String> = BTreeMap::new(); // folder -> pack.json sha256
+    let mut hashes: BTreeMap<String, (String, Option<String>)> = BTreeMap::new(); // folder -> (pack.json sha256, release)
     match std::fs::read_dir(packs) {
         Err(e) => out.broken.push(Broken { folder: packs.display().to_string(), reason: format!("Cannot Read packs Folder: {e}") }),
         Ok(rd) => {
@@ -114,8 +160,8 @@ pub fn scan(packs: &Path, c: &Contract, catalog: &CatalogClaims, store: &Result<
             dirs.sort();
             for (folder, dir) in dirs {
                 match read_pack(&folder, &dir, c) {
-                    Ok((decl, sha256)) => {
-                        hashes.insert(folder.clone(), sha256);
+                    Ok((decl, sha256, release)) => {
+                        hashes.insert(folder.clone(), (sha256, release));
                         found.push((folder, decl));
                     }
                     Err(reason) => out.broken.push(Broken { folder, reason }),
@@ -204,17 +250,20 @@ pub fn scan(packs: &Path, c: &Contract, catalog: &CatalogClaims, store: &Result<
             out.broken.push(Broken { folder, reason });
             continue;
         }
-        let pack_sha256 = hashes.remove(&folder);
+        let (pack_sha256, release) = match hashes.remove(&folder) {
+            Some((sha, rel)) => (Some(sha), rel),
+            None => (None, None),
+        };
         let gateway = d.agent.as_ref().is_some_and(|a| a.gateway.is_some());
         let verdict = if gateway { pin_verdict(store, &d) } else { Ok(None) };
-        let listed = Listed { decl: d, source: "pack", folder: Some(folder), pack_sha256 };
+        let listed = Listed { decl: d, source: "pack", folder: Some(folder), pack_sha256, release };
         match verdict {
             Ok(None) => out.modules.push(listed),
             Ok(Some(pin)) => out.pending.push((listed, pin)),
             Err(reason) => {
                 let folder = listed.folder.unwrap_or_default();
                 if reason == CHANGED {
-                    out.changed.insert(folder.clone(), (listed.decl.id.clone(), canonical_pin(&listed.decl)));
+                    out.changed.insert(folder.clone(), (listed.decl.id.clone(), canonical_pin(&listed.decl), listed.release.clone()));
                 }
                 out.broken.push(Broken { folder, reason });
             }

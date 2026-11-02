@@ -19,13 +19,13 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::protocol::{EventBody, Outcome};
+use crate::util::now_ms;
 
 /// Hard bound on one serialized record as read back from disk. Journals
 /// written before [`LONE_RECORD_CAP`] existed may hold records up to here, so
@@ -422,13 +422,6 @@ fn encode_frame(magic: [u8; 4], payload: &[u8]) -> Vec<u8> {
 
 fn io_error(context: &str, error: std::io::Error) -> JournalError {
     JournalError::Io(format!("{context}: {error}"))
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 /// Names Windows resolves to a device no matter what extension follows.

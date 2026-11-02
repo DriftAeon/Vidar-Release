@@ -8,6 +8,7 @@
 // sidecar lands via textContent/value, never innerHTML.
 
 import { invoke } from "../ipc";
+import { agoSince } from "../format";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 import { getActiveSessionId, writeToSession } from "./sessions";
@@ -407,14 +408,6 @@ function note(text: string): HTMLElement {
   return d;
 }
 
-function ago(ms: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return new Date(ms).toLocaleDateString();
-}
-
 function card(c: Comment, editing: boolean, anchoredOk: boolean): HTMLElement {
   const el = document.createElement("div");
   el.className = "doc-card";
@@ -450,7 +443,7 @@ function card(c: Comment, editing: boolean, anchoredOk: boolean): HTMLElement {
   const meta = document.createElement("div");
   meta.className = "meta";
   const when = document.createElement("span");
-  when.textContent = ago(c.atMs);
+  when.textContent = agoSince(c.atMs);
   when.title = new Date(c.atMs).toLocaleString();
   meta.appendChild(when);
   meta.appendChild(c.status === "open" ? btn("Resolve", () => setStatus(c, "resolved")) : btn("Reopen", () => setStatus(c, "open")));

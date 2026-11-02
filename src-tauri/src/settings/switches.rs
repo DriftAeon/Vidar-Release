@@ -66,8 +66,7 @@ fn write_switch_at(path: &Path, field: &str, on: bool) -> Result<(), String> {
     let mut obj = serde_json::Map::new();
     obj.insert(field.to_string(), Value::Bool(on));
     obj.insert("atMs".to_string(), Value::from(crate::fsx::now_ms()));
-    let text = serde_json::to_string_pretty(&Value::Object(obj)).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(path, text.as_bytes())
+    crate::fsx::write_json_pretty(path, &Value::Object(obj), false)
 }
 
 #[tauri::command]

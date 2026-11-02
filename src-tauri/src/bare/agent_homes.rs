@@ -2,9 +2,8 @@
 //! (`library/set`, an absent library read as the config's `rulesLibrary`, lowercased, sorted,
 //! deduped) hash to `<home>\<agent dir>\<hash12>\`: `codex-homes` for Codex, `claude-homes` for
 //! Claude. Each agent's index (`<home>\codex-homes.json`, `<home>\claude-homes.json`) maps each hash
-//! to its sets, folder and last use, written atomically under the home lock. The vault migration
-//! (`vault/migrate.rs`) re-keys a legacy home onto its vault (`adopt`, `pick_vault`), so Rendered
-//! keeps its threads; with no entry, a combination launches on its own home. The empty combination and Flow stay on the
+//! to its sets, folder and last use, written atomically under the home lock. A home is re-keyed onto
+//! its vault (`adopt`, `pick_vault`), so Rendered keeps its threads; with no entry, a combination launches on its own home. The empty combination and Flow stay on the
 //! legacy home; a Falcon-hosted Codex spawn runs on its combination's home too, which Falcon admits
 //! by path (`codex_payload::admit_codex_home`).
 //!
@@ -58,6 +57,7 @@ pub(super) fn refs(row: &RowSets) -> Vec<String> {
 }
 
 /// The first 12 hex chars of the refs' sha256; `None` for the empty combination.
+#[cfg(test)] // only `adoption` calls it, and that is test-only
 pub(super) fn hash12(row: &RowSets) -> Option<String> {
     let refs = refs(row);
     (!refs.is_empty()).then(|| hex(&Sha256::digest(refs.join("\n").as_bytes()))[..12].to_string())
@@ -99,6 +99,7 @@ fn index_of(k: &Kind, home_dir: &Path) -> Index {
 }
 
 /// The agent's index file under the Bare home (the fold migration backs it up).
+#[cfg(test)] // fixtures read and write the index directly; no production caller
 pub(super) fn index_file(agent: Agent, home_dir: &Path) -> PathBuf {
     index_path(kind(agent), home_dir)
 }
@@ -124,6 +125,7 @@ pub(super) fn adoption(agent: Agent, home_dir: &Path, legacy: &Path, row: &RowSe
 
 /// Writes an `adoption` entry under the lock, re-reading the index; an entry already there for the
 /// hash stays.
+#[cfg(test)] // the fold migration that adopted at startup is gone; fixtures still adopt a home
 pub(super) fn adopt(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, hash: &str, entry: &Entry) -> Result<(), String> {
     let k = kind(agent);
     let mut index = index_of(k, home_dir);
@@ -212,9 +214,8 @@ pub(super) fn record(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, lega
 }
 
 fn write_index(k: &Kind, home_dir: &Path, index: &Index) -> Result<(), String> {
-    let json = serde_json::to_vec_pretty(index).map_err(|e| e.to_string())?;
     let path = index_path(k, home_dir);
-    crate::fsx::atomic_write(&path, &json).map_err(|e| format!("{} homes index {}: {e}", k.label, path.display()))
+    crate::fsx::write_json_pretty(&path, index, false).map_err(|e| format!("{} homes index {}: {e}", k.label, path.display()))
 }
 
 fn is_reparse(m: &std::fs::Metadata) -> bool {
@@ -373,6 +374,36 @@ pub(super) fn prune_with(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, 
         }
     }
     warnings
+}
+
+/// Removes the home of a deleted vault `vault_id` (its `vault:<id>` entry and own `<agent dir>\<hash12>` folder)
+/// when the folder holds no transcript. A re-keyed entry on another folder, the legacy home, a link and a
+/// folder with a transcript stay (the entry too, so a later prune sees them). The vault sweep calls it.
+pub(super) fn remove_vault_home(agent: Agent, _lock: &home::HomeLock, home_dir: &Path, vault_id: &str) {
+    let k = kind(agent);
+    let Some((hash, _)) = pick_vault(agent, home_dir, &home_dir.join(".vault-key"), Some(vault_id)).combo else { return };
+    let mut index = index_of(k, home_dir);
+    let Some(e) = index.get(&hash) else { return };
+    let dir = under(home_dir, &e.dir);
+    let plain = |d: &Path| std::fs::symlink_metadata(d).is_ok_and(|m| m.is_dir() && !is_reparse(&m));
+    if e.dir != format!("{}/{hash}", k.homes_dir) || !plain(&home_dir.join(k.homes_dir)) {
+        return;
+    }
+    if dir.exists() && (!plain(&dir) || has_transcripts(k, &dir) || std::fs::remove_dir_all(&dir).is_err()) {
+        return;
+    }
+    index.remove(&hash);
+    let _ = write_index(k, home_dir, &index);
+}
+
+/// Whether `vault_id`'s own home (its `vault:<id>` entry's folder) holds a transcript, for any agent.
+/// The legacy custom cleanup keeps such a vault: a thread resumes on that home.
+pub(super) fn vault_home_has_transcripts(home_dir: &Path, vault_id: &str) -> bool {
+    crate::agent_spec::ALL.iter().any(|&agent| {
+        let k = kind(agent);
+        let Some((hash, _)) = pick_vault(agent, home_dir, &home_dir.join(".vault-key"), Some(vault_id)).combo else { return false };
+        index_of(k, home_dir).get(&hash).is_some_and(|e| has_transcripts(k, &under(home_dir, &e.dir)))
+    })
 }
 
 /// Every home of an agent in an install, for readers (W3 L9): the legacy home first (with the sets
@@ -679,11 +710,11 @@ mod tests {
     #[test]
     fn claude_adoption_takes_the_legacy_config_dir() {
         let t = Tmp::new("claude-seed");
-        let c = t.config(r#"{"set":"kit"}"#);
+        let c = t.config(r#"{"set":"team"}"#);
         let lock = home::lock(&t.home(), home::LOCK_WAIT).unwrap();
-        let kit = row(&[(None, "kit")]);
-        adopt_now(Agent::Claude, &t, &lock, &t.claude_legacy(), &kit);
-        let p = pick(Agent::Claude, &t.home(), &t.claude_legacy(), &c, Some(&kit));
+        let team = row(&[(None, "team")]);
+        adopt_now(Agent::Claude, &t, &lock, &t.claude_legacy(), &team);
+        let p = pick(Agent::Claude, &t.home(), &t.claude_legacy(), &c, Some(&team));
         assert_eq!(p.dir, t.claude_legacy());
         assert_eq!(p.rel, "claude-config");
         record(Agent::Claude, &lock, &t.home(), &t.claude_legacy(), &c, &p).unwrap();
@@ -692,13 +723,13 @@ mod tests {
         assert_eq!(index.values().next().unwrap().dir, "claude-config");
         assert!(t.home().join("claude-homes.json").is_file());
         assert!(!t.home().join("codex-homes.json").exists(), "a Claude record wrote the Codex index");
-        assert_eq!(listed(Agent::Claude, &t.home(), &t.claude_legacy()), vec![(t.claude_legacy(), vec!["lib/kit".to_string()])]);
+        assert_eq!(listed(Agent::Claude, &t.home(), &t.claude_legacy()), vec![(t.claude_legacy(), vec!["lib/team".to_string()])]);
     }
 
     #[test]
     fn claude_new_combination_gets_its_own_dir() {
         let t = Tmp::new("claude-new");
-        let c = t.config(r#"{"set":"kit"}"#);
+        let c = t.config(r#"{"set":"team"}"#);
         let lock = home::lock(&t.home(), home::LOCK_WAIT).unwrap();
         let p = pick(Agent::Claude, &t.home(), &t.claude_legacy(), &c, Some(&row(&[(None, "other")])));
         assert_eq!(p.dir.parent().unwrap(), t.home().join("claude-homes"));

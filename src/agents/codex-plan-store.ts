@@ -4,6 +4,9 @@ export const CODEX_PLANS_KEY = "rendered.codexPlans";
 export const PLAN_LIMITS = { threads: 32, turns: 64, bytes: 128 * 1024, planBytes: 16 * 1024,
   ageMs: 30 * 24 * 60 * 60 * 1000 };
 
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { jsonBytes } from "../json.ts";
+
 type Json = Record<string, unknown>;
 export interface PlanSnapshot {
   threadId: string;
@@ -16,9 +19,8 @@ export interface PlanBackend {
   read(): Promise<unknown>;
   patch(entries: Record<string, unknown>): Promise<unknown>;
 }
-const obj = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v);
+const obj = (v: unknown): v is Json => !!v && typeof v === "object" && !Array.isArray(v); // home-ok: a type guard that narrows; json.ts obj returns Json | null
 const id = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 256;
-const bytes = (v: unknown): number => new TextEncoder().encode(JSON.stringify(v)).length;
 
 function snapshot(threadId: unknown, p: unknown, updatedAt: unknown): PlanSnapshot | null {
   if (!id(threadId) || !obj(p) || !id(p.turnId) || !Array.isArray(p.plan) || p.plan.length > 128
@@ -31,7 +33,7 @@ function snapshot(threadId: unknown, p: unknown, updatedAt: unknown): PlanSnapsh
     plan.push({ step: raw.step, status: raw.status as PlanSnapshot["plan"][number]["status"] });
   }
   const row: PlanSnapshot = { threadId, turnId: p.turnId, explanation: p.explanation as string ?? "", plan, updatedAt };
-  return bytes(row) <= PLAN_LIMITS.planBytes ? row : null;
+  return jsonBytes(row) <= PLAN_LIMITS.planBytes ? row : null;
 }
 
 export class CodexPlanStore {
@@ -63,7 +65,7 @@ export class CodexPlanStore {
       const saved = root[CODEX_PLANS_KEY];
       if (saved !== undefined) {
         if (!obj(saved) || saved.version !== 1 || !Array.isArray(saved.entries)
-          || bytes(saved) > 1024 * 1024) throw new Error("Invalid plan store");
+          || jsonBytes(saved) > 1024 * 1024) throw new Error("Invalid plan store");
         const seen = new Set<string>();
         const loaded: PlanSnapshot[] = [];
         for (const raw of saved.entries) {
@@ -99,7 +101,7 @@ export class CodexPlanStore {
       threads.set(row.threadId, count + 1);
       return true;
     });
-    while (bytes({ version: 1, entries: this.rows }) > PLAN_LIMITS.bytes) this.rows.pop();
+    while (jsonBytes({ version: 1, entries: this.rows }) > PLAN_LIMITS.bytes) this.rows.pop();
   }
 
   private write(): Promise<void> {

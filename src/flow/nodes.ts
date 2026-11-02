@@ -13,6 +13,8 @@ import { setSelection } from "./selection";
 import { renderPopover, suspendPopover } from "./popover";
 import { buildEdgePath, beginEdgeDrag, clearPortHighlight } from "./edges";
 import { snapCoord, mintId, isValidId } from "./snap";
+import { iconImg } from "../icon-img";
+import { onVaultNames, vaultName } from "./vault-names";
 
 // Glyphs: two letters per kind, all ten distinct, v1's four
 // (pa/sp/cw/rt) chosen first since those are the only ones the ADD picker (V1_ADDON_KINDS) ever
@@ -131,6 +133,61 @@ function buildPort(side: "in" | "out"): HTMLElement {
   return p;
 }
 
+/** Paints what the face shows of `node` into `el`: title, subtitle, field 0 and (agent nodes) the vault
+ *  row. Idempotent; the addon row is not touched. */
+function paintFace(node: FlowNode, el: HTMLElement): void {
+  const header = el.querySelector<HTMLElement>(".flow-node-header");
+  const body = el.querySelector<HTMLElement>(".flow-node-body");
+  if (!header || !body) return;
+
+  const title = header.querySelector<HTMLElement>(".flow-node-title");
+  if (title) title.textContent = node.title;
+  else header.prepend(text("flow-node-title", node.title));
+  let sub = header.querySelector<HTMLElement>(".flow-node-subtitle");
+  if (node.subtitle) {
+    if (sub) sub.textContent = nodeSubtitle(node.subtitle);
+    else header.append(text("flow-node-subtitle", nodeSubtitle(node.subtitle)));
+  } else sub?.remove();
+
+  let field = body.querySelector<HTMLElement>(".flow-node-field:not(.flow-node-vault)");
+  if (node.fields.length) {
+    const f = node.fields[0];
+    if (!field) {
+      field = document.createElement("div");
+      field.className = "flow-node-field";
+      field.append(text("flow-node-field-k", ""), text("flow-node-field-v", ""));
+      body.prepend(field);
+    }
+    field.children[0].textContent = `${fieldLabel(f.k)}:`;
+    field.children[1].textContent = fieldValue(f.k, f.v);
+  } else field?.remove();
+
+  let row = body.querySelector<HTMLElement>(".flow-node-vault");
+  // an unset vault draws no row; validate.ts keeps the node from running until one is picked
+  const id = node.vault;
+  if (node.kind !== "agent" || !id) { row?.remove(); return; }
+  const name = vaultName(id);
+  if (!row) {
+    row = document.createElement("div");
+    row.className = "flow-node-field flow-node-vault";
+    row.append(iconImg("runelib"), text("flow-node-field-v", ""));
+    field ? field.after(row) : body.prepend(row);
+  }
+  row.dataset.vault = id;
+  row.title = name === id ? `Vault: ${id}` : `Vault: ${name} (${id})`;
+  row.children[1].textContent = name;
+}
+
+/** Repaints `node`'s face from its data: title, subtitle, field 0 and the vault row. The one entry
+ *  point for edits that must show on the canvas card as they happen. */
+export function refreshNodeFace(node: FlowNode): void {
+  const el = S.nodeEls.get(node.id);
+  if (el) paintFace(node, el);
+}
+
+// A vault list that loads (or reloads) renames the rows already on the canvas.
+onVaultNames(() => { for (const n of S.nodes) if (n.kind === "agent") refreshNodeFace(n); });
+
 function buildNode(node: FlowNode): HTMLElement {
   const el = document.createElement("div");
   el.className = `flow-node flow-node-${node.kind}`;
@@ -148,25 +205,18 @@ function buildNode(node: FlowNode): HTMLElement {
   // title/subtitle DOM patches (querySelector by class, not touched by this brief) keep working.
   const header = document.createElement("div");
   header.className = `flow-node-header flow-kind-${node.kind}`;
-  header.appendChild(text("flow-node-title", node.title));
-  if (node.subtitle) header.appendChild(text("flow-node-subtitle", nodeSubtitle(node.subtitle)));
   el.appendChild(header);
 
   const body = document.createElement("div");
   body.className = "flow-node-body";
-  if (node.fields.length) {
-    const field = document.createElement("div");
-    field.className = "flow-node-field";
-    field.append(text("flow-node-field-k", `${fieldLabel(node.fields[0].k)}:`), text("flow-node-field-v", fieldValue(node.fields[0].k, node.fields[0].v)));
-    body.appendChild(field);
-  }
+  el.appendChild(body);
+  paintFace(node, el);
   if (node.addons && node.addons.length) {
     const row = document.createElement("div");
     row.className = "flow-node-addons";
     for (const a of node.addons) row.appendChild(buildAddonChip(a.kind, a.label));
     body.appendChild(row);
   }
-  el.appendChild(body);
 
   // Run facts (time, cost — no per-node token count exists in FlowRunNodeState, see report)
   // footer; built empty/hidden here, filled by run-view.ts's paintNodeStatus once a run has them.

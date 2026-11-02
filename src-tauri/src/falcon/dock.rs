@@ -3,14 +3,17 @@
 
 use std::{
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::State;
 
-use super::{now_ms, write_atomic, Falcon, FalconPaths};
+use super::reader_control::ReaderControl;
+use super::{
+    now_ms, read_registry, write_atomic, Connection, Falcon, FalconPaths, Op, REQUEST_TIMEOUT,
+};
 
 /* ---- tools\falcon\dock.ps1 -> the shell (bridge\falcon\dock-request.json / dock-result.json) ----
  *
@@ -62,7 +65,7 @@ pub struct DockRequestClaim {
 #[tauri::command]
 pub fn falcon_theme(falcon: State<'_, Arc<Falcon>>) -> Option<String> {
     let text = std::fs::read_to_string(falcon.paths.ui_state()).ok()?;
-    let root: Value = serde_json::from_str(text.strip_prefix('\u{FEFF}').unwrap_or(&text)).ok()?;
+    let root: Value = serde_json::from_str(crate::fsx::strip_bom(&text)).ok()?;
     root.get("theme")?.as_str().map(str::to_owned)
 }
 
@@ -173,57 +176,205 @@ pub async fn falcon_dock_ask(
         .map_err(|e| format!("dock ask task failed: {e}"))?
 }
 
+/// The ask both transports carry (`open.rs` `OpenAsk`): the bus requires `session`.
 #[cfg(falcon_shell)]
-fn falcon_dock_ask_blocking(paths: &FalconPaths, session: &str) -> Result<String, String> {
-    let _ = session; // carried via the handoff file; named here only per the call site
-    let id = mint_dispatch_id();
-    let ask = json!({
+fn dock_payload(id: &str, session: &str) -> Value {
+    json!({
         "id": id,
         "kind": "dock",
         "reason": "Dock a hosted session from the Falcon shell",
         "requester": "s0-falcon",
-    });
-    let dispatch_path = paths.open_dispatch_dir().join(format!("{id}.json"));
-    write_atomic(&dispatch_path, &ask.to_string())?;
+        "session": session,
+    })
+}
 
-    // Claim detection checks three places, not just `pending.json`:
-    // `open_result`/`answer_once` REMOVES `pending.json` as its own lock
-    // before writing `result.json` (`open.rs::answer_once`), so a claim that
-    // is approved within one poll tick can already have both `pending.json`
-    // gone and `result.json` not fully visible yet — checking `pending.json`
-    // alone raced that window and returned "Vidar is not running" for a dock
-    // that had, in fact, already succeeded (review proof, root cause). The
-    // `.claimed` file (`open.rs::scan`, the rename target at claim time) is
-    // never removed once a claim validates and is only ever MOVED away by
-    // `park` on a rejection — so its presence in `dispatch\`, not `stale\`,
-    // is claimed-and-live regardless of how far the answer has progressed;
-    // `park`'s destination (`dispatch\stale\`) is deliberately not checked
-    // here, since a parked ask is not a claim in flight.
-    let pending_path = paths.open_dir().join(&id).join("pending.json");
-    let result_path = paths.open_dir().join(&id).join("result.json");
-    let claimed_path = paths.open_dispatch_dir().join(format!("{id}.claimed"));
-    let mut claimed = false;
-    for _ in 0..20 {
-        if pending_path.exists() || result_path.exists() || claimed_path.exists() {
-            claimed = true;
+/// How long one dock ask may wait for Vidar's verdict, from the moment a
+/// subscriber took the publish.
+#[cfg(falcon_shell)]
+const BUS_ASK_DEADLINE: Duration = Duration::from_secs(25);
+/// How long an undelivered publish (no `ask.open` subscriber) is retried.
+/// Sized past Vidar's subscriber restart path (`falcon/bus.rs`): 2 s backoff,
+/// then `ensure_host` (up to 5 s to ready, `host_launch.rs`), then the
+/// subscribe request (ms; bounded by `REQUEST_TIMEOUT`). About 7 s worst case
+/// for a normal restart, so 15 s leaves roughly double.
+#[cfg(falcon_shell)]
+const BUS_DELIVERY_RETRY: Duration = Duration::from_secs(15);
+
+/// What the shell does with Vidar's bus reply.
+#[cfg(falcon_shell)]
+#[derive(Debug, PartialEq, Eq)]
+enum Classified {
+    Verdict(String),
+    /// Any refusal, including an old Vidar's "kind not on the bus yet".
+    Err(String),
+}
+
+#[cfg(falcon_shell)]
+fn classify(reply: &Value) -> Classified {
+    if let Some(verdict) = reply.get("verdict").and_then(Value::as_str) {
+        return Classified::Verdict(verdict.to_string());
+    }
+    match reply.get("reason").and_then(Value::as_str) {
+        Some(reason) => Classified::Err(reason.to_string()),
+        None => Classified::Err("dock ask refused".into()),
+    }
+}
+
+#[cfg(falcon_shell)]
+#[derive(Debug)]
+enum BusFail {
+    /// No subscriber took the publish within `BUS_DELIVERY_RETRY`: Vidar is not running.
+    Undelivered,
+    /// No reply within the deadline.
+    NoAnswer,
+    Other(String),
+}
+
+/// Cancels the reader thread on every exit path, so its pipe handle closes
+/// (dropping a `Connection` does not unblock `read_frame`; a leaked in-process
+/// connection would keep the host from idle-exiting).
+#[cfg(falcon_shell)]
+struct ReaderGuard(Arc<ReaderControl>);
+
+#[cfg(falcon_shell)]
+impl Drop for ReaderGuard {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
+
+/// Publish `payload` on `ask.open` and wait for the reply on
+/// `ask.open.reply.<msg_id>`. Subscribes on one connection, publishes on a second
+/// opened only after the subscribe reply, so the reply cannot be missed.
+#[cfg(falcon_shell)]
+fn bus_ask(paths: &FalconPaths, msg_id: &str, payload: Value) -> Result<Value, BusFail> {
+    let other = BusFail::Other;
+    let registry = read_registry(paths).map_err(other)?;
+    let reply_topic = format!("ask.open.reply.{msg_id}");
+
+    let mut sub = Connection::open(&registry).map_err(BusFail::Other)?;
+    sub.request(
+        2,
+        Op::Subscribe {
+            topics: vec![reply_topic.clone()],
+        },
+        REQUEST_TIMEOUT,
+    )
+    .and_then(|reply| reply.applied("subscribe"))
+    .map_err(BusFail::Other)?;
+
+    let reader_pipe = sub
+        .pipe
+        .try_clone()
+        .map_err(|e| BusFail::Other(format!("duplicate falcon pipe handle: {e}")))?;
+    let mut reader = Connection::raw(reader_pipe);
+    let control = Arc::new(ReaderControl::new());
+    let _guard = ReaderGuard(Arc::clone(&control));
+    let thread_control = Arc::clone(&control);
+    let (send, receive) = std::sync::mpsc::channel();
+    let want = msg_id.to_string();
+    std::thread::spawn(move || {
+        let _finished = match thread_control.enter() {
+            Ok(finished) => finished,
+            Err(error) => {
+                let _ = send.send(Err(error));
+                return;
+            }
+        };
+        let result = loop {
+            let frame = match reader.read_frame() {
+                Ok(frame) => frame,
+                Err(error) => break Err(error),
+            };
+            if frame.get("t").and_then(Value::as_str) == Some("bus")
+                && frame.get("id").and_then(Value::as_str) == Some(want.as_str())
+            {
+                break Ok(frame.get("payload").cloned().unwrap_or(Value::Null));
+            }
+        };
+        let _ = send.send(result);
+    });
+
+    let mut publisher = Connection::open(&registry).map_err(BusFail::Other)?;
+    let started = Instant::now();
+    let mut request_id = 2u64;
+    loop {
+        request_id += 1;
+        let delivered = publisher
+            .request(
+                request_id,
+                Op::Publish {
+                    topic: "ask.open".into(),
+                    id: msg_id.to_string(),
+                    payload: payload.clone(),
+                    reply_to: Some(reply_topic.clone()),
+                },
+                REQUEST_TIMEOUT,
+            )
+            .and_then(|reply| reply.applied("publish"))
+            .map_err(BusFail::Other)?
+            .get("delivered")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| BusFail::Other("publish reply carried no delivery count".into()))?;
+        if delivered > 0 {
             break;
         }
-        std::thread::sleep(Duration::from_millis(250));
-    }
-    if !claimed {
-        let _ = std::fs::remove_file(&dispatch_path);
-        return Err("Vidar is not running".into());
-    }
-
-    for _ in 0..80 {
-        if let Ok(text) = std::fs::read_to_string(&result_path) {
-            if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                if let Some(verdict) = value.get("verdict").and_then(Value::as_str) {
-                    return Ok(verdict.to_string());
-                }
-            }
+        if started.elapsed() >= BUS_DELIVERY_RETRY {
+            return Err(BusFail::Undelivered);
         }
         std::thread::sleep(Duration::from_millis(250));
     }
-    Err("no answer".into())
+
+    let remaining = BUS_ASK_DEADLINE;
+    match receive.recv_timeout(remaining) {
+        Ok(Ok(reply)) => Ok(reply),
+        Ok(Err(error)) => Err(BusFail::Other(error)),
+        Err(_) => Err(BusFail::NoAnswer),
+    }
+}
+
+#[cfg(falcon_shell)]
+fn falcon_dock_ask_blocking(paths: &FalconPaths, session: &str) -> Result<String, String> {
+    let id = mint_dispatch_id();
+    match bus_ask(paths, &id, dock_payload(&id, session)) {
+        Ok(reply) => match classify(&reply) {
+            Classified::Verdict(verdict) => Ok(verdict),
+            Classified::Err(reason) => Err(reason),
+        },
+        Err(BusFail::Undelivered) => Err("Vidar is not running".into()),
+        Err(BusFail::NoAnswer) => Err("no answer".into()),
+        Err(BusFail::Other(reason)) => Err(reason),
+    }
+}
+
+#[cfg(all(test, falcon_shell))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_verdict_reply() {
+        let reply = json!({"ok": true, "tab": "t1", "verdict": "approved", "at_ms": 1});
+        assert_eq!(classify(&reply), Classified::Verdict("approved".into()));
+    }
+
+    #[test]
+    fn classify_old_vidar_is_an_error() {
+        let reply = json!({"ok": false, "reason": "kind not on the bus yet"});
+        assert_eq!(classify(&reply), Classified::Err("kind not on the bus yet".into()));
+    }
+
+    #[test]
+    fn classify_other_refusal_is_an_error() {
+        let reply = json!({"ok": false, "reason": "dock needs a session"});
+        assert_eq!(classify(&reply), Classified::Err("dock needs a session".into()));
+        assert_eq!(classify(&json!({"ok": false})), Classified::Err("dock ask refused".into()));
+    }
+
+    #[test]
+    fn payload_carries_the_session() {
+        let p = dock_payload("ab", "s1-00000001");
+        assert_eq!(p["kind"], "dock");
+        assert_eq!(p["session"], "s1-00000001");
+        assert_eq!(p["requester"], "s0-falcon");
+    }
 }

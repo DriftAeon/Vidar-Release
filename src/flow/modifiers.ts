@@ -1,6 +1,6 @@
 // The popover's Modifiers chip row (Controls A) — split out of inspector.ts per
 // module-boundaries.md's line budget. Same data path as the rest of the card: node.addons,
-// scheduleGraphSave, refreshed on the canvas card via refreshCanvasAddons (mirrors
+// scheduleGraphSave, refreshed on the canvas card via repaintNodeFace (mirrors
 // nodes.ts's buildAddonChip). Circular import with inspector.ts (renderInspector, to re-render
 // the whole card after an add/edit/remove) is safe here the same way engine.ts/run-view.ts's
 // mutual import is: only used from inside event handlers, never at module-init time.
@@ -10,7 +10,7 @@ import { V1_ADDON_KINDS } from "./model";
 import { fieldLabel } from "./labels";
 import { S, text } from "./state";
 import { scheduleGraphSave } from "./store";
-import { buildAddonChip } from "./nodes";
+import { buildAddonChip, refreshNodeFace } from "./nodes";
 import { renderInspector, editInPlace } from "./inspector";
 import { placeBelow } from "../panels/dropdown";
 
@@ -46,9 +46,11 @@ function stopSelectKeys(el: HTMLSelectElement): void {
   });
 }
 
-/** Rebuilds the canvas card's addon-chip row from `node.addons` after an add/edit/remove that
- *  doesn't go through `loadGraph` — mirrors `buildNode`'s own addon-chip build (nodes.ts). */
-function refreshCanvasAddons(node: FlowNode): void {
+/** Repaints the canvas card after a modifier add/edit/remove: nodes.ts's refreshNodeFace for the
+ *  face, then the addon-chip row, which refreshNodeFace does not paint (it mirrors `buildNode`'s
+ *  own addon-chip build). The one face-repaint entry point for this module. */
+function repaintNodeFace(node: FlowNode): void {
+  refreshNodeFace(node);
   const body = S.nodeEls.get(node.id)?.querySelector<HTMLElement>(".flow-node-body");
   if (!body) return;
   const addons = node.addons ?? [];
@@ -78,14 +80,14 @@ function startEditChip(node: FlowNode, idx: number, span: HTMLElement): void {
     addon.value = value;
     addon.label = value;
     scheduleGraphSave();
-    refreshCanvasAddons(node);
+    repaintNodeFace(node);
   };
   const rebuild = (value: string) => {
     const next = text("", chipLabel(addon.kind as V1AddonKind, value));
     next.addEventListener("click", () => startEditChip(node, idx, next));
     return next;
   };
-  editInPlace(node, span, addon.value, commit, rebuild);
+  editInPlace(node, span, addon.value, commit, rebuild, fieldLabel(addon.kind));
 }
 
 function buildChip(node: FlowNode, a: FlowAddon, idx: number): HTMLElement {
@@ -96,6 +98,7 @@ function buildChip(node: FlowNode, a: FlowAddon, idx: number): HTMLElement {
   if (a.kind === "retries") {
     const select = document.createElement("select");
     select.className = "flow-pop-chip-select";
+    select.setAttribute("aria-label", fieldLabel(a.kind));
     for (const v of ["0", "1", "2"]) {
       const opt = document.createElement("option");
       opt.value = v;
@@ -108,7 +111,7 @@ function buildChip(node: FlowNode, a: FlowAddon, idx: number): HTMLElement {
       node.addons![idx].label = select.value;
       scheduleGraphSave();
       renderInspector(node);
-      refreshCanvasAddons(node);
+      repaintNodeFace(node);
     });
     stopSelectKeys(select);
     chip.append(document.createTextNode(`${fieldLabel(a.kind)} `), select);
@@ -128,7 +131,7 @@ function buildChip(node: FlowNode, a: FlowAddon, idx: number): HTMLElement {
     node.addons!.splice(idx, 1);
     scheduleGraphSave();
     renderInspector(node);
-    refreshCanvasAddons(node);
+    repaintNodeFace(node);
   });
   chip.append(x);
   return chip;
@@ -173,7 +176,7 @@ function openAddonMenu(node: FlowNode, anchor: HTMLElement): void {
       node.addons.push({ kind, label: ADDON_DEFAULT_VALUE[kind], value: ADDON_DEFAULT_VALUE[kind] });
       scheduleGraphSave();
       renderInspector(node);
-      refreshCanvasAddons(node);
+      repaintNodeFace(node);
     });
     menu.appendChild(item);
   }
@@ -220,7 +223,7 @@ export function buildModifiers(node: FlowNode, locked: boolean): HTMLElement {
     const addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "flow-pop-chip-add";
-    addBtn.textContent = "ADD";
+    addBtn.textContent = "Add Modifier";
     addBtn.disabled = locked;
     addBtn.addEventListener("click", () => {
       if (openMenuEl) closeAddonMenu();

@@ -212,7 +212,7 @@ async function adopt(session: HostedSession, draft?: string, detached = false): 
       },
       // no character view in the shell, and nothing marks a background tab
       onActivity: null, onCharacterStatus: null, onCharacterActivity: null, onCharacterCompletion: null,
-      onReplyDone: null, onToolStart: null, onToolDone: null, onTabState: null,
+      onReplyDone: null, onToolStart: null, onToolDone: null, onTabState: null, vaultGate: null,
     });
     body = next;
     host.replaceChildren(next.el);

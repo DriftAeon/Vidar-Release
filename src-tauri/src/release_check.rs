@@ -25,7 +25,6 @@
 //!   back. An entry equal to `seen` is still offered until it is installed or skipped.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -52,9 +51,9 @@ const INDEX_PATH: &str = concat!(repo!(), "/releases/download/index/index.json")
 const TAG_PAGE: &str = concat!("https://", host!(), repo!(), "/releases/tag/");
 /// The only shape a pack asset URL may take: `<this><tag>/<file>`.
 const DOWNLOAD_PREFIX: &str = concat!("https://", host!(), repo!(), "/releases/download/");
-const LIMITS: Limits = Limits { cap: 1024 * 1024, body_deadline: Duration::from_secs(15) };
+const LIMITS: Limits = Limits { cap: 1024 * 1024, body_deadline: crate::net::tiers::FETCH };
 /// Packs that carry no compiled code; a test pins this to `tools/release/pack-index.mjs`.
-const PACK_UPDATABLE: [&str; 6] = ["gemini", "pi", "agent-profiles", "codex-profiles", "voice-stock", "gateways"];
+pub(crate) const PACK_UPDATABLE: [&str; 5] = ["pi", "agent-profiles", "codex-profiles", "voice-stock", "gateways"];
 const NEEDS_VIDAR_UPDATE: &str = "Pack Needs Update: Needs Vidar Update";
 
 #[derive(Debug, Deserialize)]
@@ -123,7 +122,7 @@ struct Installed {
 
 fn installed_pack(id: &str) -> Option<Installed> {
     let text = std::fs::read_to_string(crate::paths::packs_dir().join(id).join("pack.json")).ok()?;
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let v: Value = serde_json::from_str(crate::fsx::strip_bom(&text)).ok()?;
     let label = v.pointer("/ui/label").and_then(Value::as_str).unwrap_or(id).to_string();
     Some(Installed { release: v.get("release").and_then(Value::as_str).map(str::to_string), label })
 }
@@ -149,7 +148,7 @@ fn asset_page(url: &str) -> String {
 
 fn parse_index(body: &[u8]) -> Result<Index, String> {
     let text = std::str::from_utf8(body).map_err(|_| "The release index is not text.".to_string())?;
-    serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| "The release index could not be read.".to_string())
+    serde_json::from_str(crate::fsx::strip_bom(text)).map_err(|_| "The release index could not be read.".to_string())
 }
 
 fn release_of(entry: &Value) -> Option<(Semver, String)> {
@@ -277,7 +276,7 @@ mod tests {
         assert_eq!(i.core.version, "0.2.0");
         assert!(i.core.page.ends_with("/releases/tag/vidar-v0.2.0"));
         assert_eq!(i.core.assets.len(), 2);
-        assert_eq!(i.packs["gemini"].as_array().unwrap().len(), 2);
+        assert_eq!(i.packs["pi"].as_array().unwrap().len(), 2);
         assert_eq!(i.packs["voice-stock"].as_array().unwrap().len(), 1);
         assert!(i.packs.keys().all(|id| PACK_UPDATABLE.contains(&id.as_str())));
         assert!(parse_index(b"not json").is_err());
@@ -321,19 +320,19 @@ mod tests {
 
     #[test]
     fn newest_accepted_pack_entry_is_offered() {
-        // Core 0.2.0: gemini 1.1.0 accepts it; 1.0.0 (maxCore 0.1.9) does not.
+        // Core 0.2.0: pi 1.1.0 accepts it; 1.0.0 (maxCore 0.1.9) does not.
         let (_, packs, blocked, _) = ok(decide(&fixture(), "0.2.0", None, None, &BTreeMap::new(), &all_installed(None)));
-        let gemini = packs.iter().find(|p| p.id == "gemini").unwrap();
-        assert_eq!(gemini.release, "1.1.0");
-        assert_eq!(gemini.label, "L-gemini");
-        assert_eq!(gemini.page, "https://github.com/DriftAeon/Vidar-Release/releases/tag/pack-gemini-v1.1.0");
+        let pi = packs.iter().find(|p| p.id == "pi").unwrap();
+        assert_eq!(pi.release, "1.1.0");
+        assert_eq!(pi.label, "L-pi");
+        assert_eq!(pi.page, "https://github.com/DriftAeon/Vidar-Release/releases/tag/pack-pi-v1.1.0");
         assert!(blocked.is_empty());
         // Core 0.1.0: 1.1.0 needs 0.2.0, so the older accepted 1.0.0 is offered.
         let (_, packs, _, _) = ok(decide(&fixture(), "0.1.0", None, None, &BTreeMap::new(), &all_installed(None)));
-        assert_eq!(packs.iter().find(|p| p.id == "gemini").unwrap().release, "1.0.0");
+        assert_eq!(packs.iter().find(|p| p.id == "pi").unwrap().release, "1.0.0");
         // Installed at or above the newest: nothing.
         let (_, packs, blocked, _) = ok(decide(&fixture(), "0.2.0", None, None, &BTreeMap::new(), &all_installed(Some("1.1.0"))));
-        assert!(packs.iter().all(|p| p.id != "gemini") && blocked.iter().all(|b| b.id != "gemini"));
+        assert!(packs.iter().all(|p| p.id != "pi") && blocked.iter().all(|b| b.id != "pi"));
         // Not installed: never offered.
         let none = |_: &str| None;
         let (_, packs, blocked, _) = ok(decide(&fixture(), "0.2.0", None, None, &BTreeMap::new(), &none));
@@ -345,59 +344,59 @@ mod tests {
         let (_, packs, blocked, _) = ok(decide(&fixture(), "0.1.0", None, None, &BTreeMap::new(), &all_installed(Some("1.0.0"))));
         assert!(packs.is_empty());
         let ids: Vec<&str> = blocked.iter().map(|b| b.id.as_str()).collect();
-        assert_eq!(ids, ["gemini", "voice-stock"]);
+        assert_eq!(ids, ["pi", "voice-stock"]);
         assert_eq!(blocked[0].release, "1.1.0");
         assert_eq!(blocked[0].reason, "Pack Needs Update: Needs Vidar Update");
     }
 
     #[test]
     fn seen_rises_only_from_offered_entries() {
-        // Core 0.1.0, gemini 0.9.0 installed; the index has 1.0.0 (ok) and 1.1.0 (needs core 0.2.0).
+        // Core 0.1.0, pi 0.9.0 installed; the index has 1.0.0 (ok) and 1.1.0 (needs core 0.2.0).
         let installed = all_installed(Some("0.9.0"));
         let (_, packs, _, seen) = ok(decide(&fixture(), "0.1.0", None, None, &BTreeMap::new(), &installed));
-        assert_eq!(packs.iter().find(|p| p.id == "gemini").unwrap().release, "1.0.0");
+        assert_eq!(packs.iter().find(|p| p.id == "pi").unwrap().release, "1.0.0");
         // Launch 1 records the offered 1.0.0, not the blocked 1.1.0.
-        assert_eq!(seen["gemini"], "1.0.0");
+        assert_eq!(seen["pi"], "1.0.0");
         // Launch 2 on the same core still offers 1.0.0.
         let (_, packs, _, seen2) = ok(decide(&fixture(), "0.1.0", None, None, &seen, &installed));
-        assert_eq!(packs.iter().find(|p| p.id == "gemini").unwrap().release, "1.0.0");
-        assert_eq!(seen2["gemini"], "1.0.0");
+        assert_eq!(packs.iter().find(|p| p.id == "pi").unwrap().release, "1.0.0");
+        assert_eq!(seen2["pi"], "1.0.0");
         // After a core update, 1.1.0 is offered and seen rises to it.
         let (_, packs, blocked, seen3) = ok(decide(&fixture(), "0.2.0", None, None, &seen2, &installed));
-        assert_eq!(packs.iter().find(|p| p.id == "gemini").unwrap().release, "1.1.0");
-        assert!(blocked.iter().all(|b| b.id != "gemini"));
-        assert_eq!(seen3["gemini"], "1.1.0");
+        assert_eq!(packs.iter().find(|p| p.id == "pi").unwrap().release, "1.1.0");
+        assert!(blocked.iter().all(|b| b.id != "pi"));
+        assert_eq!(seen3["pi"], "1.1.0");
         // Nothing offered and only a blocked entry: seen is not written for it.
         let (_, packs, blocked, seen4) = ok(decide(&fixture(), "0.1.0", None, None, &BTreeMap::new(), &all_installed(Some("1.0.0"))));
-        assert!(packs.is_empty() && blocked.iter().any(|b| b.id == "gemini"));
+        assert!(packs.is_empty() && blocked.iter().any(|b| b.id == "pi"));
         assert!(seen4.is_empty());
     }
 
     #[test]
     fn rollback_below_seen_is_refused_and_seen_never_lowers() {
         // Seen 1.1.0 earlier: on core 0.1.0, 1.0.0 would be accepted but sits below seen.
-        let seen = BTreeMap::from([("gemini".to_string(), "1.1.0".to_string())]);
+        let seen = BTreeMap::from([("pi".to_string(), "1.1.0".to_string())]);
         let (_, packs, blocked, seen_out) = ok(decide(&fixture(), "0.1.0", None, None, &seen, &all_installed(None)));
-        assert!(packs.iter().all(|p| p.id != "gemini"));
-        assert_eq!(blocked.iter().find(|b| b.id == "gemini").unwrap().release, "1.1.0");
-        assert_eq!(seen_out["gemini"], "1.1.0");
+        assert!(packs.iter().all(|p| p.id != "pi"));
+        assert_eq!(blocked.iter().find(|b| b.id == "pi").unwrap().release, "1.1.0");
+        assert_eq!(seen_out["pi"], "1.1.0");
         // Seen equal to the newest accepted entry: still offered.
         let (_, packs, _, _) = ok(decide(&fixture(), "0.2.0", None, None, &seen, &all_installed(None)));
-        assert_eq!(packs.iter().find(|p| p.id == "gemini").unwrap().release, "1.1.0");
+        assert_eq!(packs.iter().find(|p| p.id == "pi").unwrap().release, "1.1.0");
         // A higher seen is never lowered.
-        let high = BTreeMap::from([("gemini".to_string(), "9.0.0".to_string())]);
+        let high = BTreeMap::from([("pi".to_string(), "9.0.0".to_string())]);
         let (_, packs, _, seen_out) = ok(decide(&fixture(), "0.2.0", None, None, &high, &all_installed(None)));
-        assert_eq!(seen_out["gemini"], "9.0.0");
-        assert!(packs.iter().all(|p| p.id != "gemini"));
+        assert_eq!(seen_out["pi"], "9.0.0");
+        assert!(packs.iter().all(|p| p.id != "pi"));
     }
 
     #[test]
     fn pack_with_a_non_array_value_is_skipped_and_the_rest_survive() {
-        let body = FIXTURE.replace("\"voice-stock\": [", "\"voice-stock\": 7, \"pi\": [").replace("\"gemini\": [", "\"gemini\": [");
+        let body = FIXTURE.replace("\"voice-stock\": [", "\"voice-stock\": 7, \"gateways\": [");
         let index = parse_index(body.as_bytes()).unwrap();
         let (core, packs, ..) = ok(decide(&index, "0.1.0", None, None, &BTreeMap::new(), &all_installed(None)));
         assert!(core.is_some());
-        assert!(packs.iter().any(|p| p.id == "gemini"));
+        assert!(packs.iter().any(|p| p.id == "pi"));
         assert!(packs.iter().all(|p| p.id != "voice-stock"));
     }
 
@@ -408,7 +407,7 @@ mod tests {
         let (_, packs, blocked, seen) = ok(decide(&index, "0.2.0", None, None, &BTreeMap::new(), &all_installed(None)));
         assert!(packs.iter().all(|p| p.id != "voice-stock") && blocked.iter().all(|b| b.id != "voice-stock"));
         assert!(!seen.contains_key("voice-stock"));
-        assert!(packs.iter().any(|p| p.id == "gemini"));
+        assert!(packs.iter().any(|p| p.id == "pi"));
     }
 
     #[test]

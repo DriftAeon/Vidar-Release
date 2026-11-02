@@ -175,7 +175,7 @@ fn a_missing_bare_credential_is_a_login_error_and_touches_nothing() {
 #[test]
 fn bad_agent_and_run_id_are_invalid() {
     let fx = Fx::new("bad");
-    assert!(build_run("gemini", &fx.0, "0a1b2c3d", "S", None).unwrap_err().starts_with("invalid: "));
+    assert!(build_run("acme", &fx.0, "0a1b2c3d", "S", None).unwrap_err().starts_with("invalid: "));
     assert!(build_run("claude", &fx.0, "..\\x", "S", None).unwrap_err().starts_with("invalid: "));
 }
 
@@ -257,7 +257,7 @@ fn a_build_guard_removes_a_half_built_cwd_and_a_disarmed_one_leaves_it() {
 #[test]
 fn the_runner_refuses_a_stray_file_in_the_config_dir_before_spawning() {
     use super::super::run::{execute, Spec};
-    use crate::job::Job;
+    use crate::proc_job::Job;
     let fx = Fx::new("runner");
     for agent in ["claude", "codex"] {
         let run = build_run(agent, &fx.0, "0a1b2c3d", "S", None).unwrap();

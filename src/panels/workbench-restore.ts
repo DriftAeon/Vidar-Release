@@ -5,8 +5,7 @@
 // to resolve, the same leaf-module pattern as rendered-drive.ts and
 // rendered-settle.ts.
 
-/** Mirrors workbench.ts's own `Source` union; duplicated rather than imported
- *  so this file stays a dependency-free leaf. */
+/** Where a tray block came from. The one home: workbench-tray.ts imports it from this dependency-free leaf. */
 export type Source = "paste" | "drop" | "marquee" | "log crop";
 const KNOWN_SOURCES: readonly Source[] = ["paste", "drop", "marquee", "log crop"];
 function asSource(v: unknown): Source {

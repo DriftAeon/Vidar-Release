@@ -78,7 +78,7 @@ impl Falcon {
                                 match connection.read_frame() {
                                     Ok(frame) => {
                                         if frame.get("t").and_then(Value::as_str) == Some("bus") {
-                                            on_frame(frame);
+                                            guarded_frame(&on_frame, frame);
                                             continue;
                                         }
                                         if frame.get("t").and_then(Value::as_str)
@@ -140,5 +140,37 @@ impl Falcon {
             ));
         }
         Ok(connection)
+    }
+}
+
+/// Runs one frame handler; a panic in it is caught and logged so the
+/// subscriber loop keeps reading (an unwound thread would stay dead until
+/// Vidar restarted, taking astra, dock, jettison and ctl asks with it).
+fn guarded_frame<F: Fn(Value)>(on_frame: &F, frame: Value) {
+    let topic = frame.get("topic").and_then(Value::as_str).unwrap_or("").to_string();
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| on_frame(frame))).is_err() {
+        eprintln!("falcon-bus-sub: frame handler panicked on topic {topic:?}; frame dropped");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn a_panicking_frame_leaves_the_loop_alive() {
+        let seen = Cell::new(0);
+        let handler = |frame: Value| {
+            if frame.get("boom").is_some() {
+                panic!("handler bug");
+            }
+            seen.set(seen.get() + 1);
+        };
+        // The same sequence the subscriber loop feeds: good, panicking, good.
+        guarded_frame(&handler, serde_json::json!({"t": "bus", "topic": "ask.open"}));
+        guarded_frame(&handler, serde_json::json!({"t": "bus", "topic": "ask.open", "boom": 1}));
+        guarded_frame(&handler, serde_json::json!({"t": "bus", "topic": "ask.open"}));
+        assert_eq!(seen.get(), 2, "frames after the panic are still handled");
     }
 }

@@ -1,7 +1,13 @@
 // The one shape every ask takes on its way to Relay or a tab card (Claude and Codex questions, MCP
 // elicitation, pend, ctl.ask), with the pure mappers between it and each wire form. No DOM, no invoke.
 
-export type AskOrigin = "claude" | "codex" | "codex-async" | "mcp" | "pend" | "ctl-ask";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { isAgentId } from "../agents/id.ts";
+import type { AgentId } from "../agents/id.ts";
+
+/** The origin of a Codex async ask (codex-async-ask.ts); cards.ts passes it as the record's origin. */
+export const ASYNC_ASK_ORIGIN = "async-ask";
+export type AskOrigin = AgentId | typeof ASYNC_ASK_ORIGIN | "mcp" | "pend" | "ctl-ask";
 export interface AskQuestionItem {
   /** Claude: index + text, so identical texts never collide; Codex: the question's own id */
   id: string;
@@ -59,27 +65,30 @@ const rawQuestions = (input: unknown): unknown[] => {
 };
 const asRaw = (raw: unknown): RawQuestion => (raw && typeof raw === "object" ? raw : {}) as RawQuestion;
 
-const NOTES: ReadonlySet<AskOrigin> = new Set(["pend", "ctl-ask", "codex-async"]);
-const PROMPT: ReadonlySet<AskOrigin> = new Set(["pend", "codex-async"]);
-const DISMISS: Record<AskOrigin, QuestionRecord["dismiss"]> = { claude: "deny", codex: "deny", "codex-async": null, mcp: "deny", pend: "settle", "ctl-ask": "deny" };
+const NOTES: ReadonlySet<AskOrigin> = new Set(["pend", "ctl-ask", ASYNC_ASK_ORIGIN]);
+const PROMPT: ReadonlySet<AskOrigin> = new Set(["pend", ASYNC_ASK_ORIGIN]);
+const AGENT_DISMISS: Record<AgentId, QuestionRecord["dismiss"]> = { claude: "deny", codex: "deny" };
+const SECRET_QUESTION_IN_TAB: Record<AgentId, boolean> = { claude: false, codex: true };
+const DISMISS: Record<AskOrigin, QuestionRecord["dismiss"]> = { ...AGENT_DISMISS, [ASYNC_ASK_ORIGIN]: null, mcp: "deny", pend: "settle", "ctl-ask": "deny" };
 
 /** AskUserQuestion input (Claude keyed by text, Codex keyed by `id`) to a record; the per-question
  *  `other` flag copies question-form.ts: Claude always, Codex on `isOther` or a free-text question */
 export function recordFromAskInput(input: unknown, base: AskBase): QuestionRecord {
   const questions = rawQuestions(input).map((r, i): AskQuestionItem => {
     const q = asRaw(r);
-    const codex = typeof q.id === "string";
+    // The question shape is the wire contract; a supplied id is its answer key.
+    const hasQuestionId = typeof q.id === "string";
     const options = (Array.isArray(q.options) ? q.options : []).map((o) => {
       const oo = (o && typeof o === "object" ? o : {}) as { label?: string; description?: string };
       return oo.description ? { label: oo.label ?? "", description: oo.description } : { label: oo.label ?? "" };
     });
     const text = q.question ?? "";
     return {
-      id: codex ? (q.id as string) : `${i}:${text}`,
+      id: hasQuestionId ? (q.id as string) : `${i}:${text}`,
       text,
       options,
       multi: q.multiSelect === true,
-      other: !codex || q.isOther === true || options.length === 0,
+      other: !hasQuestionId || q.isOther === true || options.length === 0,
       secret: q.isSecret === true,
     };
   });
@@ -92,7 +101,7 @@ export function recordFromAskInput(input: unknown, base: AskBase): QuestionRecor
     notes: NOTES.has(base.origin),
     needsPrompt: PROMPT.has(base.origin),
     dismiss: base.dismiss === undefined ? DISMISS[base.origin] : base.dismiss,
-    inline: !(base.origin === "codex" && questions.some((q) => q.secret)),
+    inline: !(isAgentId(base.origin) && SECRET_QUESTION_IN_TAB[base.origin] && questions.some((q) => q.secret)),
     askedAtMs: base.askedAtMs,
   };
   if (base.context) rec.context = base.context;

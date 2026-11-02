@@ -66,10 +66,19 @@ fn ttl_ms(kind: &str) -> u64 {
     if kind == "jettison" { JETTISON_TTL_MS } else { OPEN_TTL_MS }
 }
 
-/// Kinds admitted on the bus topic `ask.open`. `dock` stays on the files: the
-/// shell that writes it has no bus client and its handoff is a file.
+/// Kinds admitted on the bus topic `ask.open`. `dock` rides the bus only: the
+/// file path refuses it (`validate`).
 fn bus_kind_allowed(kind: &str) -> bool {
-    matches!(kind, "astra" | "jettison")
+    matches!(kind, "astra" | "dock" | "jettison")
+}
+
+/// Bus-only extra check: a `dock` ask must name the session to dock, because
+/// the bus has no handoff file to carry it.
+fn bus_admits(ask: &Ask) -> Result<(), &'static str> {
+    if ask.kind == "dock" && ask.session.as_deref().map_or(true, str::is_empty) {
+        return Err("dock needs a session");
+    }
+    Ok(())
 }
 
 /// The `open-ask` event payload for a claimed ask, with its expiry stamped.
@@ -139,9 +148,8 @@ pub struct OpenAsk {
     kind: String,
     reason: String,
     requester: String,
-    /// Only `jettison` carries this: which Falcon session to pull out of a
-    /// Vidar tab. `dock` names its session through the handoff file instead
-    /// (`falcon_dock_ask_blocking`), so this stays absent there.
+    /// `jettison` carries this: which Falcon session to pull out of a Vidar
+    /// tab. `dock` must carry it too (`bus_admits`): the bus has no handoff file.
     #[serde(default)]
     session: Option<String>,
 }
@@ -215,6 +223,9 @@ fn validate_ask(v: &Value) -> Result<Ask, String> {
 fn validate(open_dir: &Path, d: &OpenAsk, file_stem: &str) -> Result<(), String> {
     let v = serde_json::to_value(d).map_err(|e| e.to_string())?;
     validate_ask(&v)?;
+    if d.kind == "dock" {
+        return Err("dock rides the bus".into());
+    }
     if d.id != file_stem {
         return Err("id does not match the file name".into());
     }
@@ -243,7 +254,7 @@ pub fn handle_bus_ask(app: &AppHandle, frame: &Value) {
             return;
         }
     };
-    // `astra` and `jettison` are on the bus path; `dock` stays file-only.
+    // `astra`, `dock` and `jettison` are on the bus path.
     if !bus_kind_allowed(&ask.kind) {
         publish_bus_reply(
             app,
@@ -251,6 +262,10 @@ pub fn handle_bus_ask(app: &AppHandle, frame: &Value) {
             &msg_id,
             serde_json::json!({ "ok": false, "reason": "kind not on the bus yet" }),
         );
+        return;
+    }
+    if let Err(reason) = bus_admits(&ask) {
+        publish_bus_reply(app, &reply_to, &msg_id, serde_json::json!({ "ok": false, "reason": reason }));
         return;
     }
 
@@ -422,6 +437,31 @@ mod tests {
         let _ = fs::remove_dir_all(&b.root);
     }
 
+    /// A dock ask on the files is parked: dock rides the bus only.
+    #[test]
+    fn dock_on_the_file_path_is_rejected() {
+        use crate::dispatch_bridge::tests::{stale_reasons, temp_bridge};
+        let b = temp_bridge("open");
+        let mut req = ask_json("dock", "please");
+        req["session"] = serde_json::json!("s1-00000001");
+        fs::write(b.dispatch.join("0123abcd.json"), req.to_string()).unwrap();
+        let mut emitted = 0;
+        b.scan(|d, stem| accept(&b.root, d, stem), |_: Value| emitted += 1);
+        assert_eq!(emitted, 0);
+        assert!(!b.root.join("0123abcd").exists());
+        assert_eq!(stale_reasons(&b), ["dock rides the bus"]);
+        let _ = fs::remove_dir_all(&b.root);
+    }
+
+    #[test]
+    fn validate_ask_accepts_dock_for_the_bus() {
+        let mut req = ask_json("dock", "please");
+        req["session"] = serde_json::json!("s1-00000001");
+        let ask = validate_ask(&req).expect("the shared check admits dock");
+        assert!(bus_kind_allowed(&ask.kind));
+        assert!(bus_admits(&ask).is_ok());
+    }
+
     #[test]
     fn purge_expired_pending_drops_only_entries_past_the_ttl() {
         let base = Instant::now();
@@ -457,10 +497,22 @@ mod tests {
     }
 
     #[test]
-    fn bus_refuses_dock() {
-        assert!(!bus_kind_allowed("dock"));
+    fn bus_admits_dock_with_session() {
+        assert!(bus_kind_allowed("dock"));
         assert!(!bus_kind_allowed("launch"));
         assert!(!bus_kind_allowed(""));
+        let mut ask = Ask {
+            id: "0123abcd".into(),
+            kind: "dock".into(),
+            reason: "please".into(),
+            requester: "shell".into(),
+            session: Some("s4-hvyi".into()),
+        };
+        assert!(bus_admits(&ask).is_ok());
+        ask.session = None;
+        assert!(bus_admits(&ask).is_err(), "a dock ask without a session is refused");
+        ask.kind = "astra".into();
+        assert!(bus_admits(&ask).is_ok(), "only dock needs a session");
     }
 
     #[test]

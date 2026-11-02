@@ -8,6 +8,7 @@ use super::set_loadout::{self, ResolveEnv, VaultLoadout};
 use super::vault::session::{self, VaultPin};
 use super::vault::store::Store;
 use super::vault::{LockedBy, Vault};
+use crate::rules::rune::Surface;
 
 /// The folder the vault store, its libraries and the session records resolve under: the spawn's root.
 /// Tests that spawn on the checkout's root (for its profiles) point the store at a temp dir through
@@ -26,22 +27,33 @@ thread_local! {
 
 /// The spawn's loadout: vault `v` resolved (`set_loadout::resolve_vault`). `None` is the test-only
 /// no-vault spawn (`launch_row::TEST_NO_VAULT`), an empty loadout on the profile's own home.
-pub(super) fn resolve(env: &ResolveEnv, agent: Agent, root: &Path, v: Option<&Vault>) -> Result<VaultLoadout, String> {
+pub(super) fn resolve(env: &ResolveEnv, agent: Agent, surface: Option<Surface>, root: &Path, v: Option<&Vault>) -> Result<VaultLoadout, String> {
     match v {
-        Some(v) => {
-            let mut out = set_loadout::resolve_vault(env, agent, &Store::open(&store_root(root)), v)?;
-            // A Codex built-in marker is Codex's own (`codex_builtin`); Codex takes it at its prepare.
-            match agent {
-                Agent::Claude => drop(super::codex_builtin::take(agent, root, &mut out.loadout.skills, false)),
-                Agent::Codex => {}
-            }
-            Ok(out)
-        }
+        Some(v) => set_loadout::resolve_vault(env, agent, surface, &Store::open(&store_root(root)), v),
         None => {
-            let (loadout, _) = set_loadout::resolve(env, agent, &[]);
+            let (mut loadout, _) = set_loadout::resolve(env, agent, &[]);
+            // No vault, no setting rune to place: the shipped one stands in.
+            loadout.setting = shipped_setting(root, agent);
+            loadout.hash = set_loadout::hash_of(&loadout);
             Ok(VaultLoadout { loadout, warnings: Vec::new(), text: None, sets: Vec::new() })
         }
     }
+}
+
+/// The loadout's setting file for `agent`, expanded and checked for every key the agent needs
+/// (`AgentSpec.setting_keys`); a loadout with no setting rune, or a file missing a key, refuses the spawn.
+pub(super) fn setting_file(loadout: &set_loadout::Loadout, agent: Agent, root: &Path) -> Result<PathBuf, String> {
+    let spec = crate::agent_spec::spec(agent);
+    let s = loadout.setting.as_ref().ok_or_else(|| format!("Rune Vault carries no {} setting rune; Bare spawn refused", spec.label))?;
+    let path = super::rune_items::expand_path(&s.source, &super::rune_items::MapEnv { root, user_home: None }).map_err(|e| format!("Setting rune `{}`: {e}; spawn refused", s.id))?;
+    (spec.check_setting)(&s.id, &path, spec.setting_keys)?;
+    Ok(path)
+}
+
+/// The Vidar library's setting rune for `agent`, as a vault places it (`claude-settings`, `codex-config`).
+fn shipped_setting(root: &Path, agent: Agent) -> Option<set_loadout::SettingRef> {
+    let lib = crate::rules::library::Library::open(&crate::paths::rune_vidar_dir_in(root)).ok()?;
+    lib.all_runes().0.into_iter().find(|(r, _)| r.kind == "setting" && r.fits(Some(agent), None)).and_then(|(r, _)| Some(set_loadout::SettingRef { id: r.id, source: r.item.source? }))
 }
 
 /// Raw bodies lock at spawn (model: Raw has no first-message hook): `Store::lock(id, FirstMessage, hash)`.
@@ -57,7 +69,7 @@ pub(crate) fn rune_mode(body: &str, agent: Agent) -> Option<String> {
     if header_value(body, "kind").as_deref() != Some("permission") {
         return None;
     }
-    if header_value(body, "agent").is_some_and(|a| crate::agent_spec::parse(&a) != Some(agent)) {
+    if !crate::rules::rune::parse(body).ok()?.fits(Some(agent), None) {
         return None;
     }
     let mode = header_value(body, "mode").filter(|m| !m.is_empty())?;
@@ -80,22 +92,16 @@ pub(crate) struct NodePerms {
     pub hash: String,
 }
 
-/// Vault `vault` as `agent` reads it for one node: refuses an unknown id and another agent's stock
-/// vault. The mode and allow come from the vault's permission runes only (none → no mode).
+/// Vault `vault` as `agent` reads it for one node: refuses an unknown id. The mode and allow come from
+/// the vault's permission runes only (none → no mode).
 pub(crate) fn node_permissions(root: &Path, vault: &str, agent: Agent) -> Result<NodePerms, String> {
-    if let Some(other) = vault.strip_prefix("stock-").and_then(crate::agent_spec::parse) {
-        if other != agent {
-            return Err(format!("Stock Vault for Another Agent: {vault}"));
-        }
-    }
     let store = Store::open(&store_root(root));
-    let v = if vault.starts_with("stock-") { store.ensure_stock(vault) } else { store.get(vault) }
-        .map_err(|_| format!("Unknown Vault: {vault}"))?;
+    let v = store.get(vault).map_err(|_| format!("Unknown Vault: {vault}"))?;
     let resolved = store.resolve(vault).map_err(|e| format!("Vault {vault}: {e}"))?;
     let mut allow: Vec<String> = Vec::new();
     for r in resolved.runes.iter().filter(|r| !r.recall) {
         let Ok(rune) = crate::rules::rune::parse(&r.body) else { continue };
-        if rune.kind != "permission" || rune.agent.as_deref().is_some_and(|a| crate::agent_spec::parse(a) != Some(agent)) {
+        if rune.kind != "permission" || !rune.fits(Some(agent), None) {
             continue;
         }
         for a in &rune.item.allow {

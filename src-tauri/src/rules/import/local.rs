@@ -20,6 +20,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::memory;
+use crate::agent_spec::{spec, Agent, ALL};
 use super::sources::{self, tilde, MAX_BYTES};
 
 /// The block targets of `tools/bare/guard-probe.mjs` (`BLOCK_TARGETS`, from `probeCases`); keep the two equal.
@@ -134,15 +135,20 @@ fn under(path: &Path, dir: &Path) -> bool {
     !d.is_empty() && p.starts_with(d) && (p.len() == d.len() || p[d.len()..].starts_with('\\'))
 }
 
+/// The agent a rules file is tagged for by its name: an instruction file other than Claude's own (untagged, ticked)
+/// belongs to the agent that reads it (`AGENTS.md`, or the Codex override that replaces it).
+fn tagged_agent(name: &str) -> Option<Agent> {
+    ALL.into_iter().find(|a| match a {
+        Agent::Claude => false,
+        Agent::Codex => name.eq_ignore_ascii_case(spec(*a).instructions_file) || name.eq_ignore_ascii_case(sources::AGENTS_OVERRIDE),
+    })
+}
+
 /// The one "project" rule for every offered file, Codex home files included: a path under the cwd is
 /// `project`, anything else `global`. It reads the path itself, so a `CODEX_HOME` outside the profile
 /// still reads global.
 pub(super) fn file(env: &LocalEnv, path: &Path, kind: &'static str) -> LocalFile {
-    let codex_rules = kind == "rules"
-        && path.file_name().is_some_and(|n| {
-            let n = n.to_string_lossy();
-            n.eq_ignore_ascii_case("AGENTS.md") || n.eq_ignore_ascii_case(sources::AGENTS_OVERRIDE)
-        });
+    let tagged = if kind == "rules" { path.file_name().and_then(|n| tagged_agent(&n.to_string_lossy())) } else { None };
     LocalFile {
         path: path.to_string_lossy().into_owned(),
         shown: tilde(path, env.home),
@@ -151,12 +157,12 @@ pub(super) fn file(env: &LocalEnv, path: &Path, kind: &'static str) -> LocalFile
         section: None,
         scope: if under(path, env.cwd) { "project" } else { "global" },
         // Each agent ticks its own instruction files: AGENTS.md stays pickable but starts unticked (Codex ticks it by name).
-        ticked: !codex_rules,
+        ticked: tagged.is_none(),
         pickable: true,
         reason: None,
         guard: None,
         codex_supported: None,
-        agent: codex_rules.then_some("codex"),
+        agent: tagged.map(Agent::as_str),
         hosted: None,
         url: None,
     }
@@ -182,9 +188,9 @@ fn rules(env: &LocalEnv) -> Vec<LocalFile> {
     }
     let mut dirs = Vec::new();
     if let Some(h) = env.home {
-        dirs.push(h.join(".claude").join("rules"));
+        dirs.extend(sources::user_dirs(h).into_iter().map(|d| d.join("rules")));
     }
-    dirs.push(env.cwd.join(".claude").join("rules"));
+    dirs.extend(sources::user_dirs(env.cwd).into_iter().map(|d| d.join("rules")));
     for p in dirs.iter().flat_map(|d| listed(d, readable_md)) {
         if out.iter().any(|f| Path::new(&f.path) == p) {
             continue;
@@ -226,10 +232,13 @@ fn memories(env: &LocalEnv) -> (Vec<LocalFile>, Option<String>) {
 
 fn skills_and_agents(env: &LocalEnv) -> Vec<LocalFile> {
     let Some(home) = env.home else { return Vec::new() };
-    let claude = home.join(".claude");
-    let skills = listed(&claude.join("skills"), |p| p.is_dir() && p.join("SKILL.md").is_file()).into_iter().map(|p| file(env, &p, "skill"));
-    let agents = listed(&claude.join("agents"), readable_md).into_iter().map(|p| file(env, &p, "agent"));
-    skills.chain(agents).collect()
+    let mut out = Vec::new();
+    for dir in sources::user_dirs(home) {
+        let skills = listed(&dir.join("skills"), |p| p.is_dir() && p.join("SKILL.md").is_file()).into_iter().map(|p| file(env, &p, "skill"));
+        let agents = listed(&dir.join("agents"), readable_md).into_iter().map(|p| file(env, &p, "agent"));
+        out.extend(skills.chain(agents));
+    }
+    out
 }
 
 /// Quoted-or-bare tokens of a hook command, a leading `node` dropped (`commandTokens`).
@@ -334,7 +343,13 @@ fn hooks(env: &LocalEnv, bare_guards: Option<&Vec<Value>>) -> Vec<LocalFile> {
                 return LocalFile { pickable: false, reason: Some("guardDriver"), ..base };
             }
             let guard = Guard { event: h.event, matcher: h.matcher, run: h.run, source: None };
-            let codex_supported = crate::bare::guards::codex_unsupported(&guard.event, guard.matcher.as_deref()).is_none();
+            let codex_supported = ALL
+                .into_iter()
+                .filter(|a| match a {
+                    Agent::Claude => false,
+                    Agent::Codex => true,
+                })
+                .all(|a| (spec(a).carries.guard)(&guard.event, guard.matcher.as_deref()).is_none());
             // With no `bareGuards` key yet (first import) the block targets start on, as guard-probe --emit has them;
             // once the key exists a block target is on only when the list holds it, like any other hook.
             let ticked = match bare_guards {
@@ -355,19 +370,19 @@ pub fn discover(env: &LocalEnv) -> LocalSources {
     let root = read_root(env.config);
     let bare_guards = root.as_ref().and_then(|r| r.get("bareGuards"));
     let guards_key = bare_guards.is_some();
-    let codex = super::codex_home::discover(env);
+    let home_files = super::codex_home::discover(env);
     let mut files = rules(env);
-    files.extend(codex.rules);
+    files.extend(home_files.rules);
     let (mem, memory_dir) = memories(env);
     files.extend(mem);
-    files.extend(codex.memory);
+    files.extend(home_files.memory);
     files.extend(skills_and_agents(env));
-    files.extend(codex.skills);
-    files.extend(codex.agents);
+    files.extend(home_files.skills);
+    files.extend(home_files.agents);
     files.extend(hooks(env, bare_guards.and_then(Value::as_array)));
     files.extend(super::codex_home::hooks(env));
     files.extend(super::claude_json::rows(env));
-    files.extend(codex.mcp);
+    files.extend(home_files.mcp);
     LocalSources { files, memory_dir, guards_key }
 }
 
@@ -382,9 +397,10 @@ pub fn bare_local_sources(cwd: String) -> LocalSources {
     let primary = read_root(&config)
         .and_then(|r| r.get("primaryAgent").and_then(Value::as_str).map(str::to_string))
         .unwrap_or_default();
-    let settings = home.as_ref().map(|h| h.join(".claude").join("settings.json"));
+    let user_dir = home.as_deref().and_then(|h| sources::user_dirs(h).into_iter().next());
+    let settings = user_dir.as_ref().map(|d| d.join("settings.json"));
     let (codex_home, homes) = (sources::live_codex_home(home.as_deref()), sources::agent_homes_root());
-    let claude_json = home.as_ref().map(|h| h.join(".claude.json"));
+    let claude_json = user_dir.as_ref().map(|d| d.with_extension("json"));
     let (catalog, _) = crate::bare::bundles::load(&crate::paths::root());
     let env = LocalEnv {
         imports: &imports,

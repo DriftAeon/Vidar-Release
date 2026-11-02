@@ -13,7 +13,8 @@ import { buildRightColumn, tabRowSlot } from "./tab-row-paint";
 import { tabTitleCase } from "./tab-state-format";
 import { initTabAgents, moveTabFamily } from "./tab-agents";
 export { resolveBodyKind } from "./body-kind";
-import type { LaunchOpts, TerminalSession } from "./types";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { sessionSupports, type LaunchOpts, type TerminalSession } from "./types.ts";
 
 export interface TabStripDeps {
   sessions: ReadonlyMap<string, TerminalSession>;
@@ -298,7 +299,8 @@ export function openTabMenu(id: string, anchor: HTMLElement) {
   if (s && s.body === "rendered") {
     const hosted = !!s.falconSession || !!s.rendered?.hosted();
     if (hosted) {
-      row(terminalIcon, "Jettison to Falcon", () => { void jettisonSession(id); });
+      const jet = row(terminalIcon, "Jettison to Falcon", () => { void jettisonSession(id); });
+      if (s.pendingVault?.pending) { jet.disabled = true; jet.title = "Jettison is available once a Rune Vault is picked."; }
       row(terminalIcon, "Close Session", () => { void closeHostedTab(id); });
       if (s.closeError) {
         const message = s.closeError.length > 96 ? `${s.closeError.slice(0, 95)}…` : s.closeError;
@@ -352,7 +354,7 @@ function beginRename(id: string) {
       if (id === view().activeId) dispatchFocus(); // the workbench header shows the name
       saveCodexTabs();
       // a hosted Claude tab: the host keeps only the spawn-time name, so a swap re-adopt reads this one
-      if (s.agent === "claude" && s.body === "rendered") {
+      if (sessionSupports(s.agent, "gateway") && s.body === "rendered") {
         void (s.falconSession ? Promise.resolve(s.falconSession) : hostedFalconSession(id))
           .then((session) => hostedNames.remember(session, name));
       }

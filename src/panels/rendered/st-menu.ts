@@ -3,6 +3,7 @@
 
 import { btn, el } from "./dom";
 import { chevronTile } from "./disc";
+import { menuArrowKey } from "../../modules/context-menu";
 import { openPopover } from "../../modules/popover";
 import { placeAbove } from "../../modules/place-menu";
 import type { RenderedState } from "./state";
@@ -58,6 +59,10 @@ export function createStMenu(S: RenderedState) {
         menu.appendChild(b);
       }
     }
+    // Arrow/Home/End move between the visible rows; Tab and Escape stay with the popover core
+    menu.addEventListener("keydown", (e) => {
+      menuArrowKey(e, [...menu.querySelectorAll<HTMLButtonElement>("button")].filter((b) => !b.hidden));
+    });
     S.stMenu = menu;
     openAnchor = anchor;
     // the menu sits on body, outside the tab: keep the tab's focus ring while it is open (rendered-status.css)

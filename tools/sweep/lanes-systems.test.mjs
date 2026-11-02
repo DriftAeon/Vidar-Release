@@ -1,18 +1,11 @@
 // Systems sweep lanes: one fixture per detector yields exactly its finding.
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { makeTree } from "../../tests/helpers/tree.mjs";
 import { DETECTORS, LANES } from "./lanes-systems.mjs";
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "sys-lanes-"));
-  for (const [rel, text] of Object.entries(files)) {
-    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
-    fs.writeFileSync(path.join(root, rel), text, "utf8");
-  }
-  return { root };
+  return { root: makeTree("sys-lanes-", files) };
 }
 
 const keys = (r) => {

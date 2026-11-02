@@ -1,55 +1,56 @@
-// src\runes\bare\library-delete.ts — Delete Rune and Delete Library in Modify.
-// A library rune or a whole import library leaves the store through `bare_library_delete` (it moves into the
-// library backup; unlocked vaults drop it, locked sessions keep their copy). Each action asks first on an inline
-// notice card (the choice card's look, vault-edit.ts); nothing here writes a file or a launcher row.
+// src\runes\bare\library-delete.ts — Delete Rune and Delete Runeset in the Rune Library (Modify).
+// A library rune, or a library runeset alone, leaves the store through `bare_library_delete` with `rune` naming it (it
+// moves into the library backup; unlocked vaults drop it, locked sessions keep their copy). A deleted runeset's runes
+// stay in the library. Each action asks first on an inline confirm row; nothing here writes a file or a launcher row.
+import { confirmRow, el } from "../../dom";
+
 export const DELETE_RUNE_LABEL = "Delete Rune";
-export const DELETE_LIBRARY_LABEL = "Delete Library";
-export const STOCK_LIBRARY = "stock";
+export const DELETE_RUNESET_LABEL = "Delete Runeset";
+export const VIDAR_LIBRARY = "vidar";
+/** The one runeset of the Vidar library every Rune Vault holds (Rust `VIDAR_SET`). */
+export const VIDAR_SET = "vidar";
 
-/** What the user asked to delete: a library, or one rune of it. */
-export interface DeleteTarget { library: string; id?: string }
+/** What the user asked to delete: rune `id` of `library`, or (`runeset`) its runeset `id`. */
+export interface DeleteTarget { library: string; id: string; runeset?: boolean }
 
-export const sameTarget = (a: DeleteTarget | null, b: DeleteTarget): boolean => !!a && a.library === b.library && a.id === b.id;
+export const sameTarget = (a: DeleteTarget | null, b: DeleteTarget): boolean =>
+  !!a && a.library === b.library && a.id === b.id && !!a.runeset === !!b.runeset;
 
-/** The confirm text. */
+/** The confirm text for a rune. */
 export function confirmText(name: string): string {
   return `Delete ${name}? It moves to the library backup. Unlocked vaults that hold it drop it; locked sessions keep their copy.`;
 }
 
-/** Only an import library can be deleted; the stock library never offers it. */
-export const deletable = (library: string): boolean => library !== STOCK_LIBRARY;
-
-/** `list` less what `t` deleted: one rune, or every rune of the library. */
-export function without<T extends { library: string; id: string }>(list: readonly T[], t: DeleteTarget): T[] {
-  return list.filter((r) => r.library !== t.library || (t.id !== undefined && r.id !== t.id));
+/** The confirm text for a runeset: its runes stay. */
+export function runesetConfirmText(name: string): string {
+  return `Delete ${name}? The runeset moves to the library backup and its runes stay in the library. Unlocked vaults that hold it drop it; locked sessions keep their copy.`;
 }
 
-/** The confirm card: Delete and Cancel. */
-export function deleteConfirm(name: string, onDelete: () => void, onCancel: () => void): HTMLElement {
-  const root = document.createElement("div");
-  root.className = "blk blk-notice-card runes-vault-choice runes-delete-confirm";
-  const body = document.createElement("div");
-  body.className = "notice-body";
-  const note = document.createElement("div");
-  note.className = "blk-notice warn";
-  note.textContent = confirmText(name);
-  body.append(note);
-  const acts = document.createElement("div");
-  acts.className = "wb-actions notice-acts";  const button = (label: string, primary: boolean, run: () => void): HTMLButtonElement => {
-    const b = document.createElement("button");
-    b.type = "button";
-    // the shared decision pair (decision-pair.css): red Delete (.swap-yes), grey Cancel (.swap-no)
-    b.className = primary ? "swap-yes" : "swap-no";
-    b.textContent = label;
-    b.addEventListener("click", run);
-    return b;
-  };
-  acts.append(button("Delete", true, onDelete), button("Cancel", false, onCancel));
-  root.append(body, acts);
+/** Only an import library's runes can be deleted. The Vidar library never offers it, nor does a library the store marks
+ *  `fixed` (Rust `library_sets::fixed`: the rules library, `rulesLibrary` in vidar.json, whose id is its folder name). */
+export const deletable = (library: string, runesets: readonly { library: string; fixed: boolean }[] = []): boolean =>
+  library !== VIDAR_LIBRARY && !runesets.some((s) => s.library === library && s.fixed);
+
+/** `list` less the rune `t` deleted. */
+export function without<T extends { library: string; id: string }>(list: readonly T[], t: DeleteTarget): T[] {
+  return list.filter((r) => r.library !== t.library || r.id !== t.id);
+}
+
+/** The confirm row where the Delete button sat (on a rune's card, or at the end of a runeset's): the warning on the
+ *  left, then the shared decision pair (red Delete, grey Cancel) on the right. The button is gone until the row is answered. */
+export function deleteInline(name: string, onDelete: () => void, onCancel: () => void, text = confirmText(name)): HTMLElement {
+  const root = el("div", "runes-delete-confirm runes-delete-inline");
+  confirmRow({
+    root,
+    note: el("span", "runes-delete-text", text),
+    acts: el("span", "runes-delete-acts"),
+    yes: { label: "Delete", run: onDelete },
+    no: { label: "Cancel", run: onCancel },
+  });
   return root;
 }
 
-/** A text button in the Modify action row; `run` asks, it does not delete. */
+/** A text button; `run` asks, it does not delete. */
 export function deleteButton(label: string, title: string, run: () => void, disabled: boolean): HTMLButtonElement {
   const b = document.createElement("button");
   b.type = "button";

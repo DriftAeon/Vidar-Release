@@ -1,5 +1,7 @@
 // @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
 import { label } from "../format.ts";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { cleanSend } from "../browser/send.ts";
 
 export const ISSUE_KEYS = ["key", "summary", "status", "statusCategory", "type", "priority", "updated", "url", "typeLevel", "parent"] as const;
 
@@ -189,21 +191,8 @@ export function normaliseSite(input: string): string | null {
   return `https://${name.toLowerCase()}.atlassian.net`;
 }
 
-const STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 const MAX_SEND_BYTES = 1024;
 
 export function sendText(issue: Pick<Issue, "key" | "summary">): string {
-  const clean = `${issue.key}: ${issue.summary}`.replace(STRIP, "");
-  const encoder = new TextEncoder();
-  if (encoder.encode(clean).length <= MAX_SEND_BYTES) return clean;
-
-  let result = "";
-  let bytes = 0;
-  for (const codePoint of clean) {
-    const nextBytes = encoder.encode(codePoint).length;
-    if (bytes + nextBytes > MAX_SEND_BYTES) break;
-    result += codePoint;
-    bytes += nextBytes;
-  }
-  return result;
+  return cleanSend(`${issue.key}: ${issue.summary}`, MAX_SEND_BYTES);
 }

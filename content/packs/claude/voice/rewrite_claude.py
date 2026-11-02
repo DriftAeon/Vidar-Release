@@ -45,14 +45,14 @@ def child_env() -> dict[str, str]:
 
 
 def _chat(system: str, user: str, model: str, effort: str) -> str:
-    claude = shutil.which("claude")
-    if not claude:
+    cli = shutil.which("claude")
+    if not cli:
         raise RuntimeError(
             "claude not found on PATH: install the Claude Code CLI, or pick another rewrite adapter"
         )
     env = child_env()
     cmd = [
-        claude, "-p", "--model", model, "--effort", effort,
+        cli, "-p", "--model", model, "--effort", effort,
         "--no-session-persistence", "--output-format", "text",
         "--system-prompt", system,
         "--strict-mcp-config", "--disable-slash-commands",

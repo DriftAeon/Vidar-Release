@@ -167,6 +167,7 @@ export async function jettisonSession(id: string): Promise<{ ok: boolean; reason
     const s = sessions.get(id);
     const body = s?.rendered;
     if (!s || !body?.hosted()) return { ok: false, reason: "tab is not a hosted Rendered Claude tab" };
+    if (s.pendingVault?.pending) return { ok: false, reason: "the tab is waiting for its Rune Vault" };
     s.closeError = undefined;
     let session = s.falconSession ?? null;
     if (!session) {

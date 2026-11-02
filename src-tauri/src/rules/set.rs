@@ -43,9 +43,7 @@ fn slot(line: &str) -> Option<(&str, &str)> {
 }
 
 fn title(id: &str) -> String {
-    let spaced = id.replace('-', " ");
-    let mut chars = spaced.chars();
-    chars.next().map(|c| c.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+    super::slug::upper_first(&id.replace('-', " "))
 }
 
 /// Body with leading and trailing blank lines removed, as lines.
@@ -243,6 +241,14 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn title_outputs_are_pinned() {
+        assert_eq!(title("rune-id"), "Rune id");
+        assert_eq!(title("claude"), "Claude");
+        assert_eq!(title("élan"), "Élan");
+        assert_eq!(title(""), "");
+    }
 
     struct Tmp(PathBuf);
     impl Drop for Tmp {

@@ -7,7 +7,7 @@
 //   --dir  the probe folder; default %TEMP%\vidar-codex-hook-probe. Layout: home\ (CODEX_HOME), work\ (the launch
 //          folder, the only sandbox-writable place), rec\ (recordings, outside the workspace), setup.json.
 //
-// setup: config.toml from profiles/bare/codex.config.template.toml with the two entries that would reach the live
+// setup: config.toml from profiles/bare/vidar-runes/settings/codex-config.toml with the two entries that would reach the live
 // Vidar left out (`notify`, `[mcp_servers.vidar_drive]`), plus a trusted [projects] table for work\ as home.rs
 // writes it. home\hooks.json wires this script as a command hook on all 12 events, `command` and `commandWindows`
 // tagged apart, each carrying `%OS%` and `$env:OS` so the recording shows which shell expanded it. Then it starts
@@ -31,9 +31,10 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileS
 import { tmpdir } from "node:os";
 import { dirname, join, resolve as pathResolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { root as repoRoot } from "../lib/paths.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = pathResolve(HERE, "..", "..");
+const REPO = repoRoot();
 const SELF = fileURLToPath(import.meta.url);
 const EVENTS = ["PreToolUse", "PermissionRequest", "PostToolUse", "PreCompact", "PostCompact", "UserPromptSubmit",
   "SubagentStart", "SubagentStop", "Stop", "Interrupt", "SessionStart", "SessionEnd"];
@@ -187,7 +188,7 @@ async function setup(argv) {
   for (const d of [p.home, p.work, p.rec]) mkdirSync(d, { recursive: true });
   writeFileSync(join(p.work, "README.txt"), "Scratch launch folder for the Vidar Codex hook probe.\n");
 
-  const template = readFileSync(join(REPO, "profiles", "bare", "codex.config.template.toml"), "utf8");
+  const template = readFileSync(join(REPO, "profiles", "bare", "vidar-runes", "settings", "codex-config.toml"), "utf8");
   const base = buildConfig(template, { root: REPO, home: p.dir, work: p.work });
   writeFileSync(p.config, base);
   const hooksDoc = buildHooks("node", p.dir);

@@ -208,7 +208,7 @@ test("API key login failure: the notice names the failure and never echoes the k
 
 test("a Codex tab's not-logged-in flip says how to log in, once", () => {
   const S = { loggedOut: false, disposed: false }, notices = [];
-  const login = createLogin(S, { claude: false, tip: codexTip, check: () => Promise.resolve(null), noticeBlock: (t) => notices.push(t), redrawStatus() {}, refreshState() {} });
+  const login = createLogin(S, { readsTurnReplies: false, tip: codexTip, check: () => Promise.resolve(null), noticeBlock: (t) => notices.push(t), redrawStatus() {}, refreshState() {} });
   login.fromAgent(false);
   login.fromAgent(false);
   assert.equal(S.loggedOut, true);
@@ -257,7 +257,7 @@ test("No-Claude machine: a Codex tab's logged-out state and login strings never 
   assert.equal(await authCheck(true, false, run)(), null);
   assert.equal(await authCheck(true, true, () => Promise.reject(new Error("no claude")))(), null);
   const S = { loggedOut: false, disposed: false };
-  const login = createLogin(S, { claude: false, tip: codexTip, check: authCheck(false, true, run), noticeBlock: (t) => seen.push(t), redrawStatus() {}, refreshState() {} });
+  const login = createLogin(S, { readsTurnReplies: false, tip: codexTip, check: authCheck(false, true, run), noticeBlock: (t) => seen.push(t), redrawStatus() {}, refreshState() {} });
   login.check();
   login.fromAgent(false);
   login.sawTurn("Not logged in · Please run /login", false);
@@ -520,7 +520,7 @@ test("logged in folds the card to one Logged In row with a check; a later logout
   assert.ok(card.classList.contains("settled"));
   assert.equal(card.querySelector(".approval-title").textContent, "Logged In");
   assert.ok(card.querySelector(".approval-result.ok svg"));
-  assert.deepEqual(labels(p.host), []);
+  assert.deepEqual(labels(p.host), ["✕"]);
   assert.ok(!card.textContent.includes("Waiting For Browser"));
   p.login.offer();
   assert.equal(p.host.querySelectorAll(`.${API_KEY_CARD}`).length, 2);

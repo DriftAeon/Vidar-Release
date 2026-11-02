@@ -356,7 +356,7 @@ impl ClaudeRuntime {
         if let Some(profile) = profile {
             let root = self.vidar_root().ok_or("a profiled spawn needs the Vidar root")?;
             // A per-spawn config dir (a set combination's) replaces the overlay's once admitted.
-            let bare = bare_spawn(root, local_app_data, profile, params.claude_config_dir.as_deref())?;
+            let bare = bare_spawn(root, local_app_data, profile, params.claude_config_dir.as_deref(), &params.env)?;
             args.extend([
                 "--profile".into(), profile.into(),
                 "--root".into(), root.to_string_lossy().into_owned(),

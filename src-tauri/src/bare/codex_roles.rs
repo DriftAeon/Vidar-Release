@@ -32,8 +32,9 @@ pub struct Role {
 }
 
 /// A role file's text opens with `READ_ONLY_MARKER` (a BOM and trailing blanks allowed).
+#[cfg(test)]
 pub fn read_only_by_prompt(text: &str) -> bool {
-    text.strip_prefix('\u{feff}').unwrap_or(text).lines().next().is_some_and(|l| l.trim_end() == READ_ONLY_MARKER)
+    crate::fsx::strip_bom(text).lines().next().is_some_and(|l| l.trim_end() == READ_ONLY_MARKER)
 }
 
 #[derive(Serialize)]
@@ -47,15 +48,9 @@ struct RoleToml<'a> {
 
 /// The frontmatter lines and the body of `text` (BOM and `\r` dropped); `None` without a closing `---`.
 fn split(text: &str) -> Option<(Vec<&str>, String)> {
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let mut lines = text.lines().map(|l| l.trim_end_matches('\r'));
-    if lines.next().map(str::trim) != Some("---") {
-        return None;
-    }
-    let rest: Vec<&str> = lines.collect();
-    let end = rest.iter().position(|l| l.trim() == "---")?;
-    let body = rest[end + 1..].join("\n");
-    Some((rest[..end].to_vec(), body.trim().to_string()))
+    let (header, body) = crate::rules::rune::split_header(text)?;
+    let body = body.lines().collect::<Vec<_>>().join("\n");
+    Some((header.lines().collect(), body.trim().to_string()))
 }
 
 /// The tools frontmatter value as names (`Bash(git:*)` → `Bash`): a comma list, a `[a, b]` flow list or
@@ -119,6 +114,19 @@ pub fn convert(text: &str) -> Result<Role, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn split_outputs_are_pinned() {
+        let got = |t: &str| split(t).map(|(h, b)| (h.join("|"), b));
+        assert_eq!(got("---\na: 1\nb: 2\n---\nBody\nmore\n"), Some(("a: 1|b: 2".into(), "Body\nmore".into())));
+        assert_eq!(got("\u{feff}---\r\na: 1\r\n---\r\n\r\n Body \r\nx\r\n"), Some(("a: 1".into(), "Body \nx".into())));
+        assert_eq!(got("---\n---\nB"), Some(("".into(), "B".into())));
+        assert_eq!(got("---\na: 1\n--- \nB"), Some(("a: 1".into(), "B".into())));
+        assert_eq!(got("---\na: 1\n---"), Some(("a: 1".into(), "".into())));
+        assert_eq!(got("---\na: 1\nB"), None);
+        assert_eq!(got("a: 1\n---\nB"), None);
+        assert_eq!(got(""), None);
+    }
 
     impl Role {
         fn read_only(&self) -> bool {

@@ -7,6 +7,8 @@ import type { FlowRun, FlowRunNodeState, FlowRunStatus } from "./run";
 // A Map-backed stub in tests, the Flow file store (file-storage.ts) from runs-store.ts in the app. One definition in
 // prefs-core.ts; `import type` is erased, so this leaf still loads standalone.
 import type { StorageLike } from "../prefs-core";
+// @ts-ignore TS5097: node --test imports this leaf module directly
+import { isRecord } from "../json.ts";
 export type { StorageLike };
 
 // Restated verbatim ("vidar.flow.runs.v1 holds { v: 1, runs }" and
@@ -19,9 +21,6 @@ export interface RunsEnvelope {
   runs: FlowRun[];
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 function parseRunsEnvelope(parsed: unknown): RunsEnvelope | null {
   if (!isRecord(parsed) || parsed.v !== 1 || !Array.isArray(parsed.runs)) return null;

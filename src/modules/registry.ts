@@ -14,6 +14,7 @@ import { CATALOG, deadDeps, depsReport, isDetecting, loadDeps, mergePackDeps, on
 import { requireSoleAgentDep } from "../deps/sole-agent";
 import type { DepEntry, DepReport } from "../deps/types";
 import type { BrokenModule, ModuleDecl, ModuleSource, ModulesList } from "./types";
+import { errText } from "../err-text";
 
 export type ModuleRow = ModuleDecl & { source: ModuleSource; folder?: string };
 
@@ -39,7 +40,8 @@ const EMPTY: BuiltModules = { ordered: [], dropped: [], broken: [], deps: [] };
 
 /** The compiled-in copy of content/packs/codex: the agent every fallback keeps, so a failed
  *  modules_list or a rejected ordering still yields one agent module. */
-export const FALLBACK_AGENT: ModuleRow = { ...(codexPack.module as ModuleDecl), source: "pack", folder: "codex" };
+const FALLBACK_DECL = codexPack.module as ModuleDecl;
+export const FALLBACK_AGENT: ModuleRow = { ...FALLBACK_DECL, source: "pack", folder: FALLBACK_DECL.id };
 
 /** Non-core-level modules (packs, and core[] rows at a pack level) with an
  *  absent module in their dependsOn closure, each with the absent id. A core-level module never
@@ -79,7 +81,7 @@ export function buildModules(list: ModulesList, staticDepIds: ReadonlySet<string
   try {
     return { ordered: order(kept.map(asCapability), depIds).map((c) => kept.find((m) => m.id === c.id)!), dropped, broken, deps };
   } catch (e) {
-    const reason = e instanceof Error ? e.message : String(e);
+    const reason = errText(e);
     broken.push({ folder: "modules", reason });
     // The core modules plus one agent, tried in order: the listed codex pack, its compiled-in
     // copy, then none. The first that orders wins, so a listed codex row that is itself what
@@ -101,7 +103,7 @@ export function buildModules(list: ModulesList, staticDepIds: ReadonlySet<string
         return { ordered: order(rows.map(asCapability), fallbackDepIds).map((c) => rows.find((m) => m.id === c.id)!), dropped: [...offRows, ...rest], broken, deps: fallbackDeps };
       } catch (e2) {
         if (agent !== agents[agents.length - 1]) continue;
-        broken.push({ folder: "modules", reason: e2 instanceof Error ? e2.message : String(e2) });
+        broken.push({ folder: "modules", reason: errText(e2) });
         return { ordered: [], dropped: [...offRows, ...rows.map((row): ModuleView => ({ row, active: false, reason: "Registry Fallback" })), ...rest], broken, deps: [] };
       }
     }
@@ -198,7 +200,7 @@ export async function loadModules(): Promise<BuiltModules> {
     lastRelease = list.set !== undefined ? { set: list.set, ids: new Set(list.modules.map((m) => m.id)) } : null;
   } catch (e) {
     console.error("modules_list failed", e);
-    list = fallbackList(e instanceof Error ? e.message : String(e), lastRelease);
+    list = fallbackList(errText(e), lastRelease);
   }
   built = buildModules(list, staticIds);
   releaseIds = list.set !== undefined ? new Set(list.modules.map((m) => m.id)) : null;

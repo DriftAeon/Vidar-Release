@@ -31,7 +31,7 @@ fn codex_ledger_now(home_dir: &Path, codex_home: &Path) -> Ledger {
 pub fn listing_now(config: &Path, home_dir: &Path, codex_home: &Path) -> String {
     let root = crate::paths::root();
     let user_home = super::super::set_layer::user_home();
-    let env = ResolveEnv { root: &root, config, home: home_dir, user_home: user_home.as_deref() };
+    let env = ResolveEnv { root: &root, config, user_home: user_home.as_deref() };
     let (loadout, _) = super::super::set_loadout::resolve(&env, Agent::Codex, &[]);
     let order = listed_order(&plan_for(Agent::Codex, &codex_skills_in(&root, &loadout.skills), &[], Some(home_dir)));
     let ledger = codex_ledger_now(home_dir, codex_home);

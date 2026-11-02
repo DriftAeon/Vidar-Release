@@ -71,8 +71,7 @@ details[open] > summary .disc-caret > svg { transform: none; }
 
 /* running: the glyph is hidden and a ring spins in its place */
 .mark[data-mark="running"] { font-size: 0; }
-.mark[data-mark="running"]::before { content: ""; box-sizing: border-box; width: var(--space-8); height: var(--space-8); border: var(--border-w) solid currentColor; border-top-color: transparent; border-radius: var(--radius-full); animation: rendered-mark-spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */ }
-@keyframes rendered-mark-spin { to { transform: rotate(360deg); } }
+.mark[data-mark="running"]::before { content: ""; box-sizing: border-box; width: var(--space-8); height: var(--space-8); border: var(--border-w) solid currentColor; border-top-color: transparent; border-radius: var(--radius-full); animation: spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */ }
 
 /* the pill's mark slot takes its state from the parent row's data-mark (marks.ts stays as is) */
 .blk-tool[data-mark="pending"] > summary .mark,
@@ -83,7 +82,7 @@ details[open] > summary .disc-caret > svg { transform: none; }
 .blk-tool[data-mark="error"] > summary .mark { color: var(--dead-red); }
 .blk-tool[data-mark="denied"] > summary .mark { color: var(--deny-red); }
 .blk-tool[data-mark="running"] > summary .mark { color: var(--accent); font-size: 0; }
-.blk-tool[data-mark="running"] > summary .mark::before { content: ""; box-sizing: border-box; width: var(--space-8); height: var(--space-8); border: var(--border-w) solid currentColor; border-top-color: transparent; border-radius: var(--radius-full); animation: rendered-mark-spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */ }
+.blk-tool[data-mark="running"] > summary .mark::before { content: ""; box-sizing: border-box; width: var(--space-8); height: var(--space-8); border: var(--border-w) solid currentColor; border-top-color: transparent; border-radius: var(--radius-full); animation: spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */ }
 /* an empty slot still shows the state glyph */
 .blk-tool[data-mark="pending"] > summary .mark:empty::before { content: "\00b7"; }
 .blk-tool[data-mark="awaiting"] > summary .mark:empty::before { content: "?"; }

@@ -5,7 +5,7 @@
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use crate::net::{Request, Secret, SendError};
+use crate::net::{self, clean_redacted, pct, NetKind, Request, Secret};
 
 pub const HOST: &str = "api.notion.com";
 pub const VERSION: &str = "2026-03-11";
@@ -31,26 +31,13 @@ pub enum ErrorKind {
     Parse,
 }
 
+impl NetKind for ErrorKind {
+    const ENDPOINT: Self = ErrorKind::Endpoint;
+    const NETWORK: Self = ErrorKind::Network;
+}
+
 /// `{ kind, message, retryAfter? }`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiError {
-    pub kind: ErrorKind,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry_after: Option<u64>,
-}
-
-impl ApiError {
-    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        ApiError { kind, message: message.into(), retry_after: None }
-    }
-
-    pub fn after(mut self, secs: Option<u64>) -> Self {
-        self.retry_after = secs;
-        self
-    }
-}
+pub type ApiError = net::ApiError<ErrorKind>;
 
 pub fn endpoint(message: impl Into<String>) -> ApiError {
     ApiError::new(ErrorKind::Endpoint, message)
@@ -112,19 +99,6 @@ pub fn check_kind(kind: &str) -> Result<&'static str, ApiError> {
         "source" => Ok("data_source"),
         _ => Err(endpoint("kind must be page or source")),
     }
-}
-
-/// Percent-encodes everything outside the RFC 3986 unreserved set.
-pub fn pct(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
 }
 
 /// The header block: Bearer, the pinned version, JSON accept; Content-Type on POST only.
@@ -206,16 +180,6 @@ pub fn clean_message(s: &str) -> String {
     s.chars().filter(|c| !c.is_control()).take(MESSAGE_CAP).collect()
 }
 
-/// `clean_message`, with the token replaced by `***` after the strip and before the cap, so
-/// neither a control character inside it nor the cap can leave a part of it that no longer
-/// matches.
-pub fn clean_redacted(s: &str, token: &Secret) -> String {
-    let stripped: String = s.chars().filter(|c| !c.is_control()).collect();
-    let t = token.expose();
-    let redacted = if t.is_empty() { stripped } else { stripped.replace(t, "***") };
-    redacted.chars().take(MESSAGE_CAP).collect()
-}
-
 fn body_str<'a>(body: &'a Value, key: &str) -> Option<&'a str> {
     body.get(key).and_then(Value::as_str)
 }
@@ -274,16 +238,6 @@ pub fn is_validation_error(status: u16, body: &[u8]) -> bool {
             .ok()
             .and_then(|v| v.get("code").and_then(Value::as_str).map(|c| c == "validation_error"))
             .unwrap_or(false)
-}
-
-/// Transport failures: OverCap → endpoint; the rest → network (delta S4). `token` is redacted
-/// before the cap.
-pub fn send_error(e: &SendError, token: &Secret) -> ApiError {
-    match e {
-        SendError::OverCap => endpoint("reply too large"),
-        SendError::Timeout => ApiError::new(ErrorKind::Network, "Notion did not answer in time"),
-        SendError::Connect(m) | SendError::Io(m) => ApiError::new(ErrorKind::Network, clean_redacted(m, token)),
-    }
 }
 
 /// Keep an https url on a Notion host; otherwise rebuild it from the id.

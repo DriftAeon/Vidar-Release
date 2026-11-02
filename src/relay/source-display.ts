@@ -1,16 +1,18 @@
 // Display-gate files as Relay items: a request-id file with no current decision is pending.
 
 import { invoke, listen } from "../ipc";
+import { basename } from "../paths";
 import { hasRequestId, readDisplayDecision, saveDisplayDecision } from "../panels/display-decision";
 import { shownName } from "../panels/display-name";
 import { setItems, type RelayItem, type RelayVerdict } from "./store";
+import { errText } from "../err-text";
 
 
 const SOURCE = "display";
 let latest = 0;
 
 function titleOf(path: string): string {
-  const name = path.split("\\").pop() ?? path;
+  const name = basename(path);
   const dot = name.lastIndexOf(".");
   const stem = dot > 0 ? name.slice(0, dot) : name;
   const ext = dot > 0 ? name.slice(dot) : "";
@@ -49,7 +51,7 @@ export async function refresh(): Promise<void> {
       const d = await readDisplayDecision(f.path);
       if (d === null || !d.current) out.push(itemFor(f));
     } catch (e) {
-      out.push(itemFor(f, e instanceof Error ? e.message : String(e)));
+      out.push(itemFor(f, errText(e)));
     }
   }
   if (gen !== latest) return;

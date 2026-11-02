@@ -80,16 +80,15 @@ pub(crate) fn codex_unsupported(event: &str, matcher: Option<&str>) -> Option<St
     }
 }
 
-/// `s` as a PowerShell single-quoted string (a `'` doubled), so no `$` or backtick in a path expands.
-fn ps_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
-}
+use crate::bare::ps_quote;
 
 /// The handler line Codex runs through PowerShell (`commandWindows`): the call operator first (a
 /// quoted first token is a parse error), then `exit $LASTEXITCODE` (else -Command turns exit 2 into 1).
+/// Every argv element is quoted, flags included (`'--guard'` reaches node as `--guard`), so a config
+/// entry such as `--x; cmd` stays one literal argument.
 pub fn codex_command(node: &Path, argv: &[String]) -> String {
     let mut parts = vec!["&".to_string(), ps_quote(&node.to_string_lossy())];
-    parts.extend(argv.iter().map(|a| if a.starts_with("--") { a.clone() } else { ps_quote(a) }));
+    parts.extend(argv.iter().map(|a| ps_quote(a)));
     format!("{}; exit $LASTEXITCODE", parts.join(" "))
 }
 

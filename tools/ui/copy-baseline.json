@@ -2,7 +2,7 @@
   "about": "lint:copy grandfathered Title Case findings (tools/ui/lint-copy.mjs). Rewrite with `node tools/ui/lint-copy.mjs --update-baseline`.",
   "entries": [
     {
-      "file": "index.html",
+      "file": "src/pages/index.html",
       "sink": "html",
       "text": "Listen for the wake word",
       "count": 1

@@ -3,15 +3,9 @@
 // schema, so every read here is defensive and a malformed payload yields null
 // (the adapter then shows its quiet method notice); nothing here may throw.
 import type { AgentEvent, PermissionMode } from "./protocol";
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, str, type Json } from "../json.ts";
 
-type Json = Record<string, unknown>;
-
-function obj(v: unknown): Json | null {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null;
-}
-function str(v: unknown): string {
-  return typeof v === "string" ? v : "";
-}
 const cap = (s: string) => s.slice(0, 200);
 
 /** One line per reviewed action. `writeStdin.stdin` is never printed: it can be a password. */

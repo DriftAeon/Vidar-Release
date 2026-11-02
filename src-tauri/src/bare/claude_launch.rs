@@ -7,6 +7,7 @@
 //! for Falcon.
 
 use super::*;
+use crate::rules::rune::Surface;
 
 /// Prepares the real home (the per-install home under LOCALAPPDATA) from Vidar's own env.
 pub fn prepare(profile: &str, opts: &LaunchOpts) -> Result<Launch, String> {
@@ -45,14 +46,16 @@ struct ClaudeHome {
     git: identity::GitIdentity,
     loadout_hash: String,
     inherited: Vec<(OsString, OsString)>,
-    /// The vault rendered text, so the payload is the built one.
-    has_row: bool,
     /// The vault the launch loaded; `None` only for the test no-vault spawn.
     vault: Option<super::vault::Vault>,
     /// Plugins, allowed tools and mode, from the vault only.
     floor: Floor,
     /// The vault's model rune, written as settings.json `model` and sent as the spawn's model.
     model: Option<String>,
+    /// `ctl_for(&loadout)`: whether the spawn mints a control token.
+    ctl: bool,
+    /// The vault's env runes, checked against the surface's overlay (`env::rune_env`).
+    rune_env: Vec<(String, String)>,
 }
 
 /// The home steps both Claude prepares run (fold W2 L2a): the row's sets resolved for Claude
@@ -72,6 +75,7 @@ fn prepare_home(
     ambient: &Ambient,
     guard: &home::Guard,
     opts: &LaunchOpts,
+    surface: Surface,
 ) -> Result<ClaudeHome, String> {
     let vault = vault_for(root, opts, Agent::Claude)?;
     let config = config_of(opts);
@@ -81,11 +85,19 @@ fn prepare_home(
     let on_legacy = picked.on_legacy(&legacy);
     // Every item the launch carries comes from its vault through the resolver (model R2); what Claude
     // cannot carry (`Loadout.unsupported`) is named in the warnings.
-    let resolve_env = set_loadout::ResolveEnv { root, config: &config, home: home_dir, user_home: ambient.user_home.as_deref() };
-    let set_loadout::VaultLoadout { mut loadout, warnings: loadout_warnings, text, sets } = vault_spawn::resolve(&resolve_env, Agent::Claude, root, vault.as_ref())?;
+    let resolve_env = set_loadout::ResolveEnv { root, config: &config, user_home: ambient.user_home.as_deref() };
+    let set_loadout::VaultLoadout { mut loadout, warnings: loadout_warnings, text, sets } = vault_spawn::resolve(&resolve_env, Agent::Claude, Some(surface), root, vault.as_ref())?;
     if !loadout.refusals.is_empty() {
         return Err(format!("Rune sets failed to resolve: {}; Bare spawn refused", loadout.refusals.join("; ")));
     }
+    // Before the home is touched: a rune env name the overlay sets refuses here. Raw lays its env
+    // over `overlay`; Rendered and Flow over `overlay` plus `rendered.overlay`.
+    let mut overlay = p.overlay.clone();
+    if surface != Surface::Raw {
+        overlay.extend(p.rendered.iter().flat_map(|r| r.overlay.clone()));
+    }
+    let rune_env = env::rune_env("Claude", &loadout, &overlay)?;
+    let setting_path = vault_spawn::setting_file(&loadout, Agent::Claude, root)?;
     if let Some(skill) = recall_skill::write(root, home_dir, guard, &loadout.recall_skill)? {
         loadout.skills.insert(0, skill.to_string_lossy().into_owned());
     }
@@ -131,11 +143,11 @@ fn prepare_home(
     warnings.extend(login_warnings);
     // The guard copies count as carried, so a rune's `enforced-by` claim on them stays. The vault
     // build's warnings are the payload's (the rune build's, as before L2a).
-    let mut payload = choose_payload(&lock, &p, root, home_dir, text.as_deref(), &sets, guard)?;
+    let mut payload = choose_payload(&lock, root, home_dir, text.as_deref(), &sets, guard)?;
     payload.warnings = loadout_warnings;
     let inherited: Vec<_> = inherited.into_iter().collect();
     let floor = Floor::of(&loadout);
-    let mcp = claude_mcp::prepare_for(&lock, root, home_dir, &servers, inherited.iter().cloned(), floor.drive)?;
+    let mcp = claude_mcp::prepare_for(&lock, home_dir, &servers, inherited.iter().cloned())?;
     let settings = match on_legacy {
         true => under(home_dir, &p.settings_target),
         false => config_dir.join("settings.json"),
@@ -146,8 +158,9 @@ fn prepare_home(
         mode: loadout.permissions.mode.clone(),
         output_style: loadout.output_style.clone(),
         model: loadout.model.clone(),
+        builtin: (crate::agent_spec::spec(Agent::Claude).carries.builtin_off)(&loadout.built_ins, &[]).json,
     };
-    home::generate_settings_with(&under(root, &p.settings_template), &settings, root, home_dir, guard, &copied.hooks, &extras)?;
+    home::generate_settings_with(&setting_path, &settings, root, home_dir, guard, &copied.hooks, &extras)?;
     mirror_claude_seen(&config_dir, home_dir, opts.claude_json);
     if !on_legacy {
         let seeded = home::seed_claude_json(&legacy.join(".claude.json"), &config_dir.join(".claude.json"));
@@ -168,37 +181,23 @@ fn prepare_home(
         skills,
         warnings,
         git,
+        ctl: super::ctl_for(&loadout),
         loadout_hash: loadout.hash,
         inherited,
-        has_row: text.is_some(),
         vault,
         floor,
         model: loadout.model,
+        rune_env,
     })
 }
 
-/// The plugin a Raw line never carries: the gate mod runs on function hooks, which only the
-/// Rendered overlay turns on (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`).
-const RENDERED_ONLY_PLUGINS: &[&str] = &["gate"];
-
-/// The plugin whose MCP server (`plugin_vidar_drive`) the strict MCP file carries.
-const DRIVE_PLUGIN: &str = "vidar-app";
-
-/// The allow entries a Raw line also passes as `--allowedTools` (stock `drive-allow`); every allow
-/// entry already rides settings.json `permissions.allow`.
-const DRIVE_TOOLS: &str = "mcp__plugin_vidar_drive";
-
 /// What the session's Rune Vault carries for the Claude floor:
-/// nothing here comes from the profile, so dropping a stock rune drops its effect.
+/// nothing here comes from the profile, so dropping a Vidar rune drops its effect.
 #[derive(Default)]
 struct Floor {
     /// Plugin rune folders (`<root>\plugins\<name>`) and their names, vault order.
     plugins: Vec<(String, String)>,
-    /// Allow entries for Raw's `--allowedTools` (the drive tools only).
-    allowed_tools: Vec<String>,
     mode: Option<String>,
-    /// `vidar-app` is in the vault, so its drive server joins the strict MCP file.
-    drive: bool,
 }
 
 impl Floor {
@@ -209,18 +208,9 @@ impl Floor {
             .map(|dir| (dir.clone(), Path::new(dir).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()))
             .collect();
         Floor {
-            drive: plugins.iter().any(|(_, n)| n == DRIVE_PLUGIN),
             plugins,
-            allowed_tools: loadout.permissions.allow.iter().filter(|a| a.starts_with(DRIVE_TOOLS)).cloned().collect(),
             mode: loadout.permissions.mode.clone(),
         }
-    }
-
-    /// Raw's plugins: every vault plugin but the Rendered-only ones (`gate` draws Rendered UI only;
-    /// Raw never carried it). Silent, since the stock vault holds it: the manifest's `plugins`
-    /// records what Raw carried.
-    fn raw_plugins(&self) -> Vec<(String, String)> {
-        self.plugins.iter().filter(|(_, n)| !RENDERED_ONLY_PLUGINS.contains(&n.as_str())).cloned().collect()
     }
 
     /// The hosted spawn's `plugin_names`, each checked the way Falcon admits it (`admit_plugin_name`:
@@ -243,7 +233,7 @@ impl Floor {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // one per launch input; prepare_home and the tests pass them separately
 pub fn prepare_with(
     profile_id: &str,
     root: &Path,
@@ -258,9 +248,10 @@ pub fn prepare_with(
     check_isolation(&p)?;
     check_config_in_home(&p, root, home_dir)?;
     let (root_s, home_s) = (root.to_string_lossy().into_owned(), home_dir.to_string_lossy().into_owned());
-    let ClaudeHome { p, lock, legacy: _, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited, has_row: _, vault, floor, model: _ } =
-        prepare_home(p, root, home_dir, inherited, ambient, guard, opts)?;
-    let raw_plugins = floor.raw_plugins();
+    let ClaudeHome { p, lock, legacy: _, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited, vault, floor, model: _, ctl, rune_env } =
+        prepare_home(p, root, home_dir, inherited, ambient, guard, opts, Surface::Raw)?;
+    // The `gate` plugin rune is `surface: rendered`, so a Raw loadout never holds it.
+    let raw_plugins = floor.plugins.clone();
     // Raw has no first-message hook, so it locks its vault at spawn.
     if let Some(v) = vault.as_ref() {
         vault_spawn::lock_at_spawn(root, v)?;
@@ -275,6 +266,10 @@ pub fn prepare_with(
             env.set(k, config_dir.as_os_str().to_owned());
         }
     }
+    // The vault's env runes, after the overlay (`prepare_home` refused any name it sets).
+    for (k, v) in &rune_env {
+        env.set(k, v);
+    }
     let profile_dir = fill(&p.overlay.get("USERPROFILE").cloned().unwrap_or_default());
 
     let host = (probes.find)(&env, &p.host.name).ok_or_else(|| format!("{} is not on the allowlisted Path; bare spawn refused", p.host.name))?;
@@ -286,7 +281,7 @@ pub fn prepare_with(
     };
 
     let plugin_dirs: Vec<String> = raw_plugins.iter().map(|(dir, _)| dir.clone()).collect();
-    let vault_args = claude_line::VaultArgs { plugins: &plugin_dirs, allow: &floor.allowed_tools, mode: floor.mode.as_deref() };
+    let vault_args = claude_line::VaultArgs { plugins: &plugin_dirs, mode: floor.mode.as_deref() };
     let claude_args = claude_line::claude_args(&p, &payload.path.to_string_lossy(), &fill, probes.remote_control, mcp.file.as_deref(), &vault_args)?;
     let line = claude_line::spawn_line(
         warning.iter().chain(&payload.warnings).chain(&mcp.warnings).chain(&home_warnings).chain(&git.warning),
@@ -328,6 +323,8 @@ pub fn prepare_with(
         warnings: mcp.warnings.into_iter().chain(home_warnings).chain(git.warning).collect(),
         managed_policy: manifest::managed_policy(),
         codex_rules: None,
+        repo_skills_off: Vec::new(),
+        codex_files: Vec::new(),
         falcon_session: None,
         loadout_hash: Some(loadout_hash),
         thread_id: None,
@@ -340,6 +337,7 @@ pub fn prepare_with(
         file_stamp,
         manifests_dir: home_dir.join("manifests"),
         seed,
+        ctl,
         _lock: lock,
     })
 }
@@ -384,8 +382,8 @@ pub fn prepare_hosted_with(
     // The lock is held only while the home is written: the manifest is create-new with a unique
     // name, so the host round-trip that follows needs no lock (a second bare spawn must not wait
     // on it).
-    let ClaudeHome { p, lock, legacy, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited: _, has_row, vault, floor, model } =
-        prepare_home(p, root, home_dir, inherited, ambient, guard, opts)?;
+    let ClaudeHome { p, lock, legacy, config_dir, settings, payload, mcp, items, guard_files, skills, warnings: home_warnings, git, loadout_hash, inherited: _, vault, floor, model, ctl, rune_env } =
+        prepare_home(p, root, home_dir, inherited, ambient, guard, opts, opts.surface.unwrap_or(Surface::Rendered))?;
     let plugin_names = floor.plugin_names(root)?;
     let seed = SessionSeed::new(root, Agent::Claude, "rendered", vault.as_ref(), &loadout_hash);
     // What Falcon will admit (`admit_claude_config`), checked before it goes on the wire.
@@ -422,21 +420,25 @@ pub fn prepare_hosted_with(
         warnings: mcp.warnings.iter().cloned().chain(home_warnings).chain(git.warning).collect(),
         managed_policy: manifest::managed_policy(),
         codex_rules: None,
+        repo_skills_off: Vec::new(),
+        codex_files: Vec::new(),
         falcon_session: None,
         loadout_hash: Some(loadout_hash),
         thread_id: None,
     };
-    let payload_file = has_row.then(|| payload.path.clone());
+    let payload_file = Some(payload.path.clone());
     Ok(HostedLaunch {
         payload_file,
         mcp_file: mcp.file,
         claude_config_dir: Some(config_dir),
         plugin_names,
         model,
+        env: rune_env,
         manifest: m,
         file_stamp,
         manifests_dir: home_dir.join("manifests"),
         seed,
+        ctl,
     })
 }
 
@@ -473,31 +475,43 @@ pub(super) fn check_claude_config_dir(dir: &Path, overlay_dir: &Path, home_dir: 
 mod tests {
     use super::*;
 
+    /// The shipped `gate` plugin rune is Claude's and Rendered only: Raw and Flow loadouts never hold it.
+    #[test]
+    fn the_shipped_gate_rune_fits_claude_rendered_only() {
+        use crate::agent_spec::Agent;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let text = std::fs::read_to_string(crate::paths::rune_vidar_dir_in(root).join("plugins/gate.md")).unwrap();
+        let gate = crate::rules::rune::parse(&text.replace('\r', "")).unwrap();
+        assert!(gate.fits(Some(Agent::Claude), Some(Surface::Rendered)));
+        assert!(!gate.fits(Some(Agent::Claude), Some(Surface::Raw)));
+        assert!(!gate.fits(Some(Agent::Claude), Some(Surface::Flow)));
+        assert!(!gate.fits(Some(Agent::Codex), Some(Surface::Rendered)));
+    }
+
     /// The floor is the vault's and nothing else: plugin runes, the drive allow and the mode rune
     /// each reach it only when present, and the Raw line carries what it holds (L2b).
     #[test]
     fn the_claude_floor_is_what_the_vault_holds() {
         let root = crate::paths::root();
         let dir = |n: &str| root.join("plugins").join(n).to_string_lossy().into_owned();
-        let mut l = set_loadout::Loadout { plugins: vec![dir("vidar-app"), dir("gate")], ..Default::default() };
-        l.permissions.allow = vec!["mcp__plugin_vidar_drive".into(), "Bash(git status:*)".into()];
+        let mut l = set_loadout::Loadout { plugins: vec![dir("roster"), dir("gate")], ..Default::default() };
+        l.permissions.allow = vec!["mcp__vidar_drive".into(), "Bash(git status:*)".into()];
         l.permissions.mode = Some("auto".into());
         let f = Floor::of(&l);
-        assert!(f.drive);
-        assert_eq!(f.allowed_tools, ["mcp__plugin_vidar_drive".to_string()]);
         assert_eq!(f.mode.as_deref(), Some("auto"));
-        assert_eq!(f.plugin_names(&root).unwrap(), ["vidar-app".to_string(), "gate".to_string()]);
-        let raw: Vec<String> = f.raw_plugins().into_iter().map(|(d, _)| d).collect();
-        assert_eq!(raw, [dir("vidar-app")], "gate is Rendered only");
+        assert_eq!(f.plugin_names(&root).unwrap(), ["roster".to_string(), "gate".to_string()]);
+        let raw: Vec<String> = vec![dir("roster")];
         let p = load_profile(&root, "bare").unwrap();
         let args = claude_line::claude_args(&p, "P", &|s| s.to_string(), &|| false, None,
-            &claude_line::VaultArgs { plugins: &raw, allow: &f.allowed_tools, mode: f.mode.as_deref() }).unwrap();
-        let tail = &args[args.len() - 6..];
-        assert_eq!(tail, ["--plugin-dir", &dir("vidar-app"), "--allowedTools", "mcp__plugin_vidar_drive", "--permission-mode", "auto"]);
+            &claude_line::VaultArgs { plugins: &raw, mode: f.mode.as_deref() }).unwrap();
+        let tail = &args[args.len() - 4..];
+        assert_eq!(tail, ["--plugin-dir", &dir("roster"), "--permission-mode", "auto"]);
+        // The allow list rides settings.json (`SettingsExtras.allow`), never the line.
+        assert!(!args.iter().any(|a| a == "--allowedTools"), "{args:?}");
 
         // Each rune dropped drops its effect.
         let none = Floor::of(&set_loadout::Loadout::default());
-        assert!(!none.drive && none.plugins.is_empty() && none.allowed_tools.is_empty() && none.mode.is_none());
+        assert!(none.plugins.is_empty() && none.mode.is_none());
         let p_args = claude_line::claude_args(&p, "P", &|s| s.to_string(), &|| false, None, &claude_line::VaultArgs::default()).unwrap();
         assert!(!p_args.iter().any(|a| a.starts_with("--plugin-dir") || a == "--allowedTools" || a == "--permission-mode"), "{p_args:?}");
         let mut bad = set_loadout::Loadout::default();

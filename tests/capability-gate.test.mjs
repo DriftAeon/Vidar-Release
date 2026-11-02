@@ -9,12 +9,12 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM(
+installDom(
+  ["HTMLElement"],
   '<!doctype html><html><body><div id="host-a" style="display: none"></div><div id="host-b" style="display: none"></div></body></html>',
 );
-Object.assign(globalThis, { window, document: window.document, HTMLElement: window.HTMLElement });
 
 const deferred = () => {
   let resolve;

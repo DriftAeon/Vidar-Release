@@ -24,7 +24,7 @@ fn apply(ctx: &Ctx, config: &Path, slot: &str, value: Option<Value>) -> Result<(
             let raw = json!({ "voiceSlots": { "rewrite": v } });
             let p = pick(&raw, Slot::Rewrite).map_err(|e| e.to_string())?.ok_or("Expected an Object")?;
             let super::PickKind::Named(id) = &p.kind else { return Err("Expected a Named Adapter".into()) };
-            let scan = manifest::scan(&ctx.packs);
+            let scan = manifest::scan(&ctx.packs, ctx.ledger.as_deref());
             let a = match scan.adapters.iter().find(|a| &a.qid() == id) {
                 Some(a) => a,
                 None => {
@@ -117,7 +117,7 @@ mod tests {
         put(&pack.join("voice").join("eff.json"), &rewrite("eff", json!(["--model", "{model}", "--effort", "{effort}"]), json!({ "modelIds": true, "efforts": ["low", "high"], "suggestedModels": [{ "id": "m-1", "label": "M One" }] })));
         put(&pack.join("voice").join("plain.json"), &rewrite("plain", json!(["--model", "{model}"]), json!({ "modelIds": true })));
         put(&pack.join("voice").join("say.json"), &json!({ "version": 1, "id": "say", "slot": "tts", "label": "S", "run": { "command": "{pack}/x.exe" } }).to_string());
-        Ctx { vidar: root.to_path_buf(), packs: root.join("packs"), home: None, pins: root.join("pins.json"), raw: Ok(json!({})), origin: "http://127.0.0.1:1234".into() }
+        Ctx { vidar: root.to_path_buf(), packs: root.join("packs"), home: None, pins: root.join("pins.json"), ledger: None, raw: Ok(json!({})), origin: "http://127.0.0.1:1234".into() }
     }
 
     fn read(path: &Path) -> Value {

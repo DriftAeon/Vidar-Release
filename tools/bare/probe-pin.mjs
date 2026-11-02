@@ -18,12 +18,14 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJson } from "../lib/json.mjs";
+import { root as repoRoot } from "../lib/paths.mjs";
 import { PROMPT } from "./verify-pin.mjs";
 
-const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 const fail = (msg) => { console.error(msg); process.exit(2); };
 
-const pin = JSON.parse(readFileSync(join(REPO, "profiles", "bare", "claude.json"), "utf8").replace(/^﻿/, "")).verifiedVersion;
+const pin = readJson(join(REPO, "profiles", "bare", "claude.json")).verifiedVersion;
 const ver = spawnSync("claude", ["--version"], { encoding: "utf8", shell: true });
 const installed = /(\d+\.\d+\.\d+\S*)/.exec(ver.stdout ?? "")?.[1];
 if (!installed || !pin) fail(`Cannot read versions (installed ${installed ?? "unreadable"}, pin ${pin ?? "unreadable"}).`);

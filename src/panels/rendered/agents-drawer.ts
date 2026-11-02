@@ -5,7 +5,7 @@
 // Nothing is cloned from the transcript: names and summaries are read as text and rebuilt.
 
 import { DASH } from "../../format";
-import { renderMarkdownOrText } from "../markdown-build";
+import { whenMarkdown } from "../markdown-lazy";
 import { el } from "./dom";
 import { callsIcon, fillCount, toolIcons } from "./chain";
 import { MARK_GLYPH, markSlot, type Mark } from "./marks";
@@ -174,12 +174,17 @@ export function createAgentsDrawer(deps: AgentsDrawerDeps) {
     verdict.classList.toggle("is-empty", !v);
     reportFold.hidden = !report;
     if (!report) { reportBody.textContent = ""; return; }
-    const built = renderMarkdownOrText("report.md", report, { softBreaks: "br" });
-    if (built.fellBack) {
-      const pre = el("pre", "blk-text-fallback", report);
-      pre.title = built.fellBack.reason;
-      reportBody.replaceChildren(pre);
-    } else reportBody.replaceChildren(built.el);
+    // plain text until the parser has loaded; the swap below is a no-op if the report moved on meanwhile
+    reportBody.replaceChildren(el("pre", "blk-text-fallback", report));
+    whenMarkdown(({ renderMarkdownOrText }) => {
+      if (reportSig !== report) return;
+      const built = renderMarkdownOrText("report.md", report, { softBreaks: "br" });
+      if (built.fellBack) {
+        const pre = el("pre", "blk-text-fallback", report);
+        pre.title = built.fellBack.reason;
+        reportBody.replaceChildren(pre);
+      } else reportBody.replaceChildren(built.el);
+    });
   }
 
   /** Open every collapsed <details> above `node` (group, agent pill) so it is visible, then bring it into view. */

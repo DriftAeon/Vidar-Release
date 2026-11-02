@@ -63,8 +63,10 @@ test("unknown server asks", () => {
   asks(run("mcp__unknown_server__read"), "unknown_server read is not a declared read; confirm the call");
 });
 
-test("drive passes without bundle lookup", () => {
-  passes(run("mcp__plugin_vidar_drive__write", { bundles: join(root, "missing.json") }));
+test("drive passes through its catalog reads of everything", () => {
+  const drive = join(root, "drive.json");
+  writeFileSync(drive, JSON.stringify({ version: 1, bundles: { "vidar-drive": { mcp: [{ name: "vidar_drive", reads: "*" }] } } }));
+  passes(run("mcp__vidar_drive__write", { bundles: drive }));
 });
 
 test("non-MCP tool passes without bundle lookup", () => {

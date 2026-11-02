@@ -1,4 +1,4 @@
-// Settings › Agents › Launcher Order: the launcher's root rows as a drag list, Loadout's row look and drag (panels/reorder.ts).
+// Settings › Agents › Launcher Order: the launcher's root rows as a drag list, the rack's row look and drag (panels/reorder.ts).
 // The order lives in the "order.launcher" pref as rowIds; roster-shown.ts applies it wherever the
 // roster is shaped. Variants stay in their root's flyout and are named here only as a hint. Rows
 // whose dependency is missing are listed too (the launcher hides them, the order keeps their slot).

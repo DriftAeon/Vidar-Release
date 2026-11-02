@@ -149,28 +149,35 @@ fn falcon_spawn_blocking(
     }
     // A stale or hand-made Codex Bare call is refused before opening the host.
     #[cfg(not(falcon_shell))]
-    if agent == Agent::Codex && profile.is_some()
-        && !hosted_codex_gate(crate::config::load().config.falcon.as_ref()) {
-        return Err(HOSTED_CODEX_OFF.into());
+    match agent {
+        Agent::Claude => {}
+        Agent::Codex => if profile.is_some() && !hosted_gate_on(crate::config::load().config.falcon.as_ref()) { return Err(HOSTED_CODEX_OFF.into()) },
     }
     // Negotiate before any Bare prepare, including an explicit empty pick.
-    let capabilities = if agent == Agent::Codex || sets.is_some() {
+    let asks_host = match agent {
+        Agent::Codex => true,
+        Agent::Claude => sets.is_some(),
+    };
+    let capabilities = if asks_host {
         Some(host_capabilities(&falcon)?)
     } else {
         None
     };
     sets_capability_check(sets.as_deref(), capabilities.as_deref().unwrap_or_default())?;
-    if agent == Agent::Codex {
-        // Asked of the host, before any child: a host that runs Codex but not
-        // its turns would start a tab that can never take a prompt.
-        let capabilities = capabilities.as_deref().unwrap_or_default();
-        if let Some(refusal) = agent_refusal(agent, capabilities) {
-            return Err(refusal);
+    match agent {
+        Agent::Claude => {}
+        Agent::Codex => {
+            // Asked of the host, before any child: a host that runs Codex but not
+            // its turns would start a tab that can never take a prompt.
+            let capabilities = capabilities.as_deref().unwrap_or_default();
+            if let Some(refusal) = agent_refusal(agent, capabilities) {
+                return Err(refusal);
+            }
+            // Refused here, before a bare home is prepared for a session the host
+            // would refuse anyway (`codex.rs` `spawn_request`, `serve/spawn.rs`).
+            let host_lists_bare = capabilities.iter().any(|c| c == CAPABILITY_CODEX_BARE);
+            codex_spawn_shape(rules_file.as_deref(), profile.as_deref(), gateway.as_deref(), host_lists_bare)?;
         }
-        // Refused here, before a bare home is prepared for a session the host
-        // would refuse anyway (`codex.rs` `spawn_request`, `serve/spawn.rs`).
-        let codex_bare = capabilities.iter().any(|c| c == CAPABILITY_CODEX_BARE);
-        codex_spawn_shape(rules_file.as_deref(), profile.as_deref(), gateway.as_deref(), codex_bare)?;
     }
     // A profiled (bare) spawn: admitted and its home prepared before the host is
     // asked, so a refusal never starts a child. Vidar-only: `bare` is not compiled into the shell,
@@ -181,32 +188,36 @@ fn falcon_spawn_blocking(
     }
     #[cfg(not(falcon_shell))]
     let mut hosted_launch = match profile.as_deref() {
-        // Codex Bare: the row key must name a Codex Bare row, then u1's folder order
-        // (`prepare_codex_hosted`): the cwd resolved and refused at or above the user
-        // profile before config.toml trusts it. Falcon resolves Codex itself.
-        Some(p) if agent == Agent::Codex => {
-            crate::bare::admit_rendered(p, Some("codex"), rules_file.as_deref())?;
-            let row_key = crate::bare::admit_row_key(row_key.clone(), Some(p), None)?;
-            let opts = launch_opts(row_key.as_deref(), sets.as_deref(), vault.as_deref());
-            // Serialised with the Raw and in-process prepares (`pty::BARE_PREPARE`); released at the
-            // end of this arm, before the host is asked to spawn.
-            let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
-            Some(BareLaunch::Codex(crate::bare::prepare_codex_hosted(p, &opts, &cwd)?))
-        }
-        Some(p) => {
-            crate::bare::admit_hosted(p, rules_file.as_deref(), gateway.as_deref())?;
-            let opts = launch_opts(row_key.as_deref(), sets.as_deref(), vault.as_deref());
-            let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
-            Some(BareLaunch::Claude(crate::bare::prepare_hosted_for(p, &opts)?))
-        }
         None => None,
+        Some(p) => Some(match agent {
+            // Codex Bare: the row key must name a Codex Bare row, then u1's folder order
+            // (`prepare_codex_hosted`): the cwd resolved and refused at or above the user
+            // profile before config.toml trusts it. Falcon resolves Codex itself.
+            Agent::Codex => {
+                crate::bare::admit_rendered(p, Some(agent.as_str()), rules_file.as_deref())?;
+                crate::bare::admit_row_key_for(agent, row_key.clone(), Some(p), None)?;
+                let opts = launch_opts(sets.as_deref(), vault.as_deref());
+                // Serialised with the Raw and in-process prepares (`pty::BARE_PREPARE`); released at the
+                // end of this arm, before the host is asked to spawn.
+                let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
+                BareLaunch::AppServer(crate::bare::prepare_codex_hosted(p, &opts, &cwd)?)
+            }
+            Agent::Claude => {
+                crate::bare::admit_hosted(p, rules_file.as_deref(), gateway.as_deref())?;
+                let opts = launch_opts(sets.as_deref(), vault.as_deref());
+                let _prepare = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
+                BareLaunch::Sidecar(crate::bare::prepare_hosted_for(p, &opts)?)
+            }
+        }),
     };
-    // D-c: a fresh Claude Bare session starts in its vault's `mode` rune (read after the prepare, which
-    // made a stock vault exist); a resume keeps the mode the tab had. No mode rune keeps the tab's.
+    // D-c: a fresh Claude Bare session starts in its vault's `mode` rune (read after the prepare); a resume keeps the mode the tab had. No mode rune keeps the tab's.
     #[cfg(not(falcon_shell))]
-    let permission_mode = match (agent, vault.as_deref(), resume.as_deref()) {
-        (Agent::Claude, Some(v), None) => crate::bare::vault_spawn::vault_mode(&crate::paths::root(), v, agent).unwrap_or(permission_mode),
-        _ => permission_mode,
+    let permission_mode = match agent {
+        Agent::Claude => match (vault.as_deref(), resume.as_deref()) {
+            (Some(v), None) => crate::bare::vault_spawn::vault_mode(&crate::paths::root(), v, agent).unwrap_or(permission_mode),
+            _ => permission_mode,
+        },
+        Agent::Codex => permission_mode,
     };
     if let Some(r) = resume.as_deref() {
         // Exclusivity is decided here, at spawn, not at menu-open: two processes on
@@ -244,10 +255,11 @@ fn falcon_spawn_blocking(
     // (`codex.rs` `spawn_request`), so a minted secret would only linger. Codex Bare
     // gets one: Falcon pushes it as VIDAR_CTL_SECRET beside FALCON_SESSION.
     #[cfg(not(falcon_shell))]
-    let ctl_secret = match (agent, profile.is_some()) {
-        (Agent::Claude, _) | (Agent::Codex, true) => Some(crate::control::secrets::mint()?),
-        (Agent::Codex, false) => None,
-    };
+    let ctl_secret = hosted_launch
+        .as_ref()
+        .map_or(crate::agent_spec::spec(agent).plain_rendered_mints, BareLaunch::ctl)
+        .then(crate::control::secrets::mint)
+        .transpose()?;
     #[cfg(falcon_shell)]
     let ctl_secret: Option<String> = None;
     // A row with sets (or, for Codex, a skills listing): the payload the prepare built under
@@ -268,20 +280,25 @@ fn falcon_spawn_blocking(
     // A row's set-combination home (`bare/agent_homes.rs`), admitted again by the host: Codex's
     // CODEX_HOME, Claude's CLAUDE_CONFIG_DIR (fold W2 L2a; set plugins are gone, so none are sent).
     #[cfg(not(falcon_shell))]
-    let codex_home = hosted_launch.as_ref().and_then(BareLaunch::codex_home)
+    let app_server_home = hosted_launch.as_ref().and_then(BareLaunch::codex_home)
         .map(|p| p.to_string_lossy().into_owned());
     #[cfg(falcon_shell)]
-    let codex_home: Option<String> = None;
+    let app_server_home: Option<String> = None;
     #[cfg(not(falcon_shell))]
-    let claude_config_dir = hosted_launch.as_ref().and_then(BareLaunch::claude_config_dir)
+    let sidecar_config_dir = hosted_launch.as_ref().and_then(BareLaunch::claude_config_dir)
         .map(|p| p.to_string_lossy().into_owned());
     #[cfg(falcon_shell)]
-    let claude_config_dir: Option<String> = None;
+    let sidecar_config_dir: Option<String> = None;
     // The vault's plugin runes by name; Falcon admits each from <root>\plugins (L2b).
     #[cfg(not(falcon_shell))]
     let plugin_names = hosted_launch.as_ref().map(BareLaunch::plugin_names).unwrap_or_default();
     #[cfg(falcon_shell)]
     let plugin_names: Vec<String> = Vec::new();
+    // The vault's env runes; Falcon re-checks them against the profile's overlays (`bare_spawn`).
+    #[cfg(not(falcon_shell))]
+    let rune_env = hosted_launch.as_ref().map(BareLaunch::rune_env).unwrap_or_default();
+    #[cfg(falcon_shell)]
+    let rune_env: Vec<(String, String)> = Vec::new();
     // The vault's model rune beats the row's model.
     #[cfg(not(falcon_shell))]
     let model = vault_model_wins(hosted_launch.as_ref().and_then(BareLaunch::model), model);
@@ -303,9 +320,10 @@ fn falcon_spawn_blocking(
         set_plugin_dirs: Vec::new(),
         sets: sets_wire.clone(),
         mcp_file: mcp_file.clone(),
-        codex_home: codex_home.clone(),
-        claude_config_dir,
+        codex_home: app_server_home.clone(),
+        claude_config_dir: sidecar_config_dir,
         plugin_names,
+        env: rune_env,
     }))?;
     let summary = payload
         .get("session")
@@ -344,8 +362,8 @@ fn falcon_spawn_blocking(
     // Codex Bare: what the host ran (`codex_bare` beside `session`) becomes the record's binary
     // and the tab's version/shell warning. A host that ran it without saying what is ended.
     #[cfg(not(falcon_shell))]
-    if let Some(BareLaunch::Codex(launch)) = hosted_launch.as_mut() {
-        match codex_bare_reply(&payload).and_then(|ran| codex_home_echo_check(codex_home.as_deref(), &ran).map(|_| ran)) {
+    if let Some(BareLaunch::AppServer(launch)) = hosted_launch.as_mut() {
+        match codex_bare_reply(&payload).and_then(|ran| codex_home_echo_check(app_server_home.as_deref(), &ran).map(|_| ran)) {
             Ok(ran) => {
                 launch.record_host(&ran.executable, ran.version.as_deref(), ran.pwsh.as_deref());
             }
@@ -485,12 +503,12 @@ fn codex_spawn_shape(
     rules_file: Option<&str>,
     profile: Option<&str>,
     gateway: Option<&str>,
-    codex_bare: bool,
+    host_lists_bare: bool,
 ) -> Result<(), String> {
     if rules_file.is_some() {
         return Err("a rules file is not supported for hosted Codex sessions".into());
     }
-    if profile.is_some() && !codex_bare {
+    if profile.is_some() && !host_lists_bare {
         return Err(format!("a launch profile needs a Falcon host with the '{CAPABILITY_CODEX_BARE}' capability. {STALE_HOST}"));
     }
     if gateway.is_some() {
@@ -506,7 +524,7 @@ const HOSTED_CODEX_OFF: &str = "Hosted Codex Bare is off: turn falcon.hostedCode
 /// The `falcon.hostedCodex` opt-in from vidar.json's `falcon` value, as the webview reads it
 /// (`src/launcher/readopt.ts`): on only for `{ "hostedCodex": true }`.
 #[cfg(not(falcon_shell))]
-fn hosted_codex_gate(falcon: Option<&Value>) -> bool {
+fn hosted_gate_on(falcon: Option<&Value>) -> bool {
     falcon.and_then(|f| f.get("hostedCodex")).and_then(Value::as_bool) == Some(true)
 }
 
@@ -541,70 +559,87 @@ fn vault_model_wins(vault: Option<String>, row: Option<String>) -> Option<String
 /// profile) or Codex's (config.toml and payload written, the home lock held until dropped).
 #[cfg(not(falcon_shell))]
 enum BareLaunch {
-    Claude(crate::bare::HostedLaunch),
-    Codex(crate::bare::CodexHostedLaunch),
+    Sidecar(crate::bare::HostedLaunch),
+    AppServer(crate::bare::CodexHostedLaunch),
 }
 
 #[cfg(not(falcon_shell))]
 impl BareLaunch {
+    /// Whether the prepared loadout mints a control secret (`bare::ctl_for`).
+    fn ctl(&self) -> bool {
+        match self {
+            BareLaunch::Sidecar(l) => l.ctl,
+            BareLaunch::AppServer(l) => l.ctl,
+        }
+    }
+
     fn payload_file(&self) -> Option<&std::path::PathBuf> {
         match self {
-            BareLaunch::Claude(l) => l.payload_file.as_ref(),
-            BareLaunch::Codex(l) => l.payload_file.as_ref(),
+            BareLaunch::Sidecar(l) => l.payload_file.as_ref(),
+            BareLaunch::AppServer(l) => l.payload_file.as_ref(),
         }
     }
 
     fn mcp_file(&self) -> Option<&std::path::PathBuf> {
         match self {
-            BareLaunch::Claude(l) => l.mcp_file.as_ref(),
-            BareLaunch::Codex(_) => None,
+            BareLaunch::Sidecar(l) => l.mcp_file.as_ref(),
+            BareLaunch::AppServer(_) => None,
         }
     }
 
-    /// Codex only: the set combination's home, when the launch runs on one.
+    /// App-server launches only: the set combination's home, when the launch runs on one.
     fn codex_home(&self) -> Option<&std::path::PathBuf> {
         match self {
-            BareLaunch::Claude(_) => None,
-            BareLaunch::Codex(l) => l.codex_home.as_ref(),
+            BareLaunch::Sidecar(_) => None,
+            BareLaunch::AppServer(l) => l.codex_home.as_ref(),
         }
     }
 
-    /// Claude only: the launch's config dir (its set combination's, or the profile's own), checked
-    /// by `check_claude_config_dir` in the prepare.
+    /// Sidecar launches only: the launch's config dir (its set combination's, or the profile's own),
+    /// checked by `check_claude_config_dir` in the prepare.
     fn claude_config_dir(&self) -> Option<&std::path::PathBuf> {
         match self {
-            BareLaunch::Claude(l) => l.claude_config_dir.as_ref(),
-            BareLaunch::Codex(_) => None,
+            BareLaunch::Sidecar(l) => l.claude_config_dir.as_ref(),
+            BareLaunch::AppServer(_) => None,
         }
     }
 
-    /// Claude only: the vault's plugin rune names.
+    /// Sidecar launches only: the vault's plugin rune names.
     fn plugin_names(&self) -> Vec<String> {
         match self {
-            BareLaunch::Claude(l) => l.plugin_names.clone(),
-            BareLaunch::Codex(_) => Vec::new(),
+            BareLaunch::Sidecar(l) => l.plugin_names.clone(),
+            BareLaunch::AppServer(_) => Vec::new(),
+        }
+    }
+
+    /// Sidecar launches only: the vault's env runes, for `SpawnParams.env` (Codex sets its own
+    /// in the app-server env, `bare/codex_hosted.rs`).
+    fn rune_env(&self) -> Vec<(String, String)> {
+        match self {
+            BareLaunch::Sidecar(l) => l.env.clone(),
+            BareLaunch::AppServer(_) => Vec::new(),
         }
     }
 
     /// The vault's model rune, when it carries one.
     fn model(&self) -> Option<String> {
         match self {
-            BareLaunch::Claude(l) => l.model.clone(),
-            BareLaunch::Codex(l) => l.model.clone(),
+            BareLaunch::Sidecar(l) => l.model.clone(),
+            BareLaunch::AppServer(l) => l.model.clone(),
         }
     }
 
     fn bare_warnings(&self) -> Vec<String> {
         match self {
-            BareLaunch::Claude(l) => l.bare_warnings(),
-            BareLaunch::Codex(l) => l.bare_warnings(),
+            BareLaunch::Sidecar(l) => l.bare_warnings(),
+            BareLaunch::AppServer(l) => l.bare_warnings(),
         }
     }
 
     fn write_manifest<'a>(&mut self, tab: &str, falcon_session: &str, env_names: impl IntoIterator<Item = &'a str>) -> Result<std::path::PathBuf, String> {
         match self {
-            BareLaunch::Claude(l) => l.write_manifest(tab, falcon_session, env_names),
-            BareLaunch::Codex(l) => l.write_manifest(tab, falcon_session, env_names),
+            BareLaunch::Sidecar(l) => l.write_manifest(tab, falcon_session, env_names),
+            BareLaunch::AppServer(l) => l.write_manifest(tab, falcon_session, env_names),
         }
     }
 }
@@ -629,8 +664,8 @@ fn vault_shape(vault: Option<&str>, profile: Option<&str>) -> Result<(), String>
 
 /// The spawn's launch options: a named vault, else the transition pick (`launch_row::vault_for`).
 #[cfg(not(falcon_shell))]
-fn launch_opts<'a>(row_key: Option<&'a str>, sets: Option<&'a [LaunchSetRef]>, vault: Option<&'a str>) -> crate::bare::LaunchOpts<'a> {
-    crate::bare::LaunchOpts { row_key, custom_sets: if vault.is_some() { None } else { sets }, vault, ..Default::default() }
+fn launch_opts<'a>(sets: Option<&'a [LaunchSetRef]>, vault: Option<&'a str>) -> crate::bare::LaunchOpts<'a> {
+    crate::bare::LaunchOpts { custom_sets: if vault.is_some() { None } else { sets }, vault, ..Default::default() }
 }
 
 /// The connected host's negotiate-reply capabilities. With no control
@@ -961,7 +996,7 @@ fn echoed_sources(echoed: &[Value], default_lib: Option<&str>) -> Option<Vec<cra
 #[cfg(not(falcon_shell))]
 fn rules_library_name() -> Option<String> {
     let text = std::fs::read_to_string(crate::paths::config_path()).ok()?;
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let v: Value = serde_json::from_str(crate::fsx::strip_bom(&text)).ok()?;
     let rel = v.get("rulesLibrary")?.as_str()?.trim();
     let name = std::path::Path::new(rel).file_name()?.to_string_lossy().into_owned();
     (!name.is_empty()).then_some(name)
@@ -1173,10 +1208,10 @@ mod tests {
         let echoed = serde_json::json!({ "sets": [] });
         assert!(sets_echo_check(protocol_sets(Some(&empty)).as_deref(), &echoed).is_ok());
         assert!(sets_echo_check(protocol_sets(Some(&empty)).as_deref(), &serde_json::json!({})).is_err());
-        let pick = vec![LaunchSetRef { library: Some("kit".into()), set: "sample-set".into() }];
+        let pick = vec![LaunchSetRef { library: Some("team".into()), set: "sample-set".into() }];
         let wire = protocol_sets(Some(&pick)).unwrap();
-        assert_eq!(serde_json::to_value(&wire).unwrap(), serde_json::json!([{ "library": "kit", "set": "sample-set" }]));
-        assert!(sets_echo_check(Some(&wire), &serde_json::json!({ "sets": [{ "library": "kit", "set": "other" }] })).is_err());
+        assert_eq!(serde_json::to_value(&wire).unwrap(), serde_json::json!([{ "library": "team", "set": "sample-set" }]));
+        assert!(sets_echo_check(Some(&wire), &serde_json::json!({ "sets": [{ "library": "team", "set": "other" }] })).is_err());
         assert!(sets_echo_check(None, &serde_json::json!({})).is_ok());
     }
 
@@ -1184,35 +1219,35 @@ mod tests {
     #[test]
     fn picked_sets_reach_both_hosted_launch_opts() {
         let pick = vec![LaunchSetRef { library: None, set: "sample-set".into() }];
-        let opts = launch_opts(Some("claude-rendered-bare"), Some(&pick), None);
+        let opts = launch_opts(Some(&pick), None);
         assert_eq!(opts.custom_sets.unwrap(), pick.as_slice());
         assert_eq!(opts.vault, None);
-        assert_eq!(launch_opts(Some("codex-rendered-bare"), Some(&[]), None).custom_sets, Some(&[][..]));
+        assert_eq!(launch_opts(Some(&[]), None).custom_sets, Some(&[][..]));
     }
 
     #[cfg(not(falcon_shell))]
     #[test]
     fn a_named_vault_wins_over_the_transition_pick() {
         let pick = vec![LaunchSetRef { library: None, set: "sample-set".into() }];
-        let opts = launch_opts(None, Some(&pick), Some("team-kit"));
-        assert_eq!(opts.vault, Some("team-kit"));
+        let opts = launch_opts(Some(&pick), Some("team-daily"));
+        assert_eq!(opts.vault, Some("team-daily"));
         assert_eq!(opts.custom_sets, None, "a vault id skips the Custom transition");
     }
 
     #[test]
     fn a_vault_rides_only_a_bare_spawn() {
-        assert!(vault_shape(Some("stock-claude"), None).is_err());
-        assert!(vault_shape(Some("stock-claude"), Some("bare")).is_ok());
+        assert!(vault_shape(Some("team-daily"), None).is_err());
+        assert!(vault_shape(Some("team-daily"), Some("bare")).is_ok());
         assert!(vault_shape(None, None).is_ok());
     }
 
     #[cfg(not(falcon_shell))]
     #[test]
     fn adopted_sets_name_their_library() {
-        let echoed = vec![serde_json::json!({ "set": "base" }), serde_json::json!({ "library": "kit", "set": "x" }), serde_json::json!({ "set": "team/y" })];
+        let echoed = vec![serde_json::json!({ "set": "base" }), serde_json::json!({ "library": "team", "set": "x" }), serde_json::json!({ "set": "team/y" })];
         let got = echoed_sources(&echoed, Some("tracked")).unwrap();
         let pairs: Vec<(&str, &str)> = got.iter().map(|s| (s.library.as_str(), s.set.as_str())).collect();
-        assert_eq!(pairs, vec![("tracked", "base"), ("kit", "x"), ("team", "y")]);
+        assert_eq!(pairs, vec![("tracked", "base"), ("team", "x"), ("team", "y")]);
         assert!(echoed_sources(&echoed[..1], None).is_none(), "no rulesLibrary, no vault");
     }
 
@@ -1235,13 +1270,17 @@ mod tests {
     }
 
     #[test]
-    fn spawn_agent_defaults_to_claude_and_names_codex() {
+    fn blank_agent_is_claude() {
         assert_eq!(spawn_agent(None), Ok(Agent::Claude));
         assert_eq!(spawn_agent(Some(" ")), Ok(Agent::Claude));
         assert_eq!(spawn_agent(Some("claude")), Ok(Agent::Claude));
         assert_eq!(spawn_agent(Some("codex")), Ok(Agent::Codex));
-        let e = spawn_agent(Some("gemini")).unwrap_err();
-        assert!(e.contains("\"gemini\""), "{e}");
+    }
+
+    #[test]
+    fn unknown_agent_is_refused_naming_it() {
+        let e = spawn_agent(Some("acme")).unwrap_err();
+        assert!(e.contains("\"acme\""), "{e}");
         assert!(spawn_agent(Some("Codex")).is_err(), "the wire name is lowercase");
     }
 
@@ -1281,7 +1320,7 @@ mod tests {
             profile: None,
             payload_file: None,
             row_key: None,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
             sets: None,
             mcp_file: None,
         });
@@ -1322,11 +1361,11 @@ mod tests {
     #[cfg(not(falcon_shell))]
     #[test]
     fn the_hosted_codex_gate_is_on_only_for_hosted_codex_true() {
-        assert!(hosted_codex_gate(Some(&serde_json::json!({ "hostedCodex": true }))));
+        assert!(hosted_gate_on(Some(&serde_json::json!({ "hostedCodex": true }))));
         for off in [serde_json::json!({}), serde_json::json!({ "hostedCodex": "true" }), serde_json::json!({ "hostedCodex": false }), serde_json::json!(true)] {
-            assert!(!hosted_codex_gate(Some(&off)), "{off}");
+            assert!(!hosted_gate_on(Some(&off)), "{off}");
         }
-        assert!(!hosted_codex_gate(None));
+        assert!(!hosted_gate_on(None));
     }
 
     /// The spawn reply's `codex_bare` as Falcon writes it (serve/dispatch.rs): parsed, optional

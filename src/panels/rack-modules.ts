@@ -1,8 +1,11 @@
 // Pure rack identities and saved-order migration. rack.ts adopts these.
 
 import icons from "../../contracts/icons.json" with { type: "json" };
+import proxyContract from "../../contracts/mcp-proxy.json" with { type: "json" };
 // @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
 import { titleWords } from "../format.ts";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { normWin } from "../paths.ts";
 
 export interface RackServerIdentity {
   name: string;
@@ -27,13 +30,18 @@ export function isLoopbackHttp(target: string): boolean {
 
 // Match the MCP reader's project_key: forward slashes, no trailing slash, lowercase.
 export function normalizeRackProject(project: string | null): string {
-  return (project ?? "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return normWin(project ?? "").toLowerCase();
+}
+
+/** A scope whose servers live in a project's own config (mcp.rs `project_key`: "project" and "local"); the rest carry no project. */
+export function isProjectScope(scope: string): boolean {
+  return scope === "project" || scope === "local";
 }
 
 export function rackServerId(server: RackServerIdentity): string {
   const scope = server.scope;
   const name = encodeURIComponent(server.name);
-  if (scope === "user" || scope === "codex") return `rack:server:${scope}:${name}`;
+  if (!isProjectScope(scope)) return `rack:server:${scope}:${name}`;
   return `rack:server:${scope}:${encodeURIComponent(normalizeRackProject(server.project))}:${name}`;
 }
 
@@ -42,7 +50,7 @@ export function rackServerId(server: RackServerIdentity): string {
 export function rackToolsKey(server: RackServerIdentity): string {
   return JSON.stringify([
     server.scope,
-    server.scope === "user" || server.scope === "codex" ? null : normalizeRackProject(server.project),
+    isProjectScope(server.scope) ? normalizeRackProject(server.project) : null,
     server.transport,
     server.target,
     server.args,
@@ -83,7 +91,7 @@ export function serverTitle(name: string): string {
 
 /** The :8399 proxy's config key and address; either one maps a row to the Proxy MCP button. */
 export const PROXY_NAME = "proxy";
-const PROXY_URL = "http://127.0.0.1:8399/mcp";
+const PROXY_URL: string = proxyContract.url; // contracts/mcp-proxy.json, also read by src-tauri/src/unreal/proxy.rs
 export function isProxyServer(server: RackServerIdentity): boolean {
   return server.name === PROXY_NAME || rackUrlKey(server) === PROXY_URL;
 }
@@ -102,14 +110,11 @@ export interface RailServer {
 const SERVER_ICONS = icons.backends as Record<string, string | string[]>;
 
 /** The icons.json `backends` key for a server name, lookup only (ids, saved order and config
- *  names keep the raw name). The Vidar Drive server arrives as `vidar_drive` (the Codex home's
- *  `mcp_servers.vidar_drive` table, bare/home.rs, read verbatim by mcp/codex.rs) and as the
- *  Claude plugin form `plugin_vidar_drive` / `plugin:vidar:drive`; all map to `vidar-drive`.
- *  Any other plugin form maps its `_` and `:` to `-`; a plain name is returned unchanged. */
+ *  names keep the raw name). The Vidar Drive server arrives as `vidar_drive` (the catalog's server,
+ *  on both agents: the Codex home's `mcp_servers.vidar_drive` table read verbatim by mcp/codex.rs, and
+ *  Claude's `mcpServers.vidar_drive`) and maps to `vidar-drive`; any other name is returned unchanged. */
 export function backendLookupName(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower === "vidar_drive") return "vidar-drive";
-  if (lower.startsWith("plugin_") || lower.startsWith("plugin:")) return lower.slice(7).replace(/[_:]/g, "-");
+  if (name.toLowerCase() === "vidar_drive") return "vidar-drive";
   return name;
 }
 

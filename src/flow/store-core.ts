@@ -1,15 +1,19 @@
 // Storage leaf: envelope load/save, id/name/updatedAt stamping, layout.v1
-// migration, template instantiation, seed-if-absent. Leaf module — only `import type` crosses out (node --test rule),
+// migration, template instantiation, seed-if-absent. Leaf module — its only value import is the model id adapter,
 // so this file takes storage as a parameter and never touches window/browser storage/S/the DOM.
 
 import type { FlowAddon, FlowEdge, FlowField, FlowGraph, FlowNode, FlowTemplate, ModelId } from "./model";
+// @ts-ignore TS5097: node --test imports this leaf module directly
+import { FLOW_MODELS, CORE_ADAPTER_MODEL_IDS } from "./claude-models.ts";
+// @ts-ignore TS5097: node --test imports this leaf module directly
+import { isRecord } from "../json.ts";
 
 // A Map-backed stub in tests, the Flow file store (file-storage.ts) from store.ts in the app. Hoisted to
 // prefs-core.ts; re-exported so store.ts keeps its import.
 import type { StorageLike } from "../prefs-core";
 export type { StorageLike };
 
-// Restated here (not imported) so this leaf compiles standalone under node --test;
+// Restated here so this leaf compiles standalone under node --test;
 // LEGACY_LAYOUT_KEY matches the deleted persist.ts's own LAYOUT_KEY verbatim, so a pre-Wave-1
 // saved layout is still found; the other two are §4.1's new keys.
 export const GRAPHS_KEY = "vidar.flow.graphs.v1";
@@ -42,9 +46,6 @@ function newId(prefix: string): string {
   return `${prefix}-${rand}`;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null;
-}
 
 /** Tri-state read result: `absent` (no key) and `invalid` (present but unparsable or wrong `v`)
  *  are kept apart so a caller about to seed over the key can back up `raw` first — collapsing
@@ -264,14 +265,8 @@ const LEGACY_ADDON_KINDS = new Set(["rule", "skill", "model", "hook", "permissio
 /** Legacy `model` values were aliases ("sonnet", "opus"); v1's `FlowNode.model` is a provider id.
  *  Core claude ids only: a module's model has no legacy alias and fails validate.ts if absent. */
 const LEGACY_MODEL_IDS: Record<string, ModelId> = {
-  sonnet: "claude-sonnet-5",
-  opus: "claude-opus-5-5",
-  haiku: "claude-haiku-4-5-20251001",
-  fable: "claude-fable-5-1",
-  "claude-sonnet-5": "claude-sonnet-5",
-  "claude-opus-5-5": "claude-opus-5-5",
-  "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
-  "claude-fable-5-1": "claude-fable-5-1",
+  ...FLOW_MODELS,
+  ...Object.fromEntries(CORE_ADAPTER_MODEL_IDS.map((id) => [id, id])),
 };
 
 /** A graph is "legacy" only if it carries a pre-v1 node or addon kind. A v1 graph holding a

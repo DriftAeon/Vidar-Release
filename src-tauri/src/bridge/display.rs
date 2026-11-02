@@ -166,15 +166,6 @@ pub(super) fn sidecar_is_plain_file(side: &Path) -> bool {
 }
 
 #[tauri::command]
-pub fn archive_display_file(path: String) -> Result<String, String> {
-    let _guard = super::display_sweep::lock();
-    let (p, name) = display_child(&path)?;
-    let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
-    let dest = super::display_sweep::clear_core(&super::display_sweep::Ctx::live(), &|a, b| fs::rename(a, b), &p, &name, now_ms)?;
-    Ok(dest.to_string_lossy().into_owned())
-}
-
-#[tauri::command]
 pub fn delete_display_file(path: String) -> Result<(), String> {
     let _guard = super::display_sweep::lock();
     let (p, name) = display_child(&path)?;
@@ -193,7 +184,6 @@ fn valid_verdict(v: &str) -> bool {
 
 #[tauri::command]
 pub fn save_display_decision(path: String, sha256: String, verdict: String, comment: String) -> Result<u64, String> {
-    use std::io::Write;
     if !valid_verdict(&verdict) {
         return Err("verdict must be approve, deny or dismiss".into());
     }
@@ -208,7 +198,7 @@ pub fn save_display_decision(path: String, sha256: String, verdict: String, comm
     }
     let at_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
     let d = Decision { file: name.clone(), sha256: now_sha, verdict, comment, at_ms, request: request_id_of(&name) };
-    let out = serde_json::to_string_pretty(&d).map_err(|e| e.to_string())?;
+    let out = crate::fsx::json_pretty_text(&d, false)?;
     if out.len() > MAX_DECISION_BYTES {
         return Err("decision too large".into());
     }
@@ -219,20 +209,10 @@ pub fn save_display_decision(path: String, sha256: String, verdict: String, comm
             return Err("a link sits where the decision file goes — remove it first".into());
         }
     }
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    let tmp = side.with_file_name(format!("{name}.decision.{}-{nanos}.tmp", std::process::id()));
-    {
-        let mut t = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(|e| e.to_string())?;
-        if let Err(e) = t.write_all(out.as_bytes()).and_then(|_| t.sync_all()) {
-            drop(t);
-            let _ = fs::remove_file(&tmp);
-            return Err(e.to_string());
-        }
-    }
-    if let Err(e) = fs::rename(&tmp, &side) {
-        let _ = fs::remove_file(&tmp);
-        return Err(format!("could not place the decision file: {e}"));
-    }
+    crate::fsx::atomic_write_with(&side, out.as_bytes(), || Ok(())).map_err(|e| match e {
+        crate::fsx::AtomicError::Rename(m) => format!("could not place the decision file: {m}"),
+        e => e.to_string(),
+    })?;
     Ok(at_ms)
 }
 
@@ -275,9 +255,9 @@ mod gate_tests {
 
     #[test]
     fn request_ids() {
-        assert_eq!(request_id_of("gemini-434c758e.png"), Some("434c758e".into()));
-        assert_eq!(request_id_of("gemini-2.png"), None);
-        assert_eq!(request_id_of("gemini-434C758E.png"), None);
+        assert_eq!(request_id_of("review-434c758e.png"), Some("434c758e".into()));
+        assert_eq!(request_id_of("review-2.png"), None);
+        assert_eq!(request_id_of("review-434C758E.png"), None);
         assert_eq!(request_id_of("plain.svg"), None);
     }
 

@@ -27,7 +27,7 @@
   padding-top: var(--space-2);
 }
 #app:has(> #bottombar) { grid-template-rows: 1fr 0 var(--bottombar-h); }
-/* with nothing mounted in it (Loadout and MCP Servers moved to the left bar) the rail narrows to a
+/* with nothing mounted in it (MCP Servers moved to the left bar) the rail narrows to a
    fixed 32px stripe that balances the left bar (2026-10-10; 24 → 32 for the #rail-stripe
    buttons, rail.css), so no resize grip; a module mounted back into #modules brings the full rail back */
 #app:not(:has(> #rightbar > #modules > *)) {

@@ -179,7 +179,7 @@ mod tests {
         let tmp = std::env::temp_dir().join(format!("vidar-gate-settings-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
-        let template = crate::paths::root().join("profiles").join("bare").join("claude.settings.template.json");
+        let template = crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("claude-settings.json");
         let target = tmp.join("settings.json");
         let guard = home::Guard { user_profile: Some(r"C:\Users\testuser".into()), username: Some("testuser".into()) };
         let root = crate::paths::root();

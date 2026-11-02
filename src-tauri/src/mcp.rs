@@ -27,6 +27,10 @@ fn claude_json(profile: Option<&str>, home: Option<&Path>) -> Option<PathBuf> {
     crate::bare::claude_dir::claude_json_in(profile, home.map(Path::to_path_buf))
 }
 
+fn project_local_settings(project: &Path) -> PathBuf {
+    project.join(crate::agent_spec::spec(crate::agent_spec::Agent::Claude).user_dir).join("settings.local.json")
+}
+
 /// The config dir one rack reads: the user's own `.claude` for no profile, else the tab's
 /// session home (`claude_dir::home_of_session`: its launch manifest, else the row's pick).
 fn rack_home(app: &tauri::AppHandle, profile: Option<&str>, tab: Option<&str>, row: Option<&str>) -> Option<PathBuf> {
@@ -68,7 +72,7 @@ pub struct McpRack {
     notes: Vec<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)] // one per MCP server field; mcp/codex.rs passes them through
 pub(crate) fn codex_server(
     name: String,
     scope: String,
@@ -184,7 +188,7 @@ fn apply_approval(servers: &mut [McpServer], root: &Value, globals: &[Value]) {
         };
         let a = cache.entry(project_key(dir)).or_insert_with(|| {
             let mut extra = globals.to_vec();
-            let local = PathBuf::from(dir.replace('/', "\\")).join(".claude").join("settings.local.json");
+            let local = project_local_settings(&PathBuf::from(dir.replace('/', "\\")));
             extra.extend(read_json(&local));
             approval_for(root, dir, &extra)
         });
@@ -337,7 +341,7 @@ fn collect(block: Option<&Value>, scope: &str, project: Option<&str>, out: &mut 
 }
 
 /// Async on a blocking thread: reads ~/.claude.json and each project's .mcp.json, so a slow or
-/// unreachable share must not stall Tauri's main thread (as read_loadout).
+/// unreachable share must not stall Tauri's main thread.
 #[tauri::command]
 pub async fn read_mcp_servers(
     app: tauri::AppHandle,
@@ -553,16 +557,21 @@ pub(crate) fn redirect_status(resp: &ureq::http::Response<ureq::Body>) -> Option
 }
 
 fn list_mcp_tools_blocking(url: &str) -> Result<Vec<McpTool>, String> {
+    // 10 s: a tools/list merged across live backends is legitimately slow.
+    list_tools_with(url, Duration::from_secs(10))
+}
+
+/// One JSON-RPC POST to a loopback http server, reply read as JSON or SSE (first message).
+fn rpc_post(url: &str, body: &str, timeout: Duration) -> Result<Value, String> {
     if !is_loopback_http(url) {
         return Err("not a loopback http url".into());
     }
-    // 10 s: a tools/list merged across live backends is legitimately slow.
-    let agent = loopback_agent(Duration::from_secs(10));
+    let agent = loopback_agent(timeout);
     let mut resp = agent
         .post(url)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json, text/event-stream")
-        .send(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+        .send(body)
         .map_err(|e| format!("unreachable: {e}"))?;
     if let Some(code) = redirect_status(&resp) {
         return Err(format!("redirect refused (HTTP {code})"));
@@ -576,10 +585,40 @@ fn list_mcp_tools_blocking(url: &str) -> Result<Vec<McpTool>, String> {
         serde_json::from_str::<Value>(&text).ok()
     }
     .ok_or("no JSON-RPC message in reply")?;
+    Ok(msg)
+}
+
+pub(crate) fn list_tools_with(url: &str, timeout: Duration) -> Result<Vec<McpTool>, String> {
+    let msg = rpc_post(url, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#, timeout)?;
     tools_from(&msg)
 }
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+/// `tools/call` with no initialize (the :8399 proxy accepts it). A tool result is the
+/// `structuredContent`, else `content[0].text` parsed as JSON, else that text as a string;
+/// `isError` or a JSON-RPC error comes back as `Err(text)`.
+pub(crate) fn call_tool_blocking(url: &str, name: &str, args: Value, timeout: Duration) -> Result<Value, String> {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": { "name": name, "arguments": args }
+    })
+    .to_string();
+    let msg = rpc_post(url, &body, timeout)?;
+    if let Some(err) = msg.get("error") {
+        let text = err.get("message").and_then(Value::as_str).unwrap_or("unknown error");
+        return Err(format!("server error: {text}"));
+    }
+    let result = msg.get("result").ok_or("reply had no result")?;
+    let text = result.pointer("/content/0/text").and_then(Value::as_str);
+    if result.get("isError").and_then(Value::as_bool).unwrap_or(false) {
+        return Err(text.unwrap_or("tool reported an error").to_owned());
+    }
+    if let Some(s) = result.get("structuredContent").filter(|v| !v.is_null()) {
+        return Ok(s.clone());
+    }
+    let text = text.ok_or("tool result had no content")?;
+    Ok(serde_json::from_str::<Value>(text).unwrap_or_else(|_| Value::String(text.to_owned())))
+}
+
 const STDIO_TIMEOUT: Duration = Duration::from_secs(5);
 const TOOLS_LIST_METHOD: &str = "tools/list";
 
@@ -649,15 +688,13 @@ fn resolve_listable(servers: Vec<McpServer>, name: &str, scope: &str, project: O
 }
 
 fn spawn_stdio(command: &str, args: &[String], cwd: Option<&str>) -> std::io::Result<crate::proc_job::JobChild> {
-    use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     let build = |prog: &str| {
         let mut c = Command::new(prog);
         c.args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW);
+            .stderr(Stdio::null());
         if let Some(dir) = cwd {
             c.current_dir(dir.replace('/', "\\"));
         }
@@ -790,7 +827,7 @@ fn backends_from(v: &Value) -> Option<Vec<BackendStatus>> {
     Some(out)
 }
 
-fn proxy_status_blocking(url: &str) -> Result<Vec<BackendStatus>, String> {
+pub(crate) fn proxy_status_blocking(url: &str) -> Result<Vec<BackendStatus>, String> {
     if !is_loopback_http(url) {
         return Err("not a loopback http url".into());
     }
@@ -904,6 +941,71 @@ pub(crate) mod tests {
         server.join().unwrap();
         assert_eq!(err, "redirect refused (HTTP 302)");
         target.assert_untouched();
+    }
+
+    /// One-shot loopback server answering its first request with `body` as `content_type`.
+    fn reply_server(content_type: &'static str, body: String) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let mut req = Vec::new();
+            let mut buf = [0u8; 4096];
+            loop {
+                let n = sock.read(&mut buf).unwrap_or(0);
+                if n == 0 { break; }
+                req.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&req);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let len = text[..end]
+                        .lines()
+                        .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                        .unwrap_or(0);
+                    if req.len() >= end + 4 + len { break; }
+                }
+            }
+            let reply = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = sock.write_all(reply.as_bytes());
+        });
+        (origin, handle)
+    }
+
+    fn sse(msg: &str) -> String {
+        format!("event: message\ndata: {msg}\n\n")
+    }
+
+    #[test]
+    fn call_tool_turns_is_error_into_err_over_sse() {
+        let body = sse(r#"{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"backend 'rider' is offline — start Rider and retry"}],"isError":true}}"#);
+        let (origin, server) = reply_server("text/event-stream", body);
+        let err = call_tool_blocking(&format!("{origin}/mcp"), "rider_ue_health", serde_json::json!({}), Duration::from_secs(3)).unwrap_err();
+        server.join().unwrap();
+        assert_eq!(err, "backend 'rider' is offline — start Rider and retry");
+    }
+
+    #[test]
+    fn call_tool_prefers_structured_content_then_json_text_then_plain_text() {
+        let cases = [
+            (r#"{"result":{"structuredContent":{"a":1},"content":[{"type":"text","text":"{\"a\":2}"}]}}"#, serde_json::json!({"a":1})),
+            (r#"{"result":{"content":[{"type":"text","text":"{\"a\":2}"}]}}"#, serde_json::json!({"a":2})),
+            (r#"{"result":{"content":[{"type":"text","text":"plain words"}]}}"#, serde_json::json!("plain words")),
+        ];
+        for (msg, want) in cases {
+            let (origin, server) = reply_server("application/json", msg.to_owned());
+            let got = call_tool_blocking(&format!("{origin}/mcp"), "t", serde_json::json!({}), Duration::from_secs(3)).unwrap();
+            server.join().unwrap();
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
+    fn call_tool_and_list_with_refuse_a_non_loopback_url() {
+        let err = call_tool_blocking("http://example.com/mcp", "t", serde_json::json!({}), Duration::from_secs(1)).unwrap_err();
+        assert_eq!(err, "not a loopback http url");
+        assert_eq!(list_tools_with("https://127.0.0.1:1/mcp", Duration::from_secs(1)).unwrap_err(), "not a loopback http url");
     }
 
     #[test]

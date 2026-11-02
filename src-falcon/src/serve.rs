@@ -933,6 +933,17 @@ mod tests {
         assert_eq!(v2["capabilities"], json!(["steer", "sets-echo"]));
     }
 
+    /// The stamp a client reads to know this host honours `SpawnParams.env`.
+    #[test]
+    fn negotiate_reports_the_env_runes_stamp() {
+        let host = Arc::new(test_host());
+        assert_eq!(PROTOCOL_VERSION, crate::protocol::PROTOCOL_V3);
+        let reply = negotiate(&host, PROTOCOL_VERSION, "secret").unwrap();
+        assert_eq!(reply["protocol"], 3);
+        let older = negotiate(&host, PROTOCOL_V2, "secret").unwrap();
+        assert_eq!(older["protocol"], 2, "an older client keeps the stamp it claimed");
+    }
+
     #[test]
     fn v1_client_never_sends_agent_fields() {
         let params = |agent| crate::protocol::SpawnParams {
@@ -949,7 +960,7 @@ mod tests {
             profile: None,
             payload_file: None, mcp_file: None,
             row_key: None, sets: None,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
         };
         let mut claude = Op::Spawn(params(Some(Agent::Claude)));
         prepare_client_op(PROTOCOL_V1, &mut claude).unwrap();
@@ -988,13 +999,51 @@ mod tests {
                     profile: None,
                     payload_file: None, mcp_file: None,
                     row_key: None, sets: None,
-                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
                 }),
             },
         );
         assert_eq!(response.outcome, crate::protocol::Outcome::Failed);
         assert!(response.error.unwrap().contains("explicit agent"));
         assert_eq!(host.falcon.supported_agents, vec!["claude"]);
+    }
+
+    /// Blank-is-claude (`dispatch::spawn`): a v1 spawn carries no agent and resolves Claude, so it
+    /// passes the supported-agent gate and stops at the exit check, not at the agent refusal.
+    #[test]
+    fn v1_spawn_without_agent_resolves_claude() {
+        let host = Arc::new(test_host());
+        host.exiting.store(true, std::sync::atomic::Ordering::SeqCst);
+        let (outbound, _inbound) = sync_channel(CLIENT_BACKLOG);
+        let client = Arc::new(detached_client(outbound));
+        let response = dispatch(
+            &host,
+            &client,
+            "test",
+            PROTOCOL_V1,
+            &Mutex::new(HashMap::new()),
+            Request {
+                id: 1,
+                op: Op::Spawn(crate::protocol::SpawnParams {
+                    agent: None,
+                    cwd: r"C:\work".into(),
+                    model: None,
+                    effort: None,
+                    permission_mode: "default".into(),
+                    resume: None,
+                    ctl_secret: None,
+                    rules_file: None,
+                    tab_name: None,
+                    gateway: None,
+                    profile: None,
+                    payload_file: None, mcp_file: None,
+                    row_key: None, sets: None,
+                    set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
+                }),
+            },
+        );
+        assert_eq!(response.outcome, crate::protocol::Outcome::Failed);
+        assert!(response.error.unwrap().contains("host is exiting"));
     }
 
     #[test]
@@ -1031,7 +1080,7 @@ mod tests {
             profile: None,
             payload_file: None, mcp_file: None,
             row_key: None, sets: None,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
         };
         let session = session::new_session(
             &reservation,
@@ -1216,7 +1265,7 @@ mod tests {
             profile: None,
             payload_file: None, mcp_file: None,
             row_key: None, sets: None,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
         };
         let session = session::new_session(
             &reservation,

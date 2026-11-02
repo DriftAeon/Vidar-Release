@@ -14,7 +14,7 @@ setupDom({
     "flow/control-observe": "export const flowStatusLine = () => ''; export const waitForFlow = async () => 'timeout';",
     "flow/file-storage": "export async function initFlowStorage() {}",
     "flow/engine": `export const heldRunIds = () => new Set();
-      export const resolveRunGrants = async (g) => Object.fromEntries(g.nodes.filter((n) => n.kind === "agent").map((n) => [n.id, { vault: "stock-claude", mode: "auto", allow: [], hash: "h" }]));`,
+      export const resolveRunGrants = async (g) => Object.fromEntries(g.nodes.filter((n) => n.kind === "agent").map((n) => [n.id, { vault: "main-claude", mode: "auto", allow: [], hash: "h" }]));`,
     "control/registry": "export const driveSnapshot = () => ({ tabs: [] }); export const requesterTabId = () => null;",
   },
 });
@@ -31,7 +31,7 @@ const { createCardForm } = await import("../src/relay/card-view.ts");
 
 startApprovalSource();
 globalThis.__snapshot = prepareFlow({ action: "start", template_id: STARTER_TEMPLATES[1].id, input: "Do the work", cwd: "D:\\Work" }, {
-  templates: STARTER_TEMPLATES, wiredIds: ["claude-sonnet-5", "claude-opus-5-5"], instantiateTemplate, adaptModelsToWired,
+  templates: STARTER_TEMPLATES.map((t) => ({ ...t, graph: { ...t.graph, nodes: t.graph.nodes.map((n) => n.kind === "agent" ? { ...n, vault: "v1" } : n) } })), wiredIds: ["claude-sonnet-5", "claude-opus-5-5"], instantiateTemplate, adaptModelsToWired,
   validateGraph, autoLayout, now: () => "2026-10-18T00:00:00.000Z", newId: () => "graph-card",
 });
 globalThis.__approvals = 0;

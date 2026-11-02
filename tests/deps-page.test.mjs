@@ -10,18 +10,9 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
-Object.assign(globalThis, {
-  window,
-  document: window.document,
-  Node: window.Node,
-  HTMLElement: window.HTMLElement,
-  HTMLButtonElement: window.HTMLButtonElement,
-  Event: window.Event,
-  MouseEvent: window.MouseEvent,
-});
+installDom(["Node", "HTMLElement", "HTMLButtonElement", "Event", "MouseEvent"]);
 
 const catalog = JSON.parse(readFileSync(new URL("../contracts/dependencies.json", import.meta.url), "utf8"));
 

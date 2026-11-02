@@ -4,6 +4,12 @@
 /* Left pane takes the dragged width (panels/split.ts writes --split); the right
    pane or workbench fills the rest. Default is an even split minus half the grip. */
 #view-sessions.dual .term-container.pane-left { flex: 0 0 var(--split, calc(50% - 2px)); }
+/* A left cover (sessions/left-cover.ts) fills the slot of the session it hides: panel fill,
+   scrolls inside its own box, and never takes the focus ring (the covered tab keeps it). */
+#view-sessions.dual .term-container.term-cover {
+  overflow: auto; background: var(--bg-panel); box-sizing: border-box;
+}
+#view-sessions.dual .term-container.term-cover .xterm-screen { outline: none; }
 /* Divider: a real 4px flex item between the panes (order 1) so it can take the
    pointer — the old pseudo-element couldn't. Hit area widened via ::before. */
 #split-grip {

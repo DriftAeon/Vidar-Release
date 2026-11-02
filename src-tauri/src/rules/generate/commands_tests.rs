@@ -720,7 +720,7 @@ fn bad_requests_are_invalid_before_anything_runs() {
     let bad = [
         Request { run_id: "XYZ".into(), ..ok.clone() },
         Request { run_id: "0A1B2C3D".into(), ..ok.clone() },
-        Request { agent: "gemini".into(), ..ok.clone() },
+        Request { agent: "acme".into(), ..ok.clone() },
         Request { model: "a\"b".into(), ..ok.clone() },
         Request { model: String::new(), ..ok.clone() },
         Request { effort: "high; rm".into(), ..ok.clone() },

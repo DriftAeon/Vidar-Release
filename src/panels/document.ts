@@ -10,8 +10,8 @@ import { paneShell } from "./pane-shell";
 import { copyButton, copyPathButton, isBrowserPath, OPEN_IN_BROWSER, openFolderButton, openInBrowserButton } from "./file-actions";
 import { copyText } from "../clipboard";
 import { mountComments, setCommentsDocument, wrapForComments } from "./comments";
-import { mountOpenMenu, closeOpenMenu, setCatalog, setOpenDocLabel, clearOpenDocLabel } from "./document-open-menu";
-import { renderMarkdownOrText } from "./markdown-build";
+import { mountOpenMenu, closeOpenMenu, setCatalog, setOpenDocLabel, clearOpenDocLabel, dismissControl } from "./document-open-menu";
+import { markdownReady } from "./markdown-lazy";
 import { documentDialog as runDialog } from "./document-dialog";
 import { colourDiffs, sourcePre } from "./document-diff";
 import { publishDocument } from "./document-publish";
@@ -19,10 +19,9 @@ import { createWatcher } from "./document-watch";
 import { createDisplayRenderer, type DisplayRenderer, type Painted } from "./display-render";
 
 // The Open ▾ menu lives in document-open-menu.ts; ipc.ts keeps importing from here.
-// The builder lives in markdown-build.ts; rendered.ts and rendered/cards.ts import it from here.
+// The builder lives in markdown-build.ts and loads on first use through markdown-lazy.ts.
 export { setCatalog } from "./document-open-menu";
 export type { DocEntry } from "./document-open-menu";
-export { renderMarkdownOrText } from "./markdown-build";
 
 interface DocState {
   path: string;
@@ -78,6 +77,14 @@ export function mountDocumentView(parent: HTMLElement, note: (msg: string) => vo
     <button id="doc-save" class="hidden">Save</button>`;
   scrollEl = shell.frame;
   statusEl = root.querySelector<HTMLElement>("#doc-status")!;
+  // A failed open leaves its line up until something else writes the status; the Open button's
+  // × dismisses it. Follows the text so every writer (open, reload, note) stays untouched.
+  const failX = dismissControl(() => { statusEl.textContent = ""; }, "Dismiss");
+  failX.id = "doc-status-x";
+  failX.hidden = true;
+  statusEl.after(failX);
+  new MutationObserver(() => { failX.hidden = !/^open failed/.test(statusEl.textContent ?? ""); })
+    .observe(statusEl, { childList: true, characterData: true, subtree: true });
   visualRenderer = createDisplayRenderer(scrollEl, { onNote: (n) => { if (visual) statusEl.textContent = n; } });
   reloadBtn = root.querySelector<HTMLButtonElement>("#doc-reload")!;
   reloadBtn.prepend(iconImg("refresh"));
@@ -244,6 +251,8 @@ async function saveDocument() {
       if (gen !== docGen || doc !== d) return;
       d.mtimeMs = mtime;
       d.text = text;
+      const { renderMarkdownOrText } = await markdownReady();
+      if (gen !== docGen || doc !== d) return;
       const built = renderMarkdownOrText(d.name, text);
       d.rendered = built.fellBack ? null : built.el;
       d.dropped = built.dropped;
@@ -341,6 +350,7 @@ function present() {
 
 async function load(path: string, gen: number): Promise<DocState | null> {
   const r = await invoke("read_document", { path });
+  const { renderMarkdownOrText } = await markdownReady();
   if (gen !== docGen) return null;
   const built = renderMarkdownOrText(r.name, r.text);
   return {

@@ -9,7 +9,7 @@ const { shortLabel, toolIcons } = await import("../src/panels/rendered/chain.ts"
 const srcs = (name) => toolIcons(name).map((img) => img.getAttribute("src").replace(/^\/icons\/color\/|\.(svg|png)$/g, ""));
 
 test("plugin vidar-drive ask: label Ask, the steering wheel alone", () => {
-  const name = "mcp__plugin_vidar_drive__ask";
+  const name = "mcp__vidar_drive__ask";
   assert.equal(shortLabel(name), "Ask");
   assert.deepEqual(srcs(name), ["steer"]);
 });

@@ -37,11 +37,11 @@
 .bar-spacer { flex: 1; }
 /* The bar's darker bottom section (2026-10-11): the old foot's fill and top line (same fill as
    #bottombar, bottombar.css), full bar width and flush on the window bottom (the negative margin cancels
-   #leftbar's bottom padding), now grown upward to hold Loadout then MCP Servers (#bar-modules) over the
+   #leftbar's bottom padding), now grown upward to hold MCP Servers (#bar-modules) over the
    Settings row (#bar-foot). Bottom-anchored, so the spacer above gives way and an expanding row grows the
    modules upward while rows still read top to bottom; past the cap they scroll and the Settings row stays. */
 /* No shrink: under its cap the section keeps its content height, so a tall tab list cannot clip the modules'
-   bottom (the likely eater of the Gear box's 8 bottom padding, 2026-10-11); the tab strip scrolls instead (#session-strip above) */
+   bottom (the likely eater of the module box's 8 bottom padding, 2026-10-11); the tab strip scrolls instead (#session-strip above) */
 #leftbar > #bar-dock {
   align-self: stretch; margin-block-end: calc(-1 * var(--bar-inset));
   flex-shrink: 0; min-height: 0; max-height: 40%;
@@ -164,10 +164,9 @@
 /* tab border carries the agent kind; the accent ring still carries focus.
    Tints match LAUNCHER_ICONS in src/launcher/menu.ts (which now reads these vars) and sit
    outside the [data-theme] blocks on purpose — a kind must not shift per CAS mode. */
-:root { --agent-claude: #f28866; --agent-codex: #5b9dff; --agent-gemini: #8e7dff; --agent-pi: #22b8f0; --agent-shell: #4ec26a; --agent-falcon: #f28c3a; --agent-page: #e6c14a; }
+:root { --agent-claude: #f28866; --agent-codex: #5b9dff; --agent-pi: #22b8f0; --agent-shell: #4ec26a; --agent-falcon: #f28c3a; --agent-page: #e6c14a; }
 :is(.session-btn, .agent-subtab)[data-agent="claude"] { --tab-kind: var(--agent-claude); }
 :is(.session-btn, .agent-subtab)[data-agent="codex"] { --tab-kind: var(--agent-codex); }
-.session-btn[data-agent="gemini"] { --tab-kind: var(--agent-gemini); }
 .session-btn[data-agent="pi"] { --tab-kind: var(--agent-pi); }
 .session-btn[data-agent="shell"] { --tab-kind: var(--agent-shell); }
 /* page tabs (openPageTab) keep data-agent="shell"; the extra attribute outranks the shell green */
@@ -199,7 +198,6 @@
 .session-btn[data-art="codex"] .session-wheel { --tab-art: url("../assets/openai.png"); }
 .agent-subtab[data-agent="claude"] .session-wheel { --tab-art: url("../assets/claude.png"); }
 .agent-subtab[data-agent="codex"] .session-wheel { --tab-art: url("../assets/openai.png"); }
-.session-btn[data-art="gemini"] .session-wheel { --tab-art: url("../assets/gemini.png"); }
 .session-btn[data-art="pi"] .session-wheel { --tab-art: url("../assets/pi.png"); }
 .session-btn[data-art="local"] .session-wheel { --tab-art: url("../assets/local.png"); }
 .session-btn[data-art="shell"] .session-wheel { --tab-art: url("../assets/terminal.png"); }
@@ -258,7 +256,7 @@
 .session-btn[data-need="question"] .tab-chip {
   color: transparent;
   background-image: url("/icons/color/question.svg");
-  background-size: var(--space-16); background-position: center; background-repeat: no-repeat;
+  background-size: var(--space-12); background-position: center; background-repeat: no-repeat;
 }
 
 /* children stay under their parent; they select the

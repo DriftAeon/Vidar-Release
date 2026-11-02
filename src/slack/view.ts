@@ -2,14 +2,13 @@
 // clicks. All remote text (sender, channel, message, error message) goes in through textContent or
 // title. The token is read from its field once, on submit, and the field is emptied at once: no
 // state, attribute or later render holds it.
+import { el, iconBtn, textBtn } from "../dom";
 import { lucide } from "../icons";
 import { iconImg } from "../icon-img";
 import { brandIcon, clearEmptyState, connectActions, fillEmptyState } from "../panels/empty-state";
 import { relativeTime } from "../browser/when";
 import { initial, isNewer, placeOf, sections, whenIso } from "./model";
-import type { SlackItem } from "./ipc";
-
-export type ErrorKind = "unset" | "auth" | "scope" | "rate" | "endpoint" | "network";
+import type { SlackErrorKind, SlackItem } from "./ipc";
 
 export interface ViewState {
   mode: "loading" | "notice" | "form" | "list";
@@ -18,9 +17,9 @@ export interface ViewState {
   /** The search was cut by its cap: the head count reads 50+. */
   truncated: boolean;
   /** Inbox-load failure shown in the list area (connected). */
-  error: { kind: ErrorKind; message: string } | null;
+  error: { kind: SlackErrorKind; message: string } | null;
   /** Form failure: a client or Rust text, or an error kind. */
-  formError: { kind: ErrorKind | "text"; message: string } | null;
+  formError: { kind: SlackErrorKind | "text"; message: string } | null;
   busy: boolean;
   /** One-line hint under the head, e.g. "No tab to type into." */
   note: string | null;
@@ -47,7 +46,7 @@ export interface View {
   render(state: ViewState): void;
 }
 
-const TITLES: Record<Exclude<ErrorKind, "unset">, string> = {
+const TITLES: Record<Exclude<SlackErrorKind, "unset">, string> = {
   auth: "Slack Rejected the Token",
   scope: "Slack Is Missing a Scope",
   rate: "Slack Is Rate Limiting",
@@ -56,31 +55,8 @@ const TITLES: Record<Exclude<ErrorKind, "unset">, string> = {
 };
 const FORM_NOTE = "Create an app from the manifest at api.slack.com/apps, install it to your workspace, then paste its User OAuth Token. It is kept in Windows Credential Manager, never in vidar.json."; // note-ok: docs/projects/slack/inbox-tab-plan.md
 
-export function errorTitle(kind: ErrorKind): string | null {
+export function errorTitle(kind: SlackErrorKind): string | null {
   return kind === "unset" ? null : TITLES[kind];
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = cls;
-  return node;
-}
-
-function iconBtn(icon: Node, label: string, tip: string, cls = "cx-ico"): HTMLButtonElement {
-  const b = el("button", cls);
-  b.type = "button";
-  b.title = tip;
-  b.setAttribute("aria-label", label);
-  b.append(icon);
-  return b;
-}
-
-function textBtn(label: string, cls: string, tip?: string): HTMLButtonElement {
-  const b = el("button", cls);
-  b.type = "button";
-  b.textContent = label;
-  if (tip) b.title = tip;
-  return b;
 }
 
 export function buildView(h: Handlers): View {
@@ -203,7 +179,7 @@ export function buildView(h: Handlers): View {
     const connected = state.mode === "list";
     head.hidden = !connected && state.mode !== "loading";
     list.hidden = !connected || !!state.error || !state.items.length;
-    empty.hidden = state.mode === "form" || state.mode === "loading" ? true : connected && !state.error && !!state.items.length;
+    empty.hidden = state.mode === "form" || state.mode === "loading" ? true : connected && !state.error;
     form.hidden = state.mode !== "form";
     note.hidden = !connected || !state.note;
     note.textContent = state.note ?? ""; // note-ok: docs/projects/slack/inbox-tab-plan.md
@@ -245,7 +221,12 @@ export function buildView(h: Handlers): View {
       drawEmpty(errorTitle(state.error.kind) ?? TITLES.endpoint, state.error.message);
       return;
     }
-    if (!state.items.length) { drawEmpty("No Recent Mentions or DMs"); return; }
+    if (!state.items.length) {
+      clearEmptyState(empty);
+      empty.replaceChildren();
+      empty.removeAttribute("title");
+      return;
+    }
     const { dms, channels } = sections(state.items);
     if (dms.length) {
       const g = el("div", "sx-group");

@@ -816,7 +816,7 @@ mod tests {
                             let path = e.path();
                             if path.is_dir() { clear(&path); } else if let Ok(m) = fs::metadata(&path) {
                                 let mut perm = m.permissions();
-                                #[allow(clippy::permissions_set_readonly_false)]
+                                #[allow(clippy::permissions_set_readonly_false)] // Windows only: clears the read-only attribute so the file can be removed
                                 perm.set_readonly(false);
                                 let _ = fs::set_permissions(&path, perm);
                             }

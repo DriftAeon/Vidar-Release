@@ -7,7 +7,8 @@ setupDom({ stubs: { "panels/sessions/lookup": `
   export const getFocusedSession = () => null;
   export const renderedSessionId = () => null;
   export const renderedBody = () => null;
-  export const sessionLaunchInfo = () => null;` } });
+  export const sessionLaunchInfo = () => null;
+  export const pendingVaultTab = () => null;` } });
 const { vaultWarningLine } = await import("../src/panels/runes.ts");
 
 test("Dismissing a vault warning hides it for that tab and text only", () => {

@@ -81,6 +81,15 @@ impl Ord for Semver {
     }
 }
 
+/// Refuses a pack.json whose `version` is not the schema version this core reads (1).
+pub fn check_schema_version(pack: &Value) -> Result<(), String> {
+    match pack.get("version").and_then(Value::as_u64) {
+        Some(1) => Ok(()),
+        Some(n) => Err(format!("Unknown pack.json Version {n}")),
+        None => Err("Unknown pack.json Version (missing)".into()),
+    }
+}
+
 /// Checks a pack's top-level `release` and `requires` against this core.
 pub fn check_pack_compat(pack: &Value, core_version: &str, core_contract: u64) -> Result<(), String> {
     if let Some(r) = pack.get("release") {
@@ -165,6 +174,32 @@ mod tests {
     fn core_contract_matches_contract_file() {
         let c: Value = serde_json::from_str(include_str!("../../../contracts/modules.json")).unwrap();
         assert_eq!(c["version"].as_u64(), Some(CORE_CONTRACT));
+    }
+
+    #[test]
+    fn schema_version_one_passes_others_refused() {
+        assert!(check_schema_version(&json!({ "version": 1 })).is_ok());
+        assert_eq!(check_schema_version(&json!({ "version": 2 })).unwrap_err(), "Unknown pack.json Version 2");
+        assert!(check_schema_version(&json!({ "id": "a" })).unwrap_err().starts_with("Unknown pack.json Version"));
+        assert!(check_schema_version(&json!({ "version": "1" })).is_err());
+    }
+
+    #[test]
+    fn shipped_packs_declare_requires() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join(crate::paths::rel("packs"));
+        let mut n = 0;
+        for e in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()) {
+            let file = e.path().join("pack.json");
+            if !file.is_file() {
+                continue;
+            }
+            let pack: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+            assert!(pack.get("requires").is_some(), "{} has no requires", file.display());
+            assert!(check_schema_version(&pack).is_ok(), "{}", file.display());
+            assert!(check_pack_compat(&pack, env!("CARGO_PKG_VERSION"), CORE_CONTRACT).is_ok(), "{}", file.display());
+            n += 1;
+        }
+        assert!(n >= 8, "only {n} packs found");
     }
 
     #[test]

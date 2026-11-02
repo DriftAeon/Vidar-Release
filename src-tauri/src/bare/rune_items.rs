@@ -5,12 +5,10 @@
 //! - `RuneItem::from_rune` types a parsed rune (`None` for rule, fact, procedure, set). State is the
 //!   caller's to filter.
 //! - `map_items(agent, items, env)` (`map_claude`, `map_codex`) gives `Pieces`; a rune whose `agent:`
-//!   names the other agent maps with a warning, never dropped. Codex carries no permission list or mode
+//!   names the other agent is absent (`Rune::fits`), with no warning. Codex carries no permission list or mode
 //!   and no plugin: those come back as `Mapped::Unsupported { warning }` naming the rune.
 //! - Secrets: a hook `command` is a `rune::Secret`; any IPC or log shows `RuneItem::redacted`,
 //!   where a command hook and every MCP field are a label only.
-
-#![allow(dead_code)] // L2a wires the mappers into `set_loadout`; L1b's vault IPC calls `redacted`.
 
 use std::path::{Path, PathBuf};
 
@@ -43,6 +41,12 @@ pub enum Item {
     OutputStyle { style: String, body: String },
     /// `model:` names the session model for the rune's one `agent`.
     Model { model: String },
+    /// The whole settings file (Claude `settings.json`, Codex `config.toml`) the agent starts from; the
+    /// source as written, expanded at the launch.
+    Setting { source: String },
+    /// The agent CLI's own skill, or a built-in plugin (`<plugin>@builtin`), by its CLI name. Placed, it
+    /// stays on; every one in the Vidar library left out is written off.
+    BuiltIn { plugin: bool, name: String },
 }
 
 /// A launch's output style: the name `outputStyle` takes and, when the rune carries a body, the file the
@@ -109,7 +113,7 @@ pub struct RuneItem {
     pub item: Item,
     /// `agent:`: the one agent that runs it (`None` = both).
     pub agent: Option<Agent>,
-    /// `required-by: vidar`: dropping it from a vault warns (`drop_warning`).
+    /// `required-by: vidar`: always on in the Vidar Runeset and never removable.
     pub required_by_vidar: bool,
     /// `env:` entries, name and value; a value is a secret.
     pub env: Vec<(String, Secret)>,
@@ -155,10 +159,6 @@ fn agent_of(name: Option<&str>) -> Option<Agent> {
     name.and_then(agent_spec::parse)
 }
 
-fn label_of(agent: Agent) -> &'static str {
-    agent_spec::spec(agent).label
-}
-
 impl RuneItem {
     /// The typed item of a parsed rune; `Ok(None)` for the text kinds. `rune::parse` already checked
     /// the keys per kind, so an error here means a rune built some other way.
@@ -166,7 +166,9 @@ impl RuneItem {
         let k = &r.item;
         let need = |v: &Option<String>, key: &str| v.clone().ok_or_else(|| format!("`{}`: a {} rune needs `{key}`", r.id, r.kind));
         let item = match r.kind.as_str() {
+            "skill" | "plugin" if r.built_in.is_some() => Item::BuiltIn { plugin: r.kind == "plugin", name: r.built_in.clone().unwrap_or_default() },
             "skill" => Item::Skill { source: need(&k.source, "source")? },
+            "setting" => Item::Setting { source: need(&k.source, "source")? },
             "agent" => Item::Agent { source: need(&k.source, "source")? },
             "plugin" => Item::Plugin { source: need(&k.source, "source")? },
             "hook" => Item::Hook {
@@ -216,6 +218,9 @@ impl RuneItem {
             Item::Permission(_) => "permission",
             Item::OutputStyle { .. } => "output-style",
             Item::Model { .. } => "model",
+            Item::Setting { .. } => "setting",
+            Item::BuiltIn { plugin: false, .. } => "skill",
+            Item::BuiltIn { plugin: true, .. } => "plugin",
         }
     }
 
@@ -261,6 +266,8 @@ impl RuneItem {
             }
             Item::OutputStyle { style, .. } => { v.label = "Output Style"; v.style = Some(style.clone()); }
             Item::Model { model } => { v.label = "Model"; v.model = Some(model.clone()); }
+            Item::Setting { source } => (v.label, v.source) = ("Setting", Some(source.clone())),
+            Item::BuiltIn { plugin, .. } => v.label = if *plugin { "Plugin" } else { "Skill" },
         }
         v
     }
@@ -269,11 +276,6 @@ impl RuneItem {
 /// `redacted` of a parsed rune, or `None` for the text kinds and a rune that does not type.
 pub fn redacted_rune(r: &Rune) -> Option<RedactedItem> {
     RuneItem::from_rune(r).ok().flatten().map(|i| i.redacted())
-}
-
-/// The warning when a vault drops a `required-by: vidar` rune (any kind).
-pub fn drop_warning(id: &str) -> String {
-    format!("Rune `{id}` is required by Vidar; a session without it may not work")
 }
 
 /// The machine paths a mapper expands against: the install root (`{{root}}`) and the user's home (`~`).
@@ -301,6 +303,10 @@ pub enum Mapped {
     Permissions(Permissions),
     OutputStyle(OutputStyle),
     Model(String),
+    /// A setting rune's id and source, as written.
+    Setting(String, String),
+    /// A built-in skill or plugin the vault placed, by CLI name.
+    BuiltIn { plugin: bool, name: String },
     Env(String, Secret),
     Unsupported { warning: String },
 }
@@ -344,10 +350,10 @@ pub fn map_item(agent: Agent, it: &RuneItem, env: &MapEnv) -> Result<Vec<Mapped>
     let carries = &agent_spec::spec(agent).carries;
     let at = |e: String| format!("Rune `{}`: {e}; skipped", it.id);
     let unsupported = |why: String| Ok(vec![Mapped::Unsupported { warning: format!("Rune `{}`: {why}; not carried", it.id) }]);
+    if !crate::rules::rune::scope_fits(it.agent, None, Some(agent), None) {
+        return Ok(Vec::new());
+    }
     let mut out = match &it.item {
-        Item::Model { .. } if it.agent.is_some_and(|a| a != agent) => {
-            return unsupported(format!("its model is for {}", it.agent.map_or("", label_of)));
-        }
         Item::Model { .. } if carries.model.is_some() => return unsupported(carries.model.unwrap_or_default().into()),
         Item::Model { model } => vec![Mapped::Model(model.clone())],
         Item::Skill { .. } if carries.skill.is_some() => return unsupported(carries.skill.unwrap_or_default().into()),
@@ -365,7 +371,7 @@ pub fn map_item(agent: Agent, it: &RuneItem, env: &MapEnv) -> Result<Vec<Mapped>
                 g["matcher"] = json!(m);
             }
             match action {
-                // `{{root}}` in a command is the install root, as in a `run` path (stock `guard-driver`).
+                // `{{root}}` in a command is the install root, as in a `run` path (the Vidar `guard-driver`).
                 HookAction::Command(c) => g["command"] = json!(c.expose().replace("{{root}}", &env.root.to_string_lossy())),
                 HookAction::Files { run, open } => {
                     let abs = |l: &[String]| l.iter().map(|p| expand_path(p, env).map(text)).collect::<Result<Vec<_>, _>>();
@@ -377,6 +383,11 @@ pub fn map_item(agent: Agent, it: &RuneItem, env: &MapEnv) -> Result<Vec<Mapped>
             }
             vec![Mapped::Guard(g)]
         }
+        Item::Setting { .. } if carries.setting.is_some() => return unsupported(carries.setting.unwrap_or_default().into()),
+        Item::Setting { source } => vec![Mapped::Setting(it.id.clone(), source.clone())],
+        Item::BuiltIn { plugin: false, .. } if carries.skill.is_some() => return unsupported(carries.skill.unwrap_or_default().into()),
+        Item::BuiltIn { plugin: true, .. } if carries.plugin.is_some() => return unsupported(carries.plugin.unwrap_or_default().into()),
+        Item::BuiltIn { plugin, name } => vec![Mapped::BuiltIn { plugin: *plugin, name: name.clone() }],
         Item::Mcp { .. } if carries.mcp.is_some() => return unsupported(carries.mcp.unwrap_or_default().into()),
         Item::Mcp { module, server } => vec![Mapped::Mcp(McpRef { module: module.clone(), server: server.clone() })],
         Item::Permission(p) => {
@@ -426,6 +437,11 @@ pub struct Pieces {
     pub model: Option<String>,
     /// Plugin folders, absolute (`<root>\plugins\<name>`).
     pub plugins: Vec<String>,
+    /// Setting runes as (id, source), pick order; the vault resolver refuses a second one.
+    pub settings: Vec<(String, String)>,
+    /// Placed built-in skills and plugins, by CLI name.
+    pub built_in_skills: Vec<String>,
+    pub built_in_plugins: Vec<String>,
     pub env: Vec<(String, Secret)>,
     /// One per `Mapped::Unsupported`.
     pub unsupported: Vec<String>,
@@ -454,9 +470,6 @@ const BUILTIN_STYLES: [&str; 3] = ["Default", "Explanatory", "Learning"];
 pub fn map_items(agent: Agent, items: &[RuneItem], env: &MapEnv) -> Pieces {
     let mut out = Pieces::default();
     for it in items {
-        if let Some(only) = it.agent.filter(|a| *a != agent && !matches!(it.item, Item::Model { .. })) {
-            out.warnings.push(format!("Rune `{}` is for {}; carried on {} anyway", it.id, label_of(only), label_of(agent)));
-        }
         let mapped = match map_item(agent, it, env) {
             Ok(m) => m,
             Err(e) => {
@@ -509,6 +522,9 @@ pub fn map_items(agent: Agent, items: &[RuneItem], env: &MapEnv) -> Pieces {
                     }
                     Some(_) => {}
                 },
+                Mapped::Setting(id, source) => out.settings.push((id, source)),
+                Mapped::BuiltIn { plugin: false, name } => push_unique(&mut out.built_in_skills, &name),
+                Mapped::BuiltIn { plugin: true, name } => push_unique(&mut out.built_in_plugins, &name),
                 Mapped::Env(n, v) => match out.env.iter().find(|(o, _)| *o == n) {
                     Some((_, old)) if old != &v => out.warnings.push(format!("Rune `{}` sets env {n} again; the first value stays", it.id)),
                     Some(_) => {}
@@ -543,8 +559,8 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
     }
 
-    fn stock_items() -> Vec<RuneItem> {
-        let lib = Library::open(&repo().join("tests/fixtures/rune-vault/stock-runes")).unwrap();
+    fn vidar_items() -> Vec<RuneItem> {
+        let lib = Library::open(&repo().join("tests/fixtures/rune-vault/vidar-runes")).unwrap();
         let (runes, errors) = lib.all_runes();
         assert!(errors.is_empty(), "{errors:?}");
         runes.iter().filter_map(|(r, _)| RuneItem::from_rune(r).unwrap()).collect()
@@ -571,7 +587,7 @@ mod tests {
         let wire = serde_json::to_string(&envd.redacted()).unwrap();
         assert!(wire.contains("\"envNames\":[\"TOKEN\"]") && !wire.contains("sk-secret-1"), "{wire}");
         assert!(!format!("{envd:?}").contains("sk-secret-1"));
-        let fixture = stock_items().into_iter().find(|i| i.id == "gate-hook-command").unwrap();
+        let fixture = vidar_items().into_iter().find(|i| i.id == "gate-hook-command").unwrap();
         assert!(!serde_json::to_string(&fixture.redacted()).unwrap().contains("sk-secret-1"));
         let r = rune::parse("---\nname: notify\nkind: hook\nscope: [global]\nevent: Stop\ncommand: sk-secret-1\n---\n").unwrap();
         assert_eq!(redacted_rune(&r).unwrap().label, "Command Hook");
@@ -579,24 +595,21 @@ mod tests {
     }
 
     #[test]
-    fn every_stock_item_maps_for_claude_and_a_codex_rune_warns_but_rides() {
+    fn every_vidar_item_maps_for_claude_and_a_codex_rune_is_absent() {
         let root = repo();
         let env = MapEnv { root: &root, user_home: None };
-        let p = map_claude(&stock_items(), &env);
+        let p = map_claude(&vidar_items(), &env);
         assert!(p.skills.iter().any(|s| s.ends_with("gate-skill")), "{:?}", p.skills);
         assert!(p.agents.iter().any(|s| s.ends_with("gate-agent.md")), "{:?}", p.agents);
         assert!(p.guards.iter().any(|g| g.contains("gate-hook-run.mjs")), "{:?}", p.guards);
-        assert!(p.guard_items.iter().any(|g| g["command"].as_str().is_some_and(|c| c.contains("gate-notify.mjs"))), "a Codex-only hook still rides on Claude");
-        assert!(p.warnings.iter().any(|w| w.contains("gate-hook-command") && w.contains("for Codex")), "{:?}", p.warnings);
-        // Both MCP runes ride: the Claude one, and the Codex one with a warning.
-        assert_eq!(p.mcp.len(), 2, "{:?}", p.mcp);
-        for (module, server) in [("fixture-echo", "fixture_echo"), ("vidar-drive", "vidar_drive")] {
-            assert!(p.mcp.contains(&McpRef { module: module.into(), server: server.into() }), "{:?}", p.mcp);
-        }
-        assert_eq!((p.permissions.allow.as_slice(), p.permissions.ask.as_slice()), (&["mcp__plugin_vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..]));
+        assert!(!p.guard_items.iter().any(|g| g["command"].as_str().is_some_and(|c| c.contains("gate-notify.mjs"))), "a Codex-only hook is absent on Claude");
+        assert!(p.warnings.is_empty(), "{:?}", p.warnings);
+        // Every MCP rune that fits Claude is carried (the drive rune is untagged now).
+        assert_eq!(p.mcp, [McpRef { module: "fixture-echo".into(), server: "fixture_echo".into() }, McpRef { module: "vidar-drive".into(), server: "vidar_drive".into() }], "{:?}", p.mcp);
+        assert_eq!((p.permissions.allow.as_slice(), p.permissions.ask.as_slice()), (&["mcp__vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..]));
         assert_eq!(p.permissions.mode.as_deref(), Some("auto"));
-        assert_eq!(p.plugins, [text(root.join("plugins").join("vidar-app"))]);
-        assert!(p.plugins[0].ends_with("plugins\\vidar-app") || p.plugins[0].ends_with("plugins/vidar-app"));
+        assert_eq!(p.plugins, [text(root.join("plugins").join("roster"))]);
+        assert!(p.plugins[0].ends_with("plugins\\roster") || p.plugins[0].ends_with("plugins/roster"));
         assert!(p.unsupported.is_empty(), "{:?}", p.unsupported);
     }
 
@@ -604,7 +617,7 @@ mod tests {
     fn codex_returns_unsupported_for_mode_and_plugins_and_keeps_the_rest() {
         let root = repo();
         let env = MapEnv { root: &root, user_home: None };
-        let items = stock_items();
+        let items = vidar_items();
         let perm = items.iter().find(|i| i.id == "gate-permission").unwrap();
         let mapped = map_item(Agent::Codex, perm, &env).unwrap();
         // The `mcp__` entries ride on Codex (Flow reads them); the mode keeps its warning.
@@ -612,12 +625,12 @@ mod tests {
             if k.mode.is_none() && !k.allow.is_empty() && k.allow.iter().chain(&k.ask).all(|e| e.starts_with("mcp__"))
                 && warning.contains("gate-permission") && warning.contains("permission mode")));
         let p = map_codex(&items, &env);
-        assert!(p.unsupported.iter().any(|w| w.contains("gate-permission")) && p.unsupported.iter().any(|w| w.contains("vidar-app")), "{:?}", p.unsupported);
+        assert!(p.unsupported.iter().any(|w| w.contains("gate-permission")) && p.unsupported.iter().any(|w| w.contains("roster")), "{:?}", p.unsupported);
         assert!(p.plugins.is_empty() && p.permissions.mode.is_none());
-        assert_eq!((p.permissions.allow.as_slice(), p.permissions.ask.as_slice()), (&["mcp__plugin_vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..]));
+        assert_eq!((p.permissions.allow.as_slice(), p.permissions.ask.as_slice()), (&["mcp__vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..]));
         assert_eq!(p.guard_items.len(), 2, "both hooks ride on Codex");
-        // The Claude MCP rune `fixture-echo` rides on Codex with a warning, beside `vidar-drive`.
-        assert!(p.skills.len() == 1 && p.agents.len() == 1 && p.mcp.len() == 2, "{:?}", p.mcp);
+        // The Claude MCP rune `fixture-echo` is absent on Codex; `vidar-drive` stays.
+        assert!(p.skills.len() == 1 && p.agents.len() == 1 && p.mcp.len() == 1, "{:?}", p.mcp);
         assert!(!p.warnings.iter().any(|w| w.contains("gate-hook-command")), "a Codex rune on Codex does not warn");
     }
 
@@ -626,7 +639,7 @@ mod tests {
         let root = repo();
         let env = MapEnv { root: &root, user_home: None };
         let gate = item("---\nname: gate\nkind: plugin\nscope: [global]\nrequired-by: vidar\nsource: {{root}}/plugins/gate\nenv: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1\n---\n");
-        assert!(gate.required_by_vidar && drop_warning(&gate.id).contains("`gate`"));
+        assert!(gate.required_by_vidar);
         let p = map_claude(std::slice::from_ref(&gate), &env);
         assert_eq!(p.env.iter().map(|(n, v)| (n.as_str(), v.expose())).collect::<Vec<_>>(), [("CLAUDE_CODE_ENABLE_FUNCTION_HOOKS", "1")]);
         assert!(map_codex(&[gate], &env).env.is_empty(), "an unsupported item carries no env");
@@ -642,7 +655,7 @@ mod tests {
     fn the_shipped_guard_driver_hook_runs_from_the_root_with_its_root_arg() {
         let root = repo();
         let env = MapEnv { root: &root, user_home: None };
-        let text = std::fs::read_to_string(root.join("profiles/bare/stock-runes/hooks/guard-driver.md")).unwrap();
+        let text = std::fs::read_to_string(root.join("profiles/bare/vidar-runes/hooks/guard-driver.md")).unwrap();
         let p = map_claude(&[item(&text.replace('\r', ""))], &env);
         let r = root.to_string_lossy();
         let want = format!("node \"{r}\\tools\\agent-layer\\guard-driver.mjs\" --root \"{r}\"");
@@ -678,7 +691,7 @@ mod tests {
         let p = map_claude(&[a.clone(), b.clone(), a.clone(), c.clone()], &env);
         assert_eq!(p.model.as_deref(), Some("opus"));
         assert_eq!(p.warnings, ["Rune `sonnet` asks model sonnet; opus came first and stays"]);
-        assert_eq!(p.unsupported, ["Rune `gpt`: its model is for Codex; not carried"]);
+        assert!(p.unsupported.is_empty(), "another agent's model is absent: {:?}", p.unsupported);
         assert_eq!(map_codex(&[a.clone(), c], &env).model.as_deref(), Some("gpt-6"));
         assert_eq!(a.redacted().model.as_deref(), Some("opus"));
         let err = rune::parse(&head("m", "", "opus")).unwrap_err();

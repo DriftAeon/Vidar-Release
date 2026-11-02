@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "astra-code-no-skill",
+  "name": "Astra Code No Skill",
+  "createdUtc": "2026-10-25T12:30:00Z",
+  "from": { "vault": "astra-code", "hash": "8ef8cb187505" },
+  "runesets": [
+    {
+      "file": "sets/installed--installed.md",
+      "source": { "library": "installed", "set": "installed" },
+      "copiedUtc": "2026-10-25T12:00:00Z",
+      "sourceHash": "6d5b211b156958e0b1d9d90c8acecb3cf9832c7404bc2ad9fc5c12ad0ce06ce8"
+    }
+  ],
+  "runes": [
+    { "library": "base", "id": "bare-identity" },
+    { "library": "base", "id": "gate-recall" },
+    { "library": "base", "id": "gate-agent" },
+    { "library": "base", "id": "gate-hook-run" },
+    { "library": "base", "id": "gate-hook-command" },
+    { "library": "base", "id": "vidar-drive" },
+    { "library": "base", "id": "gate-permission" },
+    { "library": "base", "id": "roster" }
+  ],
+  "lockedUtc": "2026-10-25T12:31:00Z",
+  "lockedBy": "first-message",
+  "hash": "392ef93ec07f",
+  "pins": {
+    "installed/team-verdict-first": "db6f518bd2f7",
+    "installed/team-plain-words": "94ee22c2ac60",
+    "installed/team-recall-tip": "a35c7494aaec",
+    "base/gate-fact": "1fd454a62c98",
+    "base/bare-identity": "5c4bd15797c6",
+    "base/gate-recall": "a09a885a50ea",
+    "base/gate-agent": "3528593505e2",
+    "base/gate-hook-run": "6bb0e258da98",
+    "base/gate-hook-command": "6d1082db81f8",
+    "base/vidar-drive": "a250ca2e7947",
+    "base/gate-permission": "97889fa753a6",
+    "base/roster": "da6381bdd6f1"
+  }
+}

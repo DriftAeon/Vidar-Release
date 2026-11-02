@@ -132,7 +132,7 @@ pub fn write_back(bare_home: &Path, target: &Path, call: &Path) -> Result<Back, 
     let placed = std::fs::copy(call, &tmp)
         .map_err(|e| format!("copy: {e}"))
         .and_then(|_| bare::acl::set_private_file(&tmp))
-        .and_then(|_| std::fs::rename(&tmp, target).map_err(|e| format!("rename: {e}")));
+        .and_then(|_| crate::fsx::rename_retrying(&tmp, target).map_err(|e| format!("rename: {e}")));
     if let Err(e) = placed {
         let _ = std::fs::remove_file(&tmp);
         return Err(fail(e));

@@ -13,10 +13,12 @@ export async function prepareRules(row: AgentType): Promise<RulesLaunch | undefi
   try {
     const plan = rulesPlan(row);
     if (!plan) return undefined;
-    if ("warning" in plan) return { file: null, codex: null, warnings: [plan.warning] };
+    if ("warning" in plan) return refused(plan.warning);
     const r = await invoke("rules_prepare", { key: plan.key, ids: plan.ids, client: plan.client });
     return { file: r.file, codex: r.codex, warnings: r.warnings };
   } catch (e) {
-    return { file: null, codex: null, warnings: [`Rules not applied: Vidar could not run the rules build (${String(e)}). Open a new tab to retry.`] };
+    return refused(`Rules not applied: Vidar could not run the rules build (${String(e)}). Open a new tab to retry.`);
   }
 }
+
+const refused = (warning: string): RulesLaunch => ({ file: null, codex: null, warnings: [warning] });

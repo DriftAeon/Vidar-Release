@@ -10,16 +10,9 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
-Object.assign(globalThis, {
-  window,
-  document: window.document,
-  Node: window.Node,
-  HTMLElement: window.HTMLElement,
-  Event: window.Event,
-});
+installDom(["Node", "HTMLElement", "Event"]);
 
 const fake = { file: { flowGridOpacity: 30 }, handlers: [] };
 globalThis.__gridFake = fake;

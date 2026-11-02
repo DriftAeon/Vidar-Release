@@ -116,11 +116,11 @@ test("the claude pack: optional agent, setup before codex, flow script in its ow
   assert.ok(!catalog.includes("claude") && !catalog.includes("falcon"), "claude and falcon left the static catalog");
 });
 
-test("Gemini and Pi packs declare bounded raw launches using existing dependency IDs", () => {
+test("The Pi pack declares a bounded raw launch using an existing dependency ID", () => {
   const dependencies = JSON.parse(read("contracts/dependencies.json")).deps;
   const executable = new RegExp(contract.launch.executablePattern);
   const argument = new RegExp(contract.launch.argumentPattern);
-  for (const id of ["gemini", "pi"]) {
+  for (const id of ["pi"]) {
     const path = `${rel("packs")}/${id}/pack.json`;
     assert.ok(statSync(resolvePath(ROOT, path)).size <= contract.limits.manifestBytes);
     const m = JSON.parse(read(path)).module;
@@ -133,7 +133,7 @@ test("Gemini and Pi packs declare bounded raw launches using existing dependency
     assert.ok(m.agent.launch.args.length <= contract.launch.maxArguments);
     for (const arg of m.agent.launch.args) assert.match(arg, argument);
   }
-  for (const bad of ["../gemini", "C:\\gemini.exe", "gemini;whoami", "pi | more", "$(whoami)"]) {
+  for (const bad of ["../pi", "C:\\pi.exe", "pi;whoami", "pi | more", "$(whoami)"]) {
     assert.doesNotMatch(bad, executable);
   }
   for (const bad of ["", "--mode;whoami", "$(whoami)", "a & b", "`whoami`", "a|b"]) {

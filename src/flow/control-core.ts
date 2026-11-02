@@ -2,6 +2,8 @@
 import type { FlowGraph, FlowNode, FlowTemplate } from "./model";
 import type { FlowValidationResult } from "./validate";
 import type { autoLayout as AutoLayout } from "./layout";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { errText } from "../err-text.ts";
 
 type RecordValue = Record<string, unknown>;
 // Split the field key because the paths gate also treats its whole literal as a folder.
@@ -142,7 +144,7 @@ export async function approveSnapshot(graph: FlowGraph, deps: {
     await deps.preflight?.();
     let rollback: void | (() => Promise<void>);
     try { rollback = await deps.commit(graph); }
-    catch (error) { throw new Error(`save ${error instanceof Error ? error.message : String(error)}`); }
+    catch (error) { throw new Error(`save ${errText(error)}`); }
     try { return deps.start(graph); }
     catch (error) {
       if (rollback) await rollback();
@@ -157,7 +159,7 @@ export async function saveSnapshot(graph: FlowGraph, deps: {
 }): Promise<string> {
   checkPrepared(graph, deps.validateGraph, true);
   try { await deps.commit(graph); }
-  catch (error) { throw new Error(`save ${error instanceof Error ? error.message : String(error)}`); }
+  catch (error) { throw new Error(`save ${errText(error)}`); }
   return `saved graph=${graph.id}`;
 }
 export function prepareFlow(raw: unknown, deps: PrepareDeps): FlowGraph {

@@ -4,7 +4,8 @@
 import { invalidateConfig, loadConfig, type AgentType } from "../config";
 import { attributeOverlay, migrateOverlay, overlayAgents, type OverlayHit } from "../config-agents";
 import { AGENTS } from "../agents/descriptor";
-import { AGENT_IDS } from "../agents/id";
+import { AGENT_IDS, PTY_ONLY_IDS } from "../agents/id";
+import { titleWords } from "../format";
 import { builtinAgents, PLAIN_KEYS } from "../launcher/roster";
 import { gatewayModuleRows, moduleOn } from "../modules/registry";
 import { offModuleKeys } from "../launcher/roster-shown";
@@ -13,7 +14,9 @@ import type { OverlayEntry } from "./agents-edit";
 // The Type select of a custom row: tab kind by `id` (roster.ts agentKind). A row whose id is not
 // one of these (gateway module ids resolve to `claude` but are not editable here) is shown read-only, so a first edit can never silently rewrite its id.
 export const TYPES: [string, string][] = [
-  ...AGENT_IDS.map((id): [string, string] => [id, AGENTS[id].name]), ["gemini", "Gemini"], ["pi", "Pi"], ["shell", "Terminal"],
+  ...AGENT_IDS.map((id): [string, string] => [id, AGENTS[id].name]),
+  ...PTY_ONLY_IDS.map((id): [string, string] => [id, titleWords(id)]),
+  ["shell", "Terminal"],
 ];
 export const TYPE_IDS = new Set(TYPES.map(([id]) => id));
 // Fields a representable custom row may carry; anything else set makes it read-only.

@@ -6,7 +6,10 @@ export const AGENT_IDS = ["claude", "codex"] as const;
 export type AgentId = typeof AGENT_IDS[number];
 
 /** Agents that only ever run as PTY tabs; never members of AGENT_IDS. */
-export const PTY_ONLY_IDS = ["gemini", "pi"] as const;
+export const PTY_ONLY_IDS = ["pi"] as const;
+
+/** Vendor names that stand for an agent id in identifiers and strings (the agent-key scanner reads them). */
+export const VENDOR_ALIASES = { anthropic: "claude", openai: "codex" } as const satisfies Record<string, AgentId>;
 
 /** Exhaustiveness guard: a `switch` over AgentId ends `default: return unknownAgent(a)`. */
 export function unknownAgent(a: never): never {

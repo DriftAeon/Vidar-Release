@@ -1,121 +1,39 @@
-// Agent-literal ratchet (M1 root-fix guard). Counts, per tracked src/**/*.ts file and literal, the quoted agent
-// ids ("claude" "codex" "gemini" "pi", any quote style) and the names "Claude" "Codex" "Claude Code", comments
-// stripped. tests/agent-literals.test.mjs fails when a (file, literal) key is new or a count rises, and on the
-// table-only patterns used outside table files; it never fails on a drop.
-// Usage: node tools/agents/agent-literals.mjs            report counts against tests/fixtures/agent-literals.json
-//        node tools/agents/agent-literals.mjs --write    lower the fixture where counts fell (never raises or adds)
-//        node tools/agents/agent-literals.mjs --init     create the fixture from the current counts (refuses if it exists)
-//        node tools/agents/agent-literals.mjs --init-rust [--dry]  add .rs keys (src-tauri/src, src-falcon/src) to the
-//                                                 fixture; --dry only prints the per-tier totals
-// Rust: table files (agent_spec.rs, protocol.rs) are uncapped; adapter and debt files are capped per key and only
-// shrink. Dormant until the fixture holds a .rs key. Test code (*tests.rs, #[cfg(test)] items) is skipped.
-// Lexical keys (scanners rust-keys.mjs, ts-keys.mjs, ps-keys.mjs, py-keys.mjs; `missing scanner: <lang>` when absent):
+// Agent-key gate (M1 root-fix guard). Lexical keys from the per-language scanners (rust-keys.mjs, ts-keys.mjs,
+// ps-keys.mjs, py-keys.mjs; `missing scanner: <lang>` when absent) against tests/fixtures/agent-literals.json
+// ($schema 3: C caps, $strict ratchet, $ids $enums $closed $adapters) and the anchored pins in agent-pins.json.
+// Every agent id comes from the table (src/agents/id.ts, protocol.rs) through key-words.mjs; none is spelled here.
+// Usage: node tools/agents/agent-literals.mjs   check caps, strict ratchet, derived lists and inline AgentId unions
 //        --lang rs,ts,ps,py   --report [--tiers] [--files a,b]   --strict-dry   --strict   --owns <lanes-owns.json>
-//        --pin <file:line> --why <blank-is-claude|history-data|dev-probe|wire-name> [--test <name>]
-//        --write [--reason "<text>"]   --rekey [--yes]   (fixture $schema 3: C caps, $strict ratchet, $ids $enums $adapters)
-// Refuses: a rise or new key under --write (exit 1); --init over an existing fixture; --init-rust when any .rs key
-// exists (exit 2). Like tools/gate/paths-allow.mjs.
+//        --pin <file:line> --why <blank-default|history-data|dev-probe|wire-name> [--test <name>]
+//        --write [--reason "<text>"]   --rekey [--yes]
+// Refuses: a rise under --write without --reason (exit 1); --rekey over a $schema 3 fixture; the removed v1 flags
+// --init and --init-rust (exit 2). Like tools/gate/paths-allow.mjs.
+// countRust / kindOfRust keep the per-file Rust literal counter (table strings and Agent:: variants) for callers
+// that want raw counts; test code (#[cfg(test)] items) is skipped.
 // Scans tracked files only (git ls-files): git add a new file before running.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { LANGS, applyPins, capsOf, checkFixture, gather, nextFixture, ownsMatch, pinRefusal, scopeFiles, strictCounts, tierOf } from "./key-words.mjs";
+import { readJson } from "../lib/json.mjs";
+import { root as repoRoot } from "../lib/paths.mjs";
+import { LANGS, applyPins, capsOf, checkFixture, gather, idUnionProblems, nextFixture, ownsMatch, pinRefusal, scopeFiles, strictCounts, tableIds, tierOf } from "./key-words.mjs";
 
 // AGENT_LITERALS_ROOT / AGENT_LITERALS_FIXTURE point the CLI at a temp tree (tests only).
-const ROOT = process.env.AGENT_LITERALS_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const ROOT = process.env.AGENT_LITERALS_ROOT ?? repoRoot();
 export const FIXTURE = process.env.AGENT_LITERALS_FIXTURE ?? join(ROOT, "tests", "fixtures", "agent-literals.json");
-export const LITERALS = ["claude", "codex", "gemini", "pi", "Claude", "Codex", "Claude Code"];
 
-/** Files that hold the per-agent tables (capped like the rest, but allowed to use AGENTS.claude / AGENT_IDS[0]). */
-export const TABLE_FILES = new Set([
-  "src/agents/id.ts",
-  "src/agents/descriptor.ts",
-  "src/agents/agent-profile.ts",
-  "src/agents/login-tips.ts",
-  "src/agents/primary.ts",
-  "src/launcher/row-facts.ts",
-  "src/panels/rendered/tool-class.ts",
-  "src/settings/agent-selects.ts",
-]);
+// ---- Rust literal counter: ids from the table, adapters by path tier. ----
 
-export function kindOf(file) {
-  if (TABLE_FILES.has(file)) return "table";
-  if (/^src\/agents\/(claude|codex)[^/]*\.ts$/.test(file)) return "adapter";
-  return "debt";
-}
-
-/** Split TS source into code (comments blanked) and the string-literal values found outside comments. */
-export function lex(src) {
-  let code = "";
-  const strings = [];
-  for (let i = 0; i < src.length; ) {
-    const c = src[i];
-    const n = src[i + 1];
-    if (c === "/" && n === "/") {
-      while (i < src.length && src[i] !== "\n") i++;
-    } else if (c === "/" && n === "*") {
-      const end = src.indexOf("*/", i + 2);
-      const stop = end < 0 ? src.length : end + 2;
-      code += src.slice(i, stop).replace(/[^\n]/g, " ");
-      i = stop;
-    } else if (c === '"' || c === "'" || c === "`") {
-      let j = i + 1;
-      while (j < src.length && src[j] !== c && !(c !== "`" && src[j] === "\n")) j += src[j] === "\\" ? 2 : 1;
-      const lit = src.slice(i, j + 1);
-      strings.push(src.slice(i + 1, j));
-      code += lit;
-      i = j + 1;
-    } else {
-      code += c;
-      i++;
-    }
-  }
-  return { code, strings };
-}
-
-export function trackedSrc(root = ROOT) {
-  const out = execFileSync("git", ["ls-files", "src"], { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
-  return out.split("\n").map((s) => s.trim()).filter((s) => s.endsWith(".ts"));
-}
-
-/** Map file -> { literals: {lit: n}, code } for every tracked src ts file holding at least one literal. */
-export function scan(root = ROOT) {
-  const res = new Map();
-  for (const file of trackedSrc(root)) {
-    const p = join(root, file);
-    if (!existsSync(p)) continue;
-    const { code, strings } = lex(readFileSync(p, "utf8"));
-    const literals = {};
-    for (const s of strings) if (LITERALS.includes(s)) literals[s] = (literals[s] ?? 0) + 1;
-    res.set(file, { literals, code });
-  }
-  return res;
-}
-
-const q = `["'\`]`;
-export const TABLE_USE = /\b(AGENTS|AGENT_PROFILE)\.(claude|codex)\b|\bAGENT_IDS\[\d/;
-// Exactly two members, either order: not part of a longer union.
-export const TWO_UNION = new RegExp(
-  `(?<!${q}[\\w-]+${q}\\s*\\|\\s*)${q}(claude|codex)${q}\\s*\\|\\s*${q}(?!\\1)(claude|codex)${q}(?!\\s*\\|\\s*${q})`,
-);
-
-// ---- Rust side (D6). Same fixture; `.rs` keys appear only after `--init-rust`, until then scanning is dormant. ----
-
-export const RUST_STRINGS = ["claude", "codex", "gemini", "pi", "Claude", "Codex"];
+const TABLE = tableIds(ROOT);
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+/** Quoted Rust strings that count: every id and PTY-only id, plus each agent id's display spelling. */
+export const RUST_STRINGS = [...TABLE.ids, ...TABLE.ptyOnly, ...TABLE.ids.map(cap)];
 export const RUST_TABLE = new Set(["src-tauri/src/agent_spec.rs", "src-falcon/src/protocol.rs"]);
-const RUST_ADAPTER = [
-  /^src-tauri\/src\/bare\/(claude|codex)_[^/]*\.rs$/,
-  /^src-tauri\/src\/codex_[^/]*\.rs$/,
-  /^src-tauri\/src\/flow\/(claude|codex)\.rs$/,
-  /^src-tauri\/src\/rules\/import\/(claude_json|codex_home)\.rs$/,
-  /^src-falcon\/src\/(claude|codex)\.rs$/,
-  /^src-falcon\/src\/codex\/driver\//,
-];
 
 export function kindOfRust(file) {
   if (RUST_TABLE.has(file)) return "table";
-  if (RUST_ADAPTER.some((r) => r.test(file))) return "adapter";
+  if (tierOf(file).startsWith("adapter:")) return "adapter";
   return "debt";
 }
 
@@ -253,8 +171,7 @@ export function countRust(src, file = "") {
     if (t.t === "str" && RUST_STRINGS.includes(t.v)) add(t.v);
     else if (isI(t, "Agent") && isP(toks[k + 1], "::")) {
       const v = toks[k + 2];
-      if (isI(v, "Claude")) add("Agent::Claude");
-      else if (isI(v, "Codex")) add("Agent::Codex");
+      if (v?.t === "ident" && TABLE.enumIds.includes(v.v.toLowerCase())) add(`Agent::${v.v}`);
       const prev = toks[k - 1];
       if (isP(prev, "==") || isP(prev, "!=")) add("== Agent::");
     } else if (isI(t, "use") && !table) {
@@ -267,64 +184,14 @@ export function countRust(src, file = "") {
   return lits;
 }
 
-export function trackedRust(root = ROOT) {
-  const out = execFileSync("git", ["ls-files", "src-tauri/src", "src-falcon/src"], { cwd: root, encoding: "utf8", maxBuffer: 1 << 26 });
-  return out.split("\n").map((s) => s.trim()).filter((s) => s.endsWith(".rs") && !/tests\.rs$/.test(s));
-}
-
-/** Map file -> { kind, literals } for every tracked Rust file holding at least one key. */
-export function scanRust(root = ROOT, files = trackedRust(root)) {
-  const res = new Map();
-  for (const file of files) {
-    const p = join(root, file);
-    if (!existsSync(p)) continue;
-    const literals = countRust(readFileSync(p, "utf8"), file);
-    if (Object.keys(literals).length) res.set(file, { kind: kindOfRust(file), literals });
-  }
-  return res;
-}
-
-export const hasRustKeys = (fx) => Object.keys(fx).some((f) => f.endsWith(".rs"));
-
-/** Rises against the fixture for adapter and debt files; table files are uncapped. */
-export function checkRust(counts, fx) {
-  const rises = [];
-  for (const [file, { kind, literals }] of counts) {
-    if (kind === "table") continue;
-    for (const [key, n] of Object.entries(literals)) {
-      const cap = fx[file]?.literals?.[key];
-      if (cap === undefined || n > cap) rises.push(`${file} ${JSON.stringify(key)}: ${n} > ${cap ?? "unlisted"}`);
-    }
-  }
-  return rises;
-}
-
-export function rustTotals(counts) {
-  const tiers = {};
-  for (const [, { kind, literals }] of counts) {
-    const t = (tiers[kind] ??= { files: 0, keys: {} });
-    t.files++;
-    for (const [k, n] of Object.entries(literals)) t.keys[k] = (t.keys[k] ?? 0) + n;
-  }
-  return tiers;
-}
-
-function printTotals(counts) {
-  for (const [tier, { files, keys }] of Object.entries(rustTotals(counts))) {
-    const total = Object.values(keys).reduce((a, b) => a + b, 0);
-    console.log(`rust ${tier}: ${files} files, ${total} keys ${JSON.stringify(keys)}`);
-  }
-}
-
 // ---- Lexical keys: scanners per language, tiers, classes, anchored pins, schema-3 fixture. ----
 
 const PINS = process.env.AGENT_LITERALS_PINS ?? join(dirname(FIXTURE), "agent-pins.json");
-const KEY_FLAGS = ["--report", "--strict-dry", "--strict", "--owns", "--pin", "--rekey", "--lang"];
 const arg = (flags, name) => { const i = flags.indexOf(name); return i >= 0 && flags[i + 1] && !flags[i + 1].startsWith("--") ? flags[i + 1] : null; };
-const readJson = (p, d) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : d);
+const readJsonOr = (p, d) => (existsSync(p) ? readJson(p) : d);
 const writeJson = (p, v) => writeFileSync(p, JSON.stringify(v, null, 2) + "\n");
 const rel = (p) => relative(ROOT, p).replace(/\\/g, "/");
-const CLASSES = ["S1", "S2", "S3", "S4", "F", "C"];
+const CLASSES = ["S1", "S2", "S3", "S4", "F", "St", "C"];
 
 /** Modified or untracked paths among the fixtures and the scanned files only (L7); schemas under src-tauri/gen ignored. */
 function dirtyScoped() {
@@ -348,6 +215,7 @@ function printReport(g, unpinned, tiers) {
     const n = g.entries.filter((e) => e.lang === lang);
     console.log(`${lang}: ${new Set(n.map((e) => e.file)).size} files, ${n.length} keys, ${n.filter((e) => bad.has(e)).length} unpinned strict`);
   }
+  for (const o of g.enums.open ?? []) console.log(`open enum ${o.name}: ${o.file}:${o.line}`);
   if (!tiers) {
     const all = { files: new Set(), keys: 0, cls: {}, strict: 0, pinned: 0, cap: 0, free: 0, skip: 0 };
     for (const r of Object.values(row)) { r.files.forEach((f) => all.files.add(f)); all.keys += r.keys; for (const k of ["strict", "pinned", "cap", "free", "skip"]) all[k] += r[k]; for (const [c, n] of Object.entries(r.cls)) all.cls[c] = (all.cls[c] ?? 0) + n; }
@@ -368,7 +236,7 @@ async function keysMain(flags, schema3) {
   const pinTarget = arg(flags, "--pin");
   const g = await gather(ROOT, langs, pinTarget ? [pinTarget.replace(/:\d+$/, "").replace(/\\/g, "/")] : only);
   for (const l of g.missing) console.log(`missing scanner: ${l}`);
-  const pinsDoc = readJson(PINS, { $schema: 1, pins: [] });
+  const pinsDoc = readJsonOr(PINS,{ $schema: 1, pins: [] });
   const { unpinned, problems } = applyPins(g.entries, pinsDoc.pins ?? [], g.loaded, only);
   const cur = { caps: capsOf(g.entries), strict: strictCounts(unpinned) };
   const exit = (code) => process.exit(code);
@@ -387,7 +255,7 @@ async function keysMain(flags, schema3) {
     return;
   }
   if (flags.includes("--rekey")) {
-    const old = readJson(FIXTURE, {});
+    const old = readJsonOr(FIXTURE, {});
     if (old.$schema === 3) { console.error("fixture is already $schema 3; --rekey refuses"); exit(2); }
     printReport(g, unpinned, true);
     const { fx } = nextFixture(null, g, cur, null);
@@ -404,7 +272,7 @@ async function keysMain(flags, schema3) {
   }
   if (flags.includes("--write")) {
     if (!schema3) { console.error("--write on the keys fixture needs $schema 3; run --rekey --yes first"); exit(2); }
-    const { fx, refusals } = nextFixture(schema3 ? readJson(FIXTURE, {}) : null, g, cur, arg(flags, "--reason"));
+    const { fx, refusals } = nextFixture(schema3 ? readJsonOr(FIXTURE, {}) : null, g, cur, arg(flags, "--reason"));
     if (refusals.length) { console.error(`refused:\n  ${refusals.join("\n  ")}`); exit(1); }
     writeJson(FIXTURE, fx);
     console.log("fixture written");
@@ -417,7 +285,7 @@ async function keysMain(flags, schema3) {
     return;
   }
   if (flags.includes("--owns")) {
-    const owns = readJson(arg(flags, "--owns"), {});
+    const owns = readJsonOr(arg(flags, "--owns"), {});
     const lanes = Object.entries(owns).filter(([k]) => !k.startsWith("$")).map(([k, v]) => [k, Array.isArray(v) ? v : v.owns ?? []]);
     for (const f of [...new Set(unpinned.map((e) => e.file))]) {
       const who = lanes.filter(([, l]) => l.some((o) => ownsMatch(o, f))).map(([k]) => k);
@@ -428,7 +296,8 @@ async function keysMain(flags, schema3) {
     for (const e of unpinned) console.log(`${e.file}:${e.line} ${e.cls} ${e.tok}\n  ${JSON.stringify({ file: e.file, anchor: e.anchor, n: e.n, why: "?" })}`);
     if (unpinned.length) out.push(`${unpinned.length} unpinned strict key(s)`);
   } else {
-    if (schema3 && !only) out.push(...checkFixture(readJson(FIXTURE, {}), g, cur));
+    if (schema3 && !only) out.push(...checkFixture(readJsonOr(FIXTURE, {}), g, cur));
+    out.push(...idUnionProblems(g.entries));
     if (flags.includes("--strict")) {
       if (unpinned.length) out.push(`${unpinned.length} unpinned strict key(s), first ${unpinned[0].file}:${unpinned[0].line}`);
       if (g.missing.length) out.push(`missing scanner: ${g.missing.join(", ")}`);
@@ -440,82 +309,10 @@ async function keysMain(flags, schema3) {
 
 function main() {
   const flags = process.argv.slice(2);
-  if (!flags.includes("--init") && !flags.includes("--init-rust")) {
-    const schema3 = existsSync(FIXTURE) && JSON.parse(readFileSync(FIXTURE, "utf8")).$schema === 3;
-    if (schema3 || flags.some((f) => KEY_FLAGS.includes(f))) {
-      keysMain(flags, schema3).catch((e) => { console.error(e.stack ?? e); process.exit(2); });
-      return;
-    }
-  }
-  if (flags.includes("--init-rust")) {
-    if (!existsSync(FIXTURE)) { console.error("fixture missing; run --init first"); process.exit(2); }
-    const fx = JSON.parse(readFileSync(FIXTURE, "utf8"));
-    if (hasRustKeys(fx)) { console.error(".rs keys already exist; use --write to lower them"); process.exit(2); }
-    const rs = scanRust();
-    printTotals(rs);
-    if (flags.includes("--dry")) return;
-    let added = 0;
-    for (const [file, e] of [...rs].sort()) {
-      if (e.kind === "table") continue;
-      fx[file] = e;
-      added++;
-    }
-    writeFileSync(FIXTURE, JSON.stringify(fx, null, 2) + "\n");
-    console.log(`fixture written: ${added} rust files`);
-    return;
-  }
-  const counts = scan();
-  if (flags.includes("--init")) {
-    if (existsSync(FIXTURE)) { console.error("fixture exists; use --write"); process.exit(1); }
-    const fx = {};
-    for (const [file, { literals }] of [...counts].sort()) {
-      if (Object.keys(literals).length) fx[file] = { kind: kindOf(file), literals };
-    }
-    writeFileSync(FIXTURE, JSON.stringify(fx, null, 2) + "\n");
-    console.log(`fixture written: ${Object.keys(fx).length} files`);
-    return;
-  }
-  const fx = JSON.parse(readFileSync(FIXTURE, "utf8"));
-  const rustOn = hasRustKeys(fx);
-  const rs = scanRust();
-  const rises = [];
-  let dropped = 0;
-  for (const [file, { literals }] of counts) {
-    for (const [lit, n] of Object.entries(literals)) {
-      const cap = fx[file]?.literals?.[lit];
-      if (cap === undefined || n > cap) rises.push(`${file} ${JSON.stringify(lit)}: ${n} > ${cap ?? "unlisted"}`);
-    }
-  }
-  if (rustOn) rises.push(...checkRust(rs, fx));
-  for (const [file, e] of Object.entries(fx)) {
-    if (file.startsWith("$")) continue;
-    const now = file.endsWith(".rs") ? rs.get(file) : counts.get(file);
-    for (const [lit, cap] of Object.entries(e.literals)) if ((now?.literals[lit] ?? 0) < cap) dropped++;
-  }
-  console.log(`${dropped} fixture keys above their current count`);
-  if (!rustOn) {
-    console.log("rust scanning dormant (no .rs keys in the fixture); --init-rust would write:");
-    printTotals(rs);
-  }
-  if (rises.length) {
-    console.error(`rise (fix the call site; never raise the fixture):\n  ${rises.join("\n  ")}`);
-    process.exit(1);
-  }
-  if (flags.includes("--write")) {
-    const next = {};
-    for (const [file, e] of Object.entries(fx)) {
-      if (file.startsWith("$")) { next[file] = e; continue; }
-      const lits = {};
-      const now = file.endsWith(".rs") ? rs.get(file) : counts.get(file);
-      for (const [lit, cap] of Object.entries(e.literals)) {
-        const n = now?.literals[lit] ?? 0;
-        if (n > 0) lits[lit] = Math.min(cap, n);
-      }
-      if (Object.keys(lits).length) next[file] = { kind: e.kind, literals: lits };
-    }
-    writeFileSync(FIXTURE, JSON.stringify(next, null, 2) + "\n");
-    console.log("fixture lowered");
-  }
+  const gone = flags.filter((f) => f === "--init" || f === "--init-rust");
+  if (gone.length) { console.error(`${gone.join(", ")}: removed with the v1 literal ratchet; the fixture is $schema 3 (--rekey, --write)`); process.exit(2); }
+  const schema3 = existsSync(FIXTURE) && JSON.parse(readFileSync(FIXTURE, "utf8")).$schema === 3;
+  keysMain(flags, schema3).catch((e) => { console.error(e.stack ?? e); process.exit(2); });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

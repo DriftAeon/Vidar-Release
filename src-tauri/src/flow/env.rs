@@ -8,7 +8,7 @@ use std::process::Command;
 
 // pty.rs's list: Vidar may itself run inside an agent's tool shell, and a flow node's
 // spawned CLI must not inherit that conversation's markers (agent.rs uses the same list).
-use crate::pty::SCRUBBED_ENV;
+use crate::proc_job::SCRUBBED_ENV;
 use crate::which::find_on_path_exact;
 
 // ---------------------------------------------------------------------------
@@ -74,8 +74,8 @@ pub(super) fn registry_gateway_model(model: &str) -> Option<GatewayModel> {
     gateway_model_from(&serde_json::to_value(crate::modules::listed()).ok()?, model)
 }
 
-// The four wired Claude-family ids (model.ts's ModelId, minus the reserved/unwired ones).
-pub(super) const CLAUDE_MODELS: &[&str] = &[
+// The four wired first-party ids (model.ts's ModelId, minus the reserved/unwired ones).
+pub(super) const FIRST_PARTY_MODELS: &[&str] = &[
     "claude-fable-5-1",
     "claude-opus-5-5",
     "claude-sonnet-5",
@@ -123,7 +123,7 @@ pub fn build_node_env(
 
     let mut set: Vec<(String, String)> = vec![("CONTEXT_GATE".to_string(), "0".to_string())];
 
-    if CLAUDE_MODELS.contains(&model) {
+    if FIRST_PARTY_MODELS.contains(&model) {
         // Step 2: no overrides for the three auth keys after the scrub — the
         // subscription login (claude.exe's own stored credentials) is what is left.
         return Ok(EnvPlan { remove, set });
@@ -189,9 +189,9 @@ fn claude_or_test_placeholder(found: Option<PathBuf>) -> Option<PathBuf> {
 /// the same one §4.4's tests hold the env builder to.
 pub(super) fn resolve_executables() -> Result<(PathBuf, PathBuf), String> {
     let node = find_on_path_exact("node.exe").ok_or("node.exe not found on PATH")?;
-    let claude = claude_or_test_placeholder(crate::deps::claude_exe())
+    let exe = claude_or_test_placeholder(crate::deps::claude_exe())
         .ok_or("Claude Code not found on PATH or at the Claude dependency's install paths")?;
-    Ok((node, claude))
+    Ok((node, exe))
 }
 
 #[cfg(test)]

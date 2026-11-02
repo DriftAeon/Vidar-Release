@@ -2,11 +2,12 @@
 // Its card removes the rune from the tab's Rune Vault through `rune_vault_edit`
 // with the vault's lock rules: an open vault is edited, a locked one waits for Make Variant or Edit Original. A rune
 // riding in a placed runeset goes out of the vault's copy of it through the `member` op.
-import { invoke, type BareRuneGuardRefusal, type VaultOp } from "../../ipc";
-import { nameLabel } from "../../runes/bare/row-name";
+import type { BareRuneGuardRefusal, VaultOp } from "../../ipc";
+import { idLabel } from "../../runes/bare/row-name";
 import { editVault, EDIT_ORIGINAL_LABEL, EDIT_ORIGINAL_RESTART, MAKE_VARIANT_LABEL, variantSavedNotice, type VaultEditIo, type VaultPick } from "../../runes/bare/vault-edit";
-import { tabVaultEditIo } from "../../runes/bare/vault-edit-io";
-import { LOCKED_EDIT_TEXT, memberOp } from "../../runes/bare/view-vault";
+import { tabVaultIo } from "../../runes/bare/vault-io";
+import { memberOp } from "../../runes/bare/vault-pending";
+import { LOCKED_EDIT_TEXT } from "../../runes/bare/view-vault";
 import { sessionLaunchInfo } from "../sessions/lookup";
 import { respawnVaultTabs, tabVaultSession } from "../sessions/vault-tabs";
 import { actionButton, card } from "./notice-actions";
@@ -41,14 +42,14 @@ async function tabVault(tab: string): Promise<string | null> {
  *  (the refusal names that runeset), the `member` op that takes it out of the vault's copy of it. Throws when
  *  neither holds it. */
 async function removeOps(io: VaultEditIo, id: string, r: BareRuneGuardRefusal): Promise<VaultOp[]> {
-  const v = await io.current(id);
+  const view = await io.read(id);
+  const v = view.vault;
   const one = v.runes.find((x) => x.id === r.id && (r.library === null || x.library === r.library));
   if (one) return [{ op: "removeRune", ref: one }];
   const set = v.runesets.map((c) => c.source).find((s) => s.set === r.set && (r.library === null || s.library === r.library));
   if (!set) throw new Error(IN_RUNESET);
   // the refusal names the runeset's library; a cross-library slot's own library comes from the vault view
-  const viewed = (await io.currentView(id).catch(() => null))?.runes
-    .find((x) => x.id === r.id && x.set?.library === set.library && x.set.set === set.set);
+  const viewed = view.runes.find((x) => x.id === r.id && x.set?.library === set.library && x.set.set === set.set);
   return [memberOp(set, { library: viewed?.library ?? set.library, id: r.id }, false)];
 }
 
@@ -56,12 +57,12 @@ async function removeOps(io: VaultEditIo, id: string, r: BareRuneGuardRefusal): 
  *  A locked vault turns the card into the Make Variant / Edit Original choice; Make Variant saves the new vault
  *  for new sessions and leaves this tab on its own (the card shows the notice, no retry); Edit Original edits the
  *  locked one and retries fresh (`retry(true)`: a resume would load the thread's old vault state). */
-export function runeGuardCard(tab: string, refusal: BareRuneGuardRefusal, retry: (fresh: boolean) => Promise<void>, io: VaultEditIo = tabVaultEditIo(tab, undefined, (vault) => respawnVaultTabs(vault, tab))): HTMLElement {
+export function runeGuardCard(tab: string, refusal: BareRuneGuardRefusal, retry: (fresh: boolean) => Promise<void>, io: VaultEditIo = tabVaultIo(() => tabVaultSession(tab), undefined,(vault) => respawnVaultTabs(vault, tab))): HTMLElement {
   const why = refusal.reason.includes("holds the account name") ? "Holds Your Account Name"
     : refusal.reason.includes("holds the user-profile path") ? "Holds Your Profile Path"
     : refusal.reason.includes("unsubstituted placeholder") ? "Has an Unsubstituted Placeholder"
     : "Failed the Spawn Guard";
-  const title = `Rune ${nameLabel(refusal.id)} ${why}`;
+  const title = `Rune ${idLabel(refusal.id)} ${why}`;
   const c = card(title);
   let target: { id: string; ops: VaultOp[] } | null = null;
   const run = async (pick?: VaultPick): Promise<void> => {

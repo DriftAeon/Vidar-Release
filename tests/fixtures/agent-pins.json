@@ -2,72 +2,448 @@
   "$schema": 1,
   "pins": [
     {
-      "file": "src-tauri/src/bare/env.rs",
-      "anchor": "codex: . get ( \"CODEX_HOME\" ) . map",
+      "file": "content/local-voice/speak.py",
+      "anchor": "speak: ( ) / \".claude\" / \"projects\" ROLLOUT_SESSIONS",
       "n": 1,
       "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ( \"claude-bare\" , \"claude\" , \"raw\" )",
+      "file": "content/local-voice/speak.py",
+      "anchor": "speak: ( ) / \".codex\" / \"sessions\" ROLLOUT_DAYS",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ( \"claude-rendered-bare\" , \"claude\" , \"rendered\" )",
+      "file": "src-falcon/src/codex.rs",
+      "anchor": "CodexRuntime::spawn_request_in: if params . claude_config_dir . is_some (",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ( \"codex-bare\" , \"codex\" , \"raw\" )",
+      "file": "src-falcon/src/journal.rs",
+      "anchor": "Body: , Codex { codex : CodexRecord ,",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ( \"codex-rendered-bare\" , \"codex\" , \"rendered\" )",
+      "file": "src-falcon/src/protocol.rs",
+      "anchor": "CAPABILITY_CODEX_BARE: & str = \"codex_bare\" ; pub const",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ) , ( \"claude-bare\" , \"claude\" ,",
+      "file": "src-falcon/src/protocol.rs",
+      "anchor": "CAPABILITY_CODEX_QUERY: & str = \"codex_query\" ; pub const",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ) , ( \"codex-bare\" , \"codex\" ,",
+      "file": "src-falcon/src/protocol.rs",
+      "anchor": "CAPABILITY_CODEX_SKILLS: & str = \"codex_skills\" ; pub const",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: ) , ( \"codex-rendered-bare\" , \"codex\" ,",
+      "file": "src-falcon/src/protocol.rs",
+      "anchor": "CAPABILITY_CODEX_TURNS: & str = \"codex_turns\" ; pub const",
       "n": 1,
-      "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "why": "wire-name"
     },
     {
-      "file": "src-tauri/src/bare/vault/migrate.rs",
-      "anchor": "BUILTIN: & [ ( \"claude-rendered-bare\" , \"claude\" ,",
+      "file": "src-falcon/src/protocol.rs",
+      "anchor": "CODEX_BARE_SPAWN_KEY: & str = \"codex_bare\" ; # [",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-falcon/src/serve/dispatch.rs",
+      "anchor": "spawn: = spawned . codex_bare { payload [",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-falcon/src/serve/dispatch.rs",
+      "anchor": "spawn: => Agent :: Claude , ( _",
+      "n": 1,
+      "why": "blank-default",
+      "test": "serve::tests::v1_spawn_without_agent_resolves_claude"
+    },
+    {
+      "file": "src-falcon/src/serve/spawn.rs",
+      "anchor": "spawn_session: if params . claude_config_dir . is_some (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/bang.rs",
+      "anchor": "bang_run: :: var ( \"CLAUDE_CODE_GIT_BASH_PATH\" ) . ok",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/bare/env.rs",
+      "anchor": "app_server: . get ( \"CODEX_HOME\" ) . map",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/falcon/session_commands.rs",
+      "anchor": "spawn_agent: ( Agent :: Claude ) , Some",
+      "n": 1,
+      "why": "blank-default",
+      "test": "blank_agent_is_claude"
+    },
+    {
+      "file": "src-tauri/src/flow/codex.rs",
+      "anchor": "permission_key: format ! ( \"codex:{other}\" ) , }",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: , \"VIDAR_TAB_NAME\" , \"CLAUDE_CODE_MAX_CONTEXT_TOKENS\" , \"API_TIMEOUT_MS\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: . starts_with ( \"ANTHROPIC_\" ) || upper",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: push ( ( \"ANTHROPIC_AUTH_TOKEN\" . to_string (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: push ( ( \"ANTHROPIC_BASE_URL\" . to_string (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: push ( ( \"ANTHROPIC_DEFAULT_HAIKU_MODEL\" . to_string (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: push ( ( \"ANTHROPIC_DEFAULT_OPUS_MODEL\" . to_string (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: push ( ( \"ANTHROPIC_DEFAULT_SONNET_MODEL\" . to_string (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "build_node_env: push ( ( \"CLAUDE_CODE_MAX_CONTEXT_TOKENS\" . to_string (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "FIRST_PARTY_MODELS: , \"claude-opus-5-5\" , \"claude-sonnet-5\" , \"claude-haiku-4-5-20251001\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "FIRST_PARTY_MODELS: , \"claude-sonnet-5\" , \"claude-haiku-4-5-20251001\" , ] ;",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "FIRST_PARTY_MODELS: [ \"claude-fable-5-1\" , \"claude-opus-5-5\" , \"claude-sonnet-5\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/flow/env.rs",
+      "anchor": "FIRST_PARTY_MODELS: = & [ \"claude-fable-5-1\" , \"claude-opus-5-5\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/mcp.rs",
+      "anchor": "project_local_settings: :: Agent :: Claude ) . user_dir",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/release_check.rs",
+      "anchor": "PACK_UPDATABLE: , \"agent-profiles\" , \"codex-profiles\" , \"voice-stock\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/release_check.rs",
+      "anchor": "PACK_UPDATABLE: ] = [ \"pi\" , \"agent-profiles\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/items.rs",
+      "anchor": "source_home: = Agent :: Claude ; let dir",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "anchor": "DROP_PREFIXES: , \"CLAUDE\" , \"CODEX_\" , \"OPENAI_\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "anchor": "DROP_PREFIXES: , \"CODEX_\" , \"OPENAI_\" , \"VIDAR_\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "anchor": "DROP_PREFIXES: [ \"ANTHROPIC_\" , \"CLAUDE\" , \"CODEX_\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/generate/run.rs",
+      "anchor": "DROP_PREFIXES: ] = [ \"ANTHROPIC_\" , \"CLAUDE\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/import/sources.rs",
+      "anchor": "live_codex_home: :: var_os ( \"CODEX_HOME\" ) , home",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/rules/mod.rs",
+      "anchor": "RulesPrepared: > , pub codex : Option <",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src-tauri/src/voice_slots/mod.rs",
+      "anchor": "eval: && id == \"voice-stock/claude-p\" { return fail",
       "n": 1,
       "why": "history-data",
-      "test": "live_shape_migrates_into_expected_vaults"
+      "test": "voice_slots_claude_pack_move_requires_an_explicit_new_pick"
+    },
+    {
+      "file": "src/agents/agent-profile.ts",
+      "anchor": "CODEX_BARE: const CODEX_BARE = \"codex_bare\" ; export interface",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/agents/agent-profile.ts",
+      "anchor": "CODEX_TURNS: const CODEX_TURNS = \"codex_turns\" ; export const",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/agents/agent-profile.ts",
+      "anchor": "gatedHostShape: return c . hostedCodex && ! c",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/agents/claude.ts",
+      "anchor": "ClaudeAdapter.user: replay && ! /^Another Claude session sent a message:\\s*\\n<agent-message / . test (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/agents/codex-requests.ts",
+      "anchor": "CodexRequests.request: . mode === \"openai/userVerification\" ) input .",
+      "n": 1,
+      "why": "wire-name"
     },
     {
       "file": "src/falcon.ts",
       "anchor": "next: . rules_file , codex : null ,",
       "n": 1,
       "why": "wire-name"
+    },
+    {
+      "file": "src/flow/runner.ts",
+      "anchor": "CODEX_DEFAULT_MODEL: const CODEX_DEFAULT_MODEL = \"codex-default\" ; export function",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ( [ [ \"claude-fable-5-1\" , \"Fable 5.1\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ] , [ \"claude-haiku-4-5-20251001\" , \"Haiku 4.5\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ] , [ \"claude-haiku-5-5\" , \"Haiku 5.5\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ] , [ \"claude-opus-5-5\" , \"Opus 5.5\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ] , [ \"claude-opus-5\" , \"Opus 5\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ] , [ \"claude-sonnet-5-5\" , \"Sonnet 5.5\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/format.ts",
+      "anchor": "MODEL_NAMES: ] , [ \"claude-sonnet-5\" , \"Sonnet 5\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , agent : \"claude\" , library :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , agent : \"claude\" , sets :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , agent : \"codex\" , hosted :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , agent : \"codex\" , reason :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , agent : \"codex\" } , {",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , library : \"claude-user\" , imported :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , library : \"claude-user\" , scope :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , library : \"codex-user\" , scope :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , target : \"CLAUDE.md\" , targetAbs :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: , targetAbs : \"CLAUDE.md\" , activate :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: \"codex_list_models\" : case \"codex_rollout_threads\" : return [",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: \"list_codex_threads\" : case \"codex_list_models\" : case \"codex_rollout_threads\"",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: { library : \"claude-user\" , bricks :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: { library : \"claude-user\" , written :",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: defaultCwd ; case \"codex_cwd_refused\" : return false",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/ipc-mock.ts",
+      "anchor": "mockInvoke: sets : [ \"claude-user\" ] , skills",
+      "n": 1,
+      "why": "dev-probe"
+    },
+    {
+      "file": "src/ipc.ts",
+      "anchor": "Commands: | null ; codex : { mode",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/lab/commands.ts",
+      "anchor": "dryCommand: : LabTarget = \"CLAUDE.md\" ) : string",
+      "n": 1,
+      "why": "blank-default",
+      "test": "Codex commands end in --target AGENTS.md; Claude strings are unchanged"
+    },
+    {
+      "file": "src/lab/commands.ts",
+      "anchor": "liveCommand: : LabTarget = \"CLAUDE.md\" ) : string",
+      "n": 1,
+      "why": "blank-default",
+      "test": "Codex commands end in --target AGENTS.md; Claude strings are unchanged"
+    },
+    {
+      "file": "src/lab/items.ts",
+      "anchor": "rowMatches: . target ?? \"CLAUDE.md\" ) === target",
+      "n": 1,
+      "why": "blank-default",
+      "test": "a row matches an item by target, absent meaning CLAUDE.md"
     },
     {
       "file": "src/launcher/hosted.ts",
@@ -84,6 +460,230 @@
     {
       "file": "src/launcher/readopt.ts",
       "anchor": "readHostedCodexGate: } ) . hostedCodex === true ;",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/main.ts",
+      "anchor": "codexRestore: : AGENTS . codex . id ,",
+      "n": 1,
+      "why": "history-data",
+      "test": "codex-restore.test.mjs"
+    },
+    {
+      "file": "src/main.ts",
+      "anchor": "codexRestore: . rules , codex : null ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/main.ts",
+      "anchor": "codexRestore: `${ AGENTS . codex . id }-restore-notice`",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/main.ts",
+      "anchor": "codexRestore: === AGENTS . codex . id &&",
+      "n": 1,
+      "why": "history-data",
+      "test": "codex-restore.test.mjs"
+    },
+    {
+      "file": "src/panels/rack-modules.ts",
+      "anchor": "railIcon: . startsWith ( \"openai\" ) ) return",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rack-modules.ts",
+      "anchor": "railIcon: ) ) return \"openai\" ; return \"link\"",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rack-modules.ts",
+      "anchor": "serverTitle: ( ) === \"openai\" ? \"OpenAI\" :",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/cards.ts",
+      "anchor": "mcpFormMode: [ \"form\" , \"openai/form\" , \"openaiForm\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/chain.ts",
+      "anchor": "mcpDisplay: icons : [ \"openai\" as ColorIcon ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/claude-login.ts",
+      "anchor": "claudeLoginCalls: : invoke ( \"claude_auth_status\" ) ) ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/events.ts",
+      "anchor": "installedClaudeVersion: ??= invoke ( \"claude_installed_version\" ) . catch",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/host-profile.ts",
+      "anchor": "FEATURE_COMMANDS: [ \"claude_auth_status\" , \"claude_auth_status_bare\" ] , loginRun",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/host-profile.ts",
+      "anchor": "FEATURE_COMMANDS: [ \"claude_login_run\" , \"claude_login_cancel\" ] , bangMode",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/host-profile.ts",
+      "anchor": "FEATURE_COMMANDS: installedVersionCheck : [ \"claude_installed_version\" ] , loginCheck",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/host-profile.ts",
+      "anchor": "FEATURE_COMMANDS: loginCheck : [ \"claude_auth_status\" , \"claude_auth_status_bare\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/host-profile.ts",
+      "anchor": "FEATURE_COMMANDS: loginRun : [ \"claude_login_run\" , \"claude_login_cancel\" ]",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/notice-actions.ts",
+      "anchor": "trustBtn: await invoke ( \"codex_trust_folder\" , { id",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/rendered/transport.ts",
+      "anchor": "reportBare: await invoke ( \"codex_trust_offer\" , { id",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/runes.ts",
+      "anchor": "refresh: await invoke ( \"codex_trust_offer\" , { id",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/panels/sessions/lookup.ts",
+      "anchor": "fetchRollouts: => invoke ( \"codex_rollout_threads\" , { cwd",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/rules/inject.ts",
+      "anchor": "layer: = rules . codex ; if (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/rules/inject.ts",
+      "anchor": "RulesLaunch: | null ; codex : CodexRules ;",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/rules/prepare.ts",
+      "anchor": "prepareRules: : r . codex , warnings :",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/rules/prepare.ts",
+      "anchor": "prepareRules: . file , codex : r .",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/rules/prepare.ts",
+      "anchor": "refused: : null , codex : null ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/runes/bare/view-vault.ts",
+      "anchor": "listed: = loads ?. codexFiles ; if (",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/settings/build/view.ts",
+      "anchor": "ASSET_ICONS: > = { \"codex-profiles\" : openaiIcon ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "src/startup-updates/index.ts",
+      "anchor": "startStartupUpdates: => invoke ( \"codex_skew\" ) , readState",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/claude-sidecar-bare.mjs",
+      "anchor": "overlayDir: ( home , \"claude-config\" ) ; const",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/claude-sidecar-bare.mjs",
+      "anchor": "readProfile: ?. agent !== \"claude\" ) throw new",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/claude-sidecar-statusline.mjs",
+      "anchor": "base: ( ) , \".claude\" ) ; const",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/release/pack-index.mjs",
+      "anchor": "PACK_UPDATABLE: , \"agent-profiles\" , \"codex-profiles\" , \"voice-stock\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/release/pack-index.mjs",
+      "anchor": "PACK_UPDATABLE: PACK_UPDATABLE = [ \"pi\" , \"agent-profiles\" ,",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/release/push-msg-gate.ps1",
+      "anchor": "push-msg-gate: ] @ { \"claude-session\" = @ {",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/release/push-msg-gate.ps1",
+      "anchor": "push-msg-gate: { Re = \"Claude-Session:\" ; Opt =",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/release/release-zip.ps1",
+      "anchor": "release-zip: { $manifest [ \"claude_store\" ] = \"not shipped: Falcon uses the installed claude.exe (src-falcon/src/claude.rs fallback)\"",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
+      "file": "tools/release/zip-audit.mjs",
+      "anchor": "benignEmail: const benignEmail = /noreply|no-reply|example\\.(com|org)|\\.(example|invalid|test|local)$|@anthropic\\.com$|@users\\.noreply\\.github\\.com$|@localhost|@test\\b|@x\\.y/i ; let scrubAllow",
       "n": 1,
       "why": "wire-name"
     }

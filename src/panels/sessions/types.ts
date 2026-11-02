@@ -1,13 +1,15 @@
 // Tab record and launch types shared by sessions.ts and its sessions/* modules;
 // sessions.ts re-exports the public ones, so importers are unchanged.
 import type { Terminal } from "@xterm/xterm";
-import type { AgentId } from "../../agents/id";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { isAgentId, PTY_ONLY_IDS, unknownAgent, type AgentId } from "../../agents/id.ts";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { SearchAddon } from "@xterm/addon-search";
 import type { RenderedBody } from "../rendered";
 import type { Effort, PermissionMode } from "../../agents/protocol";
 import type { RulesLaunch } from "../../rules/inject";
 import type { SetRef } from "../../ipc";
+import type { VaultGate } from "../rendered/vault-gate";
 
 /** A tab has one BODY: an xterm over a pty (terminal), or a Rendered
  *  transcript over a headless agent (panels/rendered.ts). The body is fixed
@@ -59,6 +61,9 @@ export interface TerminalSession {
   sets?: SetRef[];
   /** The Rune Vault this tab launched on; a respawn prefers the vault its session record names. */
   vault?: string;
+  /** Set while this Bare tab waits for its Rune Vault (the launcher's opt-in); a pick (`pickTabVault`)
+   *  writes `vault` and releases it. Absent on every other tab. */
+  pendingVault?: VaultGate;
   container: HTMLElement;
   button: HTMLButtonElement;
   alive: boolean;
@@ -104,6 +109,9 @@ export interface LaunchOpts {
   sets?: SetRef[];
   /** The Rune Vault a profiled tab launches on (rune_vault_list id); wins over `sets`. */
   vault?: string;
+  /** Rendered Bare tab: open at once and hold the first spawn until a vault is picked. Set only by the
+   *  roster's pending option; unset (the default) spawns as before. */
+  pendingVault?: boolean;
   /** adopt this existing Falcon-hosted Claude session; never spawns a second Claude */
   falconSession?: string;
   /** Internal startup restore identity; ordinary opens receive a fresh key. */
@@ -117,10 +125,17 @@ export interface LaunchOpts {
   onAdopted?: (ok: boolean, reason?: string) => void;
 }
 
-// "gemini" is a terminal-only kind: no Rendered adapter, no resume source;
-// every Codex/Claude special case below compares literally, so it takes the generic path.
-// "pi" is the same terminal-only kind as gemini.
-export type SessionAgent = AgentId | "gemini" | "pi" | "shell";
+// PTY-only agents have no Rendered adapter or resume source.
+export type SessionAgent = AgentId | typeof PTY_ONLY_IDS[number] | "shell";
+
+export function sessionSupports(agent: SessionAgent, feature: "thread" | "gateway"): boolean {
+  if (!isAgentId(agent)) return false;
+  switch (agent) {
+    case "claude": return feature === "gateway";
+    case "codex": return feature === "thread";
+    default: return unknownAgent(agent);
+  }
+}
 
 /** A frontend-only page shown as a tab (openPageTab). `mount` paints into the
  *  tab's `.page-host` and returns its teardown, called when the tab closes. */

@@ -76,18 +76,7 @@ pub fn valid_id(id: &str) -> bool {
 
 /// A file stem to an id candidate: lowercase, runs of anything else to one `-`.
 pub fn slug(stem: &str) -> String {
-    let mut out = String::new();
-    for c in stem.chars().flat_map(|c| c.to_lowercase()) {
-        if c.is_ascii_lowercase() || c.is_ascii_digit() {
-            out.push(c);
-        } else if !out.ends_with('-') && !out.is_empty() {
-            out.push('-');
-        }
-    }
-    let mut out: String = out.trim_matches('-').chars().take(48).collect();
-    while out.ends_with('-') {
-        out.pop();
-    }
+    let out = crate::rules::slug::slug(stem, 48);
     if out.is_empty() { "character".into() } else { out }
 }
 
@@ -240,6 +229,18 @@ pub fn apply_patch(pack: &Pack, patch: &Value) -> Result<Pack, String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn slug_outputs_are_pinned() {
+        assert_eq!(slug("Foo Bar"), "foo-bar");
+        assert_eq!(slug("  Foo__Bar!! "), "foo-bar");
+        assert_eq!(slug("--x--"), "x");
+        assert_eq!(slug("Ünï Café 99"), "n-caf-99");
+        assert_eq!(slug("!!!"), "character");
+        assert_eq!(slug(""), "character");
+        assert_eq!(slug(&"abcdefghij".repeat(6)), "abcdefghij".repeat(4) + "abcdefgh");
+        assert_eq!(slug(&format!("{} x", "a".repeat(47))), "a".repeat(47));
+    }
 
     fn pack_json() -> Value {
         json!({

@@ -37,12 +37,10 @@ mod fsx;
 mod gitreview;
 mod gitrun;
 mod jira;
-mod job;
 mod lab;
 mod listen;
 mod listen_sidecar;
 mod lmstudio;
-mod loadout;
 mod mcp;
 mod modules;
 mod net;
@@ -72,7 +70,7 @@ mod tray;
 mod tray_config;
 mod tray_native;
 mod unreal;
-mod vidar_worktree;
+mod codex_worktree;
 mod usage_ledger;
 mod voice;
 mod voice_slots;
@@ -174,12 +172,7 @@ fn main() {
             rules::generate::commands::rules_generate,
             rules::generate::commands::rules_generate_cancel,
             rules::import::local::bare_local_sources,
-            bare::item_import::bare_items_import,
             bare::bundles::bare_module_bundles,
-            rules::fork::bare_set_fork,
-            bare::kit::bare_kit_create,
-            bare::kit::bare_kit_item_create,
-            bare::kit::bare_library_files,
             bare::library_delete::bare_library_delete,
             bare::sets_list::bare_sets_list,
             bare::manifest::bare_launch,
@@ -197,7 +190,7 @@ fn main() {
             agent::kill_agent,
             bare::codex_trust::codex_trust_offer,
             bare::codex_trust::codex_trust_folder,
-            vidar_worktree::vidar_worktree_open,
+            codex_worktree::vidar_worktree_open,
             agent::agent_reap_all,
             codex_threads::list_codex_threads,
             status::list_external_sessions,
@@ -224,6 +217,14 @@ fn main() {
             changes::changes_sync,
             changes::changes_rename_branch,
             unreal::unreal_status,
+            unreal::unreal_mcp_status,
+            unreal::asset::unreal_asset_card,
+            unreal::asset::unreal_find,
+            unreal::diff::unreal_asset_diff,
+            unreal::pin::unreal_engine_pin,
+            unreal::pin::unreal_engine_pin_set,
+            unreal::pin::unreal_engine_choices,
+            unreal::graph::unreal_graph_text,
             jira::commands::jira_status,
             jira::commands::jira_connect,
             jira::commands::jira_disconnect,
@@ -276,7 +277,6 @@ fn main() {
             bridge::list_display,
             bridge::save_display_decision,
             bridge::read_display_decision,
-            bridge::archive_display_file,
             bridge::delete_display_file,
             chrome::set_caption_color,
             caption::caption_metrics,
@@ -321,9 +321,6 @@ fn main() {
             falcon::falcon_handoff_write,
             falcon::falcon_handoff_peek,
             falcon::falcon_handoff_clear,
-            loadout::read_loadout,
-            loadout::codex::read_codex_loadout,
-            loadout::file_kb,
             mcp::read_mcp_servers,
             mcp::codex::read_codex_mcp_servers,
             mcp::list_mcp_tools,
@@ -418,9 +415,11 @@ fn main() {
         .setup(|app| {
             #[cfg(not(test))] bare::start_login_sweep();
             let handle = app.app_handle().clone();
-            // Before any window or launch: Bare rows and the retired home-wide lists become Rune
-            // Vaults; vidar.json last.
-            bare::vault::migrate::run_at_startup();
+            // Before any window or launch: unused copy and legacy custom vaults are swept (the pass the vault migration ran last).
+            let sweep_home = bare::home::resolve().map_err(|e| eprintln!("vault sweep: {e}; home not checked")).ok();
+            bare::vault::store::Store::open(&paths::root()).sweep_startup(sweep_home.as_deref()).iter().for_each(|l| eprintln!("vault sweep: {l}"));
+            // Then retired library names (`migrate_lib_rename::RENAMES`) move once; locked vaults read them by alias.
+            bare::vault::migrate_lib_rename::run_at_startup();
             bridge::ensure_dirs();
             bridge::sweep_review_artefacts();
             bridge::purge_workbench_archive();

@@ -1,4 +1,4 @@
-//! src-tauri\src\bare\env_parity.rs — env parity, Rust half: `prepare_with` (Claude) and `env::codex`
+//! src-tauri\src\bare\env_parity.rs — env parity, Rust half: `prepare_with` (Claude) and `env::app_server`
 //! (Codex) against `tests/fixtures/agent-env-parity.json`, the fixture `tests/agent-env-parity.test.mjs`
 //! holds the JS builder (`tools/lib/agent-env.mjs` buildBareEnv) to. Same contract, same profiles, same
 //! parent env in the fixture's own order (first spelling wins): the same env names, spelling included
@@ -79,7 +79,7 @@ fn rust_codex_builder_gives_the_fixture_names() {
     let p = load_codex_profile(&crate::paths::root(), "bare").expect("profiles/bare/codex.json loads");
     let fill = |s: &str| s.replace("{{root}}", r"X:\vidar").replace("{{home}}", r"X:\vidar\runtime\homes");
     let overlay: BTreeMap<String, String> = p.overlay.iter().map(|(k, v)| (k.clone(), fill(v))).collect();
-    let built = env::codex(inherited(&f), &overlay).expect("env::codex succeeds on the fixture");
+    let built = env::app_server(inherited(&f), &overlay).expect("env::app_server succeeds on the fixture");
     assert_no_inherited_drop(&f, &built);
     assert_eq!(built.get("CODEX_HOME").map(|v| v.to_string_lossy().into_owned()), Some(r"X:\vidar\runtime\homes\codex-home".into()));
     assert_eq!(built.get("LOCALAPPDATA").map(|v| v.to_string_lossy().into_owned()).as_deref(), parent_value(&f, "LOCALAPPDATA"), "the real one");

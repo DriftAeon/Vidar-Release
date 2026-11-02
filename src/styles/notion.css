@@ -1,17 +1,5 @@
 /* Notion bench tab (panels/notion.ts, notion/view.ts): the Jira pane's frame, compact buttons, notice and form
    (jira.css), rebuilt on the nt- classes; the lists are the shared browser shell (browser-*.css). */
-.notion-pane { flex: 1; min-height: 0; min-width: 0; display: none; flex-direction: column; gap: var(--space-8); font-size: var(--font-12); }
-.notion-pane [hidden] { display: none; }
-.notion-pane .icn { width: var(--space-16); height: var(--space-16); flex: none; }
-
-/* bench compact buttons: the .wb-actions look at the bar size (workbench.css .wb-block .wb-actions button) */
-.notion-pane .wb-actions button {
-  box-sizing: border-box; height: var(--row-24); min-width: var(--row-24); padding: 0 var(--space-8);
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); white-space: nowrap;
-  font-family: var(--font-ui);
-}
-.notion-pane .wb-actions button.nt-ico { width: var(--row-24); padding: 0; }
-.notion-pane .wb-actions button[aria-busy="true"] { opacity: 1; cursor: progress; }
 .notion-pane button.nt-ico { flex: none; }
 
 /* heads: workspace or data-source title, count, actions */

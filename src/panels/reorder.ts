@@ -1,15 +1,16 @@
-/** src\panels\reorder.ts — drag-to-reorder for collapsible `.rack-row` lists (Loadout, MCP
+/** src\panels\reorder.ts — drag-to-reorder for collapsible `.rack-row` lists (MCP
  *  servers), order kept in prefs per list (vidar-state.json).
  *  Rows opt in with `data-key`; keyed rows must sit contiguously in the list (trailing notes and
  *  empty-state lines stay unkeyed and unmoved). A press still toggles at once (press.ts); a
  *  press that moves past DRAG_PX becomes a drag and undoes that toggle. */
 import { repeatPress } from "./press";
+import { notifyModulesChanged } from "../modules/hidden";
 import { getPref, setPref } from "../prefs";
 import { mergeVisibleOrder } from "../modules/order";
 
 const DRAG_PX = 5;
 
-export type OrderKey = "order.loadout" | "order.rack" | "order.launcher" | "order.documentFolders" | "order.workbenchTabs" | "order.tools";
+export type OrderKey = "order.rack" | "order.launcher" | "order.documentFolders" | "order.workbenchTabs" | "order.tools";
 
 /** `handle`: the keyed rows are themselves the grab target (a direct child of the list matching this
  *  selector) and a press has no toggle to undo; absent = `.rack-name` inside a `.rack-row`.
@@ -30,7 +31,7 @@ export function applyOrder(list: HTMLElement, storeKey: OrderKey): void {
   const rows = keyedRows(list);
   const order = saved(storeKey);
   if (order.length !== (getPref(storeKey) ?? []).length && setPref(storeKey, order)) {
-    document.dispatchEvent(new document.defaultView!.CustomEvent("vidar-modules-change"));
+    notifyModulesChanged();
   }
   if (rows.length < 2) return;
   const rankOf = new Map<HTMLElement, number>();
@@ -53,7 +54,7 @@ function saveOrder(list: HTMLElement, storeKey: OrderKey, visible?: (row: HTMLEl
   const rows = keyedRows(list).filter((row) => !visible || visible(row));
   const next = mergeVisibleOrder(saved(storeKey), rows.map((r) => r.dataset.key!));
   setPref(storeKey, next);
-  document.dispatchEvent(new document.defaultView!.CustomEvent("vidar-modules-change"));
+  notifyModulesChanged();
 }
 
 /** Move one available row by one position for keyboard order controls. */

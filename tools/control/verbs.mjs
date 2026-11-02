@@ -7,6 +7,9 @@
 // Usage details name the CLI flag (`--report …`); the MCP layer rewrites them to its field names.
 
 import { readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { readJson } from "../lib/json.mjs";
+import { root as repoRoot } from "../lib/paths.mjs";
 
 export class UsageError extends Error { exitCode = 1 }
 
@@ -184,10 +187,13 @@ const builders = {
     // The caller's shell cwd is its tab's cwd; without it the tab falls back to the roster/default folder.
     const cwd = str(o, "cwd", "--cwd") ?? process.cwd();
     const effort = str(o, "effort", "--effort");
-    // Literal copy of contracts\effort-levels.json; Rust refuses anything outside the contract too.
-    if (effort !== undefined && !["low", "medium", "high", "xhigh", "max"].includes(effort)) {
-      fail("--effort must be one of low, medium, high, xhigh, max");
+    // contracts\effort-levels.json is the list; Rust refuses anything outside the contract too.
+    if (effort !== undefined) {
+      const levels = readJson(join(repoRoot(), "contracts", "effort-levels.json"));
+      if (!levels.includes(effort)) fail(`--effort must be one of ${levels.join(", ")}`);
     }
+    const vault = str(o, "vault", "--vault"); // a vault id or "last"; unset = the user's Last Vault (refused when there is none)
+    if (vault !== undefined && vault.trim() === "") fail("--vault must not be blank");
     const brief = str(o, "brief", "--brief");
     let text = str(o, "text", "--text");
     let title = str(o, "title", "--title");
@@ -208,7 +214,7 @@ const builders = {
     if (title !== undefined) title = checkTitle(title);
     // `brief` is display only; Rust rejects the whole request unless it passes `valid_reason`.
     const briefShown = brief !== undefined && briefLabelOk(brief) ? brief : undefined;
-    return { payload: { agent, model, ...(effort !== undefined ? { effort } : {}), cwd, text, title, brief: briefShown, ...extra } };
+    return { payload: { agent, model, ...(effort !== undefined ? { effort } : {}), cwd, text, title, ...(vault !== undefined ? { vault } : {}), brief: briefShown, ...extra } };
   },
 
   ask: (o) => {

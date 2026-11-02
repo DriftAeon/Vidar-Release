@@ -24,6 +24,8 @@ import { listen } from "./ipc";
 import { clearOpenMessage, getActiveSessionId, sessionContainer, writeToSession } from "./panels/sessions";
 import { addSettingRow, addShortcut, isShortcutsModalOpen } from "./shortcuts";
 import { markVoice } from "./voice-mark";
+import { asHotkeyError, hotkeyLine } from "./voice-hotkey-error";
+import { showHotkeyPopup } from "./voice-hotkey-popup";
 
 interface TranscriberCfg {
   command: string;
@@ -98,7 +100,10 @@ export function initVoice(voice: VoiceCfg, signal: AbortSignal): () => void {
     try {
       await invoke("voice_register", { chord: toGlobalChord(cfg.hotkey) });
     } catch (e) {
-      if (!signal.aborted) show(String(e), "error", 10000);
+      const typed = asHotkeyError(e);
+      if (signal.aborted) return;
+      if (typed) showHotkeyPopup(typed, () => invoke("voice_register", { chord: toGlobalChord(cfg.hotkey) }));
+      else show(String(e), "error", 10000);
       return;
     }
     // The stop's voice_register("") may have run before this register landed: unbind again.
@@ -191,7 +196,7 @@ async function stop(discard: boolean) {
   try {
     const text = await invoke("voice_stop", { prompt: cfg.prompt, discard });
     if (discard || sig.aborted) return; // switched off mid-transcription: no pill, no write
-    if (!text) show("Nothing Detected", "warn", 2500);
+    if (!text) hide(); // an empty transcript shows nothing
     else if (await writeToSession(target!, markVoice(target!, text))) {
       hide();
       // Auto-Send (bottom-bar switch beside the mic) submits what was just typed, as listen.ts deliver() does.
@@ -246,7 +251,8 @@ async function applyHotkey(chord: string): Promise<string | null> {
     } catch {
       // previous chord gone too — the error below is what the user needs to see
     }
-    return String(e);
+    const typed = asHotkeyError(e);
+    return typed ? hotkeyLine(typed) : String(e);
   }
   if (sig.aborted) {
     // switched off while the register was in flight: the stop's unbind may have run first

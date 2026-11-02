@@ -80,7 +80,7 @@ test("Log In waits on the login; an exit that the status check says is logged in
   await tick(); await tick();
   assert.deepEqual(h.calls, ["run", "check", "loggedIn"]);
   assert.equal(h.host.querySelector(".approval-title").textContent, "Logged In");
-  assert.deepEqual(labels(h.host), []);
+  assert.deepEqual(labels(h.host), ["✕"]);
   h.done();
 });
 
@@ -242,7 +242,7 @@ test("dispose ends a running login", async () => {
 
 const flipTip = (reach) => {
   const notes = [];
-  const login = createLogin({ loggedOut: false, disposed: false }, { claude: true, reach, tip: loginTip, check: async () => null,
+  const login = createLogin({ loggedOut: false, disposed: false }, { readsTurnReplies: true, reach, tip: loginTip, check: async () => null,
     noticeBlock: (t) => notes.push(t), redrawStatus() {}, refreshState() {} });
   login.fromAgent(false);
   return notes;

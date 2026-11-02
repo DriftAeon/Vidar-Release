@@ -30,10 +30,11 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync } from "
 import { tmpdir, userInfo } from "node:os";
 import { basename, dirname, join, resolve as pathResolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolve as resolvePath } from "../lib/paths.mjs";
+import { readJson } from "../lib/json.mjs";
+import { resolve as resolvePath, root as repoRoot } from "../lib/paths.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = pathResolve(HERE, "..", "..");
+const REPO = repoRoot();
 const WRAPPER = "fail-closed";
 
 // Probe cases, one per block-target guard. `real` is the real home's .claude folder (a path argument at run
@@ -218,7 +219,7 @@ export function tripsPathOf(env) {
 // `pwsh -NoProfile -Command <line>` (stdin = the payload), judge exit code and stderr.
 function probeCodex(o, home, runEnv, realHome) {
   const config = o.config ? pathResolve(o.config) : resolvePath("config", { root: REPO });
-  const guards = JSON.parse(readFileSync(config, "utf8").replace(/^﻿/, "")).bareCodexGuards;
+  const guards = readJson(config).bareCodexGuards;
   if (!Array.isArray(guards) || !guards.length) { console.log(`no bareCodexGuards in ${config}`); return 1; }
   const dir = join(home, "layer", "hooks");
   mkdirSync(dir, { recursive: true });

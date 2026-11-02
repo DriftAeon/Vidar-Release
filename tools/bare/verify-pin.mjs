@@ -33,8 +33,10 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve as pathResolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readJson } from "../lib/json.mjs";
+import { root as repoRoot } from "../lib/paths.mjs";
 
-const REPO = pathResolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 export const PROMPT = 'Run pwsh -NoProfile -Command "[IO.Path]::GetTempPath()" and reply with only its output.';
 
 function parseArgs(argv) {
@@ -53,7 +55,6 @@ function die(code, msg) {
   process.exit(code);
 }
 
-const readJson = (p) => JSON.parse(readFileSync(p, "utf8").replace(/^﻿/, ""));
 
 function defaultHome() {
   const root = join(process.env.LOCALAPPDATA ?? "", "Vidar", "homes");

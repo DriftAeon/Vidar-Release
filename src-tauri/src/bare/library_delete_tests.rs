@@ -62,7 +62,7 @@ fn r(lib: &str, id: &str) -> RuneRef {
 #[test]
 fn deleting_a_rune_moves_it_and_its_slots_to_the_backup() {
     let fx = Fx::new();
-    let got = delete_in(&fx.0, "mine", Some("one")).unwrap();
+    let got = delete_in(&fx.0, "mine", "one").unwrap();
     assert!(got.vaults.is_empty());
     let lib = fx.imports().join("mine");
     assert!(!lib.join("rules/one.md").exists());
@@ -84,35 +84,16 @@ fn deleting_a_rune_moves_it_and_its_slots_to_the_backup() {
 }
 
 #[test]
-fn deleting_a_library_moves_the_folder_and_listings_skip_it() {
+fn templates_vidar_and_outside_paths_refuse() {
     let fx = Fx::new();
-    delete_in(&fx.0, "mine", None).unwrap();
-    assert!(!fx.imports().join("mine").exists());
-    let first = backups(&fx, "mine");
-    assert_eq!(first.len(), 1);
-    assert!(first[0].join("rules/one.md").is_file());
-    let libs: Vec<_> = crate::bare::sets_list::sets_in(&fx.0).into_iter().filter_map(|s| s.library).collect();
-    assert_eq!(libs, vec!["other".to_string()]);
-    // A second library of the same name backs up beside the first.
-    write(&fx.imports().join("mine/rules/x.md"), &rule("x"));
-    delete_in(&fx.0, "mine", None).unwrap();
-    let both = backups(&fx, "mine");
-    assert_eq!(both.len(), 2);
-    assert!(both.iter().any(|b| b.join("rules/x.md").is_file()));
-}
-
-#[test]
-fn templates_stock_and_outside_paths_refuse() {
-    let fx = Fx::new();
-    write(&crate::paths::rune_templates_dir_in(&fx.0).join("stock-claude.json"), "{}");
-    write(&crate::paths::rune_stock_dir_in(&fx.0).join("rules/s.md"), &rule("s"));
-    for lib in ["stock", "stock-claude", "..", "mine.pre-split", "mine.deleted-20261028-101500", "missing", "a/b"] {
-        let e = delete_in(&fx.0, lib, None).unwrap_err();
+    write(&crate::paths::rune_vidar_dir_in(&fx.0).join("rules/s.md"), &rule("s"));
+    for lib in ["vidar", "base-main", "..", "mine.pre-split", "mine.deleted-20261028-101500", "missing", "a/b"] {
+        let e = delete_in(&fx.0, lib, "one").unwrap_err();
         assert!(e.contains("cannot be deleted here"), "{lib}: {e}");
     }
-    assert!(delete_in(&fx.0, "mine", Some("../other/rules/one")).is_err());
-    assert!(delete_in(&fx.0, "mine", Some("absent")).is_err());
-    assert!(crate::paths::rune_stock_dir_in(&fx.0).join("rules/s.md").is_file());
+    assert!(delete_in(&fx.0, "mine", "../other/rules/one").is_err());
+    assert!(delete_in(&fx.0, "mine", "absent").is_err());
+    assert!(crate::paths::rune_vidar_dir_in(&fx.0).join("rules/s.md").is_file());
     assert!(fx.imports().join("mine/rules/one.md").is_file());
 }
 
@@ -139,12 +120,12 @@ fn unlocked_vaults_drop_the_refs_and_a_locked_rev_stays_byte_identical() {
     };
     let before = snap(&locked.id);
 
-    let one = delete_in(&fx.0, "mine", Some("one")).unwrap();
+    let one = delete_in(&fx.0, "mine", "one").unwrap();
     assert_eq!(one.vaults, vec!["Open".to_string()]);
     assert_eq!(store.get(&open.id).unwrap().runes, vec![r("other", "one")]);
 
-    let lib = delete_in(&fx.0, "mine", None).unwrap();
-    assert_eq!(lib.vaults, vec!["With Set".to_string()]);
+    let set_gone = delete_in(&fx.0, "mine", "base").unwrap();
+    assert_eq!(set_gone.vaults, vec!["With Set".to_string()]);
     assert!(store.get(&with_set.id).unwrap().runesets.is_empty());
 
     assert_eq!(snap(&locked.id), before, "a locked vault and its revs are never touched");
@@ -156,10 +137,41 @@ fn deleting_a_set_rune_drops_its_placed_copy() {
     let fx = Fx::new();
     let set = SetSource { library: "mine".into(), set: "base".into() };
     let v = fx.store().create("Has Base", None, &[set], &[]).unwrap();
-    let got = delete_in(&fx.0, "mine", Some("base")).unwrap();
+    let got = delete_in(&fx.0, "mine", "base").unwrap();
     assert_eq!(got.vaults, vec!["Has Base".to_string()]);
     assert!(fx.store().get(&v.id).unwrap().runesets.is_empty());
     assert!(backups(&fx, "mine")[0].join("sets/base.md").is_file());
+}
+
+#[test]
+fn delete_runeset_keeps_its_runes_and_a_template_runeset_refuses() {
+    let fx = Fx::new();
+    // an import runeset is never fixed; the Vidar library's are (A.1d: `fixed` replaced the template check)
+    assert!(!crate::bare::vault::library_sets::fixed(&fx.0, "other"));
+    assert!(crate::bare::vault::library_sets::fixed(&fx.0, "vidar"));
+    let sets = fx.store().library_runesets("claude");
+    let fixed = |lib: &str| sets.iter().find(|s| s.library == lib && s.set == "base").map(|s| s.fixed);
+    assert_eq!(fixed("other"), Some(false));
+    assert_eq!(fixed("mine"), Some(false));
+    // an import runeset goes alone: its runes stay in storage
+    delete_in(&fx.0, "mine", "base").unwrap();
+    assert!(!fx.imports().join("mine/sets/base.md").exists());
+    assert!(fx.imports().join("mine/rules/one.md").is_file() && fx.imports().join("mine/rules/two.md").is_file());
+    assert!(fx.store().library_runesets("claude").iter().all(|s| s.library != "mine"));
+}
+
+#[test]
+fn a_fixed_runeset_refuses_with_the_reason_for_its_library() {
+    let fx = Fx::new();
+    let set = "---\nname: base\nkind: set\nscope: [global]\ndescription: d\n---\n- <?rune one?>\n";
+    write(&fx.imports().join("vidar/sets/base.md"), set);
+    write(&fx.imports().join("vidar/rules/one.md"), &rule("one"));
+    write(&crate::paths::config_path_in(&fx.0), "{ \"rulesLibrary\": \"other\" }");
+    let vidar = delete_in(&fx.0, "vidar", "base").unwrap_err();
+    assert_eq!(vidar, "Runeset base ships with Vidar, so it cannot be deleted");
+    let rules = delete_in(&fx.0, "other", "base").unwrap_err();
+    assert_eq!(rules, "Runeset base holds Vidar's rules, so it cannot be deleted");
+    assert!(fx.imports().join("other/sets/base.md").is_file() && fx.imports().join("vidar/sets/base.md").is_file());
 }
 
 #[test]

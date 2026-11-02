@@ -10,6 +10,7 @@
 // `check-clean` deletes it once clean, which ends the run.
 import fs from "node:fs";
 import path from "node:path";
+import { writeJsonAtomic } from "../lib/json.mjs";
 import { resolve } from "../lib/paths.mjs";
 import { LOCK_MS } from "./drive-budget.mjs";
 
@@ -110,9 +111,7 @@ export function writeLedger(file, snap, now = Date.now()) {
     falcon: snap.falcon ? [...snap.falcon] : null,
   };
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(record));
-  fs.renameSync(tmp, file);
+  writeJsonAtomic(file, record, { compact: true });
   return record;
 }
 

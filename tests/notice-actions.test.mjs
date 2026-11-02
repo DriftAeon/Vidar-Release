@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 const h = setupDom();
-const { bareNotices } = await import("../src/panels/rendered/notice-actions.ts");
+const { bareNotices, trustCard } = await import("../src/panels/rendered/notice-actions.ts");
 const { setFixOpener } = await import("../src/panels/rendered/fix-seam.ts");
 
 const TRUST = { folder: "C:\\work\\Proj", text: "Trust this Folder in your Codex Config to Load its Project Settings." };
@@ -22,7 +22,7 @@ function mount(warnings, trust, extra = {}) {
 const labels = (card) => [...card.querySelectorAll("button")].map((b) => b.textContent);
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-test("the trust card comes first with both buttons, then one Ask-only card per other warning", () => {
+test("the trust card comes first with both buttons, then one Ask and Dismiss card per other warning", () => {
   const root = mount(["Skill x was skipped", "No guard hooks"], TRUST);
   const cards = [...root.children];
   assert.equal(cards.length, 3);
@@ -30,7 +30,7 @@ test("the trust card comes first with both buttons, then one Ask-only card per o
   assert.equal(cards[0].querySelector(".blk-notice").textContent, TRUST.text);
   assert.deepEqual(labels(cards[0]), ["Trust Folder", "Dismiss"]);
   assert.ok(cards[0].querySelector("button").classList.contains("notice-trust"));
-  assert.deepEqual(labels(cards[1]), ["Ask Agent to Fix"]);
+  assert.deepEqual(labels(cards[1]), ["Ask Agent to Fix", "Dismiss"]);
   assert.equal(cards[2].querySelector(".blk-notice").textContent, "No guard hooks");
   assert.ok(cards[0].querySelector(".notice-acts").classList.contains("wb-actions"));
   assert.ok(cards[0].querySelector("button").classList.contains("wb-card-btn"));
@@ -45,7 +45,7 @@ test("Dismiss removes only the trust card, never calls the fix seam, and has no 
   dismiss.click();
   assert.equal(dismiss.hasAttribute("aria-busy"), false);
   assert.equal(root.children.length, 1);
-  assert.deepEqual(labels(root), ["Ask Agent to Fix"]);
+  assert.deepEqual(labels(root), ["Ask Agent to Fix", "Dismiss"]);
   assert.equal(opened, 0);
   setFixOpener(null);
 });
@@ -160,6 +160,28 @@ test("a failed trust keeps the card, marks the button, shows the error line, and
   await tick();
   assert.equal(trust.classList.contains("is-error"), false);
   assert.ok(root.querySelector(".blk-notice.done"));
+});
+
+test("a trust from either copy of a tab's card settles both: no Trust Folder or Dismiss is left on the other", async () => {
+  // the Explorer run of 11-02: the Runes pane's trust left the chat's pair, whose second press could only fail
+  h.ipc.answers.codex_trust_folder = () => undefined;
+  for (const from of ["pane", "chat"]) {
+    const tabId = `tab-both-${from}`;
+    const chat = document.createElement("div");
+    bareNotices({ tabId, agent: "codex", cwd: TRUST.folder, append: (n) => chat.appendChild(n), sealGroup() {},
+      reopenHere: () => Promise.resolve(), hasTurns: () => false }, [], TRUST);
+    const pane = document.createElement("div");
+    pane.appendChild(trustCard(tabId, TRUST));
+    const other = document.createElement("div");
+    other.appendChild(trustCard("tab-other", TRUST));
+    (from === "pane" ? pane : chat).querySelector("button").click();
+    await tick();
+    assert.deepEqual(labels(chat), ["Refresh"], from);
+    assert.equal(chat.querySelector(".blk-notice").textContent, "Trusted. Refresh to load the project settings.");
+    assert.equal(pane.querySelector("button"), null, from);
+    assert.ok(pane.querySelector(".blk-notice.done"), from);
+    assert.deepEqual(labels(other), ["Trust Folder", "Dismiss"], "another tab's card keeps asking");
+  }
 });
 
 test("Ask Agent to Fix shows Opening, passes the request, and shows an error state when the opener rejects", async () => {

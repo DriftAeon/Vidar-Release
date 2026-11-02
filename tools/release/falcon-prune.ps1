@@ -62,9 +62,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 . "$PSScriptRoot\..\lib\Paths.ps1"
-# Resolve falcon once and join the leaf rels under it.
+. "$PSScriptRoot\..\lib\FalconRuntimes.ps1"
+# Every id resolves through its full `under` chain.
 $falconDir = Resolve-VidarPath -Id falcon -Root $Root
-function Get-FalconPath([string]$Id) { Join-Path $falconDir ((Get-VidarPathNode $Id).rel.Replace('/', '\')) }
+function Get-FalconPath([string]$Id) { (Resolve-VidarPath -Id $Id -Root $Root).Replace('/', '\') }
 $bundlesDir = Get-FalconPath falconBundles
 $trashDir = Join-Path $falconDir 'prune-trash'
 $pointerPath = Get-FalconPath falconPointer
@@ -221,7 +222,9 @@ $keepStore = [System.Collections.Generic.List[string]]::new()
 $deleteStore = [System.Collections.Generic.List[string]]::new()
 $storeWhy = @{}
 $storeSkip = $null
-$pins = @{ claude = @(); codex = @() }
+$runtimeIds = Get-FalconRuntimeIds
+$pins = @{}
+foreach ($rt in $runtimeIds) { $pins[$rt] = @() }
 foreach ($id in $keepBundles) {
   $dir = Join-Path $bundlesDir $id
   # A kept id with no directory (stale registry or previous pointer) has nothing to pin.
@@ -230,17 +233,22 @@ foreach ($id in $keepBundles) {
     $m = Get-Content -LiteralPath (Join-Path $dir 'runtime-manifest.json') -Raw -ErrorAction Stop | ConvertFrom-Json
   } catch { $storeSkip = "kept bundle $id manifest unreadable"; break }
   # Schema 4+ declares which runtimes it carries (`runtimes`) and pins only those; older
-  # bundles always carry both, so a missing pin there still skips the pass.
-  $declared = @('claude', 'codex')
+  # bundles always carry every table runtime, so a missing pin there still skips the pass.
+  # A declared runtime the table does not know (or cannot read a pin for) skips the pass: its
+  # store entries could be pinned in a way this script cannot see.
+  $declared = $runtimeIds
   if ($m.schema -is [ValueType] -and [int]$m.schema -ge 4) {
-    $declared = @($m.runtimes | Where-Object { $_ -in 'claude', 'codex' })
+    $declared = @($m.runtimes | ForEach-Object { "$_" })
     if ($declared.Count -eq 0) { $storeSkip = "kept bundle $id declares no runtimes"; break }
   }
-  if (($declared -contains 'claude' -and -not $m.claude.exe_sha256) -or ($declared -contains 'codex' -and -not $m.codex.store_id)) {
+  $unknown = @($declared | Where-Object { -not (Test-FalconRuntimePinnable $_) })
+  if ($unknown.Count -gt 0) { $storeSkip = "kept bundle $id declares runtime $($unknown -join ', ') with no pin reader"; break }
+  $found = @{}
+  foreach ($rt in $declared) { $found[$rt] = Get-FalconRuntimePin $rt $m }
+  if (@($found.Values | Where-Object { -not $_ }).Count -gt 0) {
     $storeSkip = "kept bundle $id has no store pins"; break
   }
-  if ($declared -contains 'claude') { $pins.claude += "$($m.claude.exe_sha256)" }
-  if ($declared -contains 'codex') { $pins.codex += "$($m.codex.store_id)" }
+  foreach ($rt in $declared) { $pins[$rt] += $found[$rt] }
 }
 if (-not $storeSkip -and -not $created.ContainsKey($pointer.bundle_id)) { $storeSkip = 'no current bundle creation time' }
 # A running falcon-build can reuse an old unpinned entry before its bundle dir (and pin) exists.
@@ -278,12 +286,13 @@ $building = @($procs | Where-Object {
   $file -and $file -match '(?i)(?:^|[\\/])falcon-build\.ps1$' -and (Test-BuildTargetsRoot $file)
 })
 if ($building.Count -gt 0) { $storeSkip ??= "falcon-build running (pid $($building.ProcessId -join ', '))" }
-$storeEntries = @{ claude = @(); codex = @() }
+$storeEntries = @{}
+foreach ($rt in $runtimeIds) { $storeEntries[$rt] = @() }
 # Store-side read failures skip the store pass; they never abort the bundle and profile prune.
 try {
   if ((Test-Path -LiteralPath $storeDir) -and (Test-Reparse $storeDir)) { $storeSkip ??= "$storeDir is a reparse point" }
 } catch { $storeSkip ??= "cannot read $storeDir" }
-foreach ($kind in 'claude', 'codex') {
+foreach ($kind in $runtimeIds) {
   $kindDir = Join-Path $storeDir $kind
   try {
     if (-not (Test-Path -LiteralPath $kindDir)) { continue }
@@ -291,7 +300,7 @@ foreach ($kind in 'claude', 'codex') {
     $storeEntries[$kind] = @(Get-ChildItem -LiteralPath $kindDir -Force -ErrorAction Stop)
   } catch { $storeSkip ??= "cannot read $kindDir" }
 }
-foreach ($kind in 'claude', 'codex') {
+foreach ($kind in $runtimeIds) {
   foreach ($e in $storeEntries[$kind]) {
     $key = "$kind/$($e.Name)"
     # Store ids are 64 lowercase hex (claude.exe sha256, codex store_id); tmp copies and strays stay.

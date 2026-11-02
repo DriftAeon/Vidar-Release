@@ -8,7 +8,7 @@
 //
 // Usage: import { bareOptions, writeInitOnce } from "./claude-sidecar-bare.mjs";
 //        const bare = bareOptions({ profile: "bare", root: "<abs Vidar root>", home: "<abs agent home>",
-//                                   payload: "<home>\\layer\\payload-<hash12>.md" /* optional, --payload */,
+//                                   payload: "<home>\\layer\\payload-<hash12>.md" /* required, --payload */,
 //                                   mcpFile: "<home>\\layer\\mcp-<hash12>.json" /* optional, --mcp-file */,
 //                                   setPlugins: ["<root>\\plugins\\<name>", "<home>\\layer\\plugins\\<set>-<hash12>"] /* --set-plugin, repeated */,
 //                                   warn: (msg) => {} /* a dropped set plugin; default: stderr */ });
@@ -19,11 +19,11 @@
 //
 // The profile is <root>\profiles\<id>\claude.json, the same file Vidar (src-tauri/src/bare/) and
 // Falcon (src-falcon/src/claude.rs bare_spawn) read. Mapping: settingSources ["user"] (the tab's own
-// config dir, which Falcon's env names), the profile's payload as `systemPrompt.append` (or a
-// row's built `--payload` from <home>\layer in its place; the checked bytes' text, never the path),
+// config dir, which Falcon's env names), the vault's built `--payload` from <home>\layer
+// as `systemPrompt.append` (required; the checked bytes' text, never the path),
 // plugins only from `--set-plugin`: the vault's plugin runes (<root>\plugins\<name>, which Falcon
 // admitted from `plugin_names`; a bad one is refused) and any rune-set plugins (<home>\layer\plugins;
-// a bad one is dropped, not refused), and `mcp__plugin_vidar_drive` allowed only when the launch's
+// a bad one is dropped, not refused), and `mcp__vidar_drive` allowed only when the launch's
 // settings.json allow list holds it (the vault's `drive-allow` rune). The SDK `env` option is never
 // set: it replaces the child env, and Falcon already built it.
 //
@@ -34,14 +34,13 @@
 // outside the real <home>\layer, not named payload-<hash12>.md or whose SHA-256 prefix does not match that name. The optional --mcp-file is checked under the same layer and supplies strict MCP servers. Never reads vidar.json (pluginDirs and
 // statuslineMirror are the default tab's settings, not a bare tab's).
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync, statSync, lstatSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, realpathSync, statSync, lstatSync } from "node:fs";
 import { basename, dirname, join, isAbsolute, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 
 export const BARE_PROFILES = ["bare"];
-export const BARE_ALLOWED_TOOLS = ["mcp__plugin_vidar_drive"];
+export const BARE_ALLOWED_TOOLS = ["mcp__vidar_drive"];
 
-const under = (base, rel) => join(base, ...String(rel).split(/[\\/]+/).filter(Boolean));
 
 /* A row's built payload (`--payload`, which Falcon admitted under the home's layer\): checked again
    here, since the pipe that carries a spawn is open to same-user processes. The real file must sit
@@ -78,13 +77,6 @@ function readProfile(profile, root) {
   return { path, doc };
 }
 
-/* The profile's static `payload` file's bytes (read once). */
-function staticPayload(doc, root) {
-  const payload = under(root, doc.payload ?? "");
-  if (!doc.payload || !existsSync(payload)) throw new Error(`payload not found at ${payload}`);
-  return readFileSync(payload);
-}
-
 /* `--mcp-file` (a Bare tab's, or a Flow stage's, which runs on the same profile). The file must be a
    regular direct child of the real home's own layer, with the generated file name. */
 function readBareMcpFile(raw, home) {
@@ -101,7 +93,7 @@ function readBareMcpFile(raw, home) {
   const servers = doc?.mcpServers;
   if (!servers || typeof servers !== "object" || Array.isArray(servers)) throw new Error("MCP file has no mcpServers object");
   for (const name of Object.keys(servers)) {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || (name.startsWith("plugin_") && name !== "plugin_vidar_drive")) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(name) || name.startsWith("plugin_")) {
       throw new Error(`bad MCP server name ${JSON.stringify(name)}`);
     }
   }
@@ -204,9 +196,8 @@ export function bareOptions({ profile, root, home, payload: rowPayload, setPlugi
   if (!rendered || !Array.isArray(rendered.plugins)) throw new Error(`${path} has no rendered block`);
   if (rendered.plugins.length) throw new Error(`${path} lists rendered plugins; plugins come from the vault's plugin runes`);
   const plugins = admitSetPlugins(setPlugins, home, warn, root);
-  let bytes;
-  if (rowPayload !== undefined) bytes = admitRowPayload(rowPayload, home);
-  else bytes = staticPayload(doc, root);
+  if (rowPayload === undefined) throw new Error("--payload is required: the payload is the vault's built text");
+  const bytes = admitRowPayload(rowPayload, home);
   const fill = (s) => String(s).replaceAll("{{root}}", root).replaceAll("{{home}}", home);
   const overlayDir = doc.overlay?.CLAUDE_CONFIG_DIR ? fill(doc.overlay.CLAUDE_CONFIG_DIR) : join(home, "claude-config");
   const configDir = launchConfigDir(env, home, overlayDir);

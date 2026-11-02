@@ -35,7 +35,6 @@ export interface PrefKeys {
   "sessions.legacyFont": number;
   "document.last": string;
   "document.groups": Record<string, true>;
-  "order.loadout": string[];
   "order.rack": string[];
   /** Toolbar tool IDs, left to right; absent = built-in order. */
   "order.tools": string[];
@@ -122,7 +121,6 @@ export const GUARDS: { [K in PrefKey]: (v: unknown) => boolean } = {
   "sessions.legacyFont": isNum,
   "document.last": isStr,
   "document.groups": isTrueMap,
-  "order.loadout": isStrArray,
   "order.rack": isStrArray,
   "order.tools": isStrArray,
   "modules.hidden": isStrArray,
@@ -212,7 +210,6 @@ const LEGACY_KEYS: Record<string, { key: PrefKey; parse: (raw: string) => Json |
   "vidar-zoom-offset": { key: "sessions.zoomOffset", parse: num },
   "vidar.document.last": { key: "document.last", parse: str },
   "vidar.document.groups": { key: "document.groups", parse: json },
-  "vidar.order.loadout": { key: "order.loadout", parse: json },
   "vidar.order.rack": { key: "order.rack", parse: json },
   "vidar.character.animationDropdown": { key: "character.animationDropdown", parse: str },
 };
@@ -262,7 +259,7 @@ export interface PrefsOptions {
 
 const encoder = new TextEncoder();
 
-function isRecord(v: unknown): v is Record<string, Json> {
+function isRecord(v: unknown): v is Record<string, Json> { // home-ok: excludes arrays and types values as pref Json; json.ts isRecord keeps arrays, and this leaf takes no value import
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 

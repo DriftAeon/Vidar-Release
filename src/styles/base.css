@@ -11,7 +11,7 @@ body { background: var(--bg); color: var(--fg); overflow: hidden; }
   background: none; border: 1px solid var(--border); border-radius: var(--radius-4); cursor: pointer;
   color: var(--fg-dim); font: inherit; font-size: var(--font-12); padding: var(--space-3) var(--space-6);
 }
-/* no line-height here: 1 clipped descenders in rows whose labels hide overflow (Loadout "Agents") */
+/* no line-height here: 1 clipped descenders in rows whose labels hide overflow (rack rows) */
 :where(button:hover:not(:disabled)) { color: var(--accent); border-color: var(--accent); }
 /* pressed: a faint accent wash on top of the hover look, so a press reads differently from a hover */
 :where(button:active:not(:disabled)) { background: color-mix(in srgb, var(--accent) 14%, transparent); }
@@ -24,3 +24,7 @@ button:focus-visible, textarea:focus-visible {
 
 /* flat grey for dark mode: iconImg adds .icn-grey to the icons in GREY_ICONS (src/icon-img.ts) */
 .icn-grey { filter: grayscale(1); }
+
+/* The one spinner and the one dim pulse: every `animation:` that turns or pulses names these. */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes dim-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }

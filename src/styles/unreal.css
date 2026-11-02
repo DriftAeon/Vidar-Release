@@ -8,6 +8,9 @@
 .ux-status { display: inline-flex; align-items: center; gap: var(--space-4); flex: none; color: var(--fg-dim); }
 .ux-status .icn { width: var(--space-16); height: var(--space-16); }
 /* status dot after the icon, sized as .tab-agent-dot (leftbar.css) and round; signal colours as its states */
+.ux-chip { display: inline-flex; align-items: center; gap: var(--space-4); flex: none; white-space: nowrap; height: var(--row-24); box-sizing: border-box; }
+span.ux-chip { cursor: default; } /* the MCP pills are read-only: no pointer, no accent on hover */
+span.ux-chip:hover { color: var(--fg); border-color: var(--border); }
 .ux-dot { width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--dot-off); }
 .ux-dot[data-state="ok"] { background: var(--dot-ok); }
 .ux-dot[data-state="warn"] { background: var(--dot-warn); }

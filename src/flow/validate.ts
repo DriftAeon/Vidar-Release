@@ -1,9 +1,12 @@
 // Pure v1 graph validation: kind whitelist, chain-only topology, required fields, {{ref}}
 // resolvability, addon value presence, retries range, structured-content JSON parse. Leaf module
-// (only `import type` from model.ts, so it stays importable under `node --test`'s extensionless
-// resolution) — no DOM, no S, no scheduleSave.
+// (type-only model import and node-loadable leaf values) — no DOM, no S, no scheduleSave.
 
 import type { FlowGraph, FlowNode, V1AddonKind, V1NodeKind } from "./model";
+// @ts-ignore TS5097: node --test imports this leaf module directly
+import { CORE_ADAPTER_MODEL_IDS } from "./claude-models.ts";
+// @ts-ignore TS5097: node --test imports this leaf module directly
+import { appServerDefaultModel } from "./runner.ts";
 
 /** Mirrors model.ts's `V1_NODE_KINDS` (a value export; a leaf module restates it locally per §7's
  *  leaf-module rule — this fails to compile if the union in model.ts changes). */
@@ -18,19 +21,12 @@ const V1_ADDON_KIND_SET: Record<V1AddonKind, true> = {
   retries: true,
 };
 
-/** Mirrors roster.ts's wired core models — same leaf-module restatement (leaf modules can't
- *  import each other under `node --test`). Other ids come from active agent modules'
+/** Core ids come from the model adapter and runner; other ids come from active agent modules'
  *  `flowModels`, handed in by roster.ts through `setPackModelIds`. A loaded graph can name a
  *  model that is not present (its module off or removed); that is an error naming the model,
  *  not only "not blank" (the inspector shows the first wired model while the absent one
  *  would actually run). */
-const CORE_MODEL_IDS: ReadonlySet<string> = new Set([
-  "claude-sonnet-5",
-  "claude-opus-5-5",
-  "claude-fable-5-1",
-  "claude-haiku-4-5-20251001",
-  "codex-default",
-]);
+const CORE_MODEL_IDS: ReadonlySet<string> = new Set([...CORE_ADAPTER_MODEL_IDS, appServerDefaultModel()]);
 let packModelIds: ReadonlySet<string> = new Set();
 let liveModelIds: (() => readonly string[]) | null = null;
 
@@ -47,17 +43,11 @@ function modelAvailable(id: string): boolean {
 }
 
 let liveVaultIds: (() => readonly string[]) | null = null;
-let agentOfModel: ((model: string) => string) | null = null;
 
-/** inspector.ts hands in the vault ids `rune_vault_list` returned; until then (or on `null`) an
- *  unknown vault id cannot be told apart from a slow list, so only the stock check runs. */
+/** vault-names.ts hands in the vault ids `rune_vault_list` returned; until then (or on `null`) an
+ *  unknown vault id cannot be told apart from a slow list, so only the unset check runs. */
 export function setLiveVaultIds(source: (() => readonly string[]) | null): void {
   liveVaultIds = source;
-}
-
-/** The agent id a model runs on (`stock-<agent>` is that agent's own vault); `null` skips the stock check. */
-export function setVaultAgentOf(fn: ((model: string) => string) | null): void {
-  agentOfModel = fn;
 }
 
 /** The `flowModels` ids of the active agent modules; replaces the previous set. */
@@ -183,14 +173,15 @@ function checkRequiredFields(node: FlowNode, issues: FlowValidationIssue[]): voi
   }
 }
 
-/** `vault` is optional (unset = the agent's stock vault). A set id must be a known vault, and a stock
- *  vault must be the node's own agent's. */
+/** An agent node names its vault: unset blocks the Run. A set id must be a known vault. */
 function checkVault(node: FlowNode, issues: FlowValidationIssue[]): void {
-  if (node.kind !== "agent" || isBlank(node.vault)) return;
+  if (node.kind !== "agent") return;
+  if (isBlank(node.vault)) {
+    issues.push({ nodeId: node.id, message: `Node "${node.id}" has no vault selected` });
+    return;
+  }
   const vault = node.vault as string;
-  if (vault.startsWith("stock-") && agentOfModel && !isBlank(node.model) && vault !== `stock-${agentOfModel(node.model as string)}`) {
-    issues.push({ nodeId: node.id, message: `Node "${node.id}": Stock Vault for Another Agent` });
-  } else if (liveVaultIds && !liveVaultIds().includes(vault)) {
+  if (liveVaultIds && !liveVaultIds().includes(vault)) {
     issues.push({ nodeId: node.id, message: `Node "${node.id}": Unknown Vault "${vault}"` });
   }
 }

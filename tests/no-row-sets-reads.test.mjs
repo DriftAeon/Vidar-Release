@@ -65,9 +65,8 @@ test("the scan catches a seeded reader and spares migration and the pre-pick", (
   };
   assert.equal(seeded("src-tauri/src/bare/mod.rs", "layer::row_sets(&cfg, key)").length, 1);
   assert.equal(seeded("src/panels/runes/view.ts", "read defaults.json").length, 1);
-  assert.equal(seeded("src-tauri/src/bare/vault/migrate.rs", "row_sets_for gen-index").length, 0);
-  assert.equal(seeded("src/launcher/set-pick.ts", "defaults.json").length, 0);
-  assert.equal(seeded("src/launcher/set-pick.ts", "runeGenIndex").length, 1, "the pre-pick may read defaults.json only");
+  assert.equal(seeded("src/launcher/start-vault.ts", "defaults.json").length, 0);
+  assert.equal(seeded("src/launcher/start-vault.ts", "runeGenIndex").length, 1, "the pre-pick may read defaults.json only");
   assert.equal(seeded("src-tauri/src/rules/import/assign.rs", 'entry.insert("sets", refs)').length, 1);
   assert.equal(seeded("src-tauri/src/rules/import/commands.rs", 'assign::set_row_refs(config, lib, set, rows)').length, 1);
 });

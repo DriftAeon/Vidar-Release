@@ -2,10 +2,10 @@
 // outer references, so Layer B can eval its source in the real app (strip the leading `export default `, then
 // call it on `document`). Plain data out, in document order:
 //   sections [{ name, count, section, kind, tip }]  every `.runes-set-head`; `section` = the card it sits in
-//   sets     [{ library, head, section, tip, runes }]  `.runes-set[data-library]`; runes = [{ id, name, on, locked, tip }]
+//   sets     [{ library, head, section, tip, runes }]  `.runes-set[data-library]` and the `.runes-satchel` card (library null; each rune takes its own); runes = [{ id, library, name, on, locked, tip }]
 //   servers  [{ name, label, tip, group, section, ticked }]  MCP server rows, in a View group or in Local Files
 //   buttons  [{ text, disabled, title }]  every button with text (Create Runes, Generate, Import Raw ...)
-//   picks    [{ label, ticked }]  set-pick tray rows (`.sp-row`)
+//   picks    [{ label, ticked }]  Vault Cards of a waiting tab (`.vpick-top`)
 export default function readRunes(root) {
   const top = root.documentElement ?? root;
   const text = (e) => (e ? e.textContent.trim() : "");
@@ -29,7 +29,7 @@ export default function readRunes(root) {
     kind: h.parentElement.dataset.kind ?? null,
     tip: h.title,
   }));
-  const sets = all(".runes-set[data-library]").map((card) => ({
+  const sets = all(".runes-set[data-library], .runes-satchel").map((card) => ({
     library: card.dataset.library,
     head: headOf(card),
     section: sectionOf(card),
@@ -40,6 +40,7 @@ export default function readRunes(root) {
         ?? r.querySelector(".runes-bare-switch");
       return {
         id: r.dataset.id ?? "",
+        library: r.dataset.library ?? card.dataset.library ?? null,
         name: text(r.querySelector(".runes-rname")),
         on: sw ? (sw.getAttribute("aria-checked") ?? sw.getAttribute("aria-pressed")) === "true" : !r.classList.contains("is-dim"),
         locked: sw ? sw.disabled : false,
@@ -59,6 +60,6 @@ export default function readRunes(root) {
     };
   });
   const buttons = all("button").filter((b) => text(b)).map((b) => ({ text: text(b), disabled: b.disabled, title: b.title }));
-  const picks = all(".sp-row").map((b) => ({ label: text(b), ticked: b.getAttribute("aria-checked") === "true" }));
+  const picks = all(".vpick-top").map((b) => ({ label: text(b.querySelector(".vpick-name") ?? b), ticked: b.querySelector(".runes-check")?.getAttribute("aria-checked") === "true" }));
   return { sections, sets, servers, buttons, picks };
 }

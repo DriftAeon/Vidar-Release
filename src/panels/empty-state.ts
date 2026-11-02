@@ -2,6 +2,7 @@
 // actions, then an optional alert line. Not Connected (Jira, Slack, Notion) and Not a Git Repository
 // (Changes) draw through it; the CSS is src/styles/empty-state.css. Remote or runtime text goes in through
 // textContent or title only.
+import { button, span } from "../dom";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 
@@ -19,21 +20,6 @@ export interface EmptyStateOptions {
 
 export const HIDE_TIP = "Hides this tab. Settings › Modules shows it again.";
 
-function span(cls: string, text: string): HTMLSpanElement {
-  const s = document.createElement("span");
-  s.className = cls;
-  s.textContent = text;
-  return s;
-}
-
-function button(cls: string, run: () => void): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = cls;
-  b.addEventListener("click", () => run());
-  return b;
-}
-
 /** The module's colour mark, sized by the empty-state CSS. */
 export function brandIcon(brand: ModuleBrand): Element {
   const img = iconImg(brand);
@@ -48,14 +34,14 @@ export function lineIcon(name: Parameters<typeof lucide>[0]): Element {
 
 /** A main action: the decision pair's green (`.ws-btn.ws-add`, decision-pair.css). */
 export function goButton(label: string, run: () => void): HTMLButtonElement {
-  const b = button("ws-btn ws-add", run); // copy-ok: class names, not copy
+  const b = button("", "ws-btn ws-add", run); // copy-ok: class names, not copy
   b.textContent = label;
   return b;
 }
 
 /** Hide as an icon-only Sheen button; the tooltip names it. */
 export function hideButton(run: () => void): HTMLButtonElement {
-  const b = button("ws-btn cx-ico es-ico", run); // copy-ok: class names, not copy
+  const b = button("", "ws-btn cx-ico es-ico", run); // copy-ok: class names, not copy
   b.title = "Hide"; // copy-ok: single-word tooltip
   b.setAttribute("aria-label", "Hide");
   b.append(lucide("eye-off"));

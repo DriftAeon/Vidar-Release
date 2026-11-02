@@ -2,6 +2,8 @@
 // resolveHandoffText (leaf, so `node --test` can drive it; engine.ts is not under test).
 
 import type { FlowGraph } from "./model";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { errText } from "../err-text.ts";
 
 export type FlowRunNodeStatus =
   "idle" | "queued" | "running" | "awaiting-approval" | "ok" | "error" | "canceled" | "denied";
@@ -124,6 +126,6 @@ export async function resolveHandoffText(
     if (typeof full !== "string" || full === "") return fail("the output file is empty or missing");
     return { ok: true, text: full };
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return fail(errText(err));
   }
 }

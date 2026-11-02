@@ -10,8 +10,13 @@
   border-radius: var(--radius-4);
   padding: var(--space-8) var(--space-12);
 }
-.blk-approval.settled { border-color: var(--border); border-left-color: var(--border-strong); }
+/* settled: the edge keys on the outcome glyph (out-ok / out-no); neutral outcomes (out-dim) drop the accent */
+.blk-approval.settled { border-color: var(--border); border-left: var(--border-w) solid var(--border); }
+.blk-approval.settled.out-ok { border-left: var(--space-2) solid var(--ok-green); }
+.blk-approval.settled.out-no { border-left: var(--space-2) solid var(--deny-red); }
 .blk-approval.in-pill { border-width: 0 0 var(--border-w) var(--space-2); border-radius: 0; }
+.blk-approval.settled.in-pill { border-width: 0 0 var(--border-w) var(--border-w); }
+.blk-approval.settled.in-pill:is(.out-ok, .out-no) { border-left-width: var(--space-2); }
 
 .blk-approval .approval-head { align-items: center; gap: var(--space-8); margin-bottom: var(--space-4); }
 .blk-approval .approval-head .icn { width: var(--space-16); height: var(--space-16); flex: none; color: var(--approval-amber); }

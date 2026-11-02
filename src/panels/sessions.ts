@@ -24,15 +24,18 @@ import { bindSessionTabOrder, placeRestoredTab, saveTabOrder } from "./sessions/
 import { bindZoom, initZoom } from "./sessions/zoom";
 import { bindSearchOverlay, buildSearchOverlay } from "./sessions/search-overlay";
 import { bindOutput } from "./sessions/output";
+import { sessionSupports } from "./sessions/types";
 import { attachTerminalBody, bindTerminalBody, detachTerminalBody, initTerminalBody, syncPty } from "./sessions/terminal-body";
 import { initPtyEvents } from "./sessions/pty-events";
-import { attachRenderedBody, bindRenderedBody, codexHostCapabilities, codexMayHost } from "./sessions/rendered-body";
+import { createVaultGate } from "./rendered/vault-gate";
+import { attachRenderedBody,bindRenderedBody, codexHostCapabilities, mayHostInFalcon } from "./sessions/rendered-body";
 import { readHostedCodexGate, setHostedCodexGate } from "../launcher/readopt";
 import { dropTabState, feedRaw } from "./sessions/tab-state-feeds";
 import { bindCodexSave, forgetCodexTab, noteCodexResume, saveCodexTabs } from "./sessions/codex-save";
 import { bindLookup, getFocusedSession, nextTabName } from "./sessions/lookup";
 import { bindHosted, closeHostedTab, closeRenderedLocal, jettisonFromMenu } from "./sessions/hosted";
 import { dockBottombar, inBottombar, rescueBottombar } from "./sessions/bottombar-dock";
+import { leftSlot, onLeftCoverChange, setLeftCover } from "./sessions/left-cover";
 
 export type { LaunchOpts, PageSpec, SessionAgent, SessionBody } from "./sessions/types";
 export { hasArmedAstra } from "./sessions/astra-bridge";
@@ -72,6 +75,8 @@ let placeholderEl: HTMLElement;
 /** the Relay left pane; shown instead of the placeholder while relayOpen and no session is visible */
 let relayEl: HTMLElement;
 let relayOpen = false;
+/** the left cover layout() last mounted (sessions/left-cover.ts), so a cleared one is unmounted */
+let mountedCover: HTMLElement | null = null;
 let showSessionsView: () => void = () => {};
 /** Backend-resolved at init (resolveDefaultCwd); undefined only when the backend has none. */
 let defaultCwd: string | undefined;
@@ -105,7 +110,7 @@ export function getActiveSessionId(): string | null {
 
 export function writeToActive(data: string): Promise<boolean> {
   // Same seam as writeToSession, so a rendered tab gets its composer contract
-  // (macros, config and marquee come through here).
+  // (config and marquee come through here).
   // Resolves false when nothing took the bytes (no tab, a dead tab, a page tab).
   return activeId ? writeToSession(activeId, data) : Promise.resolve(false);
 }
@@ -153,6 +158,7 @@ export async function initSessions(
   viewEl.appendChild(placeholderEl); // aria-hidden unless the first-run card is in it (layout())
   relayEl = mountRelayPane(viewEl, { openRelay, activate, active: getActiveSessionId });
   document.getElementById("relay-btn")?.addEventListener("click", openRelay);
+  onLeftCoverChange(() => layout(false)); // a cover set or cleared re-lays the slot (and refits a restored terminal)
   mountWorkbench(viewEl, { open: openWorkbench, collapse: collapseWorkbench });
   initSplit(viewEl);
   defaultCwd = await resolveDefaultCwd();
@@ -205,7 +211,9 @@ export async function createSession(opts?: LaunchOpts): Promise<string> {
     id, container, button, alive: true, body,
     agent: kind, cwd, model: opts?.model, effort: opts?.effort, launchArgs: opts?.args, shell: opts?.shell, role: opts?.role,
     falconSession: opts?.falconSession, rules: opts?.rules, profile: opts?.profile, rowKey: opts?.rowKey, sets: opts?.sets, vault: opts?.vault,
-    tabKey: kind === "codex" && body === "rendered" && !opts?.falconSession
+    // only a Rendered Bare tab can wait for a vault; any other launch ignores the option
+    pendingVault: opts?.pendingVault && opts.profile && body === "rendered" ? createVaultGate() : undefined,
+    tabKey: sessionSupports(kind, "thread") && body === "rendered" && !opts?.falconSession
       ? (opts?.tabKey ?? crypto.randomUUID()) : undefined,
     permissionMode: opts?.permissionMode ?? "default",
     ptyCols: 0, ptyRows: 0,
@@ -231,10 +239,10 @@ export async function createSession(opts?: LaunchOpts): Promise<string> {
   render(true);
   saveTabOrder();
   if (body === "rendered") {
-    if (kind === "codex") noteCodexResume(id, opts?.resume);
+    if (sessionSupports(kind, "thread")) noteCodexResume(id, opts?.resume);
     // Hosted Codex (gate on): the host's capabilities decide the backend before the body exists.
     // Gate off, or a rules file or profile: no await, no probe, attached as before.
-    const capabilities = codexMayHost(s) ? await codexHostCapabilities() : null;
+    const capabilities = mayHostInFalcon(s) ? await codexHostCapabilities() : null;
     if (sessions.get(id) !== s) return id; // closed while the host was asked
     attachRenderedBody(s, opts?.resume, opts?.draft, opts?.onAdopted, !bgRendered, capabilities);
     return id;
@@ -331,13 +339,23 @@ function layout(refocus: boolean) {
   viewEl.classList.toggle("workbench", workbenchOpen);
   setWorkbenchShown(workbenchOpen);
   setShown(visible, relayOpen || workbenchOpen);
+  // a cover takes the left slot over visible[0]; focus and `visible` stay as they are
+  const slot = leftSlot(visible, workbenchOpen);
+  if (mountedCover && mountedCover !== slot.cover) { mountedCover.remove(); mountedCover = null; }
+  if (slot.cover) {
+    if (slot.cover.parentElement !== viewEl) viewEl.appendChild(slot.cover);
+    slot.cover.classList.add("term-container", "term-cover", "pane-left");
+    slot.cover.style.order = "0";
+    slot.cover.style.display = "block";
+    mountedCover = slot.cover;
+  }
   for (const [oid, os] of sessions) {
     const shown = visible.includes(oid);
-    os.container.style.display = shown ? "block" : "none";
+    os.container.style.display = shown && oid !== slot.hidden ? "block" : "none";
     // flex order puts the divider (order 1) between the panes: first visible
     // pane left of it, everything else right — DOM order no longer decides
-    const left = oid === visible[0];
-    os.container.style.order = left ? "0" : "2";
+    const left = oid === visible[0] && oid !== slot.hidden;
+    os.container.style.order = left || oid === slot.hidden ? "0" : "2";
     os.container.classList.toggle("pane-left", left);
     os.container.classList.toggle("focused", oid === activeId);
     os.button.classList.toggle("active", shown);
@@ -348,6 +366,9 @@ function layout(refocus: boolean) {
   dockBottombar(workbenchOpen, visible.length > 1 ? sessions.get(visible[1])?.container : undefined);
   // Fit every VISIBLE pane, not just the focused one — entering/leaving dual
   // view changes both panes' widths.
+  // All geometry reads first, then the fits: a fit writes the xterm grid, which would invalidate
+  // layout before the next pane's read and force a second layout pass in a two-pane split.
+  const fitting: TerminalSession[] = [];
   for (const id of visible) {
     const s = sessions.get(id);
     if (!s?.term?.element) continue; // a rendered body is a flex child, nothing to fit
@@ -355,8 +376,9 @@ function layout(refocus: boolean) {
     // the outer view hidden a container can be 0×0, and fitting then corrupts
     // the pty size
     if (!s.container.clientWidth || !s.container.clientHeight) continue;
-    syncPty(s);
+    fitting.push(s);
   }
+  for (const s of fitting) syncPty(s);
   if (refocus && activeId) focusBody(sessions.get(activeId));
   // status panel re-targets to the focused tab without importing this module
   dispatchFocus();
@@ -378,6 +400,7 @@ export function activate(id: string) {
 /** Left-bar Relay button: empties the terminal slot, shows the Relay pane, and switches the
  *  right panel (workbench) to its Relay tab in the same click, opening it if collapsed. */
 export function openRelay() {
+  setLeftCover(null);
   if (!relayOpen) {
     visible = [];
     activeId = null;
@@ -412,6 +435,7 @@ export function openDual(id: string) {
   activeId = id;
   workbenchOpen = false; // terminal/terminal and workbench are exclusive
   relayOpen = false;
+  setLeftCover(null);
   render(true);
 }
 

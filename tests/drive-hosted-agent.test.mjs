@@ -1,6 +1,6 @@
 // `ctl.spawn`'s hosted check (drive.ts `hostedRenderedAgent`) agrees with the split
 // `attachRenderedBody` makes: Claude always hosted; Codex only with vidar.json
-// `falcon.hostedCodex` on and a row with no rules file and no profile (`codexHostShape`).
+// `falcon.hostedCodex` on and a row with no rules file and no profile (`gatedHostShape`).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";

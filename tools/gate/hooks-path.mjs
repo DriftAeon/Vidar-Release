@@ -2,11 +2,11 @@
 // Sets core.hooksPath to .githooks when the folder is a git work tree; does nothing otherwise
 // (Vidar-Release may not be a clone). Never throws, always exits 0.
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import { root as repoRoot } from "../lib/paths.mjs";
 
 try {
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const root = repoRoot();
   const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
   const inside = git("rev-parse", "--is-inside-work-tree");
   const top = git("rev-parse", "--show-toplevel");

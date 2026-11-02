@@ -1,5 +1,5 @@
 //! One Jira issue for the in-module view: `GET issue/{key}` plus the first comments page, and a later
-//! comments page on its own. Pure functions over the `Transport` seam like `api`; the Tauri commands
+//! comments page on its own. Pure functions over `http::Client` like `api`; the Tauri commands
 //! (`jira_issue`, `jira_comments`) live in `commands`. The description and comment bodies are ADF, passed
 //! through as JSON for the front end to render with its own allowlist; nothing here builds markup.
 
@@ -7,7 +7,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::api::{get_request, map_with, text, valid_key, ApiError, ErrorKind};
-use super::http::Transport;
+use super::http::Client;
 
 pub const COMMENTS_PAGE: u32 = 20;
 /// A later page starts no further in than this; Rust refuses anything over it as a backstop.
@@ -157,70 +157,61 @@ pub fn parse_issue(site: &str, body: &[u8]) -> Result<IssueDetail, String> {
 }
 
 /// The issue, then its first comments page. A bad key is refused before any request.
-pub fn issue(transport: &dyn Transport, site: &str, key: &str) -> Result<IssueDetail, ApiError> {
+pub fn issue(client: &Client, site: &str, key: &str) -> Result<IssueDetail, ApiError> {
     if !valid_key(key) {
         return Err(refused());
     }
     let req = get_request(site, &issue_path(key)).map_err(|e| ApiError::new(ErrorKind::Site, e))?;
-    let mut detail = map_with(transport.send(&req), |body| parse_issue(site, body))?;
-    detail.comments = comments(transport, site, key, 0)?;
+    let mut detail = map_with(client.send(&req), |body| parse_issue(site, body))?;
+    detail.comments = comments(client, site, key, 0)?;
     Ok(detail)
 }
 
 /// One comments page from `start_at` (capped at `MAX_START_AT`), newest first.
-pub fn comments(transport: &dyn Transport, site: &str, key: &str, start_at: u32) -> Result<CommentsPage, ApiError> {
+pub fn comments(client: &Client, site: &str, key: &str, start_at: u32) -> Result<CommentsPage, ApiError> {
     if !valid_key(key) {
         return Err(refused());
     }
     let req = get_request(site, &comments_path(key, start_at.min(MAX_START_AT))).map_err(|e| ApiError::new(ErrorKind::Site, e))?;
-    map_with(transport.send(&req), parse_comments)
+    map_with(client.send(&req), parse_comments)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jira::http::{Request, SendError};
-    use std::cell::RefCell;
+    use crate::jira::http::fake::Fake;
 
     const SITE: &str = "https://example.atlassian.net";
     const ISSUE: &str = include_str!("../../../tests/fixtures/jira/issue.json");
     const COMMENTS: &str = include_str!("../../../tests/fixtures/jira/comments.json");
 
-    struct Stub {
-        paths: RefCell<Vec<String>>,
-        replies: RefCell<Vec<&'static str>>,
+    fn stub(replies: Vec<&'static str>) -> Fake {
+        Fake::queue(replies)
     }
 
-    impl Transport for Stub {
-        fn send(&self, req: &Request) -> Result<(u16, Vec<u8>), SendError> {
-            self.paths.borrow_mut().push(req.path.clone());
-            assert_eq!(req.method, "GET");
-            let next = self.replies.borrow_mut().remove(0);
-            Ok((200, next.as_bytes().to_vec()))
-        }
-    }
-
-    fn stub(replies: Vec<&'static str>) -> Stub {
-        Stub { paths: RefCell::new(Vec::new()), replies: RefCell::new(replies) }
+    fn paths(t: &Fake) -> Vec<String> {
+        let sent = t.sent.borrow();
+        assert!(sent.iter().all(|r| r.method == "GET"));
+        sent.iter().map(|r| r.path.clone()).collect()
     }
 
     #[test]
     fn issue_bad_key_refused_before_send() {
         for bad in ["../x", "ok-1", "", "ABC-0", "ABC-1/../x", "ABC-1?x=1"] {
             let t = stub(vec![ISSUE, COMMENTS]);
-            assert!(issue(&t, SITE, bad).is_err(), "{bad:?}");
-            assert!(comments(&t, SITE, bad, 0).is_err(), "{bad:?}");
-            assert!(t.paths.borrow().is_empty(), "{bad:?} reached the transport");
+            assert!(issue(&t.client(), SITE, bad).is_err(), "{bad:?}");
+            assert!(comments(&t.client(), SITE, bad, 0).is_err(), "{bad:?}");
+            assert!(paths(&t).is_empty(), "{bad:?} reached the transport");
         }
     }
 
     #[test]
     fn issue_fixture_parses_detail() {
         let t = stub(vec![ISSUE, COMMENTS]);
-        let d = issue(&t, SITE, "DEMO-12").unwrap();
-        assert_eq!(t.paths.borrow().len(), 2);
-        assert!(t.paths.borrow()[0].starts_with("/rest/api/3/issue/DEMO-12?fields=summary,status,"));
-        assert!(t.paths.borrow()[1].starts_with("/rest/api/3/issue/DEMO-12/comment?startAt=0&maxResults=20&orderBy=-created"));
+        let d = issue(&t.client(), SITE, "DEMO-12").unwrap();
+        assert_eq!(paths(&t).len(), 2);
+        assert!(paths(&t)[0].starts_with("/rest/api/3/issue/DEMO-12?fields=summary,status,"));
+        assert!(paths(&t)[1].starts_with("/rest/api/3/issue/DEMO-12/comment?startAt=0&maxResults=20&orderBy=-created"));
         assert_eq!(d.key, "DEMO-12");
         assert_eq!(d.url, "https://example.atlassian.net/browse/DEMO-12");
         assert_eq!(d.status, "In Review");
@@ -238,8 +229,8 @@ mod tests {
     #[test]
     fn comments_page_parses() {
         let t = stub(vec![COMMENTS]);
-        let page = comments(&t, SITE, "DEMO-12", 500_000).unwrap();
-        assert!(t.paths.borrow()[0].contains("startAt=100000&"), "startAt is capped");
+        let page = comments(&t.client(), SITE, "DEMO-12", 500_000).unwrap();
+        assert!(paths(&t)[0].contains("startAt=100000&"), "startAt is capped");
         assert_eq!(page.start_at, 0);
         assert_eq!(page.total, 3);
         assert_eq!(page.items[0].author, "Grace Example");

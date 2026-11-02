@@ -26,7 +26,7 @@ pub(super) fn cap_sids(home: &Path) -> Vec<acl::Sid> {
 /// The exemptions one Codex home's own `cap_sid` records.
 fn cap_sids_in(codex_home: &Path) -> Vec<acl::Sid> {
     let Ok(text) = std::fs::read_to_string(codex_home.join("cap_sid")) else { return Vec::new() };
-    let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) else { return Vec::new() };
+    let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(crate::fsx::strip_bom(&text)) else { return Vec::new() };
     let mut texts: Vec<&Value> = Vec::new();
     for (k, v) in &doc {
         match (k.as_str(), v) {

@@ -9,6 +9,7 @@ import { invoke } from "../ipc";
 import type { NotionHit, NotionReply, NotionRow, NotionSource } from "./ipc";
 import { planFor, type Plan } from "./facets";
 import type { NotionErr } from "./model";
+import { callOrNetwork } from "../integration-call";
 
 export const MAX_PAGES = 20;
 export const STALE_MS = 10 * 60_000;
@@ -43,13 +44,9 @@ export type Got<T> = { ok: T } | { error: NotionErr };
 
 /** One IPC call: a reply's error, or a rejected invoke as a network error. */
 export async function call<T>(run: () => Promise<NotionReply<T>>): Promise<Got<T>> {
-  try {
-    const r = await run();
-    if (typeof r === "object" && r !== null && "error" in r) return { error: (r as { error: NotionErr }).error };
-    return { ok: r as T };
-  } catch (e) {
-    return { error: { kind: "network", message: e instanceof Error ? e.message : String(e) } };
-  }
+  const r = await callOrNetwork(run);
+  if (typeof r === "object" && r !== null && "error" in r) return { error: (r as { error: NotionErr }).error };
+  return { ok: r as T };
 }
 
 export interface Paged<T> { items: T[]; capped: boolean; error: NotionErr | null }

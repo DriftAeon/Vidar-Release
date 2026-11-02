@@ -6,7 +6,7 @@
 import type { QuestionRecord } from "../asks/record";
 import { invoke } from "../ipc";
 import { createDisplayRenderer, sourcePre, type DisplayRenderer, type Painted } from "../panels/display-render";
-import { renderMarkdownOrText } from "../panels/markdown-build";
+import { markdownReady } from "../panels/markdown-lazy";
 import { createAskForm, type AskForm } from "./ask-view";
 import { createCardForm } from "./card-view";
 import type { RelayItem } from "./store";
@@ -89,7 +89,7 @@ export async function showRelayItem(item: RelayItem | null): Promise<void> {
   }
   renderer.clear(); // drops any display render and its staging; the host is ours
   try {
-    const doc = await invoke("read_document", { path: v.path });
+    const [doc, { renderMarkdownOrText }] = await Promise.all([invoke("read_document", { path: v.path }), markdownReady()]);
     if (s !== seq) return;
     const built = renderMarkdownOrText(doc.name, doc.text);
     hostEl.replaceChildren(built.fellBack ? sourcePre(doc.text) : built.el);

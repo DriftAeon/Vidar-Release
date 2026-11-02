@@ -212,5 +212,8 @@ test("a failed load shows the title for its kind, the message in the tooltip", a
     assert.equal(root.querySelector(".cx-empty").title, "connection changed, try again");
   }
   await open(SAVED, { items: [], truncated: false });
-  assert.deepEqual(text(".cx-empty-title"), ["No Recent Mentions or DMs"]);
+  assert.equal(root.querySelector(".cx-empty-title"), null);
+  assert.equal(root.querySelector(".cx-empty").hidden, true);
+  assert.equal(root.querySelector(".cx-empty").textContent, "");
+  assert.equal(root.querySelector(".cx-empty").children.length, 0);
 });

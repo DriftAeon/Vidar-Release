@@ -8,10 +8,8 @@
 // before parsing, so no event, notice or error text can carry it.
 
 import type { AgentEvent, LoginMethod } from "./protocol";
-
-type Json = Record<string, unknown>;
-const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
-const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, str, type Json } from "../json.ts";
 
 /** The only origin a ChatGPT login link may point at before Vidar opens it in the browser. */
 export const LOGIN_ORIGIN = "https://auth.openai.com/";

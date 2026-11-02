@@ -112,7 +112,7 @@ pub(super) fn trust_in(config: &Path, folder: &str) -> Result<(), String> {
         None => String::new(),
     };
     let bom = raw.starts_with('\u{FEFF}');
-    let text = raw.strip_prefix('\u{FEFF}').unwrap_or(&raw);
+    let text = crate::fsx::strip_bom(&raw);
     let mut doc: toml_edit::DocumentMut = text.parse().map_err(|e| format!("the config does not parse ({e})"))?;
     let want = norm_cwd(&key);
     let matching: Vec<String> = match doc.get("projects") {

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // tools\control\vidar.mjs — CLI front end for the `ctl.*` bus surface
-// (skill `vidar:vidar-control`, plugins\vidar-app\skills\vidar-control).
+// (the vidar-control skill rune, profiles\bare\codex-skills\vidar-control).
 //
 //   node tools\control\vidar.mjs state [--json]
 //   node tools\control\vidar.mjs read [--bytes n]
 //   node tools\control\vidar.mjs show <path> [--focus]
 //   node tools\control\vidar.mjs focus <tab>|workbench
 //   node tools\control\vidar.mjs prompt <tab> [--notify] [--report p] <text...>
-//   node tools\control\vidar.mjs spawn <agent> --model m [--effort level] [--cwd p] (--brief path | --text t) [--title t] [--notify] [--report p]
+//   node tools\control\vidar.mjs spawn <agent> --model m [--effort level] [--cwd p] [--vault id|last] (--brief path | --text t) [--title t] [--notify] [--report p]
 //   node tools\control\vidar.mjs ask <question> [--choice a,b,c [--detail text]...] [--pending [--context line]]
 //   node tools\control\vidar.mjs unpend [id]
 //   node tools\control\vidar.mjs wait <tab> [--report path] [--timeout s]
@@ -40,7 +40,7 @@ const USAGE = {
   show: "show <path> [--focus]",
   focus: "focus <tab>|workbench",
   prompt: "prompt <tab> [--notify] [--report p] <text...>",
-  spawn: "spawn <agent> --model m [--effort level] [--cwd p] (--brief path | --text t) [--title t] [--notify] [--report p]",
+  spawn: "spawn <agent> --model m [--effort level] [--cwd p] [--vault id|last] (--brief path | --text t) [--title t] [--notify] [--report p]",
   ask: "ask <question> [--choice a,b,c [--detail text]...] [--placeholder text | --pending [--context line]]",
   unpend: "unpend [id]",
   wait: "wait <tab> [--report path] [--timeout s]",
@@ -110,7 +110,7 @@ const PARSE = {
       if (v === undefined || v.startsWith("--")) usage(`${flags[i - 1]} takes a value`);
       return v;
     };
-    const named = { "--model": "model", "--effort": "effort", "--cwd": "cwd", "--brief": "brief", "--text": "text", "--title": "title" };
+    const named = { "--model": "model", "--effort": "effort", "--cwd": "cwd", "--brief": "brief", "--text": "text", "--title": "title", "--vault": "vault" };
     for (let i = 0; i < flags.length; i++) {
       if (Object.hasOwn(named, flags[i])) { opts[named[flags[i]]] = value(++i); continue; }
       if (flags[i] === "--notify") { opts.notify = true; continue; }

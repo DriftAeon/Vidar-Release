@@ -1,7 +1,7 @@
 // src\launcher\recent.ts — the Resume flyout: past Claude sessions for a location (list_recent_sessions)
 // and the "/resume" answer for a rendered body (vidar-open-resume). Split from main.ts.
 import { invoke } from "../ipc";
-import { DASH } from "../format";
+import { agoSecs as ago, DASH } from "../format";
 import { openRenderedSessionIds } from "../panels/sessions";
 import type { AgentType, Location } from "../config";
 import type { Effort } from "../agents/protocol";
@@ -13,10 +13,10 @@ import { drawCapped, openCodexRecent } from "./codex-recent";
 import { cachedList } from "./recent-cache";
 import { showSessionsToast } from "../panels/sessions/zoom";
 import { twoLineRow } from "./menu-rows";
-import { ago } from "./ago";
 import { launcherLead, resumeVariant } from "./body-order";
 import { workspaces } from "./workspaces";
 import { isAgentId, type AgentId } from "../agents/id";
+import { errText } from "../err-text";
 
 const threadList: Record<AgentId, boolean> = { claude: false, codex: true };
 
@@ -99,7 +99,7 @@ export async function openRecent(t: AgentType, rendered: AgentType, loc: Locatio
         // a Bare transcript resumes on the vault its session record names (spawnFrom reads it)
         await spawnFrom({ ...entry, cwd: undefined }, { label: loc.label, cwd: s.cwd }, undefined, s.sessionId); // the vault comes from the session record (spawnFrom); no title: createSession mints a themed name
       } catch (e) {
-        showSessionsToast(e instanceof Error ? e.message : String(e), 6000);
+        showSessionsToast(errText(e), 6000);
         b.disabled = false; // the launcher stays open on a failed spawn: the row is usable again
         b.classList.remove("inert");
         if (subLine) subLine.textContent = was;

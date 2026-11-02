@@ -6,7 +6,6 @@
 // profiled spawn that carries either, so a site that slips one in shows a tab error instead of
 // opening a default Claude or Codex tab.
 import { injectRules, type RulesLaunch } from "../../rules/inject";
-import { injectAppLayer } from "../../rules/app-layer";
 import type { SetRef } from "../../ipc";
 
 export interface PtySpawnInput {
@@ -55,5 +54,5 @@ export function ptySpawnPayload(p: PtySpawnInput): { payload: PtySpawnPayload; w
     return { payload: { ...base, ...extra, profile: p.profile, ...(p.rowKey ? { rowKey: p.rowKey } : {}), ...(p.vault ? { vault: p.vault } : p.sets !== undefined ? { sets: p.sets } : {}), agent: p.agent ?? null } };
   }
   const inj = injectRules(p.args, p.rules);
-  return { payload: { ...base, shell: p.shell, args: injectAppLayer(inj.args) }, warning: inj.warning };
+  return { payload: { ...base, shell: p.shell, args: inj.args }, warning: inj.warning };
 }

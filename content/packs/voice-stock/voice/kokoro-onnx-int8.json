@@ -41,5 +41,5 @@
   ],
   "licence": "Apache-2.0 (Kokoro-82M weights); MIT (kokoro-onnx)",
   "source": "https://github.com/thewh1teagle/kokoro-onnx (release model-files-v1.0), through content/local-voice/tts_kokoro.py and kokoro_sidecar.py (this repo)",
-  "fill": "pwsh -File {vidar}/tools/voice/setup-voice.ps1"
+  "fill": "pwsh -File {vidar}/tools/voice/setup-voice.ps1 -Only kokoro"
 }

@@ -7,6 +7,11 @@ import { sessionTitle, jettisonSession, findTabByFalconSessionHosted, isJettison
 import { APPROVAL_TITLES, type ApprovalRecord, type ApprovalOutcome } from "../asks/approval";
 import { openApproval } from "../asks/approvals";
 import { depFound } from "../deps/state";
+import { AGENT_IDS } from "../agents/id";
+import type { AgentId } from "../agents/id";
+
+const DESKS_AGENT_DEP: Record<AgentId, boolean> = { claude: false, codex: true };
+const DESKS_AGENT_IDS = AGENT_IDS.filter((id) => DESKS_AGENT_DEP[id]);
 
 /** How long after initAskGate an unreported `desks` or `codex` dependency (the desks pack gate,
  *  K2) still means "not settled yet". The ask gate starts (open_ready) before the first
@@ -20,8 +25,8 @@ const OPENS_ASTRA = "Astra · Codex, writes display only, armed for review";
 async function desksReady(bootAt: number): Promise<boolean> {
   for (;;) {
     const desks = depFound("desks");
-    const codex = depFound("codex");
-    if (desks !== null && codex !== null) return desks && codex;
+    const agentsReady = DESKS_AGENT_IDS.map(depFound);
+    if (desks !== null && agentsReady.every((ready) => ready !== null)) return desks && agentsReady.every(Boolean);
     if (Date.now() - bootAt >= DESKS_SETTLE_MS) return false;
     await new Promise((r) => setTimeout(r, 250));
   }

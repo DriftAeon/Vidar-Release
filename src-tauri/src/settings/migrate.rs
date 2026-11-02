@@ -21,7 +21,7 @@
 
 use serde_json::Value;
 
-pub const CURRENT_VERSION: u32 = 2;
+pub const CURRENT_VERSION: u32 = 3;
 
 /// One migration step: from `index` (0-based, so step 0 takes v0 -> v1) to
 /// the next version, mutating the raw JSON tree in place. Returns
@@ -29,7 +29,7 @@ pub const CURRENT_VERSION: u32 = 2;
 /// no-op (version bump only).
 type Migration = fn(&mut Value) -> Option<String>;
 
-const MIGRATIONS: &[Migration] = &[v0_to_v1, v1_to_v2];
+const MIGRATIONS: &[Migration] = &[v0_to_v1, v1_to_v2, v2_to_v3];
 
 fn v0_to_v1(_root: &mut Value) -> Option<String> {
     // No shape change: v1's only addition is `configVersion` itself. The
@@ -52,6 +52,13 @@ fn v1_to_v2(root: &mut Value) -> Option<String> {
         }
     }
     (n > 0).then(|| format!("Moved {n} agent folder(s) from bridge\\ to runtime\\bridge\\"))
+}
+
+/// The Macros feature (the strip under the tabs, Settings > Agents > Macros) is gone: drop its `macros`
+/// key so the next save no longer writes it. Silent by design: no notice line.
+fn v2_to_v3(root: &mut Value) -> Option<String> {
+    root.as_object_mut()?.remove("macros");
+    None
 }
 
 /// `{vidar}\bridge` or `{vidar}\bridge\<rest>` (either separator) -> the runtime shape. The token
@@ -204,7 +211,17 @@ mod tests {
             json!("{VIDAR}\\bridge"),
             json!("{vidar}\\runtime\\Bridge\\clips"),
         ]);
-        assert_eq!(root["configVersion"], json!(2));
+        assert_eq!(root["configVersion"], json!(CURRENT_VERSION));
+    }
+
+    #[test]
+    fn v2_to_v3_drops_the_macros_key_silently() {
+        let mut root = json!({ "configVersion": 2, "fontSize": 14, "macros": [{ "label": "Go", "command": "go" }] });
+        let log = migrate(&mut root);
+        assert!(log.is_empty());
+        assert!(root.get("macros").is_none());
+        assert_eq!(root["fontSize"], json!(14));
+        assert_eq!(root["configVersion"], json!(3));
     }
 
     /// A fake rename step in a test-only table, run through the same

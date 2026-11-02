@@ -63,7 +63,7 @@ if (USER_ENV_READ.some((re) => re.test(cmd))) {
 if (tool !== "Bash") process.exit(0);
 
 const HOME_FWD = homedir().replace(/\\/g, "/").replace(/\/+$/, "");
-const REPO_ROOT_FWD = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
+const REPO_ROOT_FWD = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..") // root-ok: a guard must not fail open, so the contract reader loads only inside the try below
   .replace(/\\/g, "/").replace(/\/+$/, "");
 
 // Bridge dir from the layout contract; the literal is the fallback when the contract reader cannot

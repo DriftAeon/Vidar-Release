@@ -1,7 +1,7 @@
 // Streamed assistant text of a Rendered body: text blocks painted from deltas at a frame
 // floor, the final markdown paint, and the interim marking of text that preceded a tool call.
 
-import { renderMarkdownOrText } from "../document";
+import { markdownLoaded, markdownReady } from "../markdown-lazy";
 import { morphInto } from "../../morph";
 import { el } from "./dom";
 import { addCopyButtons, liftCopyButtons } from "./code-copy";
@@ -125,7 +125,14 @@ export function createTextStream(S: RenderedState, deps: TextStreamDeps) {
    *  (first paint, rendered <-> fallback, a depth-capped partial tree). */
   function paintText(host: HTMLElement, markdown: string): number {
     const t0 = performance.now();
-    const built = renderMarkdownOrText("message.md", markdown, { softBreaks: "br" });
+    const md = markdownLoaded();
+    if (!md) {
+      // First paint after launch: plain text now (only into an empty host), the rendered tree once the parser loads.
+      if (!host.firstChild) host.appendChild(el("pre", "blk-text-fallback", markdown));
+      void markdownReady().then(() => { if (host.isConnected) paintText(host, markdown); }, () => {});
+      return 0;
+    }
+    const built = md.renderMarkdownOrText("message.md", markdown, { softBreaks: "br" });
     liftCopyButtons(host);
     if (built.fellBack) {
       const pre = el("pre", "blk-text-fallback", markdown);

@@ -13,6 +13,7 @@ setupDom({ answers: { read_state: () => { notifyRead(); return stateRead; }, pat
 const { CodexPlanStore, CODEX_PLANS_KEY, PLAN_LIMITS } = await import("../src/agents/codex-plan-store.ts");
 const { codexPlan, replayCodexPlan } = await import("../src/agents/codex-progress.ts");
 const { createTextStream } = await import("../src/panels/rendered/text-stream.ts");
+await (await import("../src/panels/markdown-lazy.ts")).markdownReady(); // the parser loads on first use; these tests paint synchronously
 
 const plan = (turnId, status = "pending", step = "Inspect Source") => ({
   turnId, explanation: "Check the cause first.", plan: [{ step, status }],

@@ -123,17 +123,23 @@ test("an occluded finding names what covers the control", async () => {
   assert.ok(observed.includes('occluded: menuitem "Preferences" under div.veil "File" (ancestor-sibling)'), observed.join("; "));
 });
 
+// Page-shaped __TAURI_INTERNALS__: invoke is non-writable and goes through window.fetch at call time.
+function fakeTauri(w) {
+  const ti = {};
+  Object.defineProperty(ti, "invoke", { writable: false, configurable: false,
+    value: async (cmd, args) => { const r = await w.fetch("http://ipc.localhost/" + cmd, { method: "POST", body: JSON.stringify(args ?? {}) }); if (r.status >= 400) throw new Error(await r.text()); return null; } });
+  w.__TAURI_INTERNALS__ = ti;
+  return ti;
+}
+
 test("a press that calls open_url is blocked and recorded as a detour", async () => {
   const run = tmp();
   const { w, ctx } = fixture();
   const real = [];
   w.Response = Response;
   w.fetch = async (url) => { real.push(String(url)); return new Response("ok"); };
-  const ti = {};
-  Object.defineProperty(ti, "invoke", { writable: false, configurable: false,
-    value: async (cmd, args) => { const r = await w.fetch("http://ipc.localhost/" + cmd, { method: "POST", body: JSON.stringify(args ?? {}) }); if (r.status >= 400) throw new Error(await r.text()); return null; } });
-  w.__TAURI_INTERNALS__ = ti;
-  const b = w.document.createElement("button");
+  fakeTauri(w);
+  const b =w.document.createElement("button");
   b.id = "rel"; b.textContent = "Open Releases"; b.setAttribute("aria-expanded", "false");
   b.onclick = () => { w.__TAURI_INTERNALS__.invoke("open_url", { url: "https://example.test/rel" }).catch(() => {}); };
   w.document.body.appendChild(b);
@@ -151,10 +157,7 @@ test("a call blocked before the crawl is not a detour on its first press", async
   const real = [];
   w.Response = Response;
   w.fetch = async (url) => { real.push(String(url)); return new Response("ok"); };
-  const ti = {};
-  Object.defineProperty(ti, "invoke", { writable: false, configurable: false,
-    value: async (cmd, args) => { const r = await w.fetch("http://ipc.localhost/" + cmd, { method: "POST", body: JSON.stringify(args ?? {}) }); if (r.status >= 400) throw new Error(await r.text()); return null; } });
-  w.__TAURI_INTERNALS__ = ti;
+  const ti = fakeTauri(w);
   await installExternalGuard(ctx);
   await ti.invoke("open_url", { url: "https://example.test/before" }).catch(() => {});
   assert.equal(w.__vidarExternalGuard.blocked.length, 1);

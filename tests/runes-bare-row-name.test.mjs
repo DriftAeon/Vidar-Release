@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
 
 setupDom();
-const { fileName, isFileRow, nameAndPath, nameLabel } = await import("../src/runes/bare/row-name.ts");
+const { rowLabel, isFileRow, nameAndPath, idLabel } = await import("../src/runes/bare/row-name.ts");
 const { libraryLabel } = await import("../src/runes/bare/gen-label.ts");
 
-test("fileName: extension dropped, split on - and _, Title Case with small words lowercase after the first", () => {
+test("fileName (via an MCP row): extension dropped, split on - and _, Title Case with small words lowercase after the first", () => {
+  const fileName = (shown) => rowLabel({ kind: "mcp", shown });
   assert.equal(fileName("C:\\Users\\example-user\\.claude\\hooks\\guard-install.mjs"), "Guard Install");
   assert.equal(fileName("C:\\Users\\example-user\\.claude\\skills\\adversarial-diff-review"), "Adversarial Diff Review");
   assert.equal(fileName("C:/h/agents/Striker-O.md"), "Striker O");
@@ -16,23 +17,23 @@ test("fileName: extension dropped, split on - and _, Title Case with small words
   assert.equal(fileName("openaiDeveloperDocs"), "Openai Developer Docs");
 });
 
-test("nameLabel: set and library ids read in Title Case", () => {
-  assert.equal(nameLabel("kit-mine"), "Kit Mine");
-  assert.equal(nameLabel("vidar-recall"), "Vidar Recall");
-  assert.equal(nameLabel("kit"), "Kit");
-  assert.equal(nameLabel(""), "");
+test("idLabel: set and library ids read in Title Case", () => {
+  assert.equal(idLabel("team-mine"), "Team Mine");
+  assert.equal(idLabel("vidar-recall"), "Vidar Recall");
+  assert.equal(idLabel("team"), "Team");
+  assert.equal(idLabel(""), "");
 });
 
-test("nameLabel: known acronyms keep their capitals, other words are unchanged", () => {
-  assert.equal(nameLabel("mcp-write-asks"), "MCP Write Asks");
-  assert.equal(nameLabel("mcp-gate"), "MCP Gate");
-  assert.equal(nameLabel("ui"), "UI");
-  assert.equal(nameLabel("kit-mine"), "Kit Mine");
-  assert.equal(nameLabel("stdio-bridge"), "Stdio Bridge");
+test("idLabel: known acronyms keep their capitals, other words are unchanged", () => {
+  assert.equal(idLabel("mcp-extras"), "MCP Extras");
+  assert.equal(idLabel("mcp-gate"), "MCP Gate");
+  assert.equal(idLabel("ui"), "UI");
+  assert.equal(idLabel("team-mine"), "Team Mine");
+  assert.equal(idLabel("stdio-bridge"), "Stdio Bridge");
 });
 
 test("libraryLabel: a plain library id in Title Case, a generated one keeps its hyphen-joined name", () => {
-  assert.equal(libraryLabel("kit-mine"), "Kit Mine");
+  assert.equal(libraryLabel("team-mine"), "Team Mine");
   assert.equal(libraryLabel("gen-claude-bare-0123abcd"), "Runes-Claude-Bare-" + libraryLabel("gen-claude-bare-0123abcd").split("-").pop());
 });
 

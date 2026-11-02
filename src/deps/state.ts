@@ -4,6 +4,7 @@
 import { invoke } from "../ipc";
 import catalog from "../../contracts/dependencies.json" with { type: "json" };
 import type { DepCatalog, DepEntry, DepProbe, DepReport } from "./types";
+import { errText } from "../err-text";
 
 const PROBE_KINDS: ReadonlySet<string> = new Set<DepProbe["kind"]>(["exe", "vidar", "config", "env", "falcon"]);
 
@@ -60,7 +61,7 @@ export function loadDeps(): Promise<DepReport | null> {
       return r;
     }, (e: unknown): DepReport | null => {
       console.error("detect_dependencies failed", e);
-      error = e instanceof Error ? e.message : String(e);
+      error = errText(e);
       return null;
     })
     .finally(() => {

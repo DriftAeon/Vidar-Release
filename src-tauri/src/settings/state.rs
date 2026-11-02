@@ -27,8 +27,7 @@ fn read_root_at(path: &Path) -> Result<Value, String> {
 }
 
 fn write_root_at(path: &Path, root: &Value) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(root).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(path, json.as_bytes())
+    crate::fsx::write_json_pretty(path, root, false)
 }
 
 /// The plain (non-command) read, so `main.rs`'s pre-paint theme injection can
@@ -68,7 +67,7 @@ fn history_value(v: &Option<Value>) -> Value {
 /// Appends one JSON line per change to `state-history.jsonl` beside the state
 /// file: `{"at":"<UTC RFC3339>","key":..,"from":..,"to":..}`. Append-only, never
 /// truncated. Best effort: a failure is logged once and never fails the patch.
-fn append_history(state_path: &Path, changes: &[Change]) {
+fn append_history(file: &Path, changes: &[Change]) {
     use std::io::Write;
     static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if changes.is_empty() {
@@ -90,11 +89,10 @@ fn append_history(state_path: &Path, changes: &[Change]) {
         text.push_str(&line.to_string());
         text.push('\n');
     }
-    let file = state_path.with_file_name("state-history.jsonl");
     let result = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&file)
+        .open(file)
         .and_then(|mut f| f.write_all(text.as_bytes()));
     if let Err(e) = result {
         if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
@@ -103,7 +101,13 @@ fn append_history(state_path: &Path, changes: &[Change]) {
     }
 }
 
+/// Test seam: the history file sits beside the state file.
+#[cfg(test)]
 fn merge_and_write_at(path: &Path, entries: serde_json::Map<String, Value>) -> Result<(), String> {
+    merge_and_write_to(path, &path.with_file_name("state-history.jsonl"), entries)
+}
+
+fn merge_and_write_to(path: &Path, history: &Path, entries: serde_json::Map<String, Value>) -> Result<(), String> {
     let mut root = read_root_at(path)?;
     let obj = root.as_object_mut().ok_or("vidar-state.json root is not an object")?;
     let mut changes: Vec<Change> = Vec::new();
@@ -134,7 +138,7 @@ fn merge_and_write_at(path: &Path, entries: serde_json::Map<String, Value>) -> R
     }
     write_root_at(path, &root)?;
     // Still under `patch_state`'s lock, so history lines stay in merge order.
-    append_history(path, &changes);
+    append_history(history, &changes);
     Ok(())
 }
 
@@ -152,7 +156,7 @@ pub async fn patch_state(entries: serde_json::Map<String, Value>) -> Result<(), 
     // read-merge-write whole, as the main thread's serial dispatch did before.
     static PATCH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = PATCH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    merge_and_write_at(&crate::paths::ui_state_path(), entries)
+    merge_and_write_to(&crate::paths::ui_state_path(), &crate::paths::state_history_path(), entries)
 }
 
 #[cfg(test)]

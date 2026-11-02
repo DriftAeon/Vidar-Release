@@ -28,11 +28,10 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import { resolve as resolveId } from "../lib/paths.mjs";
+import { resolve as resolveId, root as repoRoot } from "../lib/paths.mjs";
 
-const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 const STYLES = join(REPO, "src", "styles.css");
 const KIT = join(resolveId("tools", { root: REPO }), "ui", "mock-kit");
 const OUT_DIR = resolveId("display", { root: REPO });

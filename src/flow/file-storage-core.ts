@@ -20,6 +20,8 @@
 //   page's open can never make this page's batches look stale.
 
 import type { StorageLike } from "../prefs-core";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { errText } from "../err-text.ts";
 
 export const MAX_VALUE_BYTES = 16 * 1024 * 1024;
 
@@ -68,7 +70,7 @@ function isOpenReply(v: unknown): v is OpenReply {
 /** A Rust-side validation refusal (`rejected <key>: ...`): that key is dropped, not retried. */
 function rejectedKey(err: unknown): string | null {
   // Tauri rejects with the bare string; an Error carries it as its message.
-  const m = /^rejected (\S+):/.exec(err instanceof Error ? err.message : String(err));
+  const m = /^rejected (\S+):/.exec(errText(err));
   return m ? m[1] : null;
 }
 

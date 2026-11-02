@@ -18,8 +18,12 @@ export interface CodexThreadTab {
   launchArgs?: string[];
 }
 
+import { AGENTS } from "../../agents/descriptor";
+import { isAgentId } from "../../agents/id";
+import { sessionSupports } from "./types";
+
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const CODEX_WORD = /(?:^|\s)codex(?=\s|$)/;
+const CODEX_WORD = new RegExp(`(?:^|\\s)${escapeRe(AGENTS.codex.id)}(?=\\s|$)`);
 const RESUME_ID = /(?:^|\s)resume\s+['"]?([0-9A-Za-z][0-9A-Za-z-]*)['"]?(?=\s|$)/;
 
 /** The thread a Raw Codex launch line resumes (`codex ... resume <id>`), or null. */
@@ -35,8 +39,8 @@ export function launchLineThread(args: readonly string[] | undefined): string | 
 /** True when `tab` is a Codex tab whose Rendered session or Raw thread is `thread`. `resolved` is
  *  the Raw tab's thread from its rollouts (`pickRawThreads`): a string or null (resolved, none
  *  held) replaces the launch line; undefined (never resolved) falls back to it. */
-export function holdsCodexThread(tab: CodexThreadTab, thread: string, resolved?: string | null): boolean {
-  if (!thread || tab.agent !== "codex") return false;
+export function holdsResumableThread(tab: CodexThreadTab, thread: string, resolved?: string | null): boolean {
+  if (!thread || !isAgentId(tab.agent) || !sessionSupports(tab.agent, "thread")) return false;
   if (tab.rendered && tab.rendered.sessionId() === thread) return true;
   if (tab.body !== "terminal" || !tab.alive) return false;
   if (resolved !== undefined) return resolved === thread;

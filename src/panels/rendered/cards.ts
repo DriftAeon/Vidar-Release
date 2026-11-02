@@ -15,7 +15,7 @@ import { iconImg } from "../../icon-img";
 import { questionForm } from "./question-form";
 import { asyncAnswerText, asyncAskFormInput, type AsyncQuestion } from "../../agents/codex-async-ask";
 import { mcpElicitationForm } from "./mcp-elicitation-form";
-import { recordFromAskInput, updatedInputFromReply, type AskReply, type QuestionRecord } from "../../asks/record";
+import { ASYNC_ASK_ORIGIN, recordFromAskInput, updatedInputFromReply, type AskReply, type QuestionRecord } from "../../asks/record";
 import type { Group, RenderedState, ToolRecord } from "./state";
 import type { Follow } from "./follow";
 import type { HydrateStats } from "./hydrate-stats";
@@ -221,6 +221,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
       // the label, so `.approval-result` textContent still reads "Allowed" / "Denied: …" for drive().
       const userDenied = label.startsWith("Denied");
       const outcome = cls === "allow" ? "ok" : userDenied ? "no" : "dim";
+      card.classList.add(`out-${outcome}`); // the settled edge keys on this, not on cls
       const reason = userDenied && label.startsWith("Denied: ") ? label.slice("Denied: ".length) : "";
       const sumEl = card.querySelector<HTMLElement>(".approval-summary");
       const inlineText = outcome === "dim" ? label : reason ? "" : (sumEl?.textContent ?? "");
@@ -275,7 +276,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     if (!S.pendingApproval) S.pendingApproval = requestId;
     (card as HTMLElement & { settle?: typeof settle; hostSettle?: (state: HostPermissionState) => void }).settle = settle;
     if (isQuestion) {
-      const record = recordFromAskInput(input, { key: requestId, origin: agent === "codex" ? "codex" : "claude", askedAtMs: Date.now() });
+      const record = recordFromAskInput(input, { key: requestId, origin: agent, askedAtMs: Date.now() });
       const rawQuestions = (input && typeof input === "object" ? (input as { questions?: unknown }).questions : undefined) ?? [];
       // the same checks and settle the Answer button runs; the card must have left `approvals` afterwards
       const run = async (decision: SentDecision) => {
@@ -302,8 +303,8 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
       if (sent && r.cls !== sent.behavior) relabelFolded(r.label);
     };
     function relabelFolded(label: string) {
-      card.classList.remove("allow");
-      card.classList.add("deny");
+      card.classList.remove("allow", "out-ok", "out-no");
+      card.classList.add("deny", "out-dim");
       head.querySelector(".approval-why")?.remove();
       const inline = head.querySelector<HTMLElement>(".approval-inline");
       if (inline) inline.textContent = label;
@@ -356,7 +357,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
       if (!asyncAsks.has(id)) return;
       asyncAsks.delete(id);
       questionCards.delete(id);
-      card.classList.add(DRIVE_CLASS.settled, "allow");
+      card.classList.add(DRIVE_CLASS.settled, "allow", "out-ok");
       row.remove();
       body.remove();
       head.appendChild(el("span", "approval-inline", ""));
@@ -390,7 +391,7 @@ export function createCards(S: RenderedState, deps: CardsDeps) {
     answer.disabled = !form.answered();
     row.append(msg, answer);
     asyncAsks.set(id, fold);
-    const record = recordFromAskInput(asyncAskFormInput(questions), { key: id, origin: "codex-async", askedAtMs: Date.now() });
+    const record = recordFromAskInput(asyncAskFormInput(questions), { key: id, origin: ASYNC_ASK_ORIGIN, askedAtMs: Date.now() });
     questionCards.set(id, { card, handle: {
       key: id,
       record,

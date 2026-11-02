@@ -1,5 +1,5 @@
 // Text handed to a terminal tab: control, format and line-separator characters out, then a byte cap on a
-// code-point boundary. Same strip and cap as jira/model.ts sendText (copied, not imported).
+// code-point boundary. jira/model.ts sendText calls this.
 
 const STRIP = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 const encoder = new TextEncoder();

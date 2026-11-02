@@ -5,16 +5,13 @@ import type { AgentEvent, PermissionMode, PermissionSuggestion, Usage } from "./
 import { isPermissionMode } from "./protocol";
 import type { Streamed } from "./claude-blocks";
 
-export type Json = Record<string, unknown>;
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, str, type Json } from "../json.ts";
+export { obj, str };
+export type { Json };
 
-export function str(v: unknown, fallback = ""): string {
-  return typeof v === "string" ? v : fallback;
-}
 export function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
-export function obj(v: unknown): Json | null {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null;
 }
 export function arr(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [];

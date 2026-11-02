@@ -5,9 +5,11 @@
 // builds the popover DOM and creates nodes once a choice is made.
 
 import type { AgentPreset, ModelId, V1NodeKind } from "./model";
+import { FLOW_MODELS } from "./claude-models";
 import { V1_NODE_KINDS } from "./model";
 import { createNode } from "./nodes";
-import { text } from "./state";
+import { S, text } from "./state";
+import { freeSpot } from "./place";
 import { presetLabel } from "./labels";
 import { modelLabel, wiredModels } from "./roster";
 import { EDIT_RULE } from "./templates";
@@ -27,49 +29,49 @@ interface AgentPresetSpec {
  *  ids, so it relies on `renderPrompt`'s default-append of the predecessor's output (§3, §4.2).
  *  The display order is fixed. */
 const AGENT_PRESETS: readonly AgentPresetSpec[] = [
-  { preset: "plan", title: "Plan", model: "claude-opus-5-5", task: "Write an implementation plan for this request." },
+  { preset: "plan", title: "Plan", model: FLOW_MODELS.opus, task: "Write an implementation plan for this request." },
   {
     preset: "review",
     title: "Review",
-    model: "claude-opus-5-5",
+    model: FLOW_MODELS.opus,
     task: "Review the upstream output against the original request. List findings by severity with the fix for each.",
   },
   {
     preset: "revise",
     title: "Revise",
-    model: "claude-sonnet-5",
+    model: FLOW_MODELS.sonnet,
     task: "Revise the upstream output per the review notes. Keep scope unchanged.",
   },
   {
     preset: "execute",
     title: "Execute",
-    model: "claude-sonnet-5",
+    model: FLOW_MODELS.sonnet,
     // The Execute task uses the same runner-neutral file-edit rule as the starter templates.
     task: `Implement the plan. ${EDIT_RULE}`,
   },
   {
     preset: "brainstorm-format",
     title: "Brainstorm-Format",
-    model: "claude-sonnet-5",
+    model: FLOW_MODELS.sonnet,
     task: "Structure the upstream ideas into a clear, organized draft.",
   },
   {
     preset: "academy",
     title: "Academy",
-    model: "claude-sonnet-5",
+    model: FLOW_MODELS.sonnet,
     task: "Suggest one improvement to this run's flow or prompts, based on what just happened.",
   },
   {
     preset: "improve",
     title: "Improve",
-    model: "claude-sonnet-5",
+    model: FLOW_MODELS.sonnet,
     task: "Rewrite the upstream output for clarity and correctness. Keep scope unchanged.",
   },
 ];
 
 /** Not in `AGENT_PRESETS`: it sits after the separator in the mock, and starts with an empty
  *  task rather than a stamped one — nothing is silently kept unedited (§3). */
-const CUSTOM_PRESET: AgentPresetSpec = { preset: "custom", title: "Custom", model: "claude-sonnet-5", task: "" };
+const CUSTOM_PRESET: AgentPresetSpec = { preset: "custom", title: "Custom", model: FLOW_MODELS.sonnet, task: "" };
 
 const KIND_TITLE: Record<V1NodeKind, string> = { input: "Input", agent: "Agent", output: "Output" };
 /** Dot colors. Off-token by design:
@@ -117,7 +119,8 @@ function bindOutsideClose(pop: HTMLElement): void {
 }
 
 function paletteItem(label: string, dot?: string): HTMLElement {
-  const item = document.createElement("div");
+  const item = document.createElement("button");
+  item.type = "button";
   item.className = "flow-palette-item";
   if (dot) {
     const d = document.createElement("span");
@@ -129,7 +132,8 @@ function paletteItem(label: string, dot?: string): HTMLElement {
   return item;
 }
 
-function placeInputNode(at: { x: number; y: number }): void {
+function placeInputNode(drop: { x: number; y: number }): void {
+  const at = freeSpot(drop, S.nodes, S.GRID);
   const node = createNode(
     {
       kind: "input",
@@ -153,7 +157,8 @@ function placeInputNode(at: { x: number; y: number }): void {
   scheduleGraphSave();
 }
 
-function placeOutputNode(at: { x: number; y: number }): void {
+function placeOutputNode(drop: { x: number; y: number }): void {
+  const at = freeSpot(drop, S.nodes, S.GRID);
   const node = createNode(
     { kind: "output", title: "Output", x: at.x, y: at.y, fields: [], inputs: ["in"], outputs: [] },
     "output",
@@ -166,7 +171,8 @@ function placeOutputNode(at: { x: number; y: number }): void {
  *  `{k:"preset",...}` marker (§2/§3) — engine.ts finds the Academy node by this field, never by
  *  title. Mints the id from the preset name (`"plan-1"`, …), matching `mintNodeId`'s "for a
  *  stamped agent preset, the preset name" rule; Custom mints from the kind instead. */
-function placeAgentNode(spec: AgentPresetSpec, at: { x: number; y: number }): void {
+function placeAgentNode(spec: AgentPresetSpec, drop: { x: number; y: number }): void {
+  const at = freeSpot(drop, S.nodes, S.GRID);
   // A preset whose default model is not offered (its module is off) takes the first wired model.
   const wired = wiredModels();
   const model = wired.some((m) => m.id === spec.model) ? spec.model : (wired[0]?.id ?? spec.model);

@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { validateRunLogLine } from "./explorer-contracts.mjs";
 
-export const INPUT_VERBS = ["press", "key", "act", "paste", "send"];
+export const INPUT_VERBS = ["press", "context", "dblclick", "key", "act", "paste", "send", "select", "drag", "fill"];
 
 export function stateFile(env, name) {
   const dir = env.VIDAR_EXPLORER_RUN ? path.join(env.VIDAR_EXPLORER_RUN, "state") : os.tmpdir();
@@ -42,6 +42,8 @@ export function logVerb(env, cmd, port, args, out, exit) {
   if (!INPUT_VERBS.includes(cmd) || !env.VIDAR_EXPLORER_RUN) return;
   try {
     const hit = out?.hit && typeof out.hit.ok === "boolean" ? { ok: out.hit.ok, ...(out.hit.got?.role ? { tag: out.hit.got.role } : {}) } : undefined;
-    appendRunLog(env, { port, verb: cmd, args: args.filter((a) => a !== undefined), target: out?.target, hit, exit });
+    // paste and send name their receiver ("composer") as a string; the schema wants an object
+    const target = typeof out?.target === "string" ? { selector: out.target } : out?.target;
+    appendRunLog(env, { port, verb: cmd, args: args.filter((a) => a !== undefined), target, hit, exit });
   } catch (e) { console.error(`run log skipped: ${e.message ?? e}`); }
 }

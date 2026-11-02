@@ -66,7 +66,7 @@
 //                                                                     Returns what the receiver did (handled, lengths,
 //                                                                     tray block count) and whether clipboardData arrived
 //
-// Raw (shell-kind) tabs — gateway agents, Gemini, Pi, Terminal — have no rendered body, so
+// Raw (shell-kind) tabs — gateway agents, Pi, Terminal — have no rendered body, so
 // `send`/`answer` refuse them; `state` still lists them and gives the tab id. The recipe
 // (gateway-tab smoke, ~12 calls):
 //   click '#new-session'                                  open the launcher

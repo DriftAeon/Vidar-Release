@@ -2,7 +2,7 @@
 // that can write files, so it is an allowlist over the launch args, the shell wrapper and the tab cwd.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sandboxBlocker, codexCommandOk, normalizeWinPath, REFUSE_COMMAND, REFUSE_SHELL, REFUSE_CWD } from "../src/panels/sessions/astra-sandbox.ts";
+import { sandboxBlocker, sandboxCommandOk, normalizeWinPath, REFUSE_COMMAND, REFUSE_SHELL, REFUSE_CWD } from "../src/panels/sessions/astra-sandbox.ts";
 
 const ROOT = "C:\\app\\Vidar";
 const DISPLAY = `${ROOT}\\runtime\\bridge\\display`;
@@ -40,7 +40,7 @@ test("reasoning effort arms with the other optional flags in any order", () => {
       assert.equal(sandboxBlocker(facts({ launchArgs: wrap(cmd) })), null, cmd);
     }
   }
-  assert.equal(codexCommandOk(["codex", "-a", "never", "-s", "read-only", "-c", "model_reasoning_effort=low"]), true);
+  assert.equal(sandboxCommandOk(["codex", "-a", "never", "-s", "read-only", "-c", "model_reasoning_effort=low"]), true);
 });
 
 test("malformed or repeated reasoning effort refuses", () => {
@@ -127,7 +127,7 @@ test("an unknown Vidar root refuses the cwd rather than guessing", () => {
 });
 
 test("helpers: command parse and path normalisation", () => {
-  assert.equal(codexCommandOk(undefined), false);
+  assert.equal(sandboxCommandOk(undefined), false);
   assert.equal(normalizeWinPath("C:/A/b/../C/"), "c:\\a\\c");
   assert.equal(normalizeWinPath("relative\\x"), null);
   assert.equal(normalizeWinPath("C:\\.."), null);

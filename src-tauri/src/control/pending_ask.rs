@@ -108,12 +108,7 @@ fn valid(e: &Entry) -> bool {
         && e.context.as_deref().map_or(true, |c| check_context(c) == Ok(Some(c)))
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
+use crate::fsx::now_ms;
 
 fn mint_id() -> Result<String, String> {
     let mut bytes = [0u8; 4];
@@ -202,8 +197,7 @@ fn write_unlocked(path: &Path, store: &Store) -> Result<(), String> {
         out.push(serde_json::to_value(e).map_err(|e| format!("pending asks {}: {e}", path.display()))?);
     }
     out.extend(store.invalid.iter().cloned());
-    let text = serde_json::to_string_pretty(&out).map_err(|e| format!("pending asks {}: {e}", path.display()))?;
-    crate::fsx::atomic_write(path, text.as_bytes())
+    crate::fsx::write_json_pretty(path, &out, false)
 }
 
 fn lock_store() -> std::sync::MutexGuard<'static, ()> {
@@ -445,7 +439,7 @@ mod tests {
             let error = load_at(&path).unwrap_err();
             assert!(error.contains(&path.display().to_string()), "{error}");
         }
-        let bytes = serde_json::to_vec_pretty(&json!([good, good])).unwrap();
+        let bytes = crate::fsx::json_pretty_bytes(&json!([good, good]), false).unwrap();
         assert_mutations_refuse_unchanged(&path, &bytes, &entry);
         std::fs::write(&path, &bytes).unwrap();
         let error = claim_at(&path, &entry.id, &digest(&entry)).unwrap_err();

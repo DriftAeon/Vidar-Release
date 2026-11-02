@@ -51,9 +51,7 @@ pub fn render(scan: &Scan) -> Vec<u8> {
             })
         })
         .collect();
-    let mut bytes = serde_json::to_vec_pretty(&Snapshot { version: VERSION, gateways }).unwrap_or_default();
-    bytes.push(b'\n');
-    bytes
+    crate::fsx::json_pretty_bytes(&Snapshot { version: VERSION, gateways }, true).unwrap_or_default()
 }
 
 /// Writes the snapshot to `path` (atomic: unique tmp, then rename), even when it lists no

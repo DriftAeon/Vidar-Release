@@ -3,7 +3,7 @@
 
 /** Bench surfaces the step offers, in display order (contracts/modules.json ids). */
 export const ONBOARDING_MODULE_IDS: readonly string[] = [
-  "tray", "doc", "flow", "runelib", "lab", "changes", "unreal", "jira", "notion", "slack",
+  "tray", "doc", "flow", "runelib", "changes", "unreal", "jira", "notion", "slack", "lab",
 ];
 
 export interface ModuleRowInput { id: string; label: string; level: string }

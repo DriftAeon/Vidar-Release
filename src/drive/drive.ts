@@ -7,6 +7,8 @@
 
 import type { Effort, PermissionMode } from "../agents/protocol";
 import { resolveDefaultCwd } from "../config";
+import { resolveLaunchVault, type LaunchVaultResult } from "../control/launch-vault";
+import { agentKind } from "../launcher/agent-kind";
 import {
   driveSnapshot as sessionsDriveSnapshot,
   renderedDrive,
@@ -14,8 +16,10 @@ import {
   writeToSession,
 } from "../panels/sessions";
 import { hostedFalconSession } from "../panels/sessions/lookup";
-import { CODEX_EFFORT_LEVELS, codexEffort } from "../agents/codex-settings";
-import { codexHostShape } from "../agents/agent-profile";
+import { CODEX_EFFORT_LEVELS, codexEffort as normalizeEffort } from "../agents/codex-settings";
+import { AGENTS } from "../agents/descriptor";
+import { isAgentId } from "../agents/id";
+import { gatedHostShape } from "../agents/agent-profile";
 import { hostedCodexOn } from "../launcher/readopt";
 import { rulesPlan } from "../rules/inject";
 import { DRIVE_CLASS as C } from "../panels/rendered-drive";
@@ -61,23 +65,55 @@ interface DriveLocation {
   cwd: string;
 }
 
+/** The live inputs `resolveLaunchVault` needs, injected so drive.ts stays free of config and roster imports. */
+export interface DriveVaults {
+  /** The user's Last Vault for an agent kind (roster `defaultVault`); none yet = undefined */
+  last(kind: string): string | undefined;
+  /** Ids from `rune_vault_list`; null when it cannot be read */
+  listed(): Promise<string[] | null>;
+}
+
 export interface DriveDeps {
-  spawnFrom(t: DriveAgentType, loc: DriveLocation, title?: string, resume?: string): Promise<string>;
+  spawnFrom(t: DriveAgentType, loc: DriveLocation, title?: string, resume?: string, draft?: string,
+    onAdopted?: undefined, pick?: undefined, bare?: { vault?: string; remember?: boolean }): Promise<string>;
+  /** Absent in tests that never spawn a Bare row: a Bare spawn then has no Last Vault and is refused. */
+  vaults?: DriveVaults;
   /** Read at call time: initDrive runs before the config lands and the roster is
    *  replaced on every setRoster (roster.ts), so a held snapshot would go stale. */
   roster(): { variantsOf: ReadonlyMap<DriveAgentType, readonly DriveAgentType[]>; launcherTypes: readonly DriveAgentType[] };
+  /** Read-only view of what the launcher and onboarding show now, for `shown()`; absent in tests that never read it. */
+  shown?: DriveShownSource;
+}
+
+/** The live reads behind `window.__vidarDrive.shown()`, injected so drive.ts imports neither the roster's
+ *  dependency gate nor the onboarding shell. */
+export interface DriveShownSource {
+  roots(): readonly DriveAgentType[];
+  variants(root: DriveAgentType): readonly DriveAgentType[];
+  /** True once the first dependency report has landed (`isAvailable` is true before it, so rows alone prove nothing) */
+  depsLanded(): boolean;
+  onboardingOpen(): boolean;
+}
+
+/** What `shown()` returns: launcher row ids as the user sees them. */
+export interface DriveShown {
+  roots: string[];
+  rendered: string[];
+  onboarding: boolean;
+  depsLanded: boolean;
 }
 
 declare global {
   interface Window {
     __vidarDrive?: {
-      openTab(opts: { agent: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; cwd?: string }): Promise<string>;
+      openTab(opts: { agent: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; cwd?: string; vault?: string }): Promise<string>;
       send(tabId: string, text: string): Promise<boolean>;
       answer(tabId: string, ans: { requestId?: string; option?: string | string[]; decision?: "allow" | "deny"; message?: string }): Promise<{ id: string; tool: string; decision: "allow" | "deny" }>;
       state(): ReturnType<typeof driveStateHosted>;
       shortcut(id: string): { id: string; name: string; activeBefore: string | null; activeAfter: string | null };
       paste(target: DrivePasteTarget, payload: DrivePastePayload): Promise<DrivePasteResult>;
       card(id: string, decision: string, opts?: { choice?: string; comment?: string }): CardDriven | Promise<CardDriven>;
+      shown(): DriveShown;
     };
   }
 }
@@ -102,31 +138,48 @@ export function hasRenderedAgent(agent: string): boolean {
 }
 
 /** The agent's rendered body runs Falcon-hosted, by the split `attachRenderedBody` makes
- *  (`sessions/rendered-body.ts`): every non-Codex kind always; Codex only when `codexHostShape`
+ *  (`sessions/rendered-body.ts`): every non-Codex kind always; Codex only when `gatedHostShape`
  *  admits the row (vidar.json `falcon.hostedCodex` on, no rules file, no profile). The host's
  *  `codex_turns` capability is asked only at spawn, so a host without it still lands the tab
  *  in-process and the send refuses (`sendPrompt`: "not a hosted tab"). */
 export function hostedRenderedAgent(agent: string): boolean {
   const t = findRenderedType(agent);
   if (t === undefined) return false;
-  if (t.id !== "codex") return true;
+  if (!isAgentId(t.id) || AGENTS[t.id].flowSdk) return true;
   // A profiled row ignores `rules` (rules/prepare.ts); otherwise a valid plan means a rules file.
   const plan = t.profile ? null : rulesPlan(t);
   const rulesFile = plan && !("warning" in plan) ? plan.key : null;
-  return codexHostShape({ hostedCodex: hostedCodexOn(), rulesFile, profile: t.profile ?? null });
+  return gatedHostShape({ hostedCodex: hostedCodexOn(), rulesFile, profile: t.profile ?? null });
 }
 
 /** Codex has no "max" (ctl.spawn admits it for every agent): it maps to xhigh before spawn.
  *  Other agents pass through unchanged. */
 export function spawnEffort(agentId: string, effort: Effort | undefined): Effort | undefined {
-  if (agentId !== "codex" || effort === undefined) return effort;
-  return codexEffort(effort, CODEX_EFFORT_LEVELS) ?? effort;
+  if (!isAgentId(agentId) || AGENTS[agentId].flowSdk || effort === undefined) return effort;
+  return normalizeEffort(effort, CODEX_EFFORT_LEVELS) ?? effort;
 }
 
-export async function driveOpenTab(opts: { agent: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; cwd?: string; title?: string }): Promise<string> {
+/** The Rune Vault a `ctl.spawn` of `agent` loads (`control/launch-vault.ts` rules), or a refusal.
+ *  Also the card handler's pre-Approve check, so a bad `vault` never reaches the modal. */
+export async function LaunchVaultFor(agent: string, asked?: string): Promise<LaunchVaultResult> {
+  const rendered = findRenderedType(agent);
+  if (!rendered) return { refuse: `no rendered variant for agent "${agent}"` };
+  const kind = agentKind(rendered.id);
+  const v = deps?.vaults;
+  const bare = Boolean(rendered.profile);
+  return resolveLaunchVault({
+    asked, bare,
+    last: v?.last(kind),
+    listed: bare && v ? await v.listed() : null,
+  });
+}
+
+export async function driveOpenTab(opts: { agent: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; cwd?: string; title?: string; vault?: string }): Promise<string> {
   if (!deps) throw new Error("drive not initialized");
   const rendered = findRenderedType(opts.agent);
   if (!rendered) throw new Error(`no rendered variant for agent "${opts.agent}"`);
+  const picked = await LaunchVaultFor(opts.agent, opts.vault);
+  if ("refuse" in picked) throw new Error(picked.refuse);
   const cwd = opts.cwd ?? rendered.cwd ?? await resolveDefaultCwd();
   if (!cwd) throw new Error("no cwd: pass one, the backend resolved no default folder");
   const effort = spawnEffort(rendered.id, opts.effort ?? rendered.effort);
@@ -134,6 +187,9 @@ export async function driveOpenTab(opts: { agent: string; model?: string; effort
     { ...rendered, model: opts.model ?? rendered.model, effort, permissionMode: opts.permissionMode ?? rendered.permissionMode, cwd: undefined },
     { label: "Drive", cwd },
     opts.title, // ctl.spawn --title; undefined: createSession mints a themed name
+    undefined, undefined, undefined, undefined,
+    // An agent's launch never overwrites the user's Last Vault (remember: false).
+    picked.vault !== undefined ? { vault: picked.vault, remember: false } : undefined,
   );
 }
 
@@ -265,10 +321,25 @@ function driveShortcut(id: string) {
   return { id: s.id, name: s.name, activeBefore, activeAfter: sessionsDriveSnapshot().activeId };
 }
 
+/** `window.__vidarDrive.shown()`: the launcher's shown roots, the shown Rendered variants (ids, `root/label` for a
+ *  key-less row), whether onboarding is up, and whether the dependency report landed. Read-only. */
+export function driveShown(): DriveShown {
+  const src = deps?.shown;
+  if (!src) return { roots: [], rendered: [], onboarding: false, depsLanded: false };
+  const roots = src.roots();
+  const rootId = (r: DriveAgentType) => r.key ?? r.id;
+  return {
+    roots: roots.map(rootId),
+    rendered: roots.flatMap((r) => src.variants(r).filter((v) => v.body === "rendered").map((v) => v.key ?? `${rootId(r)}/${v.label ?? v.id}`)),
+    onboarding: src.onboardingOpen(),
+    depsLanded: src.depsLanded(),
+  };
+}
+
 export function initDrive(d: DriveDeps): void {
   deps = d;
   window.__vidarDrive = {
     openTab: driveOpenTab, send: driveSend, answer: driveAnswer, state: driveStateHosted,
-    shortcut: driveShortcut, paste: drivePaste, card: driveCard,
+    shortcut: driveShortcut, paste: drivePaste, card: driveCard, shown: driveShown,
   };
 }

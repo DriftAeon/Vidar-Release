@@ -75,7 +75,7 @@ test('activity needs two nearby pulses and becomes quiet without per-pulse timer
 // only the predicate is covered here, the wiring is smoke-verified.
 test('raw output counts as work only for a TUI that goes quiet when idle', () => {
   assert.equal(rawOutputMeansWork('codex'), false);
-  assert.equal(rawOutputMeansWork('gemini'), false);
+  assert.equal(rawOutputMeansWork('pi'), true);
   assert.equal(rawOutputMeansWork('claude'), true);
   assert.equal(rawOutputMeansWork('shell'), true);
 });

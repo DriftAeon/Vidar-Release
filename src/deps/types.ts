@@ -2,6 +2,7 @@
 // The catalog is contracts\dependencies.json: Rust reads each entry's `probe` through
 // include_str! (src-tauri\src\deps.rs), the frontend reads the copy fields through a JSON
 // import (src\deps\state.ts). Ids are the join key between the two and the roster's `requires`.
+import type { AgentId } from "../agents/id";
 
 export type DepProbe =
   /** PATH search for the first matching name, then each env-expanded candidate path.
@@ -38,7 +39,7 @@ export interface DepEntry {
   probe: DepProbe;
   install: DepInstall;
   /** `"claude"`: Rust also runs the Claude Code login check on the found exe (sets `warning`). */
-  authCheck?: "claude";
+  authCheck?: AgentId;
   /** Present: the startup update check covers this exe. `package` is the npm package installed next
    *  to it; `native` lets a non-npm `.exe` install update itself (src-tauri deps/updates.rs). */
   update?: { package?: string; native?: boolean };

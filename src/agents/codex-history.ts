@@ -1,9 +1,8 @@
 // Paginated Codex history. Keep page validation and replay state separate from live turn state.
 import type { AgentEvent } from "./protocol";
 import { replayCodexPlan } from "./codex-progress";
-
-type Json = Record<string, unknown>;
-const obj = (v: unknown): Json | null => v && typeof v === "object" && !Array.isArray(v) ? v as Json : null;
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, type Json } from "../json.ts";
 
 export class CodexHistory {
   active = false;

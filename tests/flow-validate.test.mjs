@@ -37,6 +37,7 @@ function agent(id, task, overrides = {}) {
     x: 0,
     y: 0,
     model: 'claude-sonnet-5',
+    vault: 'v1',
     fields: [{ k: 'task', v: task }],
     fieldSpecs: [{ k: 'task', required: true, kind: 'text' }],
     inputs: ['in'],

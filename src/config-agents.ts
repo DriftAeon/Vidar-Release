@@ -16,6 +16,8 @@
    A removed root (no `under`) takes its variants (`under` = its id) with it, unless another
    root with that id is still present to host them; otherwise they would spill to top level. */
 import type { AgentType } from "./config";
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENT_IDS, isAgentId } from "./agents/id.ts";
 
 /** The legacy (key-less) identity: id + under + label. */
 export function agentKey(a: AgentType): string {
@@ -37,12 +39,10 @@ function given(entry: AgentType): Partial<AgentType> {
 }
 
 /** The retired plain rows' Bare successors (launcher/roster.ts: the Bare rows lead Claude and Codex). */
-const SUCCESSOR: Record<string, string> = {
-  "claude": "claude-bare",
-  "claude-rendered": "claude-rendered-bare",
-  "codex": "codex-bare",
-  "codex-rendered": "codex-rendered-bare",
-};
+const SUCCESSOR: Record<string, string> = Object.fromEntries(AGENT_IDS.flatMap((id) => [
+  [id, `${id}-bare`],
+  [`${id}-rendered`, `${id}-rendered-bare`],
+]));
 /** What a retired entry hands to its successor; everything else it carried is dropped. */
 const CARRIED = new Set(["model", "effort", "cwd"]);
 /** Fields that only name the entry (a legacy identity or the key): never reported as dropped. */
@@ -53,7 +53,7 @@ const IDENTITY = new Set(["key", "id", "under", "label"]);
  *  the Bare root (it was a variant before). Undefined for any other entry. */
 function legacySuccessor(entry: Partial<AgentType>): string | undefined {
   const kind = entry.id;
-  if (kind !== "claude" && kind !== "codex") return undefined;
+  if (!isAgentId(kind)) return undefined;
   const label = entry.label ?? kind;
   if (!entry.under) return label.toLowerCase() === kind ? SUCCESSOR[kind] : undefined;
   if (entry.under !== kind) return undefined;

@@ -17,7 +17,7 @@ use serde_json::Value;
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentCfg {
-    /// "claude" | "codex" | "gemini" | "pi" | "shell" — drives the tab colour and agent-scoped controls
+    /// "claude" | "codex" | "pi" | "shell" — drives the tab colour and agent-scoped controls
     pub id: String,
     pub label: Option<String>,
     pub shell: Option<String>,
@@ -73,17 +73,6 @@ pub struct LocationSetCfg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub library: Option<String>,
     pub set: String,
-}
-
-#[derive(Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
-pub struct MacroCfg {
-    pub label: String,
-    pub command: String,
-    pub submit: Option<bool>,
-    /// Unnamed fields round-trip, same as `AgentCfg::extra`.
-    #[serde(flatten)]
-    pub extra: serde_json::Map<String, Value>,
 }
 
 /// `editor` in vidar.json: `exe` is spawned directly (must be an existing `.exe`, so a
@@ -177,7 +166,6 @@ pub struct VidarConfig {
     pub primary_agent: Option<String>,
     pub agents: Option<Vec<AgentCfg>>,
     pub locations: Option<Vec<LocationCfg>>,
-    pub macros: Option<Vec<MacroCfg>>,
     // `models` (the Config band's model dropdown) was removed: the
     // Rendered status line and the terminal already show the model. `logRoots`
     // (the Output Log tool) was removed too. A stale key of either in vidar.json is ignored.

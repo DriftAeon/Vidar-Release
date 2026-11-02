@@ -14,7 +14,7 @@ import {
 } from "./state";
 import { paintRun, renderBuild, type BuildHandlers, type BuildView, type Mode } from "./view";
 
-export const BUILD_CATEGORY = "build";
+const BUILD_CATEGORY = "build";
 
 let catalog: ReleaseBuildCatalog | null = null;
 let list: Toggle[] = [];

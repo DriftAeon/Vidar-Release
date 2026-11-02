@@ -6,7 +6,9 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::net::{Request, Secret, SendError};
+#[cfg(test)]
+use crate::net::SendError;
+use crate::net::{self, pct, NetKind, Request, Secret};
 
 use super::parse;
 
@@ -26,7 +28,6 @@ pub const DM_ENOUGH: usize = 25;
 /// The DM query looks this many days back. `after:` is exclusive and Slack reads the date in the
 /// user's zone, so 8 days back in UTC still covers 7 full days plus today wherever the user is.
 pub const DM_DAYS: u64 = 8;
-const MESSAGE_CAP: usize = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,38 +40,16 @@ pub enum ErrorKind {
     Network,
 }
 
-/// `{ kind, message, retryAfter? }`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApiError {
-    pub kind: ErrorKind,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry_after: Option<u64>,
+impl NetKind for ErrorKind {
+    const ENDPOINT: Self = ErrorKind::Endpoint;
+    const NETWORK: Self = ErrorKind::Network;
 }
 
-impl ApiError {
-    pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        ApiError { kind, message: message.into(), retry_after: None }
-    }
-}
+/// `{ kind, message, retryAfter? }`.
+pub type ApiError = net::ApiError<ErrorKind>;
 
 pub fn endpoint(message: impl Into<String>) -> ApiError {
     ApiError::new(ErrorKind::Endpoint, message)
-}
-
-/// Percent-encodes everything outside the RFC 3986 unreserved set. Copied from notion/api.rs, not
-/// imported.
-pub fn pct(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
 }
 
 /// The header block: Bearer and JSON accept.
@@ -245,13 +224,7 @@ where
     Ok(found)
 }
 
-/// Control characters stripped and `token` replaced by `***` before the 200-char cap.
-pub fn clean_redacted(s: &str, token: &Secret) -> String {
-    let stripped: String = s.chars().filter(|c| !c.is_control()).collect();
-    let t = token.expose();
-    let redacted = if t.is_empty() { stripped } else { stripped.replace(t, "***") };
-    redacted.chars().take(MESSAGE_CAP).collect()
-}
+pub use crate::net::clean_redacted;
 
 const AUTH_CODES: [&str; 8] = [
     "not_authed",
@@ -298,15 +271,6 @@ pub fn classify(status: u16, retry_after: Option<u64>, body: &[u8], token: &Secr
         _ => ErrorKind::Endpoint,
     };
     Err(ApiError::new(kind, code))
-}
-
-/// Transport failures: OverCap → endpoint; the rest → network.
-pub fn send_error(e: &SendError, token: &Secret) -> ApiError {
-    match e {
-        SendError::OverCap => endpoint("reply too large"),
-        SendError::Timeout => ApiError::new(ErrorKind::Network, "Slack did not answer in time"),
-        SendError::Connect(m) | SendError::Io(m) => ApiError::new(ErrorKind::Network, clean_redacted(m, token)),
-    }
 }
 
 #[cfg(test)]
@@ -366,9 +330,10 @@ mod tests {
         assert_eq!((rate.kind, rate.retry_after), (ErrorKind::Rate, Some(30)));
         let leaked = classify(200, None, format!(r#"{{"ok":false,"error":"bad {TOKEN}"}}"#).as_bytes(), &token).unwrap_err();
         assert!(!leaked.message.contains(TOKEN));
-        assert_eq!(send_error(&SendError::OverCap, &token).kind, ErrorKind::Endpoint);
-        assert_eq!(send_error(&SendError::Timeout, &token).kind, ErrorKind::Network);
-        let io = send_error(&SendError::Io(format!("x {TOKEN}")), &token);
+        let sent = |e: SendError| -> ApiError { net::send_error(&e, &token, "Slack") };
+        assert_eq!(sent(SendError::OverCap).kind, ErrorKind::Endpoint);
+        assert_eq!(sent(SendError::Timeout).kind, ErrorKind::Network);
+        let io = sent(SendError::Io(format!("x {TOKEN}")));
         assert_eq!((io.kind, io.message.contains(TOKEN)), (ErrorKind::Network, false));
     }
 

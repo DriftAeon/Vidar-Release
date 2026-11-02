@@ -16,10 +16,11 @@ import { releaseName, reserveNames, takeBlockName } from "./workbench-names";
 import { MAX_PIXELS, TEXT_EXT, admit } from "./workbench-limits";
 import { copyContent, copyPathAction, ensureSaved } from "./workbench-actions";
 import { iconImg } from "../icon-img";
+import { baseAny as basename } from "../paths";
 import { mountAnnotation } from "./workbench-annotate";
 import { copyButton, copyPathButton, isBrowserPath, openInBrowserButton } from "./file-actions";
 
-export type Source = "paste" | "drop" | "marquee" | "log crop";
+import type { Source } from "./workbench-restore";
 export type { Outcome } from "./workbench-bridge";
 
 interface Block {
@@ -216,10 +217,6 @@ function trayLandedNote(): string {
 }
 
 /* ---- drop ---- */
-
-function basename(path: string): string {
-  return path.split(/[\\/]/).pop() ?? path;
-}
 
 // One batch per drop, serialised behind earlier batches. Failures accumulate
 // into one summary note so a later success can't wipe them (5).

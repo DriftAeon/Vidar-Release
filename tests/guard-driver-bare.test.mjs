@@ -1,7 +1,7 @@
 // The Vidar-layer Driver Mode guard (tools/agent-layer/guard-driver.mjs) for bare tabs: blocks a
 // builder or an in-root edit only for a Falcon session whose truth file is on, under --root, and
 // fails open everywhere else (no FALCON_SESSION is every Raw bare tab). Wired as a PreToolUse hook by
-// the stock hook rune profiles/bare/stock-runes/hooks/guard-driver.md.
+// the Vidar hook rune profiles/bare/vidar-runes/hooks/guard-driver.md.
 //
 //   node --test tests\guard-driver-bare.test.mjs
 import test from "node:test";
@@ -61,30 +61,28 @@ test("it fails open without FALCON_SESSION, with driver mode off, or without an 
   }
 });
 
-test("the stock guard-driver hook rune wires it as a PreToolUse hook by path with --root, not the template", () => {
-  // The hook reaches a session only through its vault's stock rune.
-  const rune = readFileSync(new URL("../profiles/bare/stock-runes/hooks/guard-driver.md", import.meta.url), "utf8").replace(/\r/g, "");
+test("the Vidar guard-driver hook rune wires it as a PreToolUse hook by path with --root, not the template", () => {
+  // The hook reaches a session only through its vault's Vidar rune.
+  const rune = readFileSync(new URL("../profiles/bare/vidar-runes/hooks/guard-driver.md", import.meta.url), "utf8").replace(/\r/g, "");
   const field = (k) => rune.match(new RegExp(`^${k}: (.*)$`, "m"))?.[1];
   assert.equal(field("kind"), "hook");
   assert.equal(field("event"), "PreToolUse");
   assert.match(field("matcher") ?? "", /Bash/);
   assert.equal(field("command"), 'node "{{root}}\\tools\\agent-layer\\guard-driver.mjs" --root "{{root}}"');
-  const t = readFileSync(new URL("../profiles/bare/claude.settings.template.json", import.meta.url), "utf8");
+  const t = readFileSync(new URL("../profiles/bare/vidar-runes/settings/claude-settings.json", import.meta.url), "utf8");
   assert.ok(!t.includes("guard-driver.mjs"), "the settings template still wires guard-driver");
 });
 
-test("the stock mcp-gate hook rune wires the MCP gate as a PreToolUse hook by path, not the template", () => {
-  // The hook reaches a session only through its vault's stock rune.
-  const rune = readFileSync(new URL("../profiles/bare/stock-runes/hooks/mcp-gate.md", import.meta.url), "utf8").replace(/\r/g, "");
+test("the Vidar mcp-gate hook rune wires the MCP gate as a PreToolUse hook by path, not the template", () => {
+  // The hook reaches a session only through its vault's Vidar rune.
+  const rune = readFileSync(new URL("../profiles/bare/vidar-runes/hooks/mcp-gate.md", import.meta.url), "utf8").replace(/\r/g, "");
   const field = (k) => rune.match(new RegExp(`^${k}: (.*)$`, "m"))?.[1];
   assert.equal(field("kind"), "hook");
   assert.equal(field("agent"), "claude");
   assert.equal(field("event"), "PreToolUse");
   assert.equal(field("matcher"), "mcp__.*");
   assert.equal(field("command"), 'node "{{root}}\\tools\\bare\\mcp-gate.mjs"');
-  const t = readFileSync(new URL("../profiles/bare/claude.settings.template.json", import.meta.url), "utf8");
+  const t = readFileSync(new URL("../profiles/bare/vidar-runes/settings/claude-settings.json", import.meta.url), "utf8");
   assert.ok(!t.includes("mcp-gate.mjs"), "the settings template still wires mcp-gate");
   JSON.parse(t);
-  const stock = readFileSync(new URL("../profiles/bare/templates/stock-claude.json", import.meta.url), "utf8");
-  assert.ok(stock.includes('"mcp-gate"'), "stock-claude does not slot mcp-gate");
 });

@@ -15,6 +15,7 @@ mod replay;
 mod security;
 mod serve;
 mod session;
+mod util;
 
 #[cfg(test)]
 mod bridge_golden;
@@ -25,6 +26,11 @@ mod falcon_client;
 #[path = "../../src-tauri/src/runlog.rs"]
 mod runlog;
 
+// Atomic writes and the clock for falcon.rs (`now_ms`, `write_atomic` wrap it); the shell uses only part of it.
+#[path = "../../src-tauri/src/fsx.rs"]
+#[allow(dead_code)] // the shell uses only part of fsx.rs
+mod fsx;
+
 // Layout constants (FRONTENDS, FRONTEND_POINTER) for frontend.rs; falcon.rs keeps its own
 // private copy of this module, so the shell compiles the file a second time.
 #[path = "../../src-tauri/src/falcon/layout.rs"]
@@ -34,7 +40,7 @@ mod layout;
 // copied so the hosted env and home match the Raw bare tab's (`claude.rs` `bare_spawn`). The shell
 // uses only part of env.rs (the Codex helpers are Vidar's).
 #[path = "../../src-tauri/src/bare/env.rs"]
-#[allow(dead_code)]
+#[allow(dead_code)] // the shell uses only part of env.rs; the Codex helpers are Vidar's
 mod bare_env;
 #[path = "../../src-tauri/src/bare/home_path.rs"]
 mod bare_home;

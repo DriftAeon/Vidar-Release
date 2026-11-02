@@ -6,6 +6,7 @@
 // The whole-tree runs (`npm run build`, `lint:ui`, the full tier) pass no path list and are unchanged.
 import { covers as coversUi } from '../ui/lint-ui.mjs';
 import { covers as coversCopy } from '../ui/lint-copy.mjs';
+import { covers as coversHome } from './one-home.mjs';
 
 const q = (p) => `"${p.replace(/"/g, '')}"`;
 
@@ -15,5 +16,7 @@ export function lintStep(files) {
   const copy = files.filter(coversCopy);
   if (ui.length) cmds.push(`node tools/ui/lint-ui.mjs --staged ${ui.map(q).join(' ')}`);
   if (copy.length) cmds.push(`node tools/ui/lint-copy.mjs --staged ${copy.map(q).join(' ')}`);
+  const home = files.filter((p) => coversHome(p));
+  if (home.length) cmds.push(`node tools/gate/one-home.mjs --staged ${home.map(q).join(' ')}`);
   return cmds.length ? ['lints', cmds.join(' && ')] : null;
 }

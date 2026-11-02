@@ -4,10 +4,13 @@
 // reports clicks. The Git / Perforce switch ends every head, and in p4 mode the pane is the read-only
 // changelist list. The list and head are redrawn only when their content changes, so a 5 s poll
 // never steals focus from a row button or the rename field.
+import { el, iconBtn as domIconBtn, textBtn } from "../dom";
 import { iconImg } from "../icon-img";
 import { lucide, type LucideName } from "../icons";
 import { clearEmptyState, fillEmptyState, goButton } from "../panels/empty-state";
-import type { ChangesStatus, P4Status } from "../ipc";
+import type { ChangesStatus, P4Status, UnrealAssetDiff } from "../ipc";
+import { ASSET_DIFF_TIP, isAssetFile, slotKey } from "./asset-diff";
+import { buildSlots } from "./asset-slots";
 import { fileType, focusAfter, headFocusClass, truncatePath, type FocusMark, type HeadMark, type Groups, type Row } from "./model";
 import { buildBackendSwitch, drawP4Group, p4Icon, type Backend } from "./p4-view";
 import type { SyncMode } from "./actions";
@@ -49,6 +52,8 @@ export interface Handlers {
   dismiss(): void;
   gitPrompt(): void;
   backend(b: Backend): void;
+  /** Reads one asset's property diff against the root captured now. */
+  assetDiff(path: string, staged: boolean): Promise<UnrealAssetDiff>;
 }
 
 export interface View {
@@ -61,26 +66,9 @@ export interface View {
 /** Folder part budget in characters; CSS ellipsis covers a pane narrower than this. */
 const PATH_BUDGET = 64;
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  return e;
-}
-
-function iconBtn(icon: LucideName, label: string, cls = "cx-ico"): HTMLButtonElement {
-  const b = el("button", cls);
-  b.type = "button";
-  b.title = label;
-  b.setAttribute("aria-label", label);
-  b.append(lucide(icon));
-  return b;
-}
-
-function textBtn(label: string, cls: string): HTMLButtonElement {
-  const b = el("button", cls);
-  b.type = "button";
-  b.textContent = label;
-  return b;
+/** An icon button from a Lucide name; label doubles as tooltip. */
+function lucideBtn(icon: LucideName, label: string, cls = "cx-ico"): HTMLButtonElement {
+  return domIconBtn(lucide(icon), label, label, cls);
 }
 
 function syncTip(st: RepoStatus): string {
@@ -130,6 +118,8 @@ export function buildView(h: Handlers): View {
   let revertBtn: HTMLButtonElement | null = null;
   let confirmBtns: { no: HTMLButtonElement; yes: HTMLButtonElement } | null = null;
   let boxes: HTMLElement[] = [];
+  const slots = buildSlots();
+  let backendNow: Backend = "git";
 
   // the header control a Sync or Rename action came from; restored once the lock lifts
   let headMark: HeadMark | null = null;
@@ -211,7 +201,7 @@ export function buildView(h: Handlers): View {
       input.setAttribute("aria-label", "Branch Name");
       input.spellcheck = false;
       input.disabled = locked;
-      const ok = iconBtn("check", "Rename");
+      const ok = lucideBtn("check", "Rename");
       ok.disabled = locked;
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") { e.preventDefault(); headMark = "rename"; h.renameCommit(input.value); }
@@ -229,7 +219,7 @@ export function buildView(h: Handlers): View {
       branch.append(name);
       head.append(branch);
       if (!st.detached) {
-        const pen = iconBtn("pencil", "Rename Branch", "cx-ico cx-rename");
+        const pen = lucideBtn("pencil", "Rename Branch", "cx-ico cx-rename");
         pen.disabled = locked;
         pen.addEventListener("click", () => h.renameStart());
         head.append(pen);
@@ -238,12 +228,12 @@ export function buildView(h: Handlers): View {
     const grow = el("span", "cx-grow");
     const split = el("span", "cx-split wb-actions");
     const syncing = s.busy === "sync";
-    const main = iconBtn(syncing ? "loader-circle" : "arrow-up-down", "Sync", "cx-ico cx-split-main");
+    const main = lucideBtn(syncing ? "loader-circle" : "arrow-up-down", "Sync", "cx-ico cx-split-main");
     main.title = syncTip(st);
     main.setAttribute("aria-busy", String(syncing));
     main.disabled = locked || st.detached;
     main.addEventListener("click", () => { headMark = "sync"; h.sync("sync"); });
-    const more = iconBtn("chevron-down", "Sync Options", "cx-ico cx-split-more");
+    const more = lucideBtn("chevron-down", "Sync Options", "cx-ico cx-split-more");
     more.setAttribute("aria-haspopup", "menu");
     more.disabled = locked || st.detached;
     more.addEventListener("click", () => (menu ? closeMenu() : openMenu(more)));
@@ -251,7 +241,30 @@ export function buildView(h: Handlers): View {
     head.append(grow, split);
   }
 
-  function drawRow(r: Row, groups: Groups, locked: boolean): HTMLElement {
+  /** The Asset Diff toggle of a file row; its expanded slot and result live in `slots`. */
+  function assetBtn(row: HTMLElement, path: string, staged: boolean): HTMLButtonElement {
+    const key = slotKey(staged, path);
+    const busy = slots.state(key)?.kind === "busy";
+    const b = lucideBtn(busy ? "loader-circle" : "search-code", "Asset Diff", "cx-ra cx-asset");
+    b.title = ASSET_DIFF_TIP;
+    b.disabled = busy;
+    b.setAttribute("aria-busy", String(busy));
+    b.setAttribute("aria-expanded", String(slots.state(key) !== null));
+    b.addEventListener("click", () => {
+      if (slots.collapse(key)) { b.setAttribute("aria-expanded", "false"); return; }
+      const paint = () => {
+        const on = slots.state(key)?.kind === "busy";
+        b.replaceChildren(lucide(on ? "loader-circle" : "search-code"));
+        b.disabled = on;
+        b.setAttribute("aria-busy", String(on));
+        b.setAttribute("aria-expanded", String(slots.state(key) !== null));
+      };
+      void slots.open(key, () => h.assetDiff(path, staged), (slot) => row.after(slot), paint);
+    });
+    return b;
+  }
+
+  function drawRow(r: Row,groups: Groups, locked: boolean): HTMLElement {
     const f = r.file;
     const row = el("div", `cx-row${r.kind === "deleted" ? " cx-del" : ""}`);
     row.title = f.origPath ? `${f.origPath} → ${f.path}` : f.path;
@@ -268,13 +281,14 @@ export function buildView(h: Handlers): View {
     path.append(fname, fdir);
     const acts = el("span", "cx-racts");
     const staged = r.group === "staged";
-    const b = iconBtn(staged ? "minus" : "plus", staged ? "Unstage" : "Stage", "cx-ra");
+    const b = lucideBtn(staged ? "minus" : "plus", staged ? "Unstage" : "Stage", "cx-ra");
     b.disabled = locked;
     rowBtns.push(b);
     b.addEventListener("click", () => {
       mark = { group: r.group, path: f.path, index: Math.max(0, groups[r.group].indexOf(r)) };
       if (staged) h.unstage(pathsOf(r)); else h.stage(pathsOf(r));
     });
+    if (isAssetFile(f.path) && backendNow === "git") acts.append(assetBtn(row, f.path, staged));
     acts.append(b);
     row.append(letter, glyph, path, acts);
     if (r.adds !== null && r.dels !== null) {
@@ -301,18 +315,18 @@ export function buildView(h: Handlers): View {
     count.textContent = String(rows.length);
     const acts = el("span", "cx-sec-acts wb-actions");
     if (group === "staged") {
-      const all = iconBtn("minus", "Unstage All");
+      const all = lucideBtn("minus", "Unstage All");
       all.disabled = locked;
       rowBtns.push(all);
       all.addEventListener("click", () => { mark = { group, path: null, index: 0 }; h.unstage(uniq(rows)); });
       acts.append(all);
     } else {
-      const rev = iconBtn("undo-2", "Revert All");
+      const rev = lucideBtn("undo-2", "Revert All");
       rev.disabled = locked || s.revertable.length === 0;
       revertBtn = rev;
       if (s.confirm) rev.setAttribute("aria-pressed", "true");
       rev.addEventListener("click", () => (s.confirm ? h.revertCancel() : h.revertAsk()));
-      const all = iconBtn("plus", "Stage All");
+      const all = lucideBtn("plus", "Stage All");
       all.disabled = locked;
       rowBtns.push(all);
       all.addEventListener("click", () => { mark = { group, path: null, index: 0 }; h.stage(uniq(rows)); });
@@ -322,7 +336,11 @@ export function buildView(h: Handlers): View {
     sec.append(top);
     if (group === "changes" && s.confirm) sec.append(drawConfirm(s));
     const box = el("div", `cx-rows${locked ? " cx-dim" : ""}`);
-    for (const r of rows) box.append(drawRow(r, s.groups, locked));
+    for (const r of rows) {
+      box.append(drawRow(r, s.groups, locked));
+      const slot = isAssetFile(r.file.path) && s.backend === "git" ? slots.attach(slotKey(group === "staged", r.file.path)) : null;
+      if (slot) box.append(slot);
+    }
     boxes.push(box);
     sec.append(box);
     return sec;
@@ -397,7 +415,7 @@ export function buildView(h: Handlers): View {
       line.append(lucide(kind === "ok" ? "circle-check" : "circle-alert"));
       const msg = el("span", "cx-note-msg");
       msg.textContent = text;
-      const x = iconBtn("x", "Dismiss");
+      const x = lucideBtn("x", "Dismiss");
       x.addEventListener("click", () => h.dismiss());
       const wrap = el("span", "wb-actions");
       wrap.append(x);
@@ -448,7 +466,7 @@ export function buildView(h: Handlers): View {
       if (at && sec) {
         target = "head" in at
           ? sec.querySelector(".cx-sec-acts button:last-of-type")
-          : sec.querySelectorAll(".cx-rows .cx-ra")[at.index];
+          : sec.querySelectorAll(".cx-rows .cx-ra:not(.cx-asset)")[at.index];
       }
     }
     if (target instanceof HTMLButtonElement || target instanceof HTMLInputElement) {
@@ -477,6 +495,8 @@ export function buildView(h: Handlers): View {
     const st = s.status;
     const locked = s.busy !== null;
     last = s;
+    backendNow = s.backend;
+    slots.forRoot(st?.root ?? "");
     root.classList.toggle("cx-busy", locked);
     if (!s.renaming) renameDraft = null;
     // head: redrawn when its inputs move; under an open rename field only the lock redraws it, and the

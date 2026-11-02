@@ -6,15 +6,10 @@ import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { setupDom } from "./helpers/dom-mount.mjs";
+import { ipcStubSource } from "./helpers/ipc-stub.mjs";
 
-const IPC = `export function invoke(cmd, args) {
-    const h = globalThis.__domMount; h.invoked.push(cmd);
-    if (Object.hasOwn(h.answers, cmd)) { const a = h.answers[cmd]; return Promise.resolve(typeof a === "function" ? a(args) : a); }
-    return Promise.resolve(null);
-  }
-  export function listen() { return Promise.resolve(() => {}); }`;
 const dom = setupDom({ stubs: {
-  ipc: IPC,
+  ipc: ipcStubSource({ unstubbed: "null" }),
   theme: "export function xtermTheme() { return {}; }",
   "panels/workbench": "export function mountWorkbench() {} export function setWorkbenchShown() {} export function revealWorkbenchTab() {}",
   "panels/split": "export function initSplit() {}",

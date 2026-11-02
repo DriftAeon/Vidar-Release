@@ -1,9 +1,8 @@
-//! src-tauri\src\bare\library_delete.rs — `bare_library_delete`: remove one rune, or a whole import library,
-//! from the store. Only libraries under the rune imports dir are
-//! deletable; the stock library, templates and the rules library refuse. Nothing is hard-deleted: a
-//! library folder is renamed to `<library>.deleted-<yyyyMMdd-HHmmss>` (UTC; `sets_list` skips `.deleted-` as it
-//! skips the migration's `.pre-split`), a rune file and every set file it was slotted in move into that same
-//! backup folder under their library-relative path.
+//! src-tauri\src\bare\library_delete.rs — `bare_library_delete`: remove one rune (or runeset) of an import
+//! library from the store. Only libraries under the rune imports dir are
+//! deletable; the Vidar library and the rules library refuse. Nothing is hard-deleted: a
+//! rune file and every set file it was slotted in move into `<library>.deleted-<yyyyMMdd-HHmmss>` (UTC;
+//! `sets_list` skips `.deleted-` as it skips the migration's `.pre-split`) under their library-relative path.
 //! Unlocked vaults drop the refs (through `vault::store::Store::edit`); locked vaults and their `revs/` are
 //! never touched, since a session keeps its own copy.
 
@@ -37,15 +36,10 @@ fn stamp(secs: u64) -> String {
     format!("{y:04}{m:02}{d:02}-{:02}{:02}{:02}", rem / 3_600, rem % 3_600 / 60, rem % 60)
 }
 
-/// The backup folder `<library>.deleted-<stamp>`. A whole-library move needs a free one (`-2`, `-3` when
-/// taken); a rune move reuses the call's folder, so runes deleted in the same second share it.
-fn backup_root(imports: &Path, library: &str, fresh: bool) -> PathBuf {
+/// The backup folder `<library>.deleted-<stamp>`; runes deleted in the same second share it.
+fn backup_root(imports: &Path, library: &str) -> PathBuf {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let first = imports.join(format!("{library}.deleted-{}", stamp(secs)));
-    if !fresh || !first.exists() {
-        return first;
-    }
-    (2..1000).map(|n| imports.join(format!("{library}.deleted-{}-{n}", stamp(secs)))).find(|p| !p.exists()).unwrap_or(first)
+    imports.join(format!("{library}.deleted-{}", stamp(secs)))
 }
 
 /// `dir/rel` free of a clash: `name.md` then `name.2.md`, ...
@@ -104,10 +98,18 @@ fn drop_from_vaults(root: &Path, ops_for: impl Fn(&super::vault::Vault) -> Vec<O
 
 fn delete_rune(root: &Path, imports: &Path, library: &str, id: &str) -> Result<Deleted, String> {
     rune::check_id(id).map_err(|_| format!("{id:?} is not a rune name"))?;
-    let dir = super::kit::library_dir(imports, library)?;
+    let dir = super::runeset_make::library_dir(imports, library)?;
     let lib = Library::open(&dir)?;
     let entry = lib.entry(id)?.ok_or_else(|| format!("Rune {id} is not in library {library}"))?;
-    let backup = backup_root(imports, library, false);
+    // Delete Runeset: a fixed library's runeset stays (the Vidar library, the rules library)
+    if entry.kind == "set" && super::vault::library_sets::fixed(root, library) {
+        return Err(if super::layer::is_vidar_library(library) {
+            format!("Runeset {id} ships with Vidar, so it cannot be deleted")
+        } else {
+            format!("Runeset {id} holds Vidar's rules, so it cannot be deleted")
+        });
+    }
+    let backup = backup_root(imports, library);
     let rel_of = |p: &Path| -> PathBuf { p.strip_prefix(&lib.root).unwrap_or(p).to_path_buf() };
     // Slots first: a set rewritten here keeps its original bytes in the backup.
     let (sets, _) = lib.all_runes();
@@ -135,34 +137,18 @@ fn delete_rune(root: &Path, imports: &Path, library: &str, id: &str) -> Result<D
     Ok(Deleted { vaults })
 }
 
-fn delete_library(root: &Path, imports: &Path, library: &str) -> Result<Deleted, String> {
-    let dir = super::kit::library_dir(imports, library)?;
-    let backup = backup_root(imports, library, true);
-    std::fs::rename(&dir, &backup).map_err(|e| format!("Cannot move library {library} to the library backup: {e}"))?;
-    let vaults = drop_from_vaults(root, |v| {
-        let mut ops: Vec<Op> = v.runes.iter().filter(|r| r.library == library).cloned().map(Op::RemoveRune).collect();
-        ops.extend(v.runesets.iter().filter(|c| c.source.library == library).map(|c| Op::RemoveRuneset(c.source.clone())));
-        ops
-    });
-    let _ = Store::open(root).prune_off(library, None);
-    Ok(Deleted { vaults })
-}
-
-/// Pure over `root` (the Vidar root). Only a library under the imports dir is deletable.
-pub fn delete_in(root: &Path, library: &str, rune: Option<&str>) -> Result<Deleted, String> {
+/// Pure over `root` (the Vidar root). Only a rune of a library under the imports dir is deletable.
+pub fn delete_in(root: &Path, library: &str, rune: &str) -> Result<Deleted, String> {
     let imports = crate::paths::rune_imports_dir_in(root);
-    if library.contains(".pre-split") || library.contains(".deleted-") || super::kit::library_dir(&imports, library).is_err() {
+    if library.contains(".pre-split") || library.contains(".deleted-") || super::runeset_make::library_dir(&imports, library).is_err() {
         return Err(format!("Library {library} is not an imported library, so it cannot be deleted here"));
     }
-    match rune {
-        Some(id) => delete_rune(root, &imports, library, id),
-        None => delete_library(root, &imports, library),
-    }
+    delete_rune(root, &imports, library, rune)
 }
 
 #[tauri::command]
-pub async fn bare_library_delete(library: String, rune: Option<String>) -> Result<Deleted, String> {
-    tauri::async_runtime::spawn_blocking(move || delete_in(&crate::paths::root(), &library, rune.as_deref())).await.map_err(|e| e.to_string())?
+pub async fn bare_library_delete(library: String, rune: String) -> Result<Deleted, String> {
+    tauri::async_runtime::spawn_blocking(move || delete_in(&crate::paths::root(), &library, &rune)).await.map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

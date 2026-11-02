@@ -7,7 +7,7 @@ import type { Effort, PermissionMode } from "../../agents/protocol";
 import { AGENT_PROFILE } from "../../agents/agent-profile";
 import type { RulesLaunch } from "../../rules/inject";
 import type { AgentId } from "../../agents/id";
-import { codexThreadHolder, recordedVault, refreshRawCodexThreads } from "../sessions/lookup";
+import { codexThreadHolder as threadHolder, recordedVault, refreshRawCodexThreads } from "../sessions/lookup";
 
 export type RenderedAgent = AgentId;
 
@@ -86,7 +86,7 @@ export interface AgentTransport {
 async function refuseHeldCodexThread(params: AgentSpawnParams): Promise<void> {
   if (!AGENT_PROFILE[params.agent].refusesHeldResume || !params.resume) return;
   await refreshRawCodexThreads();
-  if (codexThreadHolder(params.resume, params.tabId)) throw new Error("This Codex thread is already open in another tab.");
+  if (threadHolder(params.resume, params.tabId)) throw new Error("This Codex thread is already open in another tab.");
 }
 
 /**
@@ -104,11 +104,14 @@ async function reportBare(params: AgentSpawnParams, warnings: string[]): Promise
   if (warnings.length || trust) params.onBareWarnings(warnings, trust);
 }
 
+/** A tab's launch vault: a getter reads the tab's current one, which a pick sets after the tab opened. */
+export type LaunchVault = string | (() => string | undefined);
+
 /** The vault a profiled respawn loads (D-g): the one its session record names (Retry, /clear,
  *  Resume, a re-adopt), else the tab's launch vault. Neither leaves `sets` as the only source, and
  *  with no sets either Rust refuses the spawn: a Bare session never starts outside a vault. */
-async function spawnVault(params: AgentSpawnParams, launchVault?: string, falconSession?: string): Promise<string | null> {
-  return (await recordedVault(params.tabId, falconSession ?? null, params.resume ?? null)) ?? launchVault ?? null;
+async function spawnVault(params: AgentSpawnParams, launchVault?: LaunchVault, falconSession?: string): Promise<string | null> {
+  return (await recordedVault(params.tabId, falconSession ?? null, params.resume ?? null)) ?? (typeof launchVault === "function" ? launchVault() : launchVault) ?? null;
 }
 
 /** The set or vault fields of a profiled spawn: a vault wins and drops the sets transition. */
@@ -116,7 +119,7 @@ function vaultOrSets(vault: string | null, sets?: SetRef[]): { vault: string } |
   return vault ? { vault } : sets !== undefined ? { sets } : {};
 }
 
-async function spawnInProcess(params: AgentSpawnParams, profile: string | null, rowKey?: string, sets?: SetRef[], vault?: string): Promise<AgentSpawned> {
+async function spawnInProcess(params: AgentSpawnParams, profile: string | null, rowKey?: string, sets?: SetRef[], vault?: LaunchVault): Promise<AgentSpawned> {
   if (!AGENT_PROFILE[params.agent].inProcess) {
     throw new Error("claude rendered tabs are hosted by falcon, not spawned in-process");
   }
@@ -204,7 +207,7 @@ export const falconAgentTransport: AgentTransport = {
 
 /** The in-process backend for a profiled (bare) Codex tab: every spawn (first start, /clear,
  *  Resume, Retry) carries the tab's profile, so it never respawns as a default tab. */
-export function createProfileTransport(profile: string, rowKey?: string, sets?: SetRef[], vault?: string): AgentTransport {
+export function createProfileTransport(profile: string, rowKey?: string, sets?: SetRef[], vault?: LaunchVault): AgentTransport {
   return { ...tauriAgentTransport, profile, spawn: (params) => spawnInProcess(params, profile, rowKey, sets, vault) };
 }
 
@@ -221,7 +224,7 @@ export function createRefusedTransport(): AgentTransport {
 /** The Falcon backend for a profiled (Rendered Bare) Claude tab: every spawn (first start, /clear,
  *  Resume, Retry) carries the profile and the row's key, so it never respawns as a default tab
  *  or without its row. */
-export function createFalconProfileTransport(profile: string, rowKey?: string, sets?: SetRef[], vault?: string): AgentTransport {
+export function createFalconProfileTransport(profile: string, rowKey?: string, sets?: SetRef[], vault?: LaunchVault): AgentTransport {
   return {
     ...falconAgentTransport,
     profile,
@@ -232,7 +235,7 @@ export function createFalconProfileTransport(profile: string, rowKey?: string, s
 /** Adopt exactly once; /clear subsequently starts a new hosted session, under the same gateway,
  *  launch profile and row key the adopter read from the session summary it already holds. `refuseRespawn`
  *  (an art the module registry does not know) adopts but never starts a new process. */
-export function createFalconAdoptTransport(session: string, gateway?: string, profile?: string, refuseRespawn = false, rowKey?: string, sets?: SetRef[], vault?: string): AgentTransport {
+export function createFalconAdoptTransport(session: string, gateway?: string, profile?: string, refuseRespawn = false, rowKey?: string, sets?: SetRef[], vault?: LaunchVault): AgentTransport {
   let adopted = false;
   return {
     ...falconAgentTransport,

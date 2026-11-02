@@ -1,5 +1,5 @@
-// One expandable rack row (.rack-row > button.rack-name + .rack-detail) shared by Gear
-// (loadout.ts), the MCP rack (rack.ts) and the LM Studio row. Callers keep their own
+// One expandable rack row (.rack-row > button.rack-name + .rack-detail) shared by
+// the MCP rack (rack.ts) and the LM Studio row. Callers keep their own
 // extras (dataset, classes, titles) and their own "loaded" flags: onOpen fires on every open.
 
 import { onPress } from "./press";

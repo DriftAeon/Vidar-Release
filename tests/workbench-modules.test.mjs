@@ -26,7 +26,7 @@ test('bench descriptors come from ordered core workbench surfaces', () => {
 test('built-in bench modules keep their ten stable IDs in button order', () => {
   assert.deepEqual(
     WORKBENCH_MODULES.map(({ id }) => id),
-    ['relay', 'tray', 'doc', 'flow', 'runelib', 'lab', 'changes', 'unreal', 'jira', 'notion', 'slack'],
+    ['relay', 'tray', 'doc', 'flow', 'runelib', 'changes', 'unreal', 'jira', 'notion', 'slack', 'lab'],
   );
 });
 

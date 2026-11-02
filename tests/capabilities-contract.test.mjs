@@ -28,7 +28,7 @@ const packDeps = readdirSync(resolvePath(ROOT, "content/packs"))
   .flatMap((f) => JSON.parse(read(`content/packs/${f}/pack.json`)).module?.deps ?? []);
 const depIds = new Set([...JSON.parse(read("contracts/dependencies.json")).deps, ...packDeps].map((d) => d.id));
 
-test("module capability declarations agree with the dependency catalog and index.html", () => {
+test("module capability declarations agree with the dependency catalog and src/pages/index.html", () => {
   assert.deepEqual(caps.map((c) => c.id), [
     "speak", "auto-speak", "character","dictation", "listen",
   ]);
@@ -45,7 +45,7 @@ test("module capability declarations agree with the dependency catalog and index
   }
   order(caps, depIds, factIds); // throws on unknown dependsOn, dependency or fact id, or a cycle
   assert.throws(() => order([{ id: "x", label: "x", when: { facts: ["ghost"] } }], depIds, factIds), /unknown fact/);
-  const html = read("index.html");
+  const html = read("src/pages/index.html");
   for (const c of caps) {
     if (c.host === undefined) continue; // a service capability (start(ctx)) has no host
     const tag = html.match(new RegExp(`<[^>]*\\bid="${c.host}"[^>]*>`))?.[0] ?? "";

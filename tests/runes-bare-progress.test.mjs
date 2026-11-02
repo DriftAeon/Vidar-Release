@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { ADD_TO_VAULT_LABEL, addToVault, addToVaultOps, chunkLabel, emptyProgress, groupedProgress, progressRows, reduceProgress, stopProgress } from "../src/runes/bare/progress.ts";
+import { ADD_TO_VAULT_LABEL, chunkLabel, emptyProgress, groupedProgress, progressRows, reduceProgress, stopProgress } from "../src/runes/bare/progress.ts";
 
 const EVENTS = JSON.parse(readFileSync(new URL("./fixtures/rune-gen-progress.json", import.meta.url), "utf8"));
 const fold = (events, s = emptyProgress()) => events.reduce(reduceProgress, s);
@@ -87,21 +87,6 @@ test("groupedProgress: one chunk, or a chunk the plan has not named, stays flat"
   assert.equal(groupedProgress(fold([EVENTS[1], EVENTS[2]])), null);
 });
 
-const GEN = { library: "gen-0a1b2c3d", set: "generated-20261017" };
-
-test("Add to Vault sends one addRuneset of the generated set to the tab's vault, unlocked", async () => {
+test("The Add to Vault label is stable", () => {
   assert.equal(ADD_TO_VAULT_LABEL, "Add to Vault");
-  const calls = [];
-  const err = await addToVault(async (a) => { calls.push(a); return {}; }, "v1", GEN);
-  assert.equal(err, null);
-  assert.deepEqual(calls, [{ id: "v1", ops: [{ op: "addRuneset", ref: GEN }], mode: "unlocked" }]);
-  assert.deepEqual(addToVaultOps(GEN), [{ op: "addRuneset", ref: GEN }]);
-});
-
-test("Add to Vault on a locked vault shows the store's error; no vault calls nothing", async () => {
-  const err = await addToVault(async () => { throw "invalid: vault `v1` is locked"; }, "v1", GEN);
-  assert.equal(err, "invalid: vault `v1` is locked");
-  let called = false;
-  assert.ok(await addToVault(async () => { called = true; }, null, GEN));
-  assert.equal(called, false);
 });

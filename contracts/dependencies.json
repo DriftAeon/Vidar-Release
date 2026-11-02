@@ -45,15 +45,6 @@
       "install": { "note": "Follow tools\\desks\\README.md." }
     },
     {
-      "id": "gemini",
-      "label": "Gemini CLI",
-      "required": false,
-      "usedBy": ["Gemini Tabs"],
-      "probe": { "kind": "exe", "names": ["gemini.cmd", "gemini.ps1", "gemini.exe"] },
-      "update": { "package": "@google/gemini-cli" },
-      "install": { "command": "npm install -g @google/gemini-cli" }
-    },
-    {
       "id": "pi",
       "label": "Pi",
       "required": false,

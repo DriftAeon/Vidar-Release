@@ -22,8 +22,8 @@ use crate::rules::{build, context::RenderCtx, library::Library, rune};
 pub struct PayloadCtx<'a> {
     /// `claude` or `codex`.
     pub agent: &'a str,
-    /// The profile's `setsPayload` text with `{{root}}` filled and, on Codex, the skills listing folded in after
-    /// `{{sets}}` (as `bare/mod.rs` `codex_instructions` does).
+    /// `layer::PAYLOAD_TEMPLATE` (`{{sets}}`; the marker is added at spawn) and, on Codex, the skills listing
+    /// folded in after `{{sets}}` (as `bare/mod.rs` `codex_instructions` does).
     pub template: &'a str,
     /// The row's other refs, placed ahead of the generated set; `None` when it has none.
     pub row: Option<RowRefs<'a>>,
@@ -159,10 +159,13 @@ pub fn validate(rendered: &Rendered, meta: &Meta, payload: &PayloadCtx) -> Check
     }
 
     // Bare Codex rows have no length cap (Raw rides `--profile`, Rendered `thread/start`); the size is only reported.
-    match parse(payload.agent) {
-        Some(Agent::Codex) => c.encoded_chars = Some(encode_toml_string(&marked).chars().count()),
-        Some(Agent::Claude) => {}
-        None => c.structural.push(format!("invalid: agent `{}` is not claude or codex", payload.agent)),
+    let Some(agent) = parse(payload.agent) else {
+        c.structural.push(format!("invalid: agent `{}` is not claude or codex", payload.agent));
+        return c;
+    };
+    match agent {
+        Agent::Codex => c.encoded_chars = Some(encode_toml_string(&marked).chars().count()),
+        Agent::Claude => {}
     }
     c
 }
@@ -198,9 +201,8 @@ mod tests {
         }
     }
 
-    fn template(agent: &str) -> String {
-        let file = if agent == "codex" { "codex.payload-sets.md" } else { "payload-sets.md" };
-        std::fs::read_to_string(repo().join("profiles/bare").join(file)).unwrap().replace("{{root}}", r"D:\Vidar")
+    fn template(_agent: &str) -> String {
+        layer::PAYLOAD_TEMPLATE.to_string()
     }
 
     fn check(reply: &str, inputs: &[Input], agent: &str) -> Result<super::super::Prepared, Vec<String>> {

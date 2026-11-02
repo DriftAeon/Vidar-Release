@@ -1,0 +1,211 @@
+{
+  "$comment": "One-home families: once a family has one home, a copy elsewhere fails the build. Checked by tools/gate/one-home.mjs (npm run build, gate lint step). frozen counts lower only (--write); a family is added in the commit that consolidates or freezes it.",
+  "families": [
+    {
+      "id": "capitalizer",
+      "home": ["src/format.ts"],
+      "use": "label or titleWords from src/format.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [
+        { "re": "\\.charAt\\(0\\)\\.toUpperCase\\(\\)" },
+        { "re": "\\[0\\]\\.toUpperCase\\(\\)" },
+        { "re": "\\.toUpperCase\\(\\)[^\\n]*\\.slice\\(1\\)" }
+      ],
+      "mark": "case-ok:",
+      "frozen": {},
+      "origin": "2026-10-28 c622cc9f 72895bc0"
+    },
+    {
+      "id": "vault-ipc",
+      "home": ["src/runes/bare/vault-io.ts"],
+      "use": "vaultIpc or tabVaultIo from src/runes/bare/vault-io.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [
+        { "lit": "invoke(\"rune_vault_list\"" },
+        { "lit": "invoke(\"rune_vault_read\"" },
+        { "lit": "invoke(\"rune_vault_lock\"" },
+        { "lit": "invoke(\"rune_vault_edit\"" }
+      ],
+      "frozen": {},
+      "origin": "2026-10-31 runes duplication sweep item 2"
+    },
+    {
+      "id": "confirm-row",
+      "home": ["src/dom.ts"],
+      "use": "confirmRow from src/dom.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "lit": "\"swap-yes" }],
+      "frozen": {},
+      "origin": "2026-10-31 runes duplication sweep item 6"
+    },
+    {
+      "id": "dom-el",
+      "home": ["src/dom.ts"],
+      "use": "el or button from src/dom.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "lit": "function el<" }],
+      "frozen": {},
+      "origin": "2026-10-31 runes duplication sweep item 12"
+    },
+    {
+      "id": "agent-file-hue",
+      "home": ["src/runes/bare/view-data.ts"],
+      "use": "agentFileHue from src/runes/bare/view-data.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "lit": "instructionsFile.toLowerCase().replace(/\\.md$/" }],
+      "frozen": {},
+      "origin": "2026-10-31 runes duplication sweep item 9"
+    },
+    {
+      "id": "json-pretty-write",
+      "home": ["src-tauri/src/fsx.rs"],
+      "use": "fsx::write_json_pretty (path, &value, trailing_newline)",
+      "scan": { "roots": ["src-tauri/src"], "ext": [".rs"] },
+      "shapes": [{ "re": "to_(string|vec)_pretty\\(" }],
+      "frozen": {},
+      "origin": "2026-10-31 rust duplication sweep item 1"
+    },
+    {
+      "id": "rust-slug",
+      "home": ["src-tauri/src/rules/slug.rs"],
+      "use": "rules::slug::slug or rune_id",
+      "scan": { "roots": ["src-tauri/src"], "ext": [".rs"] },
+      "shapes": [{ "re": "flat_map\\((char::to_lowercase|\\|c\\| c\\.to_lowercase\\(\\))\\)" }],
+      "frozen": {},
+      "origin": "2026-10-31 rust duplication sweep item 7, hound-dup 13"
+    },
+    {
+      "id": "tools-repo-root",
+      "home": ["tools/lib/paths.mjs"],
+      "use": "root() from tools/lib/paths.mjs",
+      "scan": { "roots": ["tools"], "ext": [".mjs"] },
+      "shapes": [{ "re": "fileURLToPath\\(import\\.meta\\.url\\)\\), [\"']\\.\\.[\"'], [\"']\\.\\.[\"']" }],
+      "mark": "root-ok:",
+      "frozen": {},
+      "origin": "2026-10-31 tools duplication sweep item 1"
+    },
+    {
+      "id": "tools-json-io",
+      "home": ["tools/lib/json.mjs"],
+      "use": "readJson or writeJsonAtomic from tools/lib/json.mjs",
+      "scan": { "roots": ["tools"], "ext": [".mjs"] },
+      "shapes": [{ "re": "(function|const) (readJson|writeJsonAtomic)\\b" }],
+      "frozen": {},
+      "origin": "2026-10-31 tools duplication sweep item 2"
+    },
+    {
+      "id": "tools-git-runner",
+      "home": ["tools/lib/git.mjs"],
+      "use": "git from tools/lib/git.mjs",
+      "scan": { "roots": ["tools"], "ext": [".mjs"] },
+      "shapes": [{ "lit": "startsWith(\"GIT_\")" }],
+      "frozen": {},
+      "origin": "2026-10-31 tools duplication sweep item 7"
+    },
+    {
+      "id": "modules-change-notice",
+      "home": ["src/modules/hidden.ts"],
+      "use": "notifyModulesChanged or hideModule from src/modules/hidden.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "lit": "CustomEvent(\"vidar-modules-change\")" }],
+      "frozen": {},
+      "origin": "2026-10-31 frontend duplication sweep item 1"
+    },
+    {
+      "id": "err-text",
+      "home": ["src/err-text.ts"],
+      "use": "errText from src/err-text.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "re": "instanceof Error \\? \\w+\\.message : String\\(\\w+\\)" }],
+      "frozen": {},
+      "origin": "2026-10-31 frontend duplication sweep item 2"
+    },
+    {
+      "id": "json-guards",
+      "home": ["src/json.ts"],
+      "use": "obj, str or isRecord from src/json.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [
+        { "re": "^\\s*(export )?function (obj|str|isRecord)\\(v: unknown" },
+        { "re": "^\\s*const (obj|str) = \\(v: unknown" }
+      ],
+      "frozen": {},
+      "origin": "2026-10-31 frontend duplication sweep item 9"
+    },
+    {
+      "id": "icon-text-btn",
+      "home": ["src/dom.ts"],
+      "use": "iconBtn or textBtn from src/dom.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "re": "^function (iconBtn|textBtn)\\(" }],
+      "frozen": {},
+      "origin": "2026-10-31 frontend duplication sweep item 5"
+    },
+    {
+      "id": "send-clean",
+      "home": ["src/browser/send.ts"],
+      "use": "cleanSend from src/browser/send.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "lit": "[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]" }],
+      "frozen": {},
+      "origin": "2026-10-31 frontend duplication sweep item 10"
+    },
+    {
+      "id": "test-temp-tree",
+      "home": ["tests/helpers/tree.mjs"],
+      "use": "makeTree or writeTree from tests/helpers/tree.mjs",
+      "scan": { "roots": ["tests"], "ext": [".mjs"] },
+      "shapes": [{ "re": "mkdtempSync\\(.*tmpdir\\(" }],
+      "frozen": {},
+      "origin": "2026-10-31 duplication sweep tools item 3"
+    },
+    {
+      "id": "test-ipc-stub",
+      "home": ["tests/helpers/ipc-stub.mjs"],
+      "use": "ipcStubSource from tests/helpers/ipc-stub.mjs",
+      "scan": { "roots": ["tests"], "ext": [".mjs"] },
+      "shapes": [{ "lit": "export function invoke(cmd, args)" }],
+      "frozen": {},
+      "origin": "2026-10-31 duplication sweep tools item 4"
+    },
+    {
+      "id": "net-shared",
+      "home": ["src-tauri/src/net/error.rs", "src-tauri/src/net/hold.rs", "src-tauri/src/net/text.rs", "src-tauri/src/net/token.rs", "src-tauri/src/net/transport.rs"],
+      "use": "net::ApiError, Answer, send_error, ceil_secs, pct, clean_redacted, printable, Transport",
+      "scan": { "roots": ["src-tauri/src"], "ext": [".rs"] },
+      "shapes": [
+        { "re": "(struct ApiError|enum Answer<|trait Transport|fn ceil_secs|fn pct\\(|fn clean_redacted)" },
+        { "lit": "token must be printable ASCII with no spaces" }
+      ],
+      "frozen": {},
+      "origin": "2026-10-31 rust duplication sweep item 2; Jira moved onto net 2026-11-01"
+    },
+    {
+      "id": "net-deadline",
+      "home": ["src-tauri/src/net/tiers.rs"],
+      "use": "net::tiers::COMMAND or FETCH for a request deadline",
+      "scan": { "roots": ["src-tauri/src/jira", "src-tauri/src/notion", "src-tauri/src/slack"], "ext": [".rs"] },
+      "shapes": [{ "re": "(DEADLINE|deadline)[^\\n]*Duration::from_secs\\(\\d+\\)" }],
+      "frozen": {},
+      "origin": "2026-10-31 rust duplication sweep item 4"
+    },
+    {
+      "id": "panel-network-error",
+      "home": ["src/integration-call.ts"],
+      "use": "callOrNetwork or networkError from src/integration-call.ts",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "lit": "kind: \"network\", message" }],
+      "frozen": {},
+      "origin": "2026-10-31 duplication sweep frontend item 3"
+    },
+    {
+      "id": "module-icons",
+      "home": ["src/panels/workbench-modules.ts"],
+      "use": "BENCH_ICONS from src/panels/workbench-modules.ts (surface.icon in contracts/modules.json)",
+      "scan": { "roots": ["src"], "ext": [".ts"] },
+      "shapes": [{ "re": "\\b(tray|doc|flow|runelib|changes|unreal|jira|notion|slack|relay): \"(tray|doc|flow|runelib|changes|unreal|jira|notion|slack|relay)\"" }],
+      "frozen": {},
+      "origin": "2026-11-01 modularity card M4b"
+    }
+  ]
+}

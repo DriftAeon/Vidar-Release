@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
-use crate::proc_job::JobChild;
+use crate::proc_job::{JobChild, SpawnExt};
 
 /// The whole exchange (initialize and every page) after the spawn.
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -98,8 +98,9 @@ fn admit(agent: &str) -> Result<(), String> {
 /// Spawns, asks, ends. Every return after the spawn goes through the kill below.
 fn fetch() -> Result<Vec<Value>, String> {
     admit("codex")?;
-    // The model list asks Codex on the stock vault, never a row's sets.
-    let opts = crate::bare::LaunchOpts { row_key: None, config: None, claude_json: None, vault: Some("stock-codex"), custom_sets: None };
+    // The model list asks Codex on the in-memory blank vault (required Vidar members only), never a row's
+    // sets; it is never stored or locked, so a list fetch leaves no vault behind.
+    let opts = crate::bare::LaunchOpts { surface: None, config: None, claude_json: None, vault: None, custom_sets: None, blank_vault: true };
     // Bare prepares stay serialized in-process (agent.rs, pty.rs); held until the spawn is in.
     let prepare_guard = crate::pty::BARE_PREPARE.lock().unwrap_or_else(|e| e.into_inner());
     // No launch folder: config.toml gets no trusted project, and nothing runs in a project.
@@ -108,10 +109,7 @@ fn fetch() -> Result<Vec<Value>, String> {
     let manifest = launch.write_manifest(TAB, names.iter().map(String::as_str))?;
     let cwd: PathBuf = launch.codex_home.clone();
     let mut cmd = Command::new(&launch.program);
-    cmd.args(&launch.args).current_dir(&cwd).env_clear();
-    for (key, value) in launch.env.iter() {
-        cmd.env(key, value);
-    }
+    cmd.args(&launch.args).current_dir(&cwd).exact_env(launch.env.iter());
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
     let spawned = JobChild::spawn(&mut cmd);
     drop(launch); // releases the home lock
@@ -150,9 +148,7 @@ fn fetch() -> Result<Vec<Value>, String> {
     };
     drop(stdin); // EOF: the app-server's own way out
     let grace = Instant::now() + GRACE;
-    while Instant::now() < grace && matches!(child.try_wait(), Ok(None)) {
-        thread::sleep(Duration::from_millis(20));
-    }
+    let _ = crate::proc_job::wait_bounded(&mut child, grace);
     child.kill(); // the whole tree, exited or not
     let _ = child.wait();
     if let Ok(handle) = reader {

@@ -11,7 +11,8 @@ import { CODEX_EFFORT_LEVELS, codexEffort, codexModelsPref } from "./codex-setti
 import type { AgentAdapter, AgentEvent, Effort, PermissionMode } from "./protocol";
 import { EFFORT_LEVELS, PERMISSION_MODES } from "./protocol";
 import { CODEX_LOGIN_TIP, claudeLoginTip } from "./login-tips";
-import type { AgentId } from "./id";
+import { AGENT_IDS, type AgentId } from "./id";
+import { AGENTS } from "./descriptor";
 import type { LoginReach } from "../panels/rendered/login";
 
 /** The agents a Rendered body can run (an alias of the one agent id). */
@@ -38,7 +39,7 @@ export interface FalconHostCheck {
 /** A Codex tab of this shape may be hosted once the host says it can: the gate is on, it has no
  *  rules file (stays in-process, spec Q5), and its profile, if any, is `bare` (the only one the
  *  host admits). Checked before the capability probe, since `falcon_list` launches a host. */
-export function codexHostShape(c: Omit<FalconHostCheck, "capabilities">): boolean {
+export function gatedHostShape(c: Omit<FalconHostCheck, "capabilities">): boolean {
   return c.hostedCodex && !c.rulesFile && (!c.profile || c.profile === "bare");
 }
 
@@ -111,9 +112,8 @@ export interface AgentProfile {
 /** The mode wording shared by every agent, and the one used when no agent is named. */
 export const MODE_LABELS: Readonly<Record<PermissionMode, string>> = { default: "Default", acceptEdits: "Accept Edits", plan: "Plan", auto: "Auto" };
 
-export const AGENT_PROFILE: Record<RenderedAgent, AgentProfile> = {
+const PROFILE_ROWS: Record<RenderedAgent, Omit<AgentProfile, "label">> = {
   claude: {
-    label: "Claude Code",
     newAdapter: () => new ClaudeAdapter(),
     permissionModes: PERMISSION_MODES,
     resumeNoun: "messages",
@@ -149,12 +149,11 @@ export const AGENT_PROFILE: Record<RenderedAgent, AgentProfile> = {
     },
   },
   codex: {
-    label: "Codex",
     newAdapter: (hosted) => hosted ? new HostedCodexAdapter() : new CodexAdapter(),
     permissionModes: ["default", "plan", "auto"],
     resumeNoun: "turns",
     inProcess: true,
-    falconHosted: (c) => codexHostShape(c) && !!c.capabilities?.includes(CODEX_TURNS)
+    falconHosted: (c) => gatedHostShape(c) && !!c.capabilities?.includes(CODEX_TURNS)
       && (!c.profile || !!c.capabilities?.includes(CODEX_BARE)), // an old host stays in-process for Bare
     effortLevels: CODEX_EFFORT_LEVELS,
     modelMenu: true,
@@ -187,3 +186,8 @@ export const AGENT_PROFILE: Record<RenderedAgent, AgentProfile> = {
     },
   },
 };
+
+/** The profile rows with each start-pill label read from the descriptor (`product`). */
+export const AGENT_PROFILE = Object.fromEntries(
+  AGENT_IDS.map((id) => [id, { label: AGENTS[id].product, ...PROFILE_ROWS[id] }]),
+) as Record<RenderedAgent, AgentProfile>;

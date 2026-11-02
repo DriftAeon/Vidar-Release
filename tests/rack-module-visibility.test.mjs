@@ -135,7 +135,7 @@ test("Claude module availability controls rack mounts and the Settings offer", a
   globalThis.__rackClaudeAvailable = () => claude;
   globalThis.__rackModuleSubscribers = subscribers;
   globalThis.__rackMounts = mounted;
-  const noop = "export const initStatus = () => {}; export const initInspect = () => {}; export const initCloseLock = () => {}; export const initSwap = () => {}; export const initRightbarResize = () => {}; export const initLoadout = () => {};";
+  const noop = "export const initStatus = () => {}; export const initInspect = () => {}; export const initCloseLock = () => {}; export const initSwap = () => {}; export const initRightbarResize = () => {};";
   const dom = setupDom({
     stubs: {
       ...stubs,
@@ -144,8 +144,7 @@ test("Claude module availability controls rack mounts and the Settings offer", a
         export async function savePrefConfirmed() { return { status: "saved" }; }`,
       "modules/registry": registry,
       "panels/status": noop, "panels/inspect": noop, "panels/closelock": noop,
-      "panels/swap": noop, "panels/resize": noop, "panels/loadout": noop,
-      "panels/rack": `export function initRack(host, _opts, signal) {
+      "panels/swap": noop, "panels/resize": noop,      "panels/rack": `export function initRack(host, _opts, signal) {
         globalThis.__rackMounts.push("rack"); host.textContent = "Rack";
         signal.addEventListener("abort", () => host.replaceChildren(), { once: true });
       }`,
@@ -204,95 +203,4 @@ test("Claude module availability controls rack mounts and the Settings offer", a
   document.dispatchEvent(new dom.window.CustomEvent("vidar-focus"));
   assert.equal(dom.ipc.invoked.filter((name) => name === "read_mcp_servers").length, reads);
   dispose();
-});
-
-test("Loadout gates Claude and Codex readers across focus, module changes and late replies while keeping Launch", async () => {
-  const subscribers = new Set();
-  const pending = [];
-  const pendingCodex = [];
-  let claude = false;
-  let codex = false;
-  globalThis.__loadoutModuleOn = (id) => (id === "codex" ? codex : claude);
-  globalThis.__loadoutModuleSubscribers = subscribers;
-  const dom = setupDom({
-    stubs: {
-      ...stubs,
-      format: `${stubs.format} export const prettyModel = (s) => s;`,
-      "modules/registry": `export const moduleOn = (id) => globalThis.__loadoutModuleOn(id);
-        export const onModulesChange = (fn) => { globalThis.__loadoutModuleSubscribers.add(fn); return () => globalThis.__loadoutModuleSubscribers.delete(fn); };`,
-    },
-    answers: {
-      read_loadout: () => new Promise((resolve) => pending.push(resolve)),
-      read_codex_loadout: () => new Promise((resolve) => pendingCodex.push(resolve)),
-    },
-  });
-  const { initLoadout } = await import("../src/panels/loadout.ts?module-visibility");
-  const root = document.createElement("div");
-  document.body.replaceChildren(root);
-  const controller = new dom.window.AbortController();
-  initLoadout(root, controller.signal);
-  const focus = (id, agent) => document.dispatchEvent(new dom.window.CustomEvent("vidar-focus", {
-    detail: { id, agent, cwd: "C:\\Work", launchArgs: ["ANTHROPIC_BASE_URL=https://api.example"] },
-  }));
-  const notify = () => { for (const fn of [...subscribers]) fn(); };
-  const rows = () => [...root.querySelectorAll(".rack-row")].map((row) => row.dataset.key);
-  const reply = { instructions: [], memoryPath: "", memoryEntries: 0, handoffPath: "", handoffNewest: null,
-    skills: [], agents: [], hooks: [], permissions: [], notes: [] };
-
-  focus("claude-tab", "claude");
-  assert.deepEqual(dom.ipc.invoked, []);
-  assert.deepEqual(rows(), ["Launch"]);
-
-  focus("codex-tab", "codex");
-  assert.deepEqual(rows(), ["Launch"]);
-  root.querySelector('[data-key="Launch"] .rack-name').click();
-  assert.match(root.querySelector('[data-key="Launch"] .rack-detail').textContent, /https:\/\/api\.example/);
-  assert.deepEqual(dom.ipc.invoked, []);
-
-  claude = true;
-  notify();
-  assert.deepEqual(dom.ipc.invoked, [], "enabling Claude does not read a Codex tab");
-  focus("claude-tab", "claude");
-  assert.equal(pending.length, 1);
-  assert.deepEqual(rows(), ["Launch"]);
-
-  claude = false;
-  notify();
-  pending.shift()(reply);
-  await dom.flush();
-  assert.deepEqual(rows(), ["Launch"], "a late Claude reply cannot restore Claude rows");
-  assert.equal(root.textContent.includes("Querying"), false);
-
-  claude = true;
-  notify();
-  assert.equal(pending.length, 1, "reenabling Claude starts a fresh read for the focused tab");
-  pending.shift()(reply);
-  await dom.flush();
-  assert.ok(rows().includes("Instructions"));
-  assert.ok(rows().includes("Launch"));
-  assert.equal(dom.ipc.invoked.filter((name) => name === "read_loadout").length, 2);
-
-  // Codex rows follow the Codex module only; other agents stay Launch-only.
-  const codexReply = { home: null, instructions: [], developerInstructionsChars: null, skills: [], agents: [], model: null,
-    effort: null, sandbox: null, approval: null, reviewer: null, network: null, notify: [], rulesFiles: 0, notes: [] };
-  focus("codex-tab", "codex");
-  assert.deepEqual(rows(), ["Launch"], "Codex module off: Launch only");
-  assert.equal(pendingCodex.length, 0);
-  codex = true;
-  notify();
-  assert.equal(pendingCodex.length, 1, "enabling Codex reads the focused Codex tab");
-  pendingCodex.shift()(codexReply);
-  await dom.flush();
-  assert.ok(rows().includes("Instructions"));
-  assert.ok(rows().includes("Launch"));
-  assert.equal(dom.ipc.invoked.filter((name) => name === "read_codex_loadout").length, 1);
-  focus("gemini-tab", "gemini");
-  assert.deepEqual(rows(), ["Launch"], "other agents show Launch only");
-  codex = false;
-  notify();
-  focus("codex-tab", "codex");
-  assert.deepEqual(rows(), ["Launch"], "Codex module off again: Launch only");
-
-  controller.abort();
-  assert.equal(subscribers.size, 0);
 });

@@ -23,6 +23,15 @@ const CONNECTOR_LEN = 28;
 const CARD_W = 300;
 const ANCHOR_TOP_OFFSET = 14; // card's top sits 14px above the node's top edge (mock: top:-14)
 
+/** The viewport x where the visible window ends for the card: the window's own edge, or the left
+ *  edge of the right rail's #toolbench when one is laid out to the left of it. */
+function visibleRight(): number {
+  let right = document.documentElement.clientWidth || window.innerWidth;
+  const rail = document.getElementById("toolbench")?.getBoundingClientRect();
+  if (rail && rail.width > 0 && rail.left > 0) right = Math.min(right, rail.left);
+  return right;
+}
+
 /** `card` and `connector` are children of `document.body` — every coordinate below is
  *  canvas-local until the final assignment, which adds the canvas's own viewport offset. Flips
  *  left when the right side would leave the canvas, shifts up only as far as needed when there
@@ -55,7 +64,11 @@ export function positionPopover(card: HTMLElement, connector: HTMLElement, node:
   card.style.display = "";
   connector.style.display = "";
 
-  const fitsRight = nodeLeft + screenW + GAP + CARD_W <= canvasW;
+  // The canvas pane can run under the right rail (#toolbench) or past the window edge, so the
+  // card fits and clamps against the visible part of the canvas, not its full width: otherwise the
+  // × lands under the rail and cannot be pressed.
+  const visibleW = Math.max(0, Math.min(canvasW, visibleRight() - canvasRect.left));
+  const fitsRight = nodeLeft + screenW + GAP + CARD_W <= visibleW;
   const fitsLeft = nodeLeft - GAP - CARD_W >= 0;
   const side: "right" | "left" = fitsRight || !fitsLeft ? "right" : "left";
   const xLocal = side === "right" ? nodeLeft + screenW + GAP : nodeLeft - GAP - CARD_W;
@@ -72,7 +85,7 @@ export function positionPopover(card: HTMLElement, connector: HTMLElement, node:
   const cardH = card.offsetHeight || Math.min(200, availableH);
   const desiredTopLocal = nodeTop - ANCHOR_TOP_OFFSET;
 
-  const clampedXLocal = Math.max(0, Math.min(xLocal, Math.max(0, canvasW - CARD_W)));
+  const clampedXLocal = Math.max(0, Math.min(xLocal, Math.max(0, visibleW - CARD_W)));
   const clampedTopLocal = Math.max(0, Math.min(desiredTopLocal, availableH - cardH));
 
   const cardTop = canvasRect.top + clampedTopLocal;

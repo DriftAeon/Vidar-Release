@@ -43,6 +43,7 @@ pub fn rel(id: &str) -> PathBuf {
 const MARKER: &str = r"contracts\paths.json";
 
 static ROOT: OnceLock<PathBuf> = OnceLock::new();
+static FRIEND: OnceLock<bool> = OnceLock::new();
 
 /// Resolve the root from the running exe and store it. A second call is a
 /// no-op returning `Ok`.
@@ -52,6 +53,7 @@ pub fn init() -> Result<(), String> {
     }
     let exe = std::env::current_exe().map_err(|e| format!("Vidar could not read its own exe path: {e}"))?;
     let root = resolve_from(&exe)?;
+    let _ = FRIEND.set(exe.parent().is_some_and(|d| d.join(MARKER).is_file()));
     let _ = ROOT.set(root);
     Ok(())
 }
@@ -95,6 +97,12 @@ fn resolve_from(exe: &Path) -> Result<PathBuf, String> {
         "Vidar is running from {}.\nNot a friend layout: {friend_why}.\nNot a dev checkout: {dev_why}.",
         exe.display()
     ))
+}
+
+/// True when the marker sits next to the exe (friend and zip layouts); false in a dev checkout,
+/// before `init()`, and under test. The pack ledger runs only when this is true.
+pub fn is_friend_layout() -> bool {
+    FRIEND.get().copied().unwrap_or(false)
 }
 
 /// The Vidar root (e.g. `C:\Work\Example\Vidar`), set once by `init()`.
@@ -164,6 +172,13 @@ pub fn close_lock_path() -> PathBuf {
 pub fn driver_mode_dir() -> PathBuf {
     p("driverMode")
 }
+/// `engines.json` (project root → pinned engine) and `state.json` (editor/build state), unreal/pin.rs and status.rs.
+pub fn unreal_pins_path() -> PathBuf {
+    p("unrealPins")
+}
+pub fn unreal_state_path() -> PathBuf {
+    p("unrealState")
+}
 pub fn auto_speak_path() -> PathBuf {
     p("autoSpeak")
 }
@@ -219,6 +234,11 @@ pub fn ui_state_path() -> PathBuf {
     p("uiState")
 }
 
+/// Append-only change log beside `vidar-state.json` (`settings/state.rs`), one JSON line per changed key.
+pub fn state_history_path() -> PathBuf {
+    p("stateHistory")
+}
+
 // ---- flow_store.rs ----
 /// Flow's graphs, templates and runs, one `<key>.json` per storage key plus `writer.lock`.
 pub fn flow_store_dir() -> PathBuf {
@@ -230,6 +250,16 @@ pub fn flow_store_dir() -> PathBuf {
 /// written by `tools/codex-schema/verify.mjs --out`.
 pub fn codex_accepted_path() -> PathBuf {
     p("codexAccepted")
+}
+
+// ---- modules/ledger.rs ----
+/// The pack ledger: `{version, packs:{<id>:{floor, current, previous}}}`.
+pub fn pack_ledger_path() -> PathBuf {
+    p("packLedger")
+}
+/// Kept pack copies: `packs-kept\<id>\<release>\`.
+pub fn packs_kept_dir() -> PathBuf {
+    p("packsKept")
 }
 
 // ---- usage_ledger.rs ----
@@ -307,19 +337,34 @@ pub fn rules_dir() -> PathBuf {
 pub fn runes_dir() -> PathBuf {
     p("runes")
 }
-// The global library: `~\.claude\runes` when `~\.claude` is a directory (even without `runes\`),
-// else `<CODEX_HOME or ~\.codex>\runes`. Never creates either folder. Twin: tools/lib/paths.mjs.
+// The global library, read off the agent table: every agent's root in table order (its `home_env` var when set
+// and non-empty, else `<home>\<user_dir>`); the first root that is a directory (even without `runes\`) gives
+// `<root>\runes`, none gives the last agent's. Never creates a folder. Twin: tools/lib/paths.mjs.
 pub fn global_runes_dir() -> Option<PathBuf> {
-    let home = home()?;
-    let fallback = crate::rules::codex::codex_home_from(std::env::var_os("CODEX_HOME"), Some(home.clone()));
-    global_runes_dir_in(&home, fallback)
+    global_runes_dir_in(&home()?, &|k| std::env::var_os(k))
 }
-pub fn global_runes_dir_in(home: &Path, codex_home: Option<PathBuf>) -> Option<PathBuf> {
-    let first = home.join(".claude");
-    if first.is_dir() {
-        return Some(first.join("runes"));
+/// One agent's root: its `home_env` var when non-empty, else `<home>\<user_dir>`.
+fn agent_root_in(a: crate::agent_spec::Agent, home: &Path, env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> PathBuf {
+    match env(a.home_env()).filter(|v| !v.is_empty()) {
+        Some(v) => PathBuf::from(v),
+        None => home.join(crate::agent_spec::spec(a).user_dir),
     }
-    codex_home.map(|c| c.join("runes"))
+}
+/// Every agent's root, in table order (the Document roots list and `global_runes_dir_in` read it).
+pub fn agent_roots_in(home: &Path, env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> Vec<PathBuf> {
+    crate::agent_spec::ALL.iter().map(|a| agent_root_in(*a, home, env)).collect()
+}
+/// The agent roots that exist as directories, for the Document roots list.
+pub fn agent_roots() -> Vec<PathBuf> {
+    home().map(|h| existing_agent_roots_in(&h, &|k| std::env::var_os(k))).unwrap_or_default()
+}
+pub fn existing_agent_roots_in(home: &Path, env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> Vec<PathBuf> {
+    agent_roots_in(home, env).into_iter().filter(|r| r.is_dir()).collect()
+}
+pub fn global_runes_dir_in(home: &Path, env: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let roots = agent_roots_in(home, env);
+    let root = roots.iter().find(|r| r.is_dir()).or(roots.last())?;
+    Some(root.join("runes"))
 }
 // ---- bare/layer.rs: imported rune libraries, one `<library>\` folder each (onboarding D1) ----
 #[allow(dead_code)] // the onboarding importer (W2) writes here; layer.rs resolves through `rune_imports_dir_in`
@@ -329,11 +374,6 @@ pub fn rune_imports_dir() -> PathBuf {
 /// `runtime\runes\load-history.json`: last-seen dates of rune uses across sessions (`rules/load_history.rs`).
 pub fn rune_load_history() -> PathBuf {
     p("runeLoadHistory")
-}
-/// The retired `runtime\runes\gen-index.json` (row key -> generated library): only the vault
-/// migration reads it, then deletes it (`bare/vault/migrate.rs`).
-pub fn legacy_rune_gen_index_in(root: &Path) -> PathBuf {
-    contract::resolve(root, "legacyRuneGenIndex")
 }
 /// `profiles\bare\rune-create\SKILL.md`: the skill the rune generator's agent runs under (`rules/generate/commands.rs`).
 pub fn rune_create_skill() -> PathBuf {
@@ -351,24 +391,20 @@ pub fn rune_imports_dir_in(root: &Path) -> PathBuf {
 pub fn rune_vaults_dir_in(root: &Path) -> PathBuf {
     contract::resolve(root, "runeVaults")
 }
-/// `profiles\bare\stock-runes`: the tracked read-only `stock` rune library (`bare/vault/store.rs`).
-pub fn rune_stock_dir_in(root: &Path) -> PathBuf {
-    contract::resolve(root, "runeStock")
-}
-/// `profiles\bare\templates`: stock vault templates, copied into `runtime\vaults` on create.
-pub fn rune_templates_dir_in(root: &Path) -> PathBuf {
-    contract::resolve(root, "runeTemplates")
+/// `profiles\bare\vidar-runes`: the tracked read-only Vidar rune library (`bare/vault/store.rs`).
+pub fn rune_vidar_dir_in(root: &Path) -> PathBuf {
+    contract::resolve(root, "runeVidar")
 }
 /// Content-addressed on-demand rune skills under the install's runtime directory.
 pub fn rune_skills_dir_in(root: &Path) -> PathBuf {
     contract::resolve(root, "runeSkills")
 }
 /// The retired tracked-set overrides (`<lib>\<set>.json` per set of `rulesLibrary`): only the vault
-/// migration reads them, then deletes them (`bare/vault/migrate.rs`).
+/// migration read them, then deleted them.
 pub fn legacy_rune_overrides_dir_in(root: &Path) -> PathBuf {
     contract::resolve(root, "legacyRuneOverrides")
 }
-/// `runtime\migrations\`: one backup folder per startup migration that wrote (`bare/vault/migrate.rs`).
+/// `runtime\migrations\`: one backup folder per startup migration that wrote.
 pub fn migrations_dir_in(root: &Path) -> PathBuf {
     contract::resolve(root, "migrations")
 }
@@ -407,8 +443,9 @@ pub fn sessions_dir() -> PathBuf {
 pub fn home() -> Option<PathBuf> {
     std::env::var_os("USERPROFILE").map(PathBuf::from)
 }
+// The first agent's root (the table's first row), honouring its `home_env` var.
 pub fn claude_dir() -> Option<PathBuf> {
-    Some(home()?.join(".claude"))
+    agent_roots_in(&home()?, &|k| std::env::var_os(k)).into_iter().next()
 }
 
 #[cfg(test)]
@@ -476,8 +513,11 @@ mod tests {
         moved(open_dispatch_dir(), "bridge\\open\\dispatch");
         moved(open_stale_dir(), "bridge\\open\\dispatch\\stale");
         moved(ui_state_path(), "vidar-state.json");
+        moved(state_history_path(), "state-history.jsonl");
         moved(flow_store_dir(), "state\\flow");
         moved(codex_accepted_path(), "state\\codex-accepted.json");
+        moved(pack_ledger_path(), "state\\pack-ledger.json");
+        moved(packs_kept_dir(), "state\\packs-kept");
         moved(usage_ledger_path(), "state\\usage-ledger.jsonl");
         moved(voice_dir(), "bridge\\voice");
         moved(voice_slots_dir(), "bridge\\voice-slots");
@@ -512,26 +552,58 @@ mod tests {
         }
     }
 
-    #[test]
-    fn home_and_claude_dir_agree_with_userprofile() {
-        let expected = std::env::var_os("USERPROFILE").map(PathBuf::from);
-        assert_eq!(home(), expected);
-        assert_eq!(claude_dir(), expected.map(|h| h.join(".claude")));
+    fn no_env(_: &str) -> Option<std::ffi::OsString> {
+        None
     }
 
     #[test]
-    fn global_runes_dir_prefers_claude_then_codex_home() {
-        let home = scratch("global-runes");
-        let codex = home.join("codex-elsewhere");
-        assert_eq!(
-            global_runes_dir_in(&home, Some(codex.clone())),
-            Some(codex.join("runes"))
-        );
-        std::fs::create_dir_all(home.join(".claude")).unwrap();
-        assert_eq!(
-            global_runes_dir_in(&home, Some(codex)),
-            Some(home.join(".claude").join("runes"))
-        );
+    fn home_agrees_with_userprofile_and_claude_dir_is_the_first_root() {
+        let expected = std::env::var_os("USERPROFILE").map(PathBuf::from);
+        assert_eq!(home(), expected);
+        let first = expected.and_then(|h| agent_roots_in(&h, &|k| std::env::var_os(k)).into_iter().next());
+        assert_eq!(claude_dir(), first);
+    }
+
+    #[test]
+    fn agent_roots_default_to_home_user_dirs_in_table_order() {
+        let home = PathBuf::from("H");
+        let want: Vec<PathBuf> = crate::agent_spec::ALL.iter().map(|a| home.join(crate::agent_spec::spec(*a).user_dir)).collect();
+        assert_eq!(agent_roots_in(&home, &no_env), want);
+    }
+
+    #[test]
+    fn config_dir_env_set_to_a_temp_dir_puts_global_runes_under_it() {
+        let home = scratch("global-runes-config-dir");
+        let cfg = home.join("cfg-elsewhere");
+        std::fs::create_dir_all(&cfg).unwrap();
+        let first = crate::agent_spec::ALL[0];
+        let env = |k: &str| (k == first.home_env()).then(|| cfg.clone().into_os_string());
+        assert_eq!(global_runes_dir_in(&home, &env), Some(cfg.join("runes")));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn first_root_missing_and_last_home_env_set_puts_global_runes_under_it() {
+        let home = scratch("global-runes-last-home");
+        let last = *crate::agent_spec::ALL.last().unwrap();
+        let first_dir = home.join(crate::agent_spec::spec(crate::agent_spec::ALL[0]).user_dir);
+        let elsewhere = home.join("last-elsewhere");
+        let env = |k: &str| (k == last.home_env()).then(|| elsewhere.clone().into_os_string());
+        assert_eq!(global_runes_dir_in(&home, &env), Some(elsewhere.join("runes")));
+        std::fs::create_dir_all(&first_dir).unwrap();
+        assert_eq!(global_runes_dir_in(&home, &env), Some(first_dir.join("runes")));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn document_roots_list_includes_the_last_agent_root_when_it_exists() {
+        let home = scratch("agent-roots-exist");
+        let last = *crate::agent_spec::ALL.last().unwrap();
+        let root = home.join("last-root");
+        let env = |k: &str| (k == last.home_env()).then(|| root.clone().into_os_string());
+        assert!(!existing_agent_roots_in(&home, &env).contains(&root));
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(existing_agent_roots_in(&home, &env).contains(&root));
         let _ = std::fs::remove_dir_all(&home);
     }
 

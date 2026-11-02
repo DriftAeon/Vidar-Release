@@ -67,8 +67,8 @@ fn prompt_details(requester: &Requester, payload: &Value) -> Result<Value, Strin
     Ok(json!({ "tab": tab, "text": text, "notify": notify, "report": report, "deliver_to": deliver_to(requester) }))
 }
 
-/// `ctl.spawn` details: `{ agent, model, effort, cwd, text, title, brief, notify,
-/// report, deliver_to }` (`brief` is display only); absent optionals serialise as `null`, `notify` as a bool.
+/// `ctl.spawn` details: `{ agent, model, effort, cwd, text, title, vault, brief, notify,
+/// report, deliver_to }` (`brief` is display only; `vault` is a vault id or `last`); absent optionals serialise as `null`, `notify` as a bool.
 /// `agent`/`model`/`cwd`/`title`/`brief` use `open.rs::valid_reason`, `report` the
 /// `wait.rs` rule. Unknown payload keys are dropped by construction.
 fn spawn_details(requester: &Requester, payload: &Value) -> Result<Value, String> {
@@ -89,11 +89,12 @@ fn spawn_details(requester: &Requester, payload: &Value) -> Result<Value, String
         Some(v) => Some(v.as_str().filter(|s| valid_text(s)).ok_or_else(|| "bad text".to_string())?),
     };
     let title = opt_reason(payload, "title")?;
+    let vault = opt_reason(payload, "vault")?;
     let brief = opt_reason(payload, "brief")?;
     let notify = parse_notify(payload)?;
     let report = super::wait::parse_report(payload)?;
     Ok(json!({
-        "agent": agent, "model": model, "effort": effort, "cwd": cwd, "text": text, "title": title,
+        "agent": agent, "model": model, "effort": effort, "cwd": cwd, "text": text, "title": title, "vault": vault,
         "brief": brief, "notify": notify, "report": report, "deliver_to": deliver_to(requester),
     }))
 }
@@ -126,6 +127,7 @@ mod tests {
             ("spawn 65537 B text", json!({ "agent": "test-agent", "text": big })),
             ("spawn NUL text", json!({ "agent": "test-agent", "text": "a\0b" })),
             ("spawn bad title", json!({ "agent": "test-agent", "title": "\u{7f}bad" })),
+            ("spawn bad vault", json!({ "agent": "test-agent", "vault": "\u{7f}bad" })),
             ("spawn bad brief", json!({ "agent": "test-agent", "brief": "\u{7f}bad" })),
             ("spawn bad report", json!({ "agent": "test-agent", "report": "a\nb" })),
             ("spawn bad notify", json!({ "agent": "test-agent", "notify": "yes" })),
@@ -146,16 +148,16 @@ mod tests {
 
         let full = json!({
             "agent": "test-agent", "model": "opus", "effort": "xhigh", "cwd": "C:/x", "text": "go", "title": "Lane 1",
-            "brief": "docs/b.md", "notify": true, "report": "docs/r.md", "extra": 1, "deliver_to": "tab-evil",
+            "vault": "team-daily", "brief": "docs/b.md", "notify": true, "report": "docs/r.md", "extra": 1, "deliver_to": "tab-evil",
         });
         assert_eq!(spawn_details(&me, &full).unwrap(), json!({
             "agent": "test-agent", "model": "opus", "effort": "xhigh", "cwd": "C:/x", "text": "go", "title": "Lane 1",
-            "brief": "docs/b.md", "notify": true, "report": "docs/r.md", "deliver_to": "tab-9",
+            "vault": "team-daily", "brief": "docs/b.md", "notify": true, "report": "docs/r.md", "deliver_to": "tab-9",
         }));
         let bare = spawn_details(&me, &json!({ "agent": "test-agent" })).unwrap();
         assert_eq!(bare, json!({
             "agent": "test-agent", "model": null, "effort": null, "cwd": null, "text": null, "title": null,
-            "brief": null, "notify": false, "report": null, "deliver_to": "tab-9",
+            "vault": null, "brief": null, "notify": false, "report": null, "deliver_to": "tab-9",
         }));
         let p = prompt_details(&me, &json!({ "tab": "t", "text": "hi", "junk": true, "deliver_to": "tab-evil" })).unwrap();
         assert_eq!(p, json!({ "tab": "t", "text": "hi", "notify": false, "report": null, "deliver_to": "tab-9" }));

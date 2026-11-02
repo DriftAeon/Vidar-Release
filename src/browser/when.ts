@@ -1,6 +1,9 @@
 // Timestamps for rows and comments. Offsets (`Z`, `+01:00`, Jira's `+0100`) are parsed explicitly, because
 // Date.parse rejects the colon-less form in some engines.
 
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { clock } from "../format.ts";
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?\s*(Z|[+-]\d{2}(?::?\d{2})?)?)?$/i;
 
@@ -45,6 +48,5 @@ export function absoluteTime(s: string): string {
   const t = parseWhen(s);
   if (t === null) return "";
   const d = new Date(t);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${clock(t)}`;
 }

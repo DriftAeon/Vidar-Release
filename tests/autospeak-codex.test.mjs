@@ -6,10 +6,9 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
-Object.assign(globalThis, { window, document: window.document, CustomEvent: window.CustomEvent });
+const window = installDom(["CustomEvent"]);
 
 const stub = { on: true, active: "t1" };
 globalThis.__asStub = stub;

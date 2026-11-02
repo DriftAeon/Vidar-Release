@@ -1,5 +1,5 @@
 // Bare rune cards by Activate (src/runes/bare/view-sets.ts runeCard, src/runes/cards.ts cardDetails): recall and
-// paths cards carry their class, a paths card shows its first glob and keeps the Activate chip, recall read stays.
+// paths cards carry their class, a paths card shows its first glob, no card carries an Activate chip, recall read stays.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom } from "./helpers/dom-mount.mjs";
@@ -19,7 +19,7 @@ test("a recall card gets act-recall, and a read one is marked is-read", () => {
   assert.ok(card(brick("r3", "recall"), { dim: true }).classList.contains("is-dim"), "the dim stays its own class");
 });
 
-test("a paths card gets act-paths, its first glob beside the name, and keeps its Activate chip", () => {
+test("a paths card gets act-paths, its first glob beside the name, and no Activate chip", () => {
   const c = card(brick("p1", "paths", { paths: ["src/launcher/**", "vidar.example.json"] }));
   assert.ok(c.classList.contains("act-paths"));
   const sum = c.querySelector("summary");
@@ -28,8 +28,7 @@ test("a paths card gets act-paths, its first glob beside the name, and keeps its
   const glob = sum.querySelector(".runes-glob");
   assert.equal(glob.textContent, "src/launcher/**");
   assert.equal(glob.title, "src/launcher/**\nvidar.example.json");
-  assert.equal(sum.querySelectorAll(".runes-chips .runes-chip").length, 2, "Scope and Activate");
-  assert.ok([...sum.querySelectorAll(".runes-chip")].some((x) => x.title === "Paths"));
+  assert.equal(sum.querySelectorAll(".runes-chips .runes-chip").length, 0, "no Scope or Activate chips");
 });
 
 test("an always card, and a paths card without globs, get no extra look", () => {

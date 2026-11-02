@@ -12,14 +12,15 @@ use serde::Serialize;
 use super::api::{self, ApiError, ErrorKind, Issue, ProjectOption, Scope, TypeOption};
 use super::config::{self, JiraSettings};
 use super::detail::{self, CommentsReply, IssueReply};
-use super::http::{Token, Transport, WinHttpTransport};
+use super::http::{Client, Token};
 use super::jql::{self, Filters};
 use super::vault::{self, CredVault, Saved, Vault};
 use crate::net::deadline::{self, Elapsed};
+use crate::net::{Live, Transport};
 
 /// The whole `jira_issues` budget: WinHTTP's own timeouts cannot interrupt a blocked
 /// call, so the reply is awaited against this and the worker abandoned past it.
-pub const DEADLINE: Duration = Duration::from_secs(20);
+pub const DEADLINE: Duration = crate::net::tiers::COMMAND;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -144,7 +145,7 @@ pub fn issues_with<F>(
     page_token: Option<&str>,
 ) -> IssuesReply
 where
-    F: FnOnce(String, Token) -> Box<dyn Transport>,
+    F: FnOnce() -> Box<dyn Transport>,
 {
     let c = match connection(settings, vault) {
         Ok(c) => c,
@@ -154,8 +155,9 @@ where
         Ok(jql) => jql,
         Err(e) => return e.into(),
     };
-    let t = transport(c.email, c.token);
-    match api::search(t.as_ref(), &c.site, &jql, page_token) {
+    let t = transport();
+    let client = Client::new(t.as_ref(), c.email, c.token);
+    match api::search(&client, &c.site, &jql, page_token) {
         Ok(page) => IssuesReply::Issues { issues: page.issues, next_page_token: page.next_page_token },
         Err(error) => error.into(),
     }
@@ -164,14 +166,15 @@ where
 /// The issue types the user can browse, for the Type picker, with the same refusals.
 pub fn types_with<F>(settings: Result<JiraSettings, String>, vault: &dyn Vault, transport: F) -> TypesReply
 where
-    F: FnOnce(String, Token) -> Box<dyn Transport>,
+    F: FnOnce() -> Box<dyn Transport>,
 {
     let c = match connection(settings, vault) {
         Ok(c) => c,
         Err(e) => return e.into(),
     };
-    let t = transport(c.email, c.token);
-    match api::types(t.as_ref(), &c.site) {
+    let t = transport();
+    let client = Client::new(t.as_ref(), c.email, c.token);
+    match api::types(&client, &c.site) {
         Ok(types) => TypesReply::Types { types },
         Err(error) => error.into(),
     }
@@ -180,14 +183,15 @@ where
 /// The first page of projects, for the Project picker, with the same refusals.
 pub fn projects_with<F>(settings: Result<JiraSettings, String>, vault: &dyn Vault, transport: F) -> ProjectsReply
 where
-    F: FnOnce(String, Token) -> Box<dyn Transport>,
+    F: FnOnce() -> Box<dyn Transport>,
 {
     let c = match connection(settings, vault) {
         Ok(c) => c,
         Err(e) => return e.into(),
     };
-    let t = transport(c.email, c.token);
-    match api::projects(t.as_ref(), &c.site) {
+    let t = transport();
+    let client = Client::new(t.as_ref(), c.email, c.token);
+    match api::projects(&client, &c.site) {
         Ok(projects) => ProjectsReply::Projects { projects },
         Err(error) => error.into(),
     }
@@ -196,14 +200,15 @@ where
 /// One issue with its first comments page, with the same refusals. Both GETs share the caller's one deadline.
 pub fn issue_with<F>(settings: Result<JiraSettings, String>, vault: &dyn Vault, transport: F, key: &str) -> IssueReply
 where
-    F: FnOnce(String, Token) -> Box<dyn Transport>,
+    F: FnOnce() -> Box<dyn Transport>,
 {
     let c = match connection(settings, vault) {
         Ok(c) => c,
         Err(e) => return e.into(),
     };
-    let t = transport(c.email, c.token);
-    match detail::issue(t.as_ref(), &c.site, key) {
+    let t = transport();
+    let client = Client::new(t.as_ref(), c.email, c.token);
+    match detail::issue(&client, &c.site, key) {
         Ok(issue) => IssueReply::Issue { issue: Box::new(issue) },
         Err(error) => error.into(),
     }
@@ -212,14 +217,15 @@ where
 /// A later comments page of one issue, with the same refusals.
 pub fn comments_with<F>(settings: Result<JiraSettings, String>, vault: &dyn Vault, transport: F, key: &str, start_at: u32) -> CommentsReply
 where
-    F: FnOnce(String, Token) -> Box<dyn Transport>,
+    F: FnOnce() -> Box<dyn Transport>,
 {
     let c = match connection(settings, vault) {
         Ok(c) => c,
         Err(e) => return e.into(),
     };
-    let t = transport(c.email, c.token);
-    match detail::comments(t.as_ref(), &c.site, key, start_at) {
+    let t = transport();
+    let client = Client::new(t.as_ref(), c.email, c.token);
+    match detail::comments(&client, &c.site, key, start_at) {
         Ok(comments) => CommentsReply::Comments { comments },
         Err(error) => error.into(),
     }
@@ -246,7 +252,7 @@ fn issues_now(scope: Scope, filters: Option<Filters>, page_token: Option<String>
     issues_with(
         config::read_settings(),
         &vault,
-        |email, token| Box::new(WinHttpTransport::new(email, token)),
+        || Box::new(Live),
         scope,
         filters.as_ref(),
         page_token.as_deref(),
@@ -255,19 +261,19 @@ fn issues_now(scope: Scope, filters: Option<Filters>, page_token: Option<String>
 
 
 fn types_now() -> TypesReply {
-    types_with(config::read_settings(), &CredVault::for_install(), |email, token| Box::new(WinHttpTransport::new(email, token)))
+    types_with(config::read_settings(), &CredVault::for_install(), || Box::new(Live))
 }
 
 fn projects_now() -> ProjectsReply {
-    projects_with(config::read_settings(), &CredVault::for_install(), |email, token| Box::new(WinHttpTransport::new(email, token)))
+    projects_with(config::read_settings(), &CredVault::for_install(), || Box::new(Live))
 }
 
 fn issue_now(key: &str) -> IssueReply {
-    issue_with(config::read_settings(), &CredVault::for_install(), |email, token| Box::new(WinHttpTransport::new(email, token)), key)
+    issue_with(config::read_settings(), &CredVault::for_install(), || Box::new(Live), key)
 }
 
 fn comments_now(key: &str, start_at: u32) -> CommentsReply {
-    comments_with(config::read_settings(), &CredVault::for_install(), |email, token| Box::new(WinHttpTransport::new(email, token)), key, start_at)
+    comments_with(config::read_settings(), &CredVault::for_install(), || Box::new(Live), key, start_at)
 }
 
 /// Degrades like `issues_with`: a bad vidar.json `jira` reads as no settings and a vault read
@@ -338,7 +344,7 @@ pub async fn jira_comments(key: String, start_at: u32) -> CommentsReply {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jira::http::Request;
+    use crate::net::{Limits, Reply, Request, Secret, SendError};
     use std::cell::RefCell;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -385,16 +391,16 @@ mod tests {
     }
 
     impl Transport for Stub {
-        fn send(&self, _req: &Request) -> Result<(u16, Vec<u8>), crate::jira::http::SendError> {
+        fn send(&self, _req: &Request, _headers: &Secret, _limits: Limits) -> Result<Reply, SendError> {
             self.sends.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.sleep);
-            Ok((200, EMPTY.as_bytes().to_vec()))
+            Ok(Reply { status: 200, retry_after: None, body: EMPTY.as_bytes().to_vec() })
         }
     }
 
-    fn stub(sends: &Arc<AtomicUsize>, sleep: Duration) -> impl FnOnce(String, Token) -> Box<dyn Transport> {
+    fn stub(sends: &Arc<AtomicUsize>, sleep: Duration) -> impl FnOnce() -> Box<dyn Transport> {
         let sends = sends.clone();
-        move |_, _| Box::new(Stub { sends, sleep })
+        move || Box::new(Stub { sends, sleep })
     }
 
     fn settings(site: &str) -> Result<JiraSettings, String> {
@@ -492,8 +498,8 @@ mod tests {
             Duration::from_secs(5),
         );
         assert_eq!(reply, IssuesReply::Issues { issues: vec![], next_page_token: None });
-        assert_eq!(kind(&with_deadline::<IssuesReply, _>("jira-test", "search", || panic!("worker died"), Duration::from_secs(5))), Some(ErrorKind::Network));
-        assert_eq!(DEADLINE, Duration::from_secs(20));
+        assert_eq!(kind(&with_deadline::<IssuesReply, _>("jira-test", "search", || panic!("worker died"), Duration::from_secs(5))), Some(ErrorKind::Network)); // home-ok: test deadline
+        assert_eq!(DEADLINE, Duration::from_secs(20)); // home-ok: pins the tier value
     }
 
     #[test]
@@ -510,16 +516,16 @@ mod tests {
     }
 
     impl Transport for Recorder {
-        fn send(&self, req: &Request) -> Result<(u16, Vec<u8>), crate::jira::http::SendError> {
-            let body: serde_json::Value = serde_json::from_slice(&req.body).unwrap();
+        fn send(&self, req: &Request, _headers: &Secret, _limits: Limits) -> Result<Reply, SendError> {
+            let body: serde_json::Value = serde_json::from_slice(req.body.as_deref().unwrap()).unwrap();
             self.jql.lock().unwrap().push(body["jql"].as_str().unwrap().to_string());
-            Ok((200, EMPTY.to_string().into_bytes()))
+            Ok(Reply { status: 200, retry_after: None, body: EMPTY.to_string().into_bytes() })
         }
     }
 
-    fn recorder(jql: &Arc<std::sync::Mutex<Vec<String>>>) -> impl FnOnce(String, Token) -> Box<dyn Transport> {
+    fn recorder(jql: &Arc<std::sync::Mutex<Vec<String>>>) -> impl FnOnce() -> Box<dyn Transport> {
         let jql = jql.clone();
-        move |_, _| Box::new(Recorder { jql })
+        move || Box::new(Recorder { jql })
     }
 
     #[test]

@@ -7,33 +7,29 @@ import type { ReplyDoneDetail } from "./reply-events";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 import { paneShell } from "./pane-shell";
-import { getFocusedSession, renderedBody, renderedSessionId, sessionLaunchInfo, type FocusedSession } from "./sessions/lookup";
+import type { VaultPickHandle } from "../runes/bare/vault-pick-view";
+import { openDraft, tabDraft, type CoverEntry } from "./runes-draft";
+import { headName, type HeadName, type HeadNameEdit } from "../runes/bare/head-name";
+import type { VaultDraft } from "../runes/bare/vault-draft";
+import { getFocusedSession, pendingVaultTab, renderedBody, renderedSessionId, sessionLaunchInfo, type FocusedSession } from "./sessions/lookup";
 import { respawnVaultTabs, tabVaultSession } from "./sessions/vault-tabs";
-import type { VaultEditIo } from "../runes/bare/vault-edit";
-import { tabVaultEditIo } from "../runes/bare/vault-edit-io";
+import { tabVaultIo, type VaultIo } from "../runes/bare/vault-io";
+import { getLeftCover, onLeftCoverChange, setLeftCover } from "./sessions/left-cover";
 import { mountBareView, type BareViewHandle } from "../runes/bare/view";
 import { createBareIo } from "../runes/bare/io";
-import { bareViewKey, type VaultIo, type VaultView } from "../runes/bare/cake";
-import { setCard, setHead } from "../runes/set-card";
-import { BARE_SCOPE, keySet, openKeys, reopen, runeIconKey, setSection, type CardCtx } from "../runes/cards";
+import { bareViewKey } from "../runes/bare/cake";
+import { runeIconKey, type CardCtx } from "../runes/cards";
 import type { GenCtx } from "../runes/bare/agent-view";
-import { fileName } from "../runes/bare/row-name";
-import { outsideTool } from "../runes/outside-names";
 import { notCarriedLine } from "../runes/not-carried";
-import { KIND_ICON } from "../runes/kind-icons";
 import { wiredModels } from "../flow/roster";
 import { getPref } from "../prefs";
-import { isAgentId } from "../agents/id";
+import { isAgentId, type AgentId } from "../agents/id";
+import { AGENTS } from "../agents/descriptor";
 import { AGENT_PROFILE } from "../agents/agent-profile";
 import { ensureCodexModels } from "../agents/codex-models";
-import { canLoad, traceRunes } from "../runes/trace";
-import { runeLedger } from "../runes/ledger";
+import { el } from "../dom";
 import type { RunesCatalog, RunesLoaded } from "../runes/types";
-import { trustCard, type TrustOffer } from "./rendered/notice-actions";
-
-const GROUP_NAME: Record<string, string> = { global: "Global", vidar: "Vidar" };
-// tier dividers as the sets view: tier 1 (every session) is the top group and gets none
-const TIER_DIVIDER: Record<number, string> = { 2: "Path-Scoped", 3: "Recall", 4: "Not Loaded" };
+import { restartCard, trustCard, trustedOfferText, type TrustOffer } from "./rendered/notice-actions";
 
 let visible = false;
 let catalog: RunesCatalog | null = null;
@@ -48,7 +44,10 @@ let pendingReload = false;
 let queued = false;
 let stateEl: HTMLElement;
 let noteEl: HTMLElement | undefined;
+/** The shown Bare view's head buttons (Lock, Modify; in Modify Done, Cancel), at the head's right end; empty otherwise. */
+let actsEl: HTMLElement | undefined;
 let stripEl: HTMLElement;
+let nameHead: HeadName; // the vault's name in the head: a draft's (renamable) or a started session's (read-only)
 let markEl: HTMLElement;
 let stripTitleEl: HTMLElement;
 let refreshBtn: HTMLButtonElement;
@@ -59,25 +58,64 @@ let replyListener: ((e: Event) => void) | undefined;
 let keyEl: HTMLElement | undefined;
 // One kept Bare view per agent, row and folder; a run, an open set or a scroll position outlives a
 // refresh, a workbench-tab switch and a hide. Disposed with the Runes view.
-interface BareEntry { handle: BareViewHandle; scrollTop: number; drawKey: string; note: string | null }
+interface BareEntry {
+  handle: BareViewHandle; scrollTop: number; drawKey: string; note: string | null; name: string | null; ready: boolean;
+  /** In Modify (the view's onModifyChange); the Rune Library covers the left pane while this entry is shown. */
+  modifying: boolean;
+  /** Something else took the left slot (openRelay, openDual): no re-set until the next Modify entry. */
+  coverGone: boolean;
+  /** The libraryRoot wrapped for the left pane (its "Rune Library" title rides inside the root). */
+  cover?: HTMLElement;
+}
 const bareViews = new Map<string, BareEntry>();
+const pickViews = new Map<string, VaultPickHandle>();
 let shownBare: BareEntry | undefined;
+let shownDraft: CoverEntry | undefined; // the focused waiting tab's New Rune Vault draft (runes-draft.ts)
 let freshNext = false; // shown again or Refresh pressed: the next Bare draw re-reads the row
 let lastTabId: string | null = null;
 let catalogVer = 0;
 
-/** Swap the icon key between the ordinary one (Scope: Global, Vidar) and the Bare one (Global, Project). */
+/** Swap the icon key between the ordinary one and the Bare one (the class marks which view it keys). */
 function showKey(bare: boolean) {
   if (!keyEl || keyEl.classList.contains("runes-key-bare") === bare) return;
-  const next = runeIconKey(bare ? BARE_SCOPE : undefined);
+  const next = runeIconKey();
   if (bare) next.classList.add("runes-key-bare");
   keyEl.replaceWith(next);
   keyEl = next;
 }
 
-/** Show the ordinary icon key again; the kept Bare view stays mounted (on hide) or is left by the caller. */
-function dropBare() {
+/** Show the ordinary icon key again and clear the head buttons; the kept Bare view stays mounted (on hide) or is left
+ *  by the caller. Every non-Bare draw path (drawPick, the ordinary draw, hide) runs it. `keep` is the draft drawPick
+ *  shows again: its cover stays put, since a cover change re-lays the slot, fires `vidar-focus` and so the next
+ *  drawPick (a drop and re-set per refresh looped without end, 2026-10-31). */
+function dropBare(keep?: CoverEntry) {
   showKey(false);
+  actsEl?.replaceChildren();
+  nameHead?.show(null);
+  shownDraft = keep;
+  syncCover();
+}
+
+let coverEl: HTMLElement | null = null; // the cover this panel set in the left pane
+let coverOwner: CoverEntry | undefined;
+let unsubCover: (() => void) | undefined;
+
+/** The Rune Library covers the left pane only while the Runes tab is shown and the focused tab's Bare view (or its
+ *  New Rune Vault draft) is in Modify. */
+function syncCover() {
+  const e = shownBare ?? shownDraft;
+  if (!visible || !e || !e.modifying || e.coverGone) {
+    const c = coverEl;
+    coverEl = null;
+    coverOwner = undefined;
+    if (c && getLeftCover() === c) setLeftCover(null);
+    return;
+  }
+  if (!e.cover) { e.cover = el("div", "runes-left-library"); e.cover.appendChild(e.handle.libraryRoot); }
+  if (coverEl === e.cover) return;
+  coverEl = e.cover;
+  coverOwner = e;
+  setLeftCover(e.cover);
 }
 
 /** The ordinary view takes the list: remember the Bare view's scroll position and let it go. */
@@ -95,12 +133,6 @@ function leaveBare() {
   showNote(null);
 }
 
-function el(tag: string, cls: string, text?: string): HTMLElement {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 
 /** The focused tab's state line: [text, isError, isStrip]. A strip is the tab's mark and title
  *  (the loads came from its transcript); an empty text shows nothing. */
@@ -113,13 +145,29 @@ function stateLine(f: FocusedSession | null, res: RunesLoaded | null, err: strin
   return [f.title, false, true];
 }
 
-/** Repo root for outside-file labels: the Vidar library's parent folder. */
-function repoRootOf(c: RunesCatalog): string | null {
-  const v = c.libraries.find((l) => l.key === "vidar" && l.present);
-  return v ? v.root.replace(/[\\/][^\\/]*[\\/]?$/, "") : null;
+const STRIP_TIP = "Loaded from the transcript"; // copy-ok: sentence-case tooltip (2026-10-11)
+
+/** The loaded vault's name rides the tab-name strip as a tooltip, never a visible subtitle. */
+function showVault(name: string | null): void {
+  stripEl.title = name ? `Vault: ${name}` : STRIP_TIP; // copy-ok: sentence-case tooltip
+  nameHead.show(name); // read-only in the head slot a draft's name uses
 }
 
+const DRAFT_NAME = "New Rune Vault";
+
+/** The head name of a New Rune Vault draft: "New Rune Vault" until named, with the rename pencil. */
+function draftName(d: VaultDraft): HeadNameEdit {
+  let made = draftEdits.get(d);
+  if (!made) {
+    made = { value: () => d.name ?? "", fallback: DRAFT_NAME, set: (name) => { d.name = name; } };
+    draftEdits.set(d, made);
+  }
+  return made;
+}
+const draftEdits = new WeakMap<VaultDraft, HeadNameEdit>(); // one edit object per draft, so a redraw does not close an open field
+
 function draw(f: FocusedSession | null, res: RunesLoaded | null, err: string | null) {
+  stripEl.title = STRIP_TIP;
   const [text, bad, strip] = stateLine(f, res, err);
   stateEl.textContent = strip ? "" : text;
   stateEl.classList.toggle("runes-err", bad);
@@ -129,75 +177,9 @@ function draw(f: FocusedSession | null, res: RunesLoaded | null, err: string | n
     stripTitleEl.textContent = text;
   }
   refreshBtn.hidden = !(bad || catalogErr); // retry only: focus change and show already re-query
-  const open = openKeys(listEl);
   const scroll = frameEl?.scrollTop ?? 0;
-  // no focused tab: nothing to trace, so the list stays empty (a catalog error still shows)
-  listEl.replaceChildren(...(f ? traceParts(res) : catalogErr ? [el("div", "runes-err", catalogErr)] : []));
-  reopen(listEl, open);
+  listEl.replaceChildren(...(catalogErr ? [el("div", "runes-err", catalogErr)] : []));
   if (frameEl) frameEl.scrollTop = scroll;
-}
-
-/** One loaded file no rune library owns: its rune kind's icon (a Codex vault or rollout row), else the doc icon, and
- *  its Title Case file name (`notes.md` → Notes); the path stays in the tooltip. */
-export function outsideRow(path: string, open: (path: string) => void, kind?: string, file = true): HTMLElement {
-  // only a file row is clickable (opens in Document), so only it takes the card hover
-  const row = el(file ? "button" : "div", file ? "runes-blk card runes-outside-row" : "runes-blk runes-outside-row");
-  row.title = path;
-  const tool = outsideTool(path);
-  if (tool) kind = tool.kind;
-  row.append(iconImg(kind && Object.hasOwn(KIND_ICON, kind) ? KIND_ICON[kind] : "doc"), el("span", "runes-rname", tool?.name ?? fileName(path)));
-  if (file) {
-    (row as HTMLButtonElement).type = "button";
-    row.addEventListener("click", () => open(path));
-  } else {
-    row.style.cursor = "default";
-  }
-  return row;
-}
-
-/** The load trace as today's tab draws it: library groups, then the outside files. */
-function traceParts(res: RunesLoaded | null): HTMLElement[] {
-  const parts: HTMLElement[] = [];
-  if (catalogErr) parts.push(el("div", "runes-err", catalogErr));
-  if (catalog) {
-    const trace = traceRunes(catalog, res, repoRootOf(catalog));
-    // a Codex trace (rows carry a `source`) drops a library heading with nothing under it; Claude keeps today's heads
-    const dropEmpty = !!res?.files.some((f) => f.source);
-    for (const t of trace.libraries) {
-      if (dropEmpty && t.lib.present && !t.lib.error && !t.sets.some(canLoad)) continue;
-      const ledger = runeLedger(t, res);
-      const group = el("section", "runes-group");
-      group.appendChild(el("h3", "runes-group-head", GROUP_NAME[t.lib.key] ?? t.lib.key));
-      if (!t.lib.present) {
-        const missing = el("div", "runes-missing", "No Library");
-        missing.title = `No rune library at ${t.lib.root}`; // copy-ok: sentence-case tooltip (full sentence)
-        group.appendChild(missing);
-      }
-      if (t.lib.error) group.appendChild(el("div", "runes-err", t.lib.error));
-      let lastTier = 0;
-      for (const s of t.sets) {
-        if (!canLoad(s)) continue;
-        const tier = s.set.tier;
-        if (tier !== lastTier && TIER_DIVIDER[tier]) group.appendChild(el("div", "runes-div", TIER_DIVIDER[tier]));
-        lastTier = tier;
-        group.appendChild(setSection(t, s, ctx, ledger));
-      }
-      parts.push(group);
-    }
-    if (trace.outside.length) {
-      const group = el("section", "runes-group");
-      const head = setHead("Autos",trace.outside.length, "grp-findings");
-      head.title = "Loaded by the agent itself, not from a rune library"; // copy-ok: sentence-case tooltip
-      const det = setCard("hue-none runes-auto", head);
-      const tray = el("div", "runes-tray");
-      for (const o of trace.outside) tray.appendChild(outsideRow(o.path, ctx.openInDocument, o.kind, o.file));
-      det.appendChild(tray);
-      keySet(det, "auto-imports");
-      group.appendChild(det);
-      parts.push(group);
-    }
-  }
-  return parts;
 }
 
 const hasLoads = (res: RunesLoaded | null): boolean => !!res && res.source !== "none" && res.files.length > 0;
@@ -235,27 +217,33 @@ export function vaultWarningLine(text: string, tabId: string): HTMLElement | nul
   return row;
 }
 
-/** The Bare trace shows today's transcript loads; vault warnings are drawn from the vault read. */
-export function bareTraceParts(res: RunesLoaded | null, tabId = "", trust: TrustOffer | null = null): HTMLElement[] {
-  const parts: HTMLElement[] = [];
-  if (trust) parts.push(trustCard(tabId, trust));
-  if (hasLoads(res)) parts.push(...traceParts(res));
-  return parts;
+/** The Bare view's notice slot: the trust card when the tab offers one, else the restart line while the tab's untrusted
+ *  launch still runs after a trust (`restart`); vault warnings are drawn from the vault read. */
+function bareTrustParts(tabId: string, trust: TrustOffer | null, restart: boolean): HTMLElement[] {
+  return trust ? [trustCard(tabId, trust, undefined, restartCard)] : restart ? [restartCard()] : [];
 }
 
-/** The agent Generate's model list for a Bare tab's agent: the Claude roster, or the saved Codex catalog. */
+/** The agent Generate's model list for a Bare tab's agent: the SDK roster of an agent that runs through it
+ *  (its model-id prefix picks the rows), else the agent's saved catalog; none for a name that is no agent. */
 export function genModels(agent: string): GenCtx {
-  if (agent === "codex") return { models: [...(getPref("codexModels") ?? [])] };
-  return { models: wiredModels().filter((m) => m.runner === "sdk" && String(m.id).startsWith("claude-")).map((m) => ({ value: m.id, label: m.label })) };
+  if (!isAgentId(agent)) return { models: [] };
+  const d = AGENTS[agent];
+  if (!d.flowSdk) return { models: [...(getPref(d.modelPref) ?? [])] as GenCtx["models"] };
+  return { models: wiredModels().filter((m) => m.runner === "sdk" && String(m.id).startsWith(d.modelPrefix ?? "")).map((m) => ({ value: m.id, label: m.label })) };
 }
 
-/** A Codex Bare view's model fetch, started only while no catalog is saved (the view repaints when it lands). */
+/** The model fetch an agent's Bare view starts, only while its catalog is unsaved (the view repaints when it lands). */
+const CATALOG_FETCH: Record<AgentId, () => Promise<void> | undefined> = {
+  claude: () => undefined,
+  codex: () => (!getPref("codexModels")?.length ? ensureCodexModels() : undefined),
+};
+
 export function codexModelsReady(agent: string): Promise<void> | undefined {
-  return agent === "codex" && !getPref("codexModels")?.length ? ensureCodexModels() : undefined;
+  return isAgentId(agent) ? CATALOG_FETCH[agent]() : undefined;
 }
 
 /** Bare tab: the import and actives view replaces the tab's body; the load trace sits collapsed below it. */
-function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null, trust: TrustOffer | null) {
+function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null, trust: TrustOffer | null, restart: boolean) {
   const [text, bad, strip] = bareStateLine(f, res, err);
   stateEl.textContent = strip ? "" : text;
   stateEl.classList.toggle("runes-err", bad);
@@ -267,71 +255,122 @@ function drawBare(f: FocusedSession, res: RunesLoaded | null, err: string | null
   refreshBtn.hidden = !(bad || catalogErr);
   showKey(true);
   drawnKey = null;
+  shownDraft = undefined;
   const key = bareViewKey(f.id);
-  const drawKey = JSON.stringify([res, err, catalogErr, catalogVer, trust]);
+  const drawKey = JSON.stringify([res, err, catalogErr, catalogVer, trust, restart]);
   const fresh = freshNext || f.id !== lastTabId;
   freshNext = false;
   let e = bareViews.get(key);
   if (!e) {
+    const bv = bareView(f);
+    if (!bv) return;
     leaveBare();
-    listEl.replaceChildren();
+    // a vault just started on this tab: its Pick card stays on screen (Start busy) until the bare view's first
+    // resolved paint, so the panel never shows an empty gap; the view mounts detached and swaps in on onReady
+    const pick = pickViews.get(f.id);
+    const host = pick ? document.createElement("div") : listEl;
+    if (!pick) listEl.replaceChildren();
+    const io = vaultIo(f.id);
     const handle = mountBareView(
-      listEl,
+      host,
       {
-        agent: f.agent,
-        cwd: f.cwd,
-        profile: "bare",
-        traceParts: bareTraceParts(res, f.id, trust),
+        onReady: () => {
+          if (!e) return;
+          e.ready = true;
+          const p = pickViews.get(f.id);
+          if (!p) return;
+          if (p.root.parentNode === listEl && shownBare === e) listEl.replaceChildren(e.handle.root);
+          p.dispose();
+          pickViews.delete(f.id);
+        },
+        ...bv,
+        trustParts: bareTrustParts(f.id, trust, restart),
         headNote: (text) => { if (e) e.note = text; if (e && shownBare === e) showNote(text); },
+        headName: (text) => { if (e) e.name = text; if (e && shownBare === e) showVault(text); },
         warningLine: (warning) => trust && warning === trust.text ? null : vaultWarningLine(warning, f.id),
-        card: ctx,
-        gen: () => genModels(f.agent),
-        modelsReady: codexModelsReady(f.agent),
-        vault: vaultIo(f.id),
-        vaultEdit: vaultEditIo(f.id),
+        vault: io,
+        vaultEdit: io,
+        placesLibrary: true,
+        onModifyChange: (on) => {
+          if (!e) return;
+          e.modifying = on;
+          if (on) e.coverGone = false;
+          syncCover();
+        },
         // a tab launched without a vault has no record to wait for: paint No Vault Session at once
         retry: !!sessionLaunchInfo(f.id)?.vault,
       },
       createBareIo(),
       res,
     );
-    e = { handle, scrollTop: 0, drawKey, note: null };
+    e = { handle, scrollTop: 0, drawKey, note: null, name: null, ready: !pick, modifying: false, coverGone: false };
     bareViews.set(key, e);
   } else {
     if (e.drawKey !== drawKey) {
       e.handle.setLoads(res);
-      e.handle.setTrace(bareTraceParts(res, f.id, trust));
+      e.handle.setTrust(bareTrustParts(f.id, trust, restart));
       e.drawKey = drawKey;
     }
     if (fresh) e.handle.reload();
-    if (shownBare !== e || e.handle.root.parentNode !== listEl) {
+    if (e.ready && (shownBare !== e || e.handle.root.parentNode !== listEl)) {
       leaveBare();
       listEl.replaceChildren(e.handle.root);
       if (frameEl) frameEl.scrollTop = e.scrollTop;
     }
   }
   shownBare = e;
+  showVault(e.name);
   showNote(e.note);
-  // the View / Modify switch sits on the Key's last line, at the right, with Lock before it
-  if (keyEl && e.handle.modeButton.parentNode !== keyEl) {
-    keyEl.querySelectorAll(".runes-mode, .runes-lock").forEach((b) => b.remove());
-    keyEl.append(e.handle.lockButton, e.handle.modeButton);
+  // the head's right end: Lock, then Modify far right; in Modify the view hides Lock and shows Done, then Cancel
+  if (actsEl && e.handle.modeButton.parentNode !== actsEl) actsEl.replaceChildren(e.handle.lockButton, e.handle.modeButton, e.handle.cancelButton);
+  syncCover(); // a focus switch lands on a tab in or out of Modify
+}
+
+/** A tab still waiting for its Rune Vault: the Pick state (vault-pick-view.ts) replaces the list; each pending tab keeps its own. */
+async function drawPick(f: FocusedSession, my: number) {
+  leaveBare();
+  dropBare(tabDraft(f.id));
+  drawnKey = null;
+  lastTabId = f.id;
+  stateEl.textContent = "";
+  stripEl.hidden = true;
+  refreshBtn.hidden = true;
+  for (const [id, h] of pickViews) if (id !== f.id && !pendingVaultTab(id)) { h.dispose(); pickViews.delete(id); }
+  let h = pickViews.get(f.id);
+  if (!h) {
+    const bv = bareView(f);
+    if (!bv) return;
+    const { mountVaultPick } = await import("../runes/bare/vault-pick-view"); // loaded on the first pending tab only
+    if (my !== seq || !viewEl) return;
+    const made = mountVaultPick(document.createElement("div"), { tab: f.id, agent: f.agent, card: ctx,
+      draft: (hooks) => openDraft(f.id, hooks, { view: bv, changed: syncCover, shown: (e) => lastTabId === f.id && showDraft(e) }),
+      onStarted: () => { freshNext = true; requestRefresh(); } }); // the card stays (Start busy); drawBare's onReady swaps it out
+    pickViews.set(f.id, made);
+    h = made;
   }
+  listEl.replaceChildren(h.root);
+  showDraft(tabDraft(f.id) ?? null); // back on a tab mid-draft: Done and Cancel return to the head, the library to the left
 }
 
-/** The Rune Vault calls for tab `tab`: its session record, the vault at the hash it loaded, and the Lock button. */
+/** A draft's head buttons (Done, Cancel; Lock never shows in Modify) and its left cover, as drawBare places a Bare view's. */
+function showDraft(e: CoverEntry | null) {
+  if (!e && !shownDraft) return;
+  shownDraft = e ?? undefined;
+  actsEl?.replaceChildren(...(e ? [e.handle.modeButton, e.handle.cancelButton] : []));
+  const d = e?.draft;
+  nameHead.show(d ? (d.name?.trim() || DRAFT_NAME) : null, d ? draftName(d) : undefined);
+  syncCover();
+}
+
+/** The fields every Bare view of waiting or Bare tab `f` gets, its own view and a New Rune Vault draft alike; null for a
+ *  tab whose agent is no Bare agent (a PTY-only agent or a shell), which draws nothing. */
+const bareView = (f: FocusedSession) => isAgentId(f.agent) ? { agent: f.agent, cwd: f.cwd, profile: "bare", card: ctx,
+  gen: () => genModels(f.agent), modelsReady: codexModelsReady(f.agent) } : null;
+
+/** The Rune Vault calls for tab `tab` (src/runes/bare/vault-io.ts): its session record, the vault reads, the Lock
+ *  button, Modify's edit, and a fresh respawn of its Rendered body (the /clear route; a Raw tab has none). */
 function vaultIo(tab: string): VaultIo {
-  return {
-    session: () => tabVaultSession(tab),
-    read: (id, hash) => invoke("rune_vault_read", { id, hash }) as Promise<VaultView>,
-    lock: (id, expectHash) => invoke("rune_vault_lock", { id, by: "button", expectHash }),
-  };
-}
-
-/** Modify's vault writes for tab `tab` (src/runes/bare/vault-edit.ts): the current vault, the edit, the Make Variant
- *  move of its session record, and a fresh respawn of its Rendered body (the /clear route; a Raw tab has none). */
-function vaultEditIo(tab: string): VaultEditIo {
-  return tabVaultEditIo(tab, async () => { await renderedBody(tab)?.respawnFresh(); }, (vault) => respawnVaultTabs(vault, tab));
+  return tabVaultIo(() => tabVaultSession(tab), async () => { await renderedBody(tab)?.respawnFresh(); }, (vault) => respawnVaultTabs(vault, tab));
 }
 
 async function refresh(reloadCatalog: boolean) {
@@ -352,6 +391,7 @@ async function refresh(reloadCatalog: boolean) {
   }
   if (my !== seq || !viewEl) return;
   const f = getFocusedSession();
+  if (f && pendingVaultTab(f.id)) { refreshBtn.disabled = false; refreshBtn.removeAttribute("aria-busy"); void drawPick(f, my); return; }
   let res: RunesLoaded | null = null;
   let err: string | null = null;
   if (f) {
@@ -366,11 +406,18 @@ async function refresh(reloadCatalog: boolean) {
   if (f?.profile === "bare" && isAgentId(f.agent) && AGENT_PROFILE[f.agent].trustOffer && my === seq && viewEl) {
     try { trust = (await invoke("codex_trust_offer", { id: f.id })) ?? null; } catch { trust = null; }
   }
+  // trusted from a card this page drew: the restart line holds while the tab's newest launch is the untrusted one (its
+  // manifest still carries the offer's warning); a restarted tab's launch carries none
+  let restart = false;
+  const trustedText = f && !trust && f.profile === "bare" ? trustedOfferText(f.id) : undefined;
+  if (f && trustedText && my === seq && viewEl) {
+    try { restart = !!(await invoke("bare_launch", { tab: f.id }))?.warnings.includes(trustedText); } catch { restart = false; }
+  }
   if (my !== seq || !viewEl) return; // a newer query or disposal owns the view
   refreshBtn.disabled = false;
   refreshBtn.removeAttribute("aria-busy");
   if (f?.profile === "bare") {
-    drawBare(f, res, err, trust);
+    drawBare(f, res, err, trust, restart);
     lastTabId = f.id;
     return;
   }
@@ -412,7 +459,7 @@ export function mountRunesView(parent: HTMLElement, openInDocument: (path: strin
   stateEl = el("span", "runes-state pane-head-card");
   stripEl = el("span", "runes-strip pane-head-card");
   stripEl.hidden = true;
-  stripEl.title = "Loaded from the transcript"; // copy-ok: sentence-case tooltip (2026-10-11)
+  stripEl.title = STRIP_TIP;
   markEl = el("span", "runes-mark");
   stripTitleEl = el("span", "runes-strip-title");
   stripEl.append(markEl, stripTitleEl);
@@ -429,7 +476,9 @@ export function mountRunesView(parent: HTMLElement, openInDocument: (path: strin
   });
   noteEl = el("span", "runes-head-note");
   noteEl.hidden = true;
-  shell.head.append(stateEl, stripEl, noteEl, refreshBtn);
+  actsEl = el("span", "runes-head-acts");
+  nameHead = headName("runes-state runes-vault-name pane-head-card");
+  shell.head.append(stateEl, nameHead.root, stripEl, noteEl, refreshBtn, actsEl);
   listEl = el("div", "runes-list");
   // the frame holds the scrolling list and, under it, the pinned key strip
   const scrollEl = el("div", "runes-scroll");
@@ -442,6 +491,13 @@ export function mountRunesView(parent: HTMLElement, openInDocument: (path: strin
     if (visible) requestRefresh();
   };
   document.addEventListener("vidar-focus", focusListener);
+  // another route took the left slot (openRelay, openDual): the cover is gone until the next Modify entry
+  unsubCover = onLeftCoverChange(() => {
+    if (!coverEl || getLeftCover() === coverEl) return;
+    if (coverOwner) coverOwner.coverGone = true;
+    coverEl = null;
+    coverOwner = undefined;
+  });
   // a finished turn of the focused tab: its session and loads may be new (Rendered tabs fire it)
   replyListener = (e) => {
     // fresh: the first message locked the vault (agent.rs lock_first_send), so the Bare view re-reads it for Locked
@@ -467,11 +523,14 @@ export function disposeRunesView() {
   onRunesHidden();
   if (focusListener) document.removeEventListener("vidar-focus", focusListener);
   focusListener = undefined;
+  unsubCover?.();
+  unsubCover = undefined;
   if (replyListener) document.removeEventListener("vidar-reply-done", replyListener);
   replyListener = undefined;
   viewEl?.remove();
   viewEl = undefined;
   keyEl = undefined;
+  actsEl = undefined;
   frameEl = undefined;
   catalog = null;
   catalogErr = null;
@@ -479,6 +538,8 @@ export function disposeRunesView() {
   drawnKey = null;
   for (const e of bareViews.values()) e.handle.dispose();
   bareViews.clear();
+  for (const h of pickViews.values()) h.dispose();
+  pickViews.clear();
   shownBare = undefined;
   lastTabId = null;
   freshNext = false;

@@ -4,6 +4,11 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve as pathResolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { agentRows } from "./agent-table.mjs";
+
+// The agent table loads through agent-table.mjs (guarded import: a release-shape copy of tools/ ships without
+// src/, and most tools here only resolve contract paths, so absent, only `agentRoots` refuses).
+
 const MARKER = "contracts/paths.json";
 const HERE = dirname(fileURLToPath(import.meta.url));
 let contract = null;
@@ -47,12 +52,16 @@ export function resolve(id, opts = {}) {
 
 const isDirOnDisk = (p) => existsSync(p) && statSync(p).isDirectory();
 
-// The global rune library outside the repo; twin of paths.rs `global_runes_dir`: `~/.claude/runes` when
-// `~/.claude` is a directory, else `<CODEX_HOME (non-empty) or ~/.codex>/runes`. Never creates either.
-export function globalRunesDir(env = process.env, isDir = isDirOnDisk) {
+// Every agent's root in table order (src/agents/descriptor.ts): its `homeEnv` var when non-empty, else
+// `<home>/<userDir>`. Twin of paths.rs `agent_roots_in`.
+export function agentRoots(env = process.env) {
   const home = env.USERPROFILE ?? env.HOME ?? "";
-  const claude = join(home, ".claude");
-  if (isDir(claude)) return join(claude, "runes");
-  const codex = env.CODEX_HOME ? env.CODEX_HOME : join(home, ".codex");
-  return join(codex, "runes");
+  return agentRows().map((a) => (env[a.homeEnv] ? env[a.homeEnv] : join(home, a.userDir)));
+}
+
+// The global rune library outside the repo; twin of paths.rs `global_runes_dir`: the first agent root that is a
+// directory (even without `runes/`) gives `<root>/runes`, none gives the last agent's. Never creates a folder.
+export function globalRunesDir(env = process.env, isDir = isDirOnDisk) {
+  const roots = agentRoots(env);
+  return join(roots.find((r) => isDir(r)) ?? roots[roots.length - 1], "runes");
 }

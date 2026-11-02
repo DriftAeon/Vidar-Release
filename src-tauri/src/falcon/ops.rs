@@ -5,9 +5,22 @@ use serde_json::Value;
 use super::{Agent, Hosted, Lease, Op, CAPABILITY_STEER};
 // `falcon.rs` imports the shared protocol under a different root per build.
 #[cfg(falcon_shell)]
-use crate::protocol::{CAPABILITY_CODEX_QUERY, CAPABILITY_CODEX_TURNS};
+use crate::protocol::{CAPABILITY_CODEX_QUERY, CAPABILITY_CODEX_TURNS, PROTOCOL_V3};
 #[cfg(not(falcon_shell))]
-use super::protocol::{CAPABILITY_CODEX_QUERY, CAPABILITY_CODEX_TURNS};
+use super::protocol::{CAPABILITY_CODEX_QUERY, CAPABILITY_CODEX_TURNS, PROTOCOL_V3};
+
+/// Refuse, before a byte is written, a spawn carrying env runes (`SpawnParams.env`, a Bare
+/// Rendered vault's) on a connection negotiated below [`PROTOCOL_V3`]: an older host ignores
+/// the field and starts the session without them. A spawn with no env runes still goes out.
+pub(super) fn env_runes_refusal(op: &Op, host_protocol: u32) -> Option<String> {
+    match op {
+        Op::Spawn(params) if !params.env.is_empty() && host_protocol < PROTOCOL_V3 => Some(
+            "Falcon host predates env runes; restart it with falcon-refresh to launch this vault"
+                .to_string(),
+        ),
+        _ => None,
+    }
+}
 
 pub(super) fn parse_lease(payload: Value) -> Result<Lease, String> {
     Ok(Lease {
@@ -224,7 +237,7 @@ mod tests {
     fn an_unknown_agent_name_does_not_parse() {
         assert_eq!(parse_agent("codex"), Some(Agent::Codex));
         assert_eq!(parse_agent("claude"), Some(Agent::Claude));
-        for name in ["gemini", "Codex", ""] {
+        for name in ["acme", "Codex", ""] {
             assert_eq!(parse_agent(name), None, "{name:?}");
         }
     }

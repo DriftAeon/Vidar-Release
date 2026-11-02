@@ -1,12 +1,12 @@
 // tools/bare/mcp-gate.mjs: Claude Bare PreToolUse gate (matcher `mcp__.*`).
-// Passes drive (`mcp__plugin_vidar_drive__*`) and the `reads` contracts/module-bundles.json declares per server;
+// Passes the `reads` contracts/module-bundles.json declares per server (drive's is "*");
 // asks for every other MCP tool, unknown servers and an unreadable bundles file included.
 // Usage: node tools/bare/mcp-gate.mjs < PreToolUse JSON   (VIDAR_MCP_GATE_BUNDLES overrides the bundles path)
 // Refuses: unparseable input or any internal error → exit 2. Unlike other hooks this one fails closed, because
 // Claude runs the tool on exit 1 or a crash (probe P4, verified 2026-10-24).
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+import { root } from "../lib/paths.mjs";
 
 function fail(error) {
   console.error(`mcp-gate: ${error instanceof Error ? error.message : String(error)}`);
@@ -70,11 +70,10 @@ function main() {
   const server = input.tool_name.slice("mcp__".length, delimiter);
   const tool = input.tool_name.slice(delimiter + 2);
   if (!server || !tool) throw new Error("PreToolUse MCP tool_name has an empty server or tool");
-  if (server === "plugin_vidar_drive") return;
 
   const path = process.env.VIDAR_MCP_GATE_BUNDLES !== undefined
     ? process.env.VIDAR_MCP_GATE_BUNDLES
-    : resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "module-bundles.json");
+    : resolve(root(), "contracts", "module-bundles.json");
   const result = bundleResult(path);
   if (result.problem) {
     ask(`${server} ${tool}: ${result.problem}; confirm the call`);

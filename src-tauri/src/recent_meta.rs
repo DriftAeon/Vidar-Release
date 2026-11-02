@@ -25,7 +25,11 @@ pub fn last_meta(text: &str) -> SessionMeta {
         if v.get("type").and_then(Value::as_str) != Some("assistant") { continue; }
         if v.get("isSidechain").and_then(Value::as_bool) == Some(true) { continue; }
         let Some(model) = v.pointer("/message/model").and_then(Value::as_str) else { continue };
-        if !model.starts_with("claude-") { continue; }
+        let ours = crate::agent_spec::ALL
+            .iter()
+            .filter_map(|a| crate::agent_spec::spec(*a).model_prefix)
+            .any(|p| model.starts_with(p));
+        if !ours { continue; }
         let effort = v.get("effort").and_then(Value::as_str).map(str::to_owned);
         return SessionMeta { model: Some(model.to_owned()), effort };
     }

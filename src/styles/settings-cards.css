@@ -3,7 +3,9 @@
 .sc-row[data-cat="cards"] { justify-content: flex-start; gap: var(--space-16); }
 .sc-row[data-cat="cards"] .sc-text { flex: 0 0 20%; }
 .sc-row[data-cat="cards"] .sc-bind { flex: 1; min-width: 0; }
-.cards-kind { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-12); min-width: 0; }
+/* flex 1: the grid fills .sc-bind, so its 1fr column holds the wire names and the card reaches the row's right edge
+   (content-sized, the card sat packed against the names) */
+.cards-kind { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--space-12); min-width: 0; }
 /* cards sit flush right, all one width: the longest name's (cards.ts sets --cards-name-ch) */
 .cards-kind > .chain-bar { justify-self: end; }
 .cards-kind .chain-seg-name { min-width: calc(var(--cards-name-ch, 0) * 1ch); }

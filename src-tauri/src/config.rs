@@ -17,7 +17,7 @@ use crate::settings::store::{strip_bom, with_config_root};
 // Re-exported at their original crate::config:: path even though nothing outside
 // schema.rs names them directly today — they were public here before the move.
 #[allow(unused_imports)] // re-export kept for the old config:: paths; not every name has an in-crate user
-pub use crate::settings::schema::{AgentCfg, ConfigResult, LocationCfg, MacroCfg, VidarConfig};
+pub use crate::settings::schema::{AgentCfg, ConfigResult, LocationCfg, VidarConfig};
 
 /// The one default working directory, the PTY fallback cwd (pty.rs): vidar.json `defaultCwd` when set and an existing
 /// directory, else the user's home. Re-read per call, so an edit takes
@@ -54,7 +54,7 @@ fn typed_lenient(root: Value) -> Result<(VidarConfig, Vec<String>), String> {
             Ok(_) => { kept.insert(k, v); }
             Err(e) => match v {
                 // An array of entries is filtered per entry: one bad entry must not drop the list.
-                Value::Array(items) if matches!(k.as_str(), "agents" | "locations" | "macros") => {
+                Value::Array(items) if matches!(k.as_str(), "agents" | "locations") => {
                     let mut good = Vec::new();
                     for (i, item) in items.into_iter().enumerate() {
                         let mut one = serde_json::Map::new();
@@ -110,8 +110,8 @@ fn partial_error(bad: &[String]) -> String {
 
 pub fn load() -> ConfigResult {
     let mut r = load_from(&crate::paths::config_path());
-    // A failed Rune Vault migration run names its plan.txt here; main.ts shows `notice` as the config notice.
-    if let Some(n) = crate::bare::vault::migrate::notice() {
+    // A library rename the startup held back or could not finish shows as the config notice (main.ts).
+    if let Some(n) = crate::bare::vault::migrate_lib_rename::notice() {
         r.notice = Some(match r.notice.take() {
             Some(o) => format!("{o}; {n}"),
             None => n,
@@ -340,6 +340,28 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    #[test]
+    fn a_vidar_json_with_macros_loads_and_saves_back_without_them() {
+        let path = temp_path("vidar-config-test-macros-dropped.json");
+        std::fs::write(&path, br#"{"configVersion":2,"fontSize":14,"macros":[{"label":"Go","command":"go"}]}"#).unwrap();
+
+        let result = load_from(&path);
+        assert!(result.error.is_none(), "{:?}", result.error);
+        assert!(result.notice.is_none(), "dropped silently: {:?}", result.notice);
+        assert_eq!(result.config.font_size, Some(14));
+
+        // A later save through the store writes the tree back; the key must not return.
+        crate::settings::store::with_config_root_at(&path, |obj| {
+            obj.insert("fontSize".into(), Value::from(15));
+            Ok(())
+        })
+        .expect("save");
+        let on_disk: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert!(on_disk.get("macros").is_none(), "{on_disk}");
+        assert_eq!(on_disk["fontSize"], Value::from(15));
+    }
+
     // Review finding 2: a save that lands after load's first read but before the
     // migration persist must survive; the old `*target = migrated` put the stale
     // snapshot back over it.
@@ -410,7 +432,7 @@ mod tests {
         let path = temp_path("vidar-config-test-bad-entry.json");
         std::fs::write(
             &path,
-            br#"{"configVersion":1,"agents":[{"id":"codex"},{"id":"broken","args":"x"},{"args":7},{"id":"claude-rendered","key":"k"}],"macros":[{"label":"ok"}]}"#,
+            br#"{"configVersion":1,"agents":[{"id":"codex"},{"id":"broken","args":"x"},{"args":7},{"id":"claude-rendered","key":"k"}]}"#,
         )
         .unwrap();
 
@@ -420,13 +442,11 @@ mod tests {
         let agents = result.config.agents.as_ref().expect("good entries load");
         let ids: Vec<_> = agents.iter().map(|a| a.id.as_str()).collect();
         assert_eq!(ids, vec!["codex", "claude-rendered"]);
-        assert_eq!(result.config.macros.as_ref().map(|m| m.len()), Some(1));
         let err = result.error.expect("bad entries are named");
         assert!(err.starts_with(PARTIAL_ENTRIES_PREFIX), "{err}");
         assert!(!err.contains("defaults used"), "skipped entries are not defaulted: {err}");
         assert!(err.contains("agents[1] id broken"), "{err}");
         assert!(err.contains("agents[2]"), "{err}");
-        assert!(!err.contains("macros"), "{err}");
     }
 
     // Cross-language contract: `PARTIAL_MARK_*` in src/settings/save-refusal.ts finds the ignored

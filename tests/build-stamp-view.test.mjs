@@ -45,7 +45,7 @@ test("check status strings: up to date, Update Available, or could not check wit
   assert.deepEqual(describeCheck(okReply(null)), { text: "Vidar Is Up to Date", tip: "" });
   assert.deepEqual(describeCheck(okReply(newer)), { text: "Update Available", tip: "" });
   // A pack offer alone is an update too.
-  const packOffer = { id: "gemini", label: "Gemini", installed: null, release: "1.1.0", page: "https://p/g" };
+  const packOffer = { id: "pi", label: "Pi", installed: null, release: "1.1.0", page: "https://p/g" };
   assert.deepEqual(describeCheck({ ...okReply(null), packs: [packOffer] }), { text: "Update Available", tip: "" });
   assert.deepEqual(describeCheck({ status: "notPublished", reason: "No release index is published yet." }),
     { text: "No Release Published Yet", tip: "No release index is published yet." });

@@ -1,0 +1,17 @@
+{
+  "id": "w-runes-codex-repo-layer",
+  "title": "See What the Repo Adds to My Codex Session",
+  "style": "new-user",
+  "scope": "vidar",
+  "surfaces": ["launcher", "runes"],
+  "tags": ["runes", "vault"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "start a new Codex tab in Explorer Project, and in the Runes panel choose a vault card and press Start Session, without sending a message" },
+    { "intent": "if Vidar asks whether to trust this folder, find that prompt and trust it" },
+    { "intent": "open Runes in that tab and find the skills that come from the repo itself, and whether they are on or off" },
+    { "intent": "find the repo's own Codex settings files listed in the Runes panel" }
+  ]
+}

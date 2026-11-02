@@ -17,12 +17,9 @@ pub(super) fn run(mut command: Command, deadline: Instant) -> Option<String> {
         let result = stdout.take(64 * 1024 + 1).read_to_end(&mut bytes);
         let _ = tx.send((result.is_ok() && bytes.len() <= 64 * 1024).then_some(bytes));
     });
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) if status.success() => break,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(15)),
-            _ => return None, // JobChild's drop terminates and reaps the whole tree.
-        }
+    match child.wait_bounded(deadline) {
+        Ok(Some(status)) if status.success() => {}
+        _ => return None, // JobChild's drop terminates and reaps the whole tree.
     }
     // The child has exited, so its stdout closes now unless a grandchild inherited the pipe;
     // wait a short grace for the reader, not the rest of the deadline.

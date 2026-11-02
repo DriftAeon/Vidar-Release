@@ -6,10 +6,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { rel as layoutRel } from "../lib/paths.mjs";
+import { rel as layoutRel, root as repoRoot } from "../lib/paths.mjs";
 
-const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 export const SKIP_DIRS = new Set(["node_modules", "vendor"]);
 const RUNS = `${layoutRel("runs")}/`;
 const DOCS = `${layoutRel("docs")}/`;

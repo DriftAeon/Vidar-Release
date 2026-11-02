@@ -1,0 +1,16 @@
+{
+  "id": "w-bottombar-usage-detail",
+  "title": "Read My Usage From the Bottom Bar",
+  "style": "mouse-first",
+  "scope": "vidar",
+  "surfaces": ["bottombar", "tabstrip"],
+  "tags": ["statusline"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "open a Claude tab and find where Vidar shows context and usage limits" },
+    { "intent": "open the detail for it and read what each number means" },
+    { "intent": "close the detail and check nothing in the bottom bar looks empty, cut off or out of place" }
+  ]
+}

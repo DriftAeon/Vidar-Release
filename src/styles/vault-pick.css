@@ -1,0 +1,40 @@
+/* The Runes panel's Pick state for a tab waiting on its Rune Vault (src/runes/bare/vault-pick-view.ts).
+   The Vault Card: panel body, a solid hue head that is also the frame, the picked card ringed in --accent.
+   Interiors reuse the Runes read view (runes.css, runes-bare.css); only the card, Start and New Rune Vault are styled here. */
+/* padding leaves room inside the panel's scroll box for the picked card's ring (outline 1 + offset 2) */
+.vpick { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-4); }
+.vpick-list { display: flex; flex-direction: column; gap: var(--space-8); }
+.vpick-list[aria-busy="true"] { cursor: progress; }
+/* Frame and head are one solid hue, like the Runes set heads (runes.css): every vault takes --fill-skill, so they read
+   as one kind of thing. A picked card keeps its frame; the ticked box plus an accent ring outside it show the pick. */
+.vpick-card, .vpick-add { --vpick-fill: var(--fill-skill); --vpick-frame: var(--vpick-fill);
+  border: var(--border-w) solid var(--vpick-frame); border-radius: var(--radius-4); background: var(--bg-panel); overflow: hidden; }
+.vpick-card:has(> .vpick-top:hover) { --vpick-frame: color-mix(in srgb, var(--vpick-fill) 88%, var(--fg)); }
+.vpick-card.is-picked { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
+.vpick-top {
+  display: flex; align-items: center; gap: var(--space-8); list-style: none; text-align: left;
+  padding: var(--space-8) var(--space-12); background: var(--vpick-fill); color: var(--fg); cursor: pointer;
+}
+.vpick-top::-webkit-details-marker { display: none; }
+.vpick-top:hover { background: color-mix(in srgb, var(--vpick-fill) 88%, var(--fg)); }
+.vpick-top:active { background: color-mix(in srgb, var(--vpick-fill) 94%, var(--bg)); }
+.vpick-top:focus-visible { outline: 2px solid var(--accent); outline-offset: calc(-1 * var(--space-2)); }
+.vpick-tick-slot { flex: none; width: var(--font-16); height: var(--font-16); display: flex; align-items: center; justify-content: center; }
+.vpick-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.vpick-name-row { display: flex; align-items: center; gap: var(--space-8); }
+.vpick-icon { flex: none; width: var(--font-16); height: var(--font-16); }
+.vpick-name { flex: none; font-family: var(--font-title); font-size: var(--font-16); font-weight: var(--weight-strong); }
+.vpick-body { padding: var(--space-4); border-top: var(--border-w) solid var(--vpick-fill); }
+/* Start and its divider sit at the panel's foot, clear of the cards: .vpick fills the scroll box */
+.runes-list:has(> .vpick) { min-height: 100%; }
+.vpick { flex: 1 0 auto; }
+.vpick-act { display: flex; flex-direction: column; gap: var(--space-8); margin-top: auto; padding-top: var(--space-8); border-top: var(--border-w) solid var(--border); }
+.vpick-act .ws-btn { justify-content: center; align-self: center; }
+/* New Rune Vault: a vault-shaped card (frame and head hue) whose head holds only the button, left where the tick
+   sits; no hover, pointer or pick ring, since only the button acts */
+.vpick-add-row { display: flex; align-items: center; padding: var(--space-8) var(--space-12); background: var(--vpick-fill); }
+.vpick-add-row > .ws-btn.vpick-new { justify-content: center; }
+/* Start and New Rune Vault: the green .ws-add primary (decision-pair.css) in the heaviest weight; Start centred
+   over settings-modal.css's flex-start */
+.vpick-act .ws-btn.vpick-start, .vpick-add-row > .ws-btn.vpick-new { text-transform: uppercase; font-weight: var(--weight-bold); }
+.vpick-act .ws-btn.vpick-start { align-self: center; }

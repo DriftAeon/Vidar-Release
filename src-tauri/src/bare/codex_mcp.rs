@@ -1,23 +1,23 @@
 //! src-tauri\src\bare\codex_mcp.rs — MCP servers on a Codex Bare launch.
 //! A launch's MCP names come from the Rune Vault. Catalog-backed servers are written into
-//! this vault's Codex config.toml as exact-checked tables. The stock vidar-drive rune adds its
-//! pinned, name-only env_vars table without a bundle entry. No server URL or token rides in argv.
+//! this vault's Codex config.toml as exact-checked tables, vidar_drive included: its row carries
+//! name-only `env_vars` (`envPass`) and no approval pin. No server URL or token rides in argv.
 //! A server whose `agents` leaves Codex out (Slack) never rides.
 
 use super::bundles::{self, Mcp};
 use super::home::TomlDoc;
+use crate::agent_spec::Agent;
 
 /// The servers a launch carries: each of `names` (a loadout's `mcp`, pick order) as the first catalog
 /// bundle server of that name whose `agents` is empty or names Codex; a name no bundle serves to Codex
 /// is left out.
 pub(super) fn for_launch(names: &[String], catalog: &bundles::Bundles) -> Vec<Mcp> {
-    let codex = |m: &Mcp| m.agents.is_empty() || m.agents.iter().any(|a| a.eq_ignore_ascii_case("codex"));
     let mut out: Vec<Mcp> = Vec::new();
     for n in names {
         if out.iter().any(|o| o.name.eq_ignore_ascii_case(n)) {
             continue;
         }
-        if let Some(m) = catalog.bundles.values().flat_map(|b| b.mcp.iter()).find(|m| m.name.eq_ignore_ascii_case(n) && codex(m)) {
+        if let Some(m) = catalog.bundles.values().flat_map(|b| b.mcp.iter()).find(|m| m.name.eq_ignore_ascii_case(n) && bundles::serves(m, Agent::Codex)) {
             out.push(m.clone());
         }
     }
@@ -75,13 +75,25 @@ fn entries(servers: &[Mcp], env: &dyn Fn(&str) -> Option<String>) -> (Vec<Entry>
                     warnings.push(format!("MCP server {n:?}: an env value it reads is not set; left off"));
                     continue;
                 }
+                if s.env_pass.iter().any(|k| !plain(k)) {
+                    warnings.push(format!("MCP server {n:?}: an env name it forwards is not a plain name; left off"));
+                    continue;
+                }
+                if !s.env_pass.is_empty() {
+                    keys.push(("env_vars", format!("[{}]", s.env_pass.iter().map(|k| toml_str(k)).collect::<Vec<_>>().join(","))));
+                }
             }
             (None, None) => {
                 warnings.push(format!("MCP server {n:?}: no url or command; left off"));
                 continue;
             }
         }
-        keys.push((APPROVAL_KEY, toml_str(APPROVAL_MODE)));
+        if let Some(t) = m.timeout_sec {
+            keys.push(("tool_timeout_sec", t.to_string()));
+        }
+        if m.approval != Some(bundles::Approval::None) {
+            keys.push((APPROVAL_KEY, toml_str(APPROVAL_MODE)));
+        }
         out.push(Entry { name: n.clone(), keys, env: pairs });
     }
     (out, warnings)
@@ -98,28 +110,6 @@ pub struct Tables {
 }
 
 impl Tables {
-    /// Add the stock vidar-drive MCP only when its rune is in the loaded vault.
-    /// Names in env_vars are forwarded by Codex from the spawn environment; values never enter argv.
-    pub(super) fn with_vidar_drive(mut self, root: &std::path::Path) -> Result<Self, String> {
-        if self.names.iter().any(|n| n.eq_ignore_ascii_case("vidar_drive")) {
-            return Err("Bare Codex config: duplicate vidar_drive server; spawn refused".into());
-        }
-        // One literal, as `home.rs`'s pinned-table check: the server script, not a layout folder.
-        let script = root.join(r"tools\mcp\vidar-drive\server.mjs");
-        let block = format!(
-            "[mcp_servers.vidar_drive]\ncommand = \"node\"\nargs = [{}]\nenv_vars = [\"VIDAR_CTL_TOKEN\", \"FALCON_SESSION\", \"VIDAR_CTL_SECRET\"]\ntool_timeout_sec = 3700\n",
-            toml_str(&script.to_string_lossy())
-        );
-        if !self.text.is_empty() {
-            self.text.push('\n');
-        }
-        self.text.push_str(&block);
-        self.doc = super::home::parse_toml_lite(&self.text)
-            .map_err(|e| format!("Bare Codex config: vidar_drive table does not parse ({e}); spawn refused"))?;
-        self.names.push("vidar_drive".into());
-        Ok(self)
-    }
-
     /// The enabled `bareCodexMcp` servers' tables (`tables`); tests only, launches use `servers`.
     #[cfg(test)]
     pub fn hosted(enabled: &[&Hosted]) -> Self {
@@ -190,10 +180,10 @@ pub fn tables(enabled: &[&Hosted]) -> String {
         .join("\n")
 }
 
-/// Every `mcp_servers.*` key outside `vidar_drive` must be one of the tables' keys, and every one of
-/// those must hold exactly the value the tables wrote.
+/// Every `mcp_servers.*` key must be one of the tables' keys, and every one of those must hold
+/// exactly the value the tables wrote.
 pub fn check(doc: &TomlDoc, tables: &Tables) -> Result<(), String> {
-    for (k, _) in doc.iter().filter(|(k, _)| k.starts_with("mcp_servers.") && !k.starts_with("mcp_servers.vidar_drive.")) {
+    for (k, _) in doc.iter().filter(|(k, _)| k.starts_with("mcp_servers.")) {
         if !tables.doc.iter().any(|(n, _)| n == k) {
             return Err(format!("{L}: {k} is not an enabled server key; spawn refused"));
         }
@@ -253,21 +243,20 @@ mod tests {
     }
 
     fn stdio(name: &str, agents: &[&str], env_from: &[&str]) -> Mcp {
-        let stdio = bundles::Stdio { command: "node".into(), args: vec!["srv.js".into(), "--x".into()], env_from: env_from.iter().map(|s| s.to_string()).collect() };
-        Mcp { name: name.into(), http: None, stdio: Some(stdio), agents: agents.iter().map(|s| s.to_string()).collect(), reads: bundles::Reads::Names(Vec::new()), optional: false }
+        let stdio = bundles::Stdio { command: "node".into(), args: vec!["srv.js".into(), "--x".into()], env_from: env_from.iter().map(|s| s.to_string()).collect(), env_pass: Vec::new() };
+        Mcp { name: name.into(), http: None, stdio: Some(stdio), agents: agents.iter().map(|s| s.to_string()).collect(), reads: bundles::Reads::Names(Vec::new()), optional: false, approval: None, timeout_sec: None }
     }
 
     #[test]
     fn vault_tables_carry_a_selected_server_and_omit_an_unselected_one() {
-        let catalog: bundles::Bundles = serde_json::from_value(json!({ "version": 1, "bundles": { "kit": {
+        let catalog: bundles::Bundles = serde_json::from_value(json!({ "version": 1, "bundles": { "team": {
             "mcp": [
                 { "name": "files", "stdio": { "command": "node", "args": ["f.js"], "envFrom": ["FILES_TOKEN"] }, "reads": [] },
                 { "name": "chat", "http": { "url": "https://chat.example/mcp" }, "reads": [] },
                 { "name": "slack", "http": { "url": "https://slack.example/mcp" }, "agents": ["claude"], "reads": [] }
             ], "skills": [], "agents": [], "guards": [] } } })).unwrap();
-        let ticks: bundles::SetModules = serde_json::from_value(json!({ "kit": { "off": ["mcp:chat"] } })).unwrap();
-        let (resolved, _) = bundles::resolve(&ticks, &catalog, "codex");
-        let names: Vec<String> = ["notion".to_string()].into_iter().chain(resolved.mcp.iter().map(|m| m.name.clone())).collect();
+        // The loadout names `files` but not `chat`; `slack` leaves Codex out whatever the loadout says.
+        let names: Vec<String> = ["notion", "files", "slack"].map(String::from).to_vec();
         let servers = for_launch(&names, &with_notion(catalog));
         assert_eq!(servers.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["notion", "files"]);
         let (tables, warnings) = Tables::servers(&servers, &|k| (k == "FILES_TOKEN").then(|| "fixture-token".to_string())).unwrap();
@@ -296,19 +285,24 @@ mod tests {
     }
 
     #[test]
-    fn stock_drive_table_forwards_control_names_only_when_selected() {
-        let empty = Tables::default();
-        assert!(empty.text.is_empty());
-        let enabled = empty.with_vidar_drive(std::path::Path::new(r"D:\vidar")).unwrap();
-        assert_eq!(enabled.names, ["vidar_drive"]);
-        assert!(enabled.text.contains("env_vars = [\"VIDAR_CTL_TOKEN\", \"FALCON_SESSION\", \"VIDAR_CTL_SECRET\"]"));
-        assert!(!enabled.text.contains("fixture-token"));
-        assert!(enabled.with_vidar_drive(std::path::Path::new(r"D:\vidar")).is_err());
+    fn a_none_approval_server_forwards_names_and_pins_no_approval() {
+        let mut m = stdio("drv", &[], &[]);
+        m.approval = Some(bundles::Approval::None);
+        m.timeout_sec = Some(60);
+        m.stdio.as_mut().unwrap().env_pass = vec!["CTL_A".into(), "CTL_B".into()];
+        let (t, w) = Tables::servers(&[m, stdio("plain", &[], &[])], &|_| None).unwrap();
+        assert!(w.is_empty(), "{w:?}");
+        assert!(t.text.contains("env_vars = [\"CTL_A\",\"CTL_B\"]\ntool_timeout_sec = 60\n"), "{}", t.text);
+        assert!(!t.doc.iter().any(|(k, _)| k.starts_with("mcp_servers.drv.") && k.ends_with(APPROVAL_KEY)));
+        assert!(t.doc.iter().any(|(k, _)| k == &format!("mcp_servers.plain.{APPROVAL_KEY}")));
+        let mut bad = stdio("bad", &[], &[]);
+        bad.stdio.as_mut().unwrap().env_pass = vec!["A B".into()];
+        assert_eq!(Tables::servers(&[bad], &|_| None).unwrap().0.names.len(), 0);
     }
 
     #[test]
     fn server_tables_hold_the_selected_values_and_check_them_exactly() {
-        let http = Mcp { name: "chat".into(), http: Some(bundles::Http { url: "https://chat.example/mcp".into(), oauth: None }), stdio: None, agents: Vec::new(), reads: bundles::Reads::Names(Vec::new()), optional: false };
+        let http = Mcp { name: "chat".into(), http: Some(bundles::Http { url: "https://chat.example/mcp".into(), oauth: None }), stdio: None, agents: Vec::new(), reads: bundles::Reads::Names(Vec::new()), optional: false, approval: None, timeout_sec: None };
         let catalog = with_notion(catalog_of(vec![http, stdio("files", &[], &["FILES_TOKEN"]), stdio("off", &[], &["NOPE"])]));
         let servers = for_launch(&["notion", "chat", "files", "off"].map(String::from), &catalog);
         let env = |k: &str| (k == "FILES_TOKEN").then(|| "s3\"cret".to_string());
@@ -338,10 +332,10 @@ mod tests {
         assert!(check(&extra, &t).unwrap_err().contains("OTHER"));
     }
 
-    /// A catalog of one bundle `kit` serving `mcp`.
+    /// A catalog of one bundle `team` serving `mcp`.
     fn catalog_of(mcp: Vec<Mcp>) -> bundles::Bundles {
-        let mut c: bundles::Bundles = serde_json::from_value(json!({ "version": 1, "bundles": { "kit": { "mcp": [], "skills": [], "agents": [], "guards": [] } } })).unwrap();
-        c.bundles.get_mut("kit").unwrap().mcp = mcp;
+        let mut c: bundles::Bundles = serde_json::from_value(json!({ "version": 1, "bundles": { "team": { "mcp": [], "skills": [], "agents": [], "guards": [] } } })).unwrap();
+        c.bundles.get_mut("team").unwrap().mcp = mcp;
         c
     }
 
@@ -357,5 +351,12 @@ mod tests {
         let catalog = with_notion(catalog_of(vec![stdio("files", &[], &[]), stdio("slack", &["claude"], &[])]));
         let names = ["files", "notion", "FILES", "slack"].map(String::from);
         assert_eq!(for_launch(&names, &catalog).iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["files", "notion"]);
+    }
+
+    #[test]
+    fn for_launch_never_widens_an_unknown_agent_tag() {
+        let catalog = catalog_of(vec![stdio("odd", &["grok"], &[]), stdio("mixed", &["grok", "codex"], &[]), stdio("cased", &["Codex"], &[])]);
+        let names = ["odd", "mixed", "cased"].map(String::from);
+        assert_eq!(for_launch(&names, &catalog).iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), Vec::<&str>::new());
     }
 }

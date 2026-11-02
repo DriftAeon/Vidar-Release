@@ -335,11 +335,10 @@ details.has-card > pre.tool-input { display: none; }
 /* the agents block (above the status line, below the transcript scroller) is styled in rendered-agents.css */
 .rendered-state { flex: 0 0 auto; display: inline-flex; align-items: center; margin-right: var(--space-2); /* clears the rounded message box corner */ }
 .rendered-state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok-green); }
-.rendered-state[data-state="working"]::before { background: var(--accent); animation: state-pulse 1.2s ease-in-out infinite; }
+.rendered-state[data-state="working"]::before { background: var(--accent); animation: dim-pulse 1.2s ease-in-out infinite; }
 .rendered-state[data-state="approval"]::before,
 .rendered-state[data-state="login"]::before { background: var(--approval-amber); }
 .rendered-state[data-state="dead"]::before { background: var(--dead-red); }
-@keyframes state-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .rendered-input-row { position: relative; display: flex; gap: var(--space-6); align-items: flex-end; }
 .rendered-input {
   flex: 1 1 auto; min-width: 0; resize: vertical; background: var(--bg); border: 1px solid var(--border);
@@ -376,9 +375,18 @@ details.has-card > pre.tool-input { display: none; }
 .blk-notice-card > .notice-acts > button.wb-card-btn { min-height: var(--row-24); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); }
 .blk-notice-card > .notice-acts > button.wb-card-btn.is-error { --edge: var(--dead-red); }
 .blk-notice-card > .notice-acts > button.wb-card-btn .icn { width: var(--font-12); height: var(--font-12); flex: none; }
-.notice-spin { animation: notice-spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
-@keyframes notice-spin { to { transform: rotate(360deg); } }
+.notice-spin { animation: spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
 @media (prefers-reduced-motion: reduce) { .notice-spin { animation: none; } }
 .blk-notice.done { display: flex; align-items: center; gap: var(--space-4); }
 .blk-notice.done .icn { width: var(--font-12); height: var(--font-12); color: var(--ok-green); flex: none; }
 
+/* Vault scrim (rendered/vault-scrim.ts): a tab waiting for its Rune Vault is covered by a fully opaque
+   cover in the pane's own surface (--bg, as .rendered-host paints; no blur, nothing shows through); one centred bold line, no buttons, nothing under it takes input. */
+.rendered:has(> .vault-scrim) { position: relative; }
+.vault-scrim {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--space-16);
+  background: var(--bg); cursor: default;
+}
+.vault-scrim-note { font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg); }
+/* "Rune Vault" in the note: bold and amber */
+.vault-scrim-key { font-weight: var(--weight-bold); color: var(--approval-amber); }

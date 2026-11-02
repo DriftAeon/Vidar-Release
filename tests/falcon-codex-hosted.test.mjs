@@ -252,17 +252,17 @@ test("host history envelopes identify a resumed thread and replay before live ou
 });
 
 // ---- Codex Bare opens hosted (F1 2b) ----
-const { AGENT_PROFILE, codexHostShape } = await import("../src/agents/agent-profile.ts");
+const { AGENT_PROFILE, gatedHostShape } = await import("../src/agents/agent-profile.ts");
 const bareCaps = ["codex_turns", "codex_bare"];
 const check = (over) => ({ hostedCodex: true, capabilities: bareCaps, rulesFile: null, profile: "bare", ...over });
 
 test("hosted on + Bare row + a host that lists codex_bare: the tab is hosted and carries the profile", () => {
-  assert.equal(codexHostShape(check()), true);
+  assert.equal(gatedHostShape(check()), true);
   assert.equal(AGENT_PROFILE.codex.falconHosted(check()), true);
 });
 
 test("hosted off: the Bare row stays in-process, however capable the host", () => {
-  assert.equal(codexHostShape(check({ hostedCodex: false })), false);
+  assert.equal(gatedHostShape(check({ hostedCodex: false })), false);
   assert.equal(AGENT_PROFILE.codex.falconHosted(check({ hostedCodex: false })), false);
 });
 
@@ -270,8 +270,8 @@ test("an old host (no codex_bare), no capabilities, a rules file or another prof
   assert.equal(AGENT_PROFILE.codex.falconHosted(check({ capabilities: ["codex_turns"] })), false);
   assert.equal(AGENT_PROFILE.codex.falconHosted(check({ capabilities: null })), false);
   assert.equal(AGENT_PROFILE.codex.falconHosted(check({ rulesFile: "C:/r.md" })), false);
-  assert.equal(codexHostShape(check({ profile: "other" })), false);
-  assert.equal(codexHostShape(check({ profile: "Bare" })), false);
+  assert.equal(gatedHostShape(check({ profile: "other" })), false);
+  assert.equal(gatedHostShape(check({ profile: "Bare" })), false);
 });
 
 test("a plain Codex tab is unchanged: codex_turns alone hosts it", () => {

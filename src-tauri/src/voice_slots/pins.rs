@@ -140,8 +140,7 @@ pub fn record(store_path: &Path, pins: Vec<(PathBuf, Pin)>, overwrite: bool) -> 
     if let Some(dir) = store_path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    let json = serde_json::to_vec_pretty(&store).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(store_path, &json)?;
+    crate::fsx::write_json_pretty(store_path, &store, false)?;
     if differs.is_empty() {
         Ok(())
     } else {

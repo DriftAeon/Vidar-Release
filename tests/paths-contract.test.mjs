@@ -39,6 +39,25 @@ test("the scan detects a seeded literal, either separator", () => {
   );
 });
 
+test("a stale multi-segment tail or a full chain inside a longer literal counts", () => {
+  // The layout before bridge moved under runtime: the tail without its topmost ancestor.
+  assert.equal(scanText(`$b = Join-Path $vidar "bridge\\falcon\\bundles"`).get("falconBundles"), 1);
+  assert.equal(scanText(`const p = "bridge/falcon/bundles/b1/falcon.exe";`).get("falconBundles"), 1);
+  // The full chain inside a longer literal.
+  assert.equal(scanText(`const p = "{vidar}\\\\runtime\\\\bridge\\\\display";`).get("display"), 1);
+  assert.equal(scanText(`const p = \`\${root}/runtime/bridge/falcon/bundles/x\`;`).get("falconBundles"), 1);
+  // One count per literal; a single-segment tail and a mid-word match do not count.
+  assert.equal(scanText(`"runtime/bridge/falcon/bundles"`).size, 1);
+  assert.equal(scanText(`const a = "falcon/bundlesx"; const b = "xbridge/falcon/bundles";`).size, 0);
+});
+
+test("the old release-zip bundle literal is flagged, HEAD's script is clean", () => {
+  const old = execFileSync("git", ["show", "58843bef^:tools/release/release-zip.ps1"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(scanText(old).get("falconBundles"), 1);
+  const now = readFileSync(join(ROOT, "tools", "release", "release-zip.ps1"), "utf8");
+  assert.equal(scanText(now).size, 0);
+});
+
 test("module specifiers do not count, a plain literal still does", () => {
   assert.equal(scanText(`import { S } from "./runtime/state";`).size, 0);
   assert.equal(scanText(`const s = "./runtime/state";`).get("state"), 1);

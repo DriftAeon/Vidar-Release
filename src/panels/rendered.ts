@@ -46,6 +46,7 @@ import { createStatusBar, modeLabel as permissionModeLabel } from "./rendered/st
 import { createHostPayload } from "./rendered/host-payload";
 import { createHydrateStats } from "./rendered/hydrate-stats";
 import { createLifecycle } from "./rendered/lifecycle";
+import { mountVaultScrim } from "./rendered/vault-scrim";
 import { authCheck, createLogin } from "./rendered/login";
 import { API_KEY_CARD } from "./rendered/api-key-card";
 import { createBang } from "./rendered/bang";
@@ -157,6 +158,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   const composerWrap = el("div", "rendered-composer");
   const palette = el("div", "rendered-palette hidden");
   const textarea = el("textarea", "rendered-input"); // no how-to placeholder
+  textarea.setAttribute("aria-label", "Prompt");
   textarea.rows = 4; // four lines before it scrolls (2026-10-05)
   // No red squiggles under paths, flags and identifiers — a prompt is code more
   // often than it is prose, and the browser dictionary flags nearly all of it.
@@ -184,6 +186,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   const scrollWrap = el("div", "rendered-scroll");
   scrollWrap.append(transcript, latest.el);
   root.append(scrollWrap, agents.el, status, composerWrap);
+  mountVaultScrim(root, opts.vaultGate);
 
   const cache = createCacheCell(S);
   const { drawCache, markCacheWarm, stopCacheTimer, resetCache } = cache;
@@ -331,7 +334,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
 
   // onExit is a thunk: lifecycle is built last
   const login = createLogin(S, {
-    claude: AGENT_PROFILE[opts.agent].loginCheck,
+    readsTurnReplies: AGENT_PROFILE[opts.agent].loginCheck,
     tip: AGENT_PROFILE[opts.agent].loginTip,
     check: authCheck(AGENT_PROFILE[opts.agent].loginCheck, hostHas(opts.host, "loginCheck"), claudeStatus(transport)),
     noticeBlock, redrawStatus, refreshState, reach: () => bar.login?.reach?.() ?? "card",
@@ -365,7 +368,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
   }
   /** the one status the composer shows (rendered/state-chip.ts); called from every signal change */
   function refreshState() {
-    const chip = chipState(S, sl.model === "Starting…", agents.runningCount());
+    const chip = chipState(opts.vaultGate?.pending ? { ...S, picking: true } : S, sl.model === "Starting…", agents.runningCount());
     stateChip.title = chip.title;
     stateChip.dataset.state = chip.cls;
     opts.onTabState?.(chip, (S.pendingApproval && approvals.get(S.pendingApproval)?.dataset.tool) || null, S.hydrating);
@@ -484,6 +487,7 @@ export function createRenderedBody(opts: RenderedOpts): RenderedBody {
       S.characterTurnOpen = false;
       setCharacterActive(false);
       S.disposed = true;
+      opts.vaultGate?.cancel(); // a tab closed while picking spawns nothing
       stopCacheTimer();
       agents.dispose();
       askMirror.dispose(); // the tab's Relay cards leave with it

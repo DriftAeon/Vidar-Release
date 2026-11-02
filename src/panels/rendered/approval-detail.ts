@@ -1,7 +1,7 @@
 // The body of an approval card: the exact thing being approved, built from the tool's own input.
 // Shared by the Rendered approval card (cards.ts) and the Flow approvals sidebar (flow/approvals-panel.ts).
 
-import { renderMarkdownOrText } from "../markdown-build";
+import { whenMarkdown } from "../markdown-lazy";
 import { pretty } from "./format";
 import { prettyTool, label } from "../../format";
 import { el } from "./dom";
@@ -46,8 +46,8 @@ export function approvalDetail(tool: string, input: unknown, inputBytes: number)
     case "MCP Elicitation": {
       const out: HTMLElement[] = [];
       if (s("title")) out.push(el("div", "approval-path", s("title")));
-      if (s("message")) out.push(el("div", "tool-input", s("message")));
-      if (s("description")) out.push(el("div", "tool-input", s("description")));
+      if (s("message")) out.push(el("div", "approval-summary", s("message")));
+      if (s("description")) out.push(el("div", "approval-summary", s("description")));
       if (s("url")) out.push(el("pre", "tool-input approval-cmd", s("url")));
       if (i.challenge !== undefined) out.push(el("pre", "tool-input", pretty(i.challenge)));
       if (s("unsupportedReason")) out.push(el("div", "approval-path", s("unsupportedReason")));
@@ -83,15 +83,18 @@ export function approvalDetail(tool: string, input: unknown, inputBytes: number)
     }
     case "ExitPlanMode": {
       const plan = s("plan");
-      const built = renderMarkdownOrText("plan.md", plan, { softBreaks: "br" });
       const wrap = el("div", "approval-plan");
-      if (built.fellBack) {
-        const pre = el("pre", "blk-text-fallback", plan);
-        pre.title = built.fellBack.reason;
-        wrap.appendChild(pre);
-      } else {
-        wrap.appendChild(built.el);
-      }
+      wrap.appendChild(el("pre", "blk-text-fallback", plan)); // plain text until the parser has loaded
+      whenMarkdown(({ renderMarkdownOrText }) => {
+        const built = renderMarkdownOrText("plan.md", plan, { softBreaks: "br" });
+        if (built.fellBack) {
+          const pre = el("pre", "blk-text-fallback", plan);
+          pre.title = built.fellBack.reason;
+          wrap.replaceChildren(pre);
+        } else {
+          wrap.replaceChildren(built.el);
+        }
+      });
       return [wrap];
     }
     default:

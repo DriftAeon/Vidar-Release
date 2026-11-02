@@ -3,9 +3,9 @@
 import type { AgentEvent } from "./protocol";
 import { REFUSALS } from "./codex-methods";
 
-type Json = Record<string, unknown>;
-const obj = (v: unknown): Json => v && typeof v === "object" && !Array.isArray(v) ? v as Json : {};
-const str = (v: unknown): string => typeof v === "string" ? v : "";
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj as objOrNull, str, type Json } from "../json.ts";
+const obj = (v: unknown): Json => objOrNull(v) ?? {}; // home-ok: empty-object fallback keeps the call sites as they were
 const arr = (v: unknown): unknown[] => Array.isArray(v) ? v : [];
 const keyOf = (id: unknown): string => `sr:${String(id)}`;
 const enumValues = (schema: Json): unknown[] => {

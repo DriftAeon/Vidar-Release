@@ -1,6 +1,7 @@
 // Saved strip order across Falcon re-adopts and in-process Codex restores.
 // The insertion calculation is pure; the strip and prefs are injected by sessions.ts.
-import type { TerminalSession } from "./types";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { sessionSupports, type TerminalSession } from "./types.ts";
 
 export function insertionBefore(
   live: readonly string[], keys: ReadonlyMap<string, string>, saved: readonly string[], incoming: string,
@@ -17,7 +18,7 @@ export function insertionBefore(
 
 function key(s: TerminalSession): string | null {
   if (s.falconSession || s.tabOrderFalconSession) return `h:${s.falconSession ?? s.tabOrderFalconSession}`;
-  if (s.agent === "codex" && s.body === "rendered" && !s.profile && !s.rendered?.hosted() && s.tabKey) return `c:${s.tabKey}`;
+  if (sessionSupports(s.agent, "thread") && s.body === "rendered" && !s.profile && !s.rendered?.hosted() && s.tabKey) return `c:${s.tabKey}`;
   return null;
 }
 

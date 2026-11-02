@@ -6,8 +6,8 @@
 //
 // Each run: removes the files and folders the previous run recorded in <base>\.runes-seed-manifest.json that
 // the seed no longer names, clears app\runtime\runes\ and app\runtime\vaults\ (every vault, sessions\, defaults.json;
-// the app re-seeds stock-claude / stock-codex from profiles/bare/templates, vault/store.rs ensure_stock, so no run
-// inherits an earlier run's vault edits), empties the saved Codex tabs in app\runtime\vidar-state.json
+// no vault is re-seeded: a case makes its own with vault::create_at(from: None), the blank vault holding only the
+// Vidar Runeset, so no run inherits an earlier run's vault edits), empties the saved Codex tabs in app\runtime\vidar-state.json
 // (a boot restore would add a tab the journey did not open), writes every seed file and records the manifest.
 // --dry-run prints the same plan and
 // writes nothing. Every path comes from <base>; only the %TEMP% guard reads the environment.
@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve as pathResolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolve, root } from "../lib/paths.mjs";
+import { rel, resolve, root } from "../lib/paths.mjs";
 
 export const MARKER = ".vidar-sandbox";
 export const MANIFEST = ".runes-seed-manifest.json";
@@ -27,14 +27,21 @@ export const SEED = join(root(), "tests", "fixtures", "runes-e2e", "seed.json");
 const CREDENTIALS = [".credentials.json", "auth.json"];
 
 /** Case 11's throwaway import library (src-tauri/src/bare/library_delete.rs deletes only libraries under
- *  runtime\runes): two runes in a library of its own, so no earlier case reads them. The fixture seed.json is
- *  not edited; the default seed gains these entries here. */
+ *  runtime\runes): two runes and a runeset slotting the second, in a library of its own, so no earlier case reads
+ *  them. The fixture seed.json is not edited; the default seed gains these entries here. */
 export const DEL_LIBRARY = "runes-e2e-del";
 export const DEL_RUNES = ["del-a", "del-b"];
-export const delFiles = () => DEL_RUNES.map((id) => ({
-  path: `<APP>/runtime/runes/${DEL_LIBRARY}/rules/${id}.md`,
-  text: `---\nname: ${id}\nkind: rule\nscope: [global]\nstate: active\nactivate: always\n---\n\nThrowaway rune ${id}.\n`,
-}));
+export const DEL_SET = "del-set";
+export const delFiles = () => [
+  ...DEL_RUNES.map((id) => ({
+    path: `<APP>/${rel("runeImports")}/${DEL_LIBRARY}/rules/${id}.md`,
+    text: `---\nname: ${id}\nkind: rule\nscope: [global]\nstate: active\nactivate: always\n---\n\nThrowaway rune ${id}.\n`,
+  })),
+  {
+    path: `<APP>/${rel("runeImports")}/${DEL_LIBRARY}/sets/${DEL_SET}.md`,
+    text: `---\nname: ${DEL_SET}\nkind: set\nscope: [global]\ndescription: Throwaway runeset.\n---\n- <?rune ${DEL_RUNES[1]}?>\n`,
+  },
+];
 const withDel = (seed) => ({ ...seed, files: [...(seed.files ?? []), ...delFiles()] });
 
 class Refused extends Error {}

@@ -14,23 +14,22 @@ use serde::{Deserialize, Serialize};
 /// pending.ps1 also runs falcon-refresh.ps1 -DryRun; measured 3 s warm, 10.5 s cold (2026-10-06).
 const PENDING_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Removed from the worker's env on top of `pty::SCRUBBED_ENV` (agent-session markers, the control
+/// Removed from the worker's env on top of `proc_job::SCRUBBED_ENV` (agent-session markers, the control
 /// token, VIDAR_ROOT, the DevTools port). The worker's children are npm, cargo and swap-release.ps1;
 /// swap-release relaunches through clean-env.ps1, and this is the layer before that: a Vidar started
 /// from a tab carries VIDAR_TAB (swap-release refuses under it) or FALCON_SESSION, and an agent shell
 /// that launched Vidar leaves its Claude/Codex markers (the 2026-09-20 leak was an inherited env).
 const EXTRA_SCRUBBED: &[&str] = &["VIDAR_TAB", "VIDAR_TAB_NAME", "FALCON_SESSION"];
-/// Whole families: every Claude Code and Codex session variable, known now or added later.
-const SCRUBBED_PREFIXES: &[&str] = &["CLAUDE_CODE_", "CODEX_"];
-
-/// True when `key` stays out of the worker's env. Windows env names are case-insensitive.
+/// True when `key` stays out of the worker's env: whole families (every agent's session variable,
+/// known now or added later, by `env_family`) plus the lists above. Windows env names are
+/// case-insensitive.
 pub(crate) fn is_scrubbed(key: &str) -> bool {
     let upper = key.to_ascii_uppercase();
-    crate::pty::SCRUBBED_ENV
+    crate::proc_job::SCRUBBED_ENV
         .iter()
         .chain(EXTRA_SCRUBBED)
         .any(|k| k.eq_ignore_ascii_case(key))
-        || SCRUBBED_PREFIXES.iter().any(|p| upper.starts_with(p))
+        || crate::agent_spec::ALL.iter().any(|a| upper.starts_with(a.env_family()))
 }
 
 /// The env the worker gets: the caller's minus the scrubbed names, sorted case-insensitively
@@ -310,8 +309,8 @@ mod tests {
         ] {
             assert!(is_scrubbed(key), "{key} should be scrubbed");
         }
-        for key in crate::pty::SCRUBBED_ENV {
-            assert!(is_scrubbed(key), "{key} from pty::SCRUBBED_ENV should be scrubbed");
+        for key in crate::proc_job::SCRUBBED_ENV {
+            assert!(is_scrubbed(key), "{key} from proc_job::SCRUBBED_ENV should be scrubbed");
         }
     }
 

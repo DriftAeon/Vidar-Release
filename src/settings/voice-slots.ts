@@ -16,7 +16,7 @@ import { registerVoiceRewriteRow } from "./voice-rewrite";
 
 const PAGE_ID = "voice-slots";
 
-export function mountVoiceSlots(root: HTMLElement): () => void {
+function mountVoiceSlots(root: HTMLElement): () => void {
   const page = root.ownerDocument.createElement("div");
   page.className = "vs-page";
   root.appendChild(page);

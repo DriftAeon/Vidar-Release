@@ -12,7 +12,7 @@
     { "intent": "start a Claude Bare tab, send one short message, then open Runes and check the Lock button reads Locked" },
     { "intent": "press Modify and switch one rune to State: Off; the notice offers Make Variant and Edit Original" },
     { "intent": "press Make Variant and check the Runes view closes Modify, shows a notice that the change was saved as a new vault that new sessions can pick, and this tab keeps showing the original vault" },
-    { "intent": "open the launcher, press Pick Vault on the Claude Bare row, choose the new variant and press Launch" },
+    { "intent": "start a new Claude tab, and in the Runes panel choose the new variant vault card and press Start Session" },
     { "intent": "in the new tab's Runes view, check it shows the variant, the switched rune reads State: Off, and the first tab still shows the original vault" }
   ]
 }

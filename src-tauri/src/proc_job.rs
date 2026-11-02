@@ -2,20 +2,24 @@
 //! a launcher also ends what it started. Needed because `.venv\Scripts\python.exe` is a
 //! launcher stub that runs the real interpreter as its own child: `Child::kill` ends only
 //! the stub, and the interpreter kept the inherited pipes (and the mic) open. `JobChild` is used by bang.rs, listen*.rs, speak.rs, stt_warm.rs, mcp.rs,
-//! codex_threads.rs and gitrun.rs (every git call: gitreview.rs, changes.rs); agent.rs (codex tree) and flow.rs use the raw `Job`. claude_login.rs uses a
+//! codex_threads.rs and gitrun.rs (every git call: gitreview.rs, changes.rs); agent.rs (codex tree) and flow and the rune generator use `Job` with `spawn_into`. claude_login.rs uses a
 //! root-only `Job` (`Job::root_only`, silent breakaway): its own CreateProcessW child starts
 //! suspended and joins before it runs, and whatever that child spawns (the browser) stays out.
 //!
-//! Job-owned children (`JobChild`) start suspended, join the job, then resume. Toolhelp
-//! recovers the sole initial thread because std's Child exposes only the process handle.
-//! Ambiguous thread snapshots and assignment/resume failures kill and reap the suspended
-//! child.
+//! Job-owned children (`JobChild`) start suspended, join the job, then resume.
+//! `NtGetNextThread` recovers the sole initial thread because std's Child exposes only the
+//! process handle. A second thread and assignment/resume failures kill and reap the
+//! suspended child.
 //!
-//! Accepted race for raw `Job` users (agent.rs, flow.rs): the child is spawned, then
-//! assigned. A grandchild created in the microseconds between CreateProcess and
-//! AssignProcessToJobObject escapes the job; node and the venv stub both need far longer
-//! than that before they spawn anything. They keep that window until they move to
-//! `JobChild`.
+//! No caller outside this module assigns a spawned child by hand: `Job` users go through
+//! `spawn_into`, which joins the job before the child runs. The one raw assignment is
+//! claude_login.rs, which joins its own suspended CreateProcessW child via `assign_handle` (:154, :162).
+
+mod scrub;
+mod spawn;
+pub use scrub::SCRUBBED_ENV;
+#[allow(unused_imports)] // glob re-export: not every spawn name has an in-crate user
+pub(crate) use spawn::*;
 
 use std::ops::{Deref, DerefMut};
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
@@ -29,11 +33,8 @@ use windows::Win32::System::JobObjects::{
     JOB_OBJECT_LIMIT, JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK,
 };
-use windows::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, Thread32First, Thread32Next, THREADENTRY32, TH32CS_SNAPTHREAD,
-};
 use windows::Win32::System::Threading::{
-    GetProcessIdOfThread, OpenThread, ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED,
+    GetProcessIdOfThread, ResumeThread, CREATE_SUSPENDED,
     THREAD_QUERY_LIMITED_INFORMATION, THREAD_SUSPEND_RESUME,
 };
 
@@ -44,35 +45,44 @@ fn spawn_suspended(cmd: &mut Command, flags: u32) -> std::io::Result<Child> {
     result
 }
 
-fn resume_initial_thread(child: &Child) -> Result<(), String> {
-    let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) }
-        .map_err(|e| e.to_string())?;
-    let snap = unsafe { OwnedHandle::from_raw_handle(snap.0) };
-    let mut entry = THREADENTRY32 {
-        dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
-        ..Default::default()
-    };
-    let mut tid = None;
-    unsafe { Thread32First(HANDLE(snap.as_raw_handle()), &mut entry) }
-        .map_err(|e| e.to_string())?;
-    loop {
-        if entry.th32OwnerProcessID == child.id() {
-            if tid.replace(entry.th32ThreadID).is_some() {
-                return Err("suspended child has multiple threads".into());
-            }
-        }
-        if let Err(e) = unsafe { Thread32Next(HANDLE(snap.as_raw_handle()), &mut entry) } {
-            if e.code() != windows::core::HRESULT::from_win32(18) {
-                return Err(e.to_string());
-            }
-            break;
-        }
+// Undocumented ntdll export (stable since Vista; not in the windows crate's metadata).
+// Enumerates one process's threads, so finding the child's thread is one call instead of a
+// Toolhelp walk over every thread on the system, which cost seconds per spawn under parallel
+// load (full test suite, 2026-10-31: up to 4.2 s, 73 of 405 resumes over 1 s).
+#[link(name = "ntdll")]
+extern "system" {
+    fn NtGetNextThread(
+        process: HANDLE,
+        thread: HANDLE,
+        desired_access: u32,
+        handle_attributes: u32,
+        flags: u32,
+        new_thread: *mut HANDLE,
+    ) -> i32;
+}
+
+const STATUS_NO_MORE_ENTRIES: i32 = 0x8000_001A_u32 as i32;
+
+/// Opens the process thread after `after` (`HANDLE::default()` = the first); `Ok(None)` when
+/// there is none.
+fn next_thread(process: HANDLE, after: HANDLE) -> Result<Option<OwnedHandle>, String> {
+    let access = (THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION).0;
+    let mut thread = HANDLE::default();
+    match unsafe { NtGetNextThread(process, after, access, 0, 0, &mut thread) } {
+        STATUS_NO_MORE_ENTRIES => Ok(None),
+        status if status >= 0 => Ok(Some(unsafe { OwnedHandle::from_raw_handle(thread.0) })),
+        status => Err(format!("NtGetNextThread failed: 0x{:08X}", status as u32)),
     }
-    let tid = tid.ok_or("suspended child has no initial thread")?;
-    let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION, false, tid) }
-        .map_err(|e| e.to_string())?;
-    let thread = unsafe { OwnedHandle::from_raw_handle(thread.0) };
+}
+
+fn resume_initial_thread(child: &Child) -> Result<(), String> {
+    let process = HANDLE(child.as_raw_handle());
+    let thread = next_thread(process, HANDLE::default())?
+        .ok_or("suspended child has no initial thread")?;
     let handle = HANDLE(thread.as_raw_handle());
+    if next_thread(process, handle)?.is_some() {
+        return Err("suspended child has multiple threads".into());
+    }
     if unsafe { GetProcessIdOfThread(handle) } != child.id() {
         return Err("initial thread changed process".into());
     }
@@ -193,8 +203,8 @@ impl JobChild {
     /// Retains spawn's io error kind so `.cmd` callers can retry only NotFound.
     pub(crate) fn spawn_io(cmd: &mut Command) -> std::io::Result<Self> {
         let job = Job::new().map_err(|e| std::io::Error::other(format!("Create Job: {e}")))?;
-        let child = spawn_suspended(cmd, CREATE_NO_WINDOW.0)?;
-        Self::assigned(child, job).map_err(std::io::Error::other)
+        let child = spawn_into(cmd, &job)?;
+        Ok(Self { child, job: Some(job) })
     }
 
     /// For a child whose descendants must be able to break away (speak.rs: the Kokoro
@@ -233,16 +243,14 @@ impl JobChild {
         }
     }
 
-    fn assigned(mut child: Child, job: Job) -> Result<Self, String> {
-        let setup = job.assign(&child).map_err(|e| format!("Assign Job: {e}"))
-            .and_then(|_| resume_initial_thread(&child).map_err(|e| format!("Resume Job Child: {e}")));
-        if let Err(e) = setup {
-            job.terminate();
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(e);
-        }
+    fn assigned(child: Child, job: Job) -> Result<Self, String> {
+        let child = spawn::join_and_resume(child, &job).map_err(|e| e.to_string())?;
         Ok(Self { child, job: Some(job) })
+    }
+
+    /// Polls for exit until `deadline`; `Ok(None)` on timeout, nothing killed.
+    pub(crate) fn wait_bounded(&mut self, deadline: std::time::Instant) -> std::io::Result<Option<ExitStatus>> {
+        wait_bounded(&mut self.child, deadline)
     }
 
     /// Terminates the job (the stub and everything it started), then the child itself in
@@ -362,6 +370,36 @@ mod tests {
         assert_eq!(eof, Ok(true), "stdout pipe did not reach EOF after the job was terminated");
     }
 
+    /// A caller-owned job catches the stub and its grandchild; terminate ends both.
+    #[test]
+    fn spawn_into_puts_stub_and_grandchild_in_the_callers_job() {
+        let job = Job::new().unwrap();
+        let mut cmd = self_cmd("stub");
+        cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+        let mut child = spawn_into(&mut cmd, &job).unwrap();
+        let mut reader = BufReader::new(child.stdout.take().unwrap());
+        let mut pid = None;
+        let mut line = String::new();
+        while pid.is_none() && reader.read_line(&mut line).unwrap() > 0 {
+            pid = line.split("GRANDCHILD_PID=").nth(1).map(|p| p.trim().parse::<u32>().unwrap());
+            line.clear();
+        }
+        let pid = pid.expect("stub never reported its grandchild");
+        let gc = unsafe { OpenProcess(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }
+            .expect("grandchild alive");
+        let gc = unsafe { OwnedHandle::from_raw_handle(gc.0) };
+        for process in [HANDLE(child.as_raw_handle()), HANDLE(gc.as_raw_handle())] {
+            let mut in_job = Default::default();
+            unsafe { IsProcessInJob(process, Some(job.handle()), &mut in_job) }.unwrap();
+            assert!(in_job.as_bool(), "process escaped the caller's job");
+        }
+
+        job.terminate();
+
+        let _ = child.wait();
+        assert_eq!(unsafe { WaitForSingleObject(HANDLE(gc.as_raw_handle()), 5000) }, WAIT_OBJECT_0, "grandchild {pid} outlived terminate");
+    }
+
     fn limit_flags(job: &Job) -> JOB_OBJECT_LIMIT {
         use windows::Win32::System::JobObjects::QueryInformationJobObject;
         let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
@@ -392,7 +430,7 @@ mod tests {
         let job = Job::root_only().unwrap();
         let mut cmd = self_cmd("stub");
         cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
-        let mut child = spawn_suspended(&mut cmd, CREATE_NO_WINDOW.0).unwrap();
+        let mut child = spawn_suspended(&mut cmd, CREATE_NO_WINDOW).unwrap();
         job.assign(&child).unwrap();
         resume_initial_thread(&child).unwrap();
         let mut reader = BufReader::new(child.stdout.take().unwrap());
@@ -422,5 +460,38 @@ mod tests {
         let _ = unsafe { TerminateProcess(HANDLE(gc.as_raw_handle()), 1) };
         assert!(!gc_in_job, "grandchild joined the root-only job");
         assert!(survived, "grandchild {pid} died with the root");
+    }
+
+    fn suspended_noop_child() -> Child {
+        let mut cmd = self_cmd("noop");
+        cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        spawn_suspended(&mut cmd, CREATE_NO_WINDOW).unwrap()
+    }
+
+    /// NtGetNextThread finds the sole suspended thread; one resume lets the child run to exit.
+    #[test]
+    fn resume_initial_thread_runs_a_single_thread_child() {
+        let mut child = suspended_noop_child();
+        assert!(child.try_wait().unwrap().is_none());
+        resume_initial_thread(&child).unwrap();
+        assert!(child.wait().unwrap().success());
+    }
+
+    /// A second thread in the suspended child is refused, and nothing is resumed.
+    #[test]
+    fn resume_initial_thread_refuses_a_second_thread() {
+        use windows::Win32::System::Threading::CreateRemoteThread;
+        unsafe extern "system" fn never_runs(_: *mut std::ffi::c_void) -> u32 { 0 }
+        let mut child = suspended_noop_child();
+        // Created suspended and killed with the process, so the start address never runs.
+        let extra = unsafe {
+            CreateRemoteThread(HANDLE(child.as_raw_handle()), None, 0, Some(never_runs), None, CREATE_SUSPENDED.0, None)
+        }
+        .unwrap();
+        let _extra = unsafe { OwnedHandle::from_raw_handle(extra.0) };
+        assert_eq!(resume_initial_thread(&child), Err("suspended child has multiple threads".into()));
+        assert!(child.try_wait().unwrap().is_none(), "refused child must stay suspended");
+        child.kill().unwrap();
+        let _ = child.wait();
     }
 }

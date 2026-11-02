@@ -1,6 +1,6 @@
 #Requires -Version 7
-# Check a Vidar release zip without extracting it: no entry under runtime\ (no logins, transcripts or
-# state ride along) and every required path present. Who runs it: the build chain after local-zip.ps1,
+# Check a Vidar release zip without extracting it: no entry under runtime\ except the Falcon bundle
+# (runtime\bridge\falcon\bundles; no logins, transcripts or state ride along) and every required path present. Who runs it: the build chain after local-zip.ps1,
 # launch.ps1 before it extracts, or anyone by hand. Read-only.
 # Usage: pwsh -File tools/sandbox/check-zip.ps1 -Zip <zip> [-Profile <name>]
 #   Required paths: the union of the `assets` arrays in profiles/<name>/*.json when that folder exists
@@ -10,7 +10,7 @@
 #   (modules-resolve.mjs <set> --cut): they are listed as skipped, not as missing. The set definition is
 #   the set.json beside the zip when its id matches (the wrapper's ad-hoc <base>-custom sets live only
 #   there), else tools/release/sets/<id>.json in this repo; with neither it refuses.
-# Refuses (exit 1): any runtime/ entry, any missing required path, a -Profile folder with no assets.
+# Refuses (exit 1): any runtime/ entry outside the bundle folder, any missing required path, a -Profile folder with no assets.
 # Prints the zip, the required list it checked and each result.
 param(
   [Parameter(Mandatory)][string]$Zip,
@@ -19,7 +19,7 @@ param(
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$baseList = @("vidar.exe", "contracts/", "plugins/vidar-app/", "tools/sandbox/launch.ps1")
+$baseList = @("vidar.exe", "contracts/", "tools/sandbox/launch.ps1")
 $repo = git -C $PSScriptRoot rev-parse --show-toplevel 2>$null
 if ($LASTEXITCODE -ne 0 -or -not $repo) { $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent }
 
@@ -90,7 +90,10 @@ if ($rel -contains "release-manifest.json" -and (Test-Path -LiteralPath $resolve
 if ($skipped.Count) { "skipped (cut by set ${setId}): $($skipped -join ', ')" }
 "required ($source): $($required -join ', ')"
 $fail = 0
-$runtimeHits = @($rel | Where-Object { $_ -match '^runtime(/|$)' })
+. "$PSScriptRoot\..\lib\Paths.ps1"
+# The one runtime\ content a zip carries is the Falcon bundle, at the paths-contract location the app reads.
+$bundlePrefix = (Get-VidarRel -Id falconBundles) + "/"
+$runtimeHits = @($rel | Where-Object { $_ -match '^runtime(/|$)' -and -not $_.StartsWith($bundlePrefix, [StringComparison]::OrdinalIgnoreCase) })
 if ($runtimeHits.Count) {
   $fail++
   "FAIL runtime entries: $($runtimeHits.Count)"

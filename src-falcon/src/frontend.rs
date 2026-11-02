@@ -187,7 +187,7 @@ fn verify_manifest(
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     security::reject_reparse(path)?;
     let text = std::fs::read_to_string(path).map_err(|e| format!("read {}: {e}", path.display()))?;
-    serde_json::from_str(text.trim_start_matches('\u{feff}'))
+    serde_json::from_str(crate::util::strip_bom(&text))
         .map_err(|e| format!("parse {}: {e}", path.display()))
 }
 

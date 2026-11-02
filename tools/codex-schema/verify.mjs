@@ -1,36 +1,41 @@
 // Verify (Codex version pin): dumps the installed Codex's protocol surface and compares it with the committed
-// tools/codex-schema/manifest.json, so a new Codex release is accepted without a human when nothing changed.
-// Prints exactly one JSON line: {"version","pinned","same","diff"} (diff = manifest.mjs diffMethods output).
+// tools/codex-schema/manifest.json, so a new Codex release is accepted without a human when nothing Vidar
+// uses broke: `compatible` is manifest.mjs breakingChanges finding nothing (direction rule in its header).
+// Prints exactly one JSON line: {"version","pinned","same","compatible","breaking","diff"} (diff = diffMethods).
 //
 // Usage: node tools/codex-schema/verify.mjs [--codex <exe|js>] [--out <file>] [--write]
 //   --codex  the Codex executable or its npm codex.js; default the entrypoint Vidar spawns, then Path.
-//   --out    merge {"<version>": {"pinned", "same", "atMs"}} into this JSON file (created if missing, other keys
-//            kept, written tmp then rename). Vidar passes the codexAccepted path (contracts/paths.json) so a
-//            same-surface version launches without the "differs from the verified" warning.
+//   --out    merge {"<version>": {"pinned", "same", "compatible", "breaking", "diff", "atMs"}} into this JSON
+//            file (created if missing, other keys kept, written tmp then rename). Vidar passes the codexAccepted
+//            path (contracts/paths.json): a compatible version launches with no banner, and the entry keeps
+//            the diff so a verdict can be explained later. Never touches a tracked file.
 //   --write  dev only. When the surface is the same, sets the version in tools/codex-schema/manifest.json
 //            `codexVersion`, profiles/bare/codex.json `verifiedVersion`, contracts/codex-server-requests.json
 //            `codexVersion` and the "pinned from the X schema" line of src/agents/codex-methods.ts (the drift
 //            test compares it), one line each, and prints the commit subject. When it differs, writes
-//            docs/inbox/codex-drift-<version>.md for an agent and exits 1; none of the four files is touched.
+//            docs/inbox/codex-drift-<version>.md for an agent and exits 1; none of the four files is touched
+//            (the bump on a drifted surface is refresh.mjs first, then this).
 //
 // Refuses: a Codex that cannot be found, run or parsed (exit 1, message on stderr, nothing written).
 // Exit codes: 0 verified (same or not, without --write); 1 failure, or --write on a changed surface.
 // Never launches Vidar; the only process it spawns is the Codex dump.
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve as pathResolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diffMethods, sameSurface } from "./manifest.mjs";
+import { breakingChanges, diffMethods, sameSurface } from "./manifest.mjs";
 import { dumpManifest } from "./dump.mjs";
 import { resolve as pathId, root as repoRoot } from "../lib/paths.mjs";
+import { readJson } from "../lib/json.mjs";
+import { renameWithRetry } from "../lib/rename-retry.mjs";
 
-const REPO = pathResolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 
 /** Merges one version's verdict into the accepted file; other keys stay. Atomic: tmp, then rename. */
 export function mergeAccepted(file, version, entry) {
   let current = {};
   if (existsSync(file)) {
     try {
-      const parsed = JSON.parse(readFileSync(file, "utf8").replace(/^﻿/, ""));
+      const parsed = readJson(file);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) current = parsed;
     } catch { /* unreadable: start over, the file only caches verdicts */ }
   }
@@ -38,7 +43,7 @@ export function mergeAccepted(file, version, entry) {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(current, null, 2) + "\n", "utf8");
-  renameSync(tmp, file);
+  renameWithRetry(tmp, file);
   return current;
 }
 
@@ -62,14 +67,23 @@ function parseArgs(argv) {
   return o;
 }
 
+/** The verdict for the installed `manifest` against the pinned `committed` one: `compatible` when nothing
+ *  Vidar sends or reads broke (manifest.mjs breakingChanges), with the reasons and the per-group diff. */
+export function verdict(committed, manifest) {
+  const same = sameSurface(committed, manifest);
+  const diff = diffMethods(committed, manifest);
+  const breaking = same ? [] : breakingChanges(committed, manifest, diff);
+  return { version: manifest.codexVersion, pinned: committed.codexVersion, same, compatible: breaking.length === 0, breaking, diff };
+}
+
 function main() {
   const o = parseArgs(process.argv.slice(2));
   const committed = JSON.parse(readFileSync(join(REPO, "tools/codex-schema/manifest.json"), "utf8"));
   const { version, manifest } = dumpManifest(o.codex ?? null);
-  const same = sameSurface(committed, manifest);
-  const diff = diffMethods(committed, manifest);
-  console.log(JSON.stringify({ version, pinned: committed.codexVersion, same, diff }));
-  if (o.out) mergeAccepted(pathResolve(o.out), version, { pinned: committed.codexVersion, same, atMs: Date.now() });
+  const v = verdict(committed, manifest);
+  const { same, diff } = v;
+  console.log(JSON.stringify(v));
+  if (o.out) mergeAccepted(pathResolve(o.out), version, { pinned: v.pinned, same, compatible: v.compatible, breaking: v.breaking, diff, atMs: Date.now() });
   if (!o.write) return;
   if (!same) {
     const inbox = pathId("inbox", { root: repoRoot(REPO) });
@@ -78,7 +92,9 @@ function main() {
     writeFileSync(note, [
       `# Codex ${version} Changed Its Protocol`,
       "",
-      `Pinned ${committed.codexVersion}; installed ${version}. Per group (added, removed, changed, possibleRenames):`,
+      `Pinned ${committed.codexVersion}; installed ${version}. ${v.compatible ? "Compatible: nothing Vidar sends or reads broke." : `Breaking for Vidar: ${v.breaking.join("; ")}.`}`,
+      "",
+      "Per group (added, removed, changed, possibleRenames):",
       "",
       "```json",
       JSON.stringify(diff, null, 2),

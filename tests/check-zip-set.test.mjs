@@ -27,8 +27,8 @@ function pwsh(...args) {
 function makeZip(setId) {
   const tmp = mkdtempSync(join(tmpdir(), "check-zip-set-"));
   const top = join(tmp, "src", "Vidar");
-  for (const d of ["contracts", join("plugins", "vidar-app"), join("tools", "sandbox")]) mkdirSync(join(top, d), { recursive: true });
-  for (const f of ["vidar.exe", join("contracts", "a.json"), join("plugins", "vidar-app", "a.txt"), join("tools", "sandbox", "launch.ps1")]) {
+  for (const d of ["contracts", join("tools", "sandbox")]) mkdirSync(join(top, d), { recursive: true });
+  for (const f of ["vidar.exe", join("contracts", "a.json"), join("tools", "sandbox", "launch.ps1")]) {
     writeFileSync(join(top, f), "x");
   }
   writeFileSync(join(top, "release-manifest.json"), JSON.stringify({ set: { id: setId } }));

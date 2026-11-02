@@ -3,16 +3,18 @@
 //! `held_for` is pure over an explicit `now` so tests need no clock.
 
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-pub const HOLD_MIN_SECS: u64 = 1;
-pub const HOLD_MAX_SECS: u64 = 600;
+use crate::net::RateHold;
+#[cfg(test)]
+use std::time::Duration;
+
 /// The hold when Slack answers 429 without a usable `Retry-After`.
 pub const HOLD_DEFAULT_SECS: u64 = 30;
 
 #[derive(Debug, Default)]
 pub struct Hold {
-    until: Mutex<Option<Instant>>,
+    until: Mutex<RateHold>,
 }
 
 impl Hold {
@@ -20,32 +22,27 @@ impl Hold {
         Hold::default()
     }
 
-    fn slot(&self) -> std::sync::MutexGuard<'_, Option<Instant>> {
+    fn slot(&self) -> std::sync::MutexGuard<'_, RateHold> {
         self.until.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Holds sends for `secs` (clamped to 1-600) from `now`, never shortening a longer hold; returns the
     /// seconds now held.
     pub fn set(&self, now: Instant, secs: u64) -> u64 {
-        let secs = secs.clamp(HOLD_MIN_SECS, HOLD_MAX_SECS);
-        let until = now + Duration::from_secs(secs);
         let mut slot = self.slot();
-        if slot.map_or(true, |cur| until > cur) {
-            *slot = Some(until);
-        }
+        let secs = slot.set(now, secs);
+        let left = slot.left(now);
         drop(slot);
-        self.held_for(now).unwrap_or(secs)
+        left.unwrap_or(secs)
     }
 
     /// Whole seconds left (rounded up, at least 1) while held, `None` once free.
     pub fn held_for(&self, now: Instant) -> Option<u64> {
-        let until = (*self.slot())?;
-        let left = until.checked_duration_since(now).filter(|d| !d.is_zero())?;
-        Some(left.as_secs() + u64::from(left.subsec_nanos() > 0))
+        self.slot().left(now)
     }
 
     pub fn clear(&self) {
-        *self.slot() = None;
+        self.slot().clear();
     }
 }
 

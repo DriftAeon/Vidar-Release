@@ -39,6 +39,13 @@ mod claude;
 mod codex;
 mod codex_mcp;
 mod env;
+/// Role-named views of the two runner adapters: the names the dispatch sites call.
+mod sidecar {
+    pub(super) use crate::flow::claude::{forward_stdout, prompt_line, required_mcp_args, send_interrupt, send_permission_response, spawn};
+}
+mod app_server {
+    pub(super) use crate::flow::codex::{forward_stdout, prompt_line, send_interrupt, send_permission_response, spawn};
+}
 pub mod permission;
 use self::child::{cancel_child, emit_event, lock, maybe_close_stdin, start_node_process, FlowChild, Runner, Sessions};
 
@@ -122,7 +129,7 @@ pub async fn flow_run_node(       // async: PATH probe, `reg query` and spawn mu
     model: String,                // provider model id: a claude id or a module's flowModels id
     prompt: String,                // the already-rendered prompt text (§3 renderPrompt), never a template
     cwd: String,                   // empty = no "cwd" addon on the node; defaults to repo_root() below
-    vault: Option<String>,        // the node's Rune Vault id; unset = its agent's stock vault
+    vault: Option<String>,        // the node's Rune Vault id; unset is refused
     vault_hash: String,           // the hash approval bound; a changed vault refuses, a missing one is refused
 ) -> Result<u64, String> {
     // Ok(u64) = spawn token: FlowManager-monotonic, returned once the child is spawned
@@ -132,7 +139,7 @@ pub async fn flow_run_node(       // async: PATH probe, `reg query` and spawn mu
     // The mode and the allow entries come from the node's vault (`permission` FV1b); the engine's
     // `toolAllowlist` and `permissionMode` keys are gone, and any it still sends are ignored.
     let agent = bare::agent_of(&backend).ok_or_else(|| format!("backend not yet wired: {backend}"))?;
-    let need = bare::need_for(agent, &model).ok_or_else(|| format!("backend not yet wired: {backend}"))?;
+    let need = bare::need_for(agent, &model);
     if vault_hash.trim().is_empty() {
         return Err("Vault Approval Missing; Approve It Again".into());
     }
@@ -235,8 +242,8 @@ pub fn flow_answer_permission(    // writes one permission_response line; answer
         return Err(format!("no pending permission {permission_id}"));
     }
     match child.runner {
-        Runner::Claude => claude::send_permission_response(&child, &permission_id, allow, None),
-        Runner::Codex => codex::send_permission_response(&child, &permission_id, allow),
+        Runner::Sidecar => sidecar::send_permission_response(&child, &permission_id, allow, None),
+        Runner::AppServer => app_server::send_permission_response(&child, &permission_id, allow),
     }
     let pending_empty = child.pending.lock().map(|p| p.is_empty()).unwrap_or(true);
     if pending_empty {
@@ -364,7 +371,7 @@ mod tests {
             prompt,
             "claude-sonnet-5",
             tool_allowlist,
-            RunnerSpec::Claude { sidecar: fixture_path(), env: None, args: Vec::new(), warnings: Vec::new() },
+            RunnerSpec::Sidecar { sidecar: fixture_path(), env: None, args: Vec::new(), warnings: Vec::new() },
             extra_args,
         )
     }
@@ -375,7 +382,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             r"\..\tests\fixtures\flow-fake-appserver.mjs"
         ));
-        start_with(prompt, "codex-default", tool_allowlist, RunnerSpec::Codex { js, home: None, bare: None }, Vec::new())
+        start_with(prompt, "codex-default", tool_allowlist, RunnerSpec::AppServer { js, home: None, bare: None }, Vec::new())
     }
 
     fn start_with(
@@ -910,7 +917,7 @@ mod tests {
             repo_root(),
             vec!["Read".to_string()],
             "default".to_string(),
-            RunnerSpec::Claude { sidecar: real_sidecar_path(), env: None, args: Vec::new(), warnings: Vec::new() },
+            RunnerSpec::Sidecar { sidecar: real_sidecar_path(), env: None, args: Vec::new(), warnings: Vec::new() },
             Vec::new(),
             emit,
         )
@@ -1079,7 +1086,7 @@ mod tests {
             repo_root(),
             tool_allowlist,
             "default".into(),
-            RunnerSpec::Codex { js, home, bare: None },
+            RunnerSpec::AppServer { js, home, bare: None },
             Vec::new(),
             Box::new(|_| {}),
         );

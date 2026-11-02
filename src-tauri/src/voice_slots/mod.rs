@@ -181,6 +181,9 @@ struct Ctx {
     packs: PathBuf,
     home: Option<PathBuf>,
     pins: PathBuf,
+    /// The pack ledger file (`modules::ledger`), friend layout only: a pack below its load floor
+    /// is skipped. None in a dev checkout and in tests.
+    ledger: Option<PathBuf>,
     raw: Result<Value, String>,
     /// `{lmstudioOrigin}`: vidar.json `lmstudioOrigin` as lmstudio.rs reads it (`fill_origin`).
     origin: String,
@@ -193,6 +196,7 @@ impl Ctx {
             packs: crate::paths::packs_dir(),
             home: crate::paths::home(),
             pins: slots_dir().join("pins.json"),
+            ledger: crate::modules::ledger::LedgerPaths::live().map(|l| l.file),
             raw: read_raw(&crate::paths::config_path()),
             origin: crate::lmstudio::configured_origin().0,
             vidar,
@@ -282,7 +286,7 @@ fn pick(raw: &Value, slot: Slot) -> Result<Option<Pick>, SlotError> {
         },
         Slot::Wake => match raw.get("wakeword").and_then(|w| w.get("model")) {
             None | Some(Value::Null) => None,
-            Some(Value::String(m)) if m.trim().is_empty() => None,
+            Some(Value::String(m)) if m.trim().is_empty() || m == crate::listen::WAKE_NONE => None,
             Some(Value::String(m)) => Some(named(&format!("{STOCK_PACK}/openwakeword"), Some(m), Some("wakeword.model"))),
             Some(_) => return Err(bad("wakeword.model", "Expected a String")),
         },
@@ -581,7 +585,7 @@ fn eval<'a>(ctx: &Ctx, scan: &'a Scan, store: &Result<Store, String>, slot: Slot
 }
 
 fn resolve_in(ctx: &Ctx, slot: Slot) -> Result<Resolved, SlotError> {
-    let scan = manifest::scan(&ctx.packs);
+    let scan = manifest::scan(&ctx.packs, ctx.ledger.as_deref());
     let ev = eval(ctx, &scan, &pins::load(&ctx.pins), slot);
     let adapter = ev.adapter_id.clone().unwrap_or_default();
     match ev.resolved {
@@ -669,7 +673,7 @@ fn slot_row(ctx: &Ctx, scan: &Scan, store: &Result<Store, String>, slot: Slot) -
 }
 
 fn status_in(ctx: &Ctx) -> Vec<SlotStatus> {
-    let scan = manifest::scan(&ctx.packs);
+    let scan = manifest::scan(&ctx.packs, ctx.ledger.as_deref());
     let store = pins::load(&ctx.pins);
     let mut rows: Vec<SlotStatus> = Slot::ALL.into_iter().map(|slot| slot_row(ctx, &scan, &store, slot)).collect();
     let shown: Vec<String> = rows.iter().filter_map(|r| r.adapter.clone()).collect();
@@ -743,7 +747,7 @@ pub fn status_all() -> Vec<SlotStatus> {
 /// slot's model. Read-only like `status_all`.
 pub fn status_one(slot: Slot) -> SlotStatus {
     let ctx = Ctx::live();
-    let scan = manifest::scan(&ctx.packs);
+    let scan = manifest::scan(&ctx.packs, ctx.ledger.as_deref());
     slot_row(&ctx, &scan, &pins::load(&ctx.pins), slot)
 }
 
@@ -785,7 +789,7 @@ pub fn write_resolved(which: &[Slot]) -> Result<PathBuf, String> {
     let path = slots_dir().join("resolved.json");
     std::fs::create_dir_all(slots_dir()).map_err(|e| e.to_string())?;
     let body = json!({ "version": 1, "slots": slots, "errors": errors });
-    crate::fsx::atomic_write(&path, &serde_json::to_vec_pretty(&body).map_err(|e| e.to_string())?)?;
+    crate::fsx::write_json_pretty(&path, &body, false)?;
     Ok(path)
 }
 
@@ -793,7 +797,7 @@ pub fn write_resolved(which: &[Slot]) -> Result<PathBuf, String> {
 /// The only writer that replaces a pin. A hash the manifest declares still has to match.
 pub fn trust_current(slot: Slot) -> Result<(), String> {
     let ctx = Ctx::live();
-    let scan = manifest::scan(&ctx.packs);
+    let scan = manifest::scan(&ctx.packs, ctx.ledger.as_deref());
     let ev = eval(&ctx, &scan, &Ok(Store::default()), slot);
     if ev.resolved.is_none() {
         return Err(ev.reason.unwrap_or_else(|| "Empty (Optional)".into()));
@@ -846,7 +850,7 @@ mod tests {
     }
 
     fn ctx(root: &Path, raw: Value) -> Ctx {
-        Ctx { vidar: root.to_path_buf(), packs: root.join("packs"), home: None, pins: root.join("pins.json"), raw: Ok(raw), origin: "http://127.0.0.1:1234".into() }
+        Ctx { vidar: root.to_path_buf(), packs: root.join("packs"), home: None, pins: root.join("pins.json"), ledger: None, raw: Ok(raw), origin: "http://127.0.0.1:1234".into() }
     }
 
     #[test]
@@ -859,7 +863,7 @@ mod tests {
         pack(&root, "p-drive", "drive", &stt("drive", "stt", "{pack}/C:\\x.exe"));
         pack(&root, "p-unc", "unc", &stt("unc", "stt", "{vidar}/\\\\server\\x.exe"));
         std::fs::create_dir_all(root.join("p-none")).unwrap();
-        let scan = manifest::scan(&root);
+        let scan = manifest::scan(&root, None);
         assert!(scan.adapters.is_empty());
         let reason = |file_part: &str| {
             scan.broken.iter().find(|b| b.file.to_string_lossy().contains(file_part)).map(|b| b.reason.clone()).unwrap_or_default()
@@ -903,6 +907,12 @@ mod tests {
         let stt_row = rows.iter().find(|r| r.slot == Some(Slot::Stt)).unwrap();
         assert_eq!((stt_row.state, stt_row.reason.as_deref()), (State::Missing, Some("No Pick")));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn voice_slots_wake_none_is_an_empty_pick() {
+        assert_eq!(pick(&json!({ "wakeword": { "model": "none" } }), Slot::Wake).unwrap(), None);
+        assert!(pick(&json!({ "wakeword": { "model": "pico" } }), Slot::Wake).unwrap().is_some());
     }
 
     #[test]
@@ -1031,7 +1041,7 @@ mod tests {
         put(&claude.join("voice").join("claude-p.json"), real);
         let m: manifest::Manifest = serde_json::from_str(real).unwrap();
         put(&root.join(m.run.command.strip_prefix("{vidar}/").expect("a {vidar}-rooted command")), "python");
-        let scan = manifest::scan(&root.join("packs"));
+        let scan = manifest::scan(&root.join("packs"), None);
         assert!(scan.broken.is_empty(), "{:?}", scan.broken.iter().map(|b| &b.reason).collect::<Vec<_>>());
         let c = ctx(&root, json!({ "voiceSlots": { "rewrite": { "adapter": "claude/claude-p", "model": "claude-sonnet-5-5", "effort": "medium" } } }));
         let r = resolve_in(&c, Slot::Rewrite).expect("the real pick resolves");
@@ -1057,7 +1067,7 @@ mod tests {
         put(&codex.join("voice").join("codex-exec.json"), real);
         let m: manifest::Manifest = serde_json::from_str(real).unwrap();
         put(&root.join(m.run.command.strip_prefix("{vidar}/").expect("a {vidar}-rooted command")), "python");
-        let scan = manifest::scan(&root.join("packs"));
+        let scan = manifest::scan(&root.join("packs"), None);
         assert!(scan.broken.is_empty(), "{:?}", scan.broken.iter().map(|b| &b.reason).collect::<Vec<_>>());
         let first = serde_json::from_str::<Value>(real).unwrap()["suggestedModels"][0]["id"].as_str().unwrap().to_string();
         let c = ctx(&root, json!({ "voiceSlots": { "rewrite": { "adapter": "codex/codex-exec", "model": first, "effort": "medium" } } }));
@@ -1103,7 +1113,7 @@ mod tests {
     fn voice_slots_real_stock_pack_validates() {
         // Under cfg(test) `paths::root()` is the checkout (CARGO_MANIFEST_DIR's parent).
         let packs = crate::paths::packs_dir();
-        let scan = manifest::scan(&packs);
+        let scan = manifest::scan(&packs, None);
         let stock_broken: Vec<String> = scan.broken.iter()
             .filter(|b| b.file.to_string_lossy().contains(STOCK_PACK))
             .map(|b| format!("{}: {}", b.file.display(), b.reason)).collect();

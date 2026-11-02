@@ -33,6 +33,39 @@ test("TypeScript errors map to the Record literal and never-closing switch", () 
   assert.deepEqual(compareSites(got.sites.slice(0, 1), got.sites), { missing: [], extra: got.sites.slice(1) });
 });
 
+test("TS2741 at a Record declaration name maps to the object literal", () => {
+  const file = "src/example.ts";
+  const src = [
+    "export const ROWS: Readonly<Record<AgentId, () => void>> = {",
+    "  claude: () => {},",
+    "};",
+    "const other: Map<string, number> = { a: 1 };",
+    "const MAPPED: { [A in AgentId]: (n: number) => void } = {",
+    "  claude: () => {},",
+    "};",
+    "const SAT = {",
+    "  claude: 1,",
+    "} satisfies Record<AgentId, number>;",
+  ].join("\n");
+  const at = (r, c) => `${file}(${r},${c}): error TS2741: Property 'grok' is missing.`;
+  const got = parseTsErrors([at(1, 14), at(4, 7), at(5, 7), at(10, 3)].join("\n"), () => src);
+  assert.deepEqual(got.sites, [
+    { file, anchor: "1:60", lines: [1, 3], kind: "ts-record" },
+    { file, anchor: "5:57", lines: [5, 7], kind: "ts-record" },
+    { file, anchor: "8:13", lines: [8, 10], kind: "ts-record" },
+  ]);
+  assert.equal(got.other.length, 1);
+});
+
+test("a regex literal with a quote does not unbalance the block scan", () => {
+  const file = "src/example.ts";
+  const src = ["const re = /['\"]?x/;", "const T: Record<AgentId, { a: boolean; b: boolean }> = {", "  claude: 1,", "};", "const S = {", "  claude: 1,", "} satisfies Record<AgentId, number>;"].join("\n");
+  const at = (r, c) => `${file}(${r},${c}): error TS2741: Property 'grok' is missing.`;
+  const got = parseTsErrors([at(2, 7), at(7, 3)].join("\n"), () => src);
+  assert.deepEqual(got.other, []);
+  assert.deepEqual(got.sites.map((s) => s.lines), [[2, 4], [5, 7]]);
+});
+
 test("rustc E0004 maps to the match and other errors are reported", () => {
   const file = "src-tauri/src/example.rs";
   const src = "fn label(a: Agent) {\n    match a {\n        Agent::Claude => (),\n        Agent::Codex => (),\n    }\n}";

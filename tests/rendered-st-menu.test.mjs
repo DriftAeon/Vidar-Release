@@ -46,6 +46,29 @@ test("an anchor click while open closes the menu once and does not reopen it", a
   assert.equal(document.querySelector(".st-menu"), null);
 });
 
+test("arrow keys, Home and End move focus between rows and wrap; Tab is left alone", () => {
+  const S = { stMenu: null };
+  const { openStMenu } = createStMenu(S);
+  const anchor = document.createElement("button");
+  document.body.appendChild(anchor);
+  openStMenu(anchor, [{ label: "One", value: "one" }, { label: "Two", value: "two" }, { label: "Three", value: "three" }], () => {});
+  const rows = [...S.stMenu.querySelectorAll("button")];
+  const press = (key) => {
+    const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    document.activeElement.dispatchEvent(e);
+    return e;
+  };
+  assert.equal(document.activeElement, rows[0]);
+  press("ArrowDown"); assert.equal(document.activeElement, rows[1]);
+  press("ArrowDown"); press("ArrowDown"); assert.equal(document.activeElement, rows[0], "ArrowDown wraps");
+  press("ArrowUp"); assert.equal(document.activeElement, rows[2], "ArrowUp wraps");
+  press("Home"); assert.equal(document.activeElement, rows[0]);
+  press("End"); assert.equal(document.activeElement, rows[2]);
+  assert.equal(press("Tab").defaultPrevented, false);
+  assert.ok(S.stMenu, "Tab leaves the menu open");
+  S.stMenu.querySelector("button").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+});
+
 test("Escape closes the menu and refocuses the anchor", () => {
   const S = { stMenu: null };
   const { openStMenu } = createStMenu(S);

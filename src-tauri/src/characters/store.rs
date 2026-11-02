@@ -188,7 +188,7 @@ pub fn find_valid(target: &str) -> Result<(Found, Pack), String> {
 /// before the atomic replace.
 pub fn write_pack(dir: &Path, pack: &Pack) -> Result<(), String> {
     pack::validate(pack)?;
-    let json = serde_json::to_string_pretty(pack).map_err(|e| e.to_string())?;
+    let json = crate::fsx::json_pretty_text(pack, false)?;
     if json.len() > MAX_PACK_JSON {
         return Err(format!(
             "character.json would be {} KiB, over the {} KiB limit; shorten it (extra keys count too)",

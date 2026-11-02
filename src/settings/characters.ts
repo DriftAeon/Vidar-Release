@@ -15,6 +15,7 @@ import { claimsOf, findClashes, normaliseKey, type Clash } from "../character/re
 import { AUTO_RENDERER, findRenderer, renderers } from "../character/renderer-registry";
 import { REVERT_EVENT } from "./modal";
 import { addSettingRow, registerCategory } from "./registry";
+import { wsButton } from "../dom";
 import { iconImg } from "../icon-img";
 import { el } from "../panels/rendered/dom";
 
@@ -33,13 +34,6 @@ function subscribe(): void {
   onStyleNotes(() => repaint?.());
 }
 
-function button(label: string, cls = ""): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = `ws-btn ${cls}`.trim();
-  b.textContent = label;
-  return b;
-}
 
 function mb(bytes: number | undefined): string {
   return bytes === undefined ? "?" : `${(bytes / 1_000_000).toFixed(2)} MB`;
@@ -99,7 +93,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
         chip.title = `Claimed first by ${lost.winner}; this pack never gets it`;
       }
       if (editable) {
-        const x = button("", "ch-chip-x");
+        const x = wsButton("", "ch-chip-x");
         x.appendChild(iconImg("close"));
         x.title = "Remove";
         x.setAttribute("aria-label", `Remove ${claimLabel(claim)}`);
@@ -114,7 +108,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
 
   const addClaim = (entry: CharacterEntry, claims: Claim[]) => {
     const wrap = el("span", "ch-add-claim");
-    const open = button("Add", "ch-chip-add");
+    const open = wsButton("Add", "ch-chip-add");
     open.addEventListener("click", () => {
       const kind = el("select", "sc-select ch-kind");
       for (const k of ["model", "role", "agent"] as ClaimKind[]) kind.add(new Option(KIND_LABEL[k], k));
@@ -129,7 +123,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
         if (claims.some((c) => c.kind === next.kind && normaliseKey(c.key) === k)) { repaint?.(); return; }
         run(updateCharacter(entry.target, { answersTo: [...claims, next] }));
       };
-      const ok = button("Add");
+      const ok = wsButton("Add");
       ok.addEventListener("click", commit);
       key.addEventListener("keydown", (e) => {
         if (e.key === "Enter") commit();
@@ -146,8 +140,8 @@ function editor(setError: (msg: string) => void): HTMLElement {
   const detail = (entry: CharacterEntry, clashes: Clash[]) => {
     const det = el("div", "ch-det");
     const pack = entry.pack;
-    const pinNew = () => { const b = button("Pin New File"); b.addEventListener("click", () => run(repinCharacter(entry.target, false))); return b; };
-    const browse = () => { const b = button("Browse"); b.title = "Choose The Model File"; b.addEventListener("click", () => run(repinCharacter(entry.target, true))); return b; };
+    const pinNew = () => { const b = wsButton("Pin New File"); b.addEventListener("click", () => run(repinCharacter(entry.target, false))); return b; };
+    const browse = () => { const b = wsButton("Browse"); b.title = "Choose The Model File"; b.addEventListener("click", () => run(repinCharacter(entry.target, true))); return b; };
     if (entry.status === "changed" && pack) {
       det.appendChild(alert("Model File Changed Since It Was Pinned",
         `Pinned ${mb(pack.model.bytes)}; the file is now ${mb(entry.currentBytes)}. ${pack.name} shows the placeholder until you pin the new file.`,
@@ -182,12 +176,12 @@ function editor(setError: (msg: string) => void): HTMLElement {
     }
     const folder = el("span", "ws-path", `characters\\${entry.folder}\\`);
     folder.title = entry.dir;
-    const openFolder = button("", "icon-btn");
+    const openFolder = wsButton("", "icon-btn");
     openFolder.setAttribute("aria-label", "Open Folder");
     openFolder.title = "Open Folder";
     openFolder.appendChild(iconImg("folder"));
     openFolder.addEventListener("click", () => run(invoke("open_folder", { path: entry.dir })));
-    const remove = button("Remove", "ws-remove");
+    const remove = wsButton("Remove", "ws-remove");
     remove.title = "Moves The Pack To characters\\_removed";
     remove.addEventListener("click", () => { expanded.delete(entry.folder); run(removeCharacter(entry.target)); });
     det.appendChild(detailRow("Pack", folder, openFolder, remove));
@@ -198,7 +192,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
     const head = el("div", "ch-row");
     const open = expanded.has(entry.folder);
     head.classList.toggle("open", open);
-    const caret = button("", "ch-caret");
+    const caret = wsButton("", "ch-caret");
     caret.append(iconImg("arrow-down-square"));
     caret.title = open ? "Collapse" : "Expand";
     caret.setAttribute("aria-expanded", String(open));
@@ -257,7 +251,7 @@ function editor(setError: (msg: string) => void): HTMLElement {
         `${[winner, ...losers].join(" and ")} all answer to it; ${winner} is listed first and wins. Remove it from the others.`));
     }
     for (const entry of packs) root.append(...row(entry, clashes));
-    const add = button("Add Character", "ws-add");
+    const add = wsButton("Add Character", "ws-add");
     add.addEventListener("click", () => run(addCharacter().then((id) => { if (id) expanded.add(id); })));
     root.appendChild(add);
   };

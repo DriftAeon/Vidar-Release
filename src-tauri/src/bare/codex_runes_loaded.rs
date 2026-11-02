@@ -32,8 +32,14 @@ fn row(path: String, memory_type: &str, source: &'static str) -> LoadedFile {
 /// `root` is the vaults store root (`paths::root()` live, a temp root in tests). `session_id` is the
 /// tab's Falcon session or Codex thread id, whichever the UI holds; it matches either on the record.
 pub(crate) fn loaded(root: &Path, tab: &str, session_id: Option<&str>) -> Loaded {
+    let manifests = super::home::resolve().ok().map(|h| h.join("manifests"));
+    loaded_with(root, manifests.as_deref(), tab, session_id)
+}
+
+/// `loaded` with the launch manifests folder (`<bare home>\manifests`) named by the caller.
+pub(crate) fn loaded_with(root: &Path, manifests: Option<&Path>, tab: &str, session_id: Option<&str>) -> Loaded {
     let Ok(Some(rec)) = session::find(root, tab, session_id, session_id) else { return none("No Session Yet") };
-    let mut files: Vec<LoadedFile> = match read_view(&Store::open(root), &rec.vault.id, Some(&rec.vault.hash)) {
+    let mut files: Vec<LoadedFile> = match read_view(&Store::open(root), Some(&rec.vault.id),Some(&rec.vault.hash)) {
         Ok(view) => view.runes.iter().map(|r| row(format!("{}/{}", r.library, r.id), &r.kind, "vault")).collect(),
         Err(_) => Vec::new(),
     };
@@ -50,7 +56,8 @@ pub(crate) fn loaded(root: &Path, tab: &str, session_id: Option<&str>) -> Loaded
         return none("No Loads Recorded");
     }
     let source = if vault_rows { "vault" } else { "rollout" };
-    Loaded { source, reason: None, files, reads: Vec::new(), rune_reads: Vec::new(), rune_triggers: Default::default(), skills: Vec::new(), truncated }
+    let (repo_skills_off, codex_files) = manifests.map(|d| super::manifest::repo_skills_off_in(d, tab, crate::agent_spec::Agent::Codex, rec.falcon_session.as_deref())).unwrap_or_default();
+    Loaded { source, reason: None, files, reads: Vec::new(), rune_reads: Vec::new(), rune_triggers: Default::default(), skills: Vec::new(), truncated, repo_skills_off, codex_files }
 }
 
 /// `<home>\sessions\<Y>\<M>\<D>\rollout-*-<thread>.jsonl`, newest day first; three levels, no deeper.
@@ -183,14 +190,15 @@ mod tests {
         }
     }
 
-    /// The fixture `stock` library under `root`; a fact and a hook rune (its command a secret) in a
+    /// The fixture Vidar library under `root`; a fact and a hook rune (its command a secret) in a
     /// new vault, locked; the record pins it.
     fn locked_vault(root: &Path) -> VaultPin {
-        let fx = crate::paths::root().join("tests").join("fixtures").join("rune-vault").join("stock-runes");
-        copy_dir(&fx, &crate::paths::rune_stock_dir_in(root));
+        let fx = crate::paths::root().join("tests").join("fixtures").join("rune-vault").join("vidar-runes");
+        copy_dir(&fx, &crate::paths::rune_vidar_dir_in(root));
         let s = Store::open(root);
-        let stock = |id: &str| RuneRef { library: "stock".into(), id: id.into() };
-        let v = s.create("P1 Vault", None, &[], &[stock("gate-fact"), stock("gate-hook-command")]).unwrap();
+        crate::bare::vault::vidar::seed_core(root);
+        let vidar = |id: &str| RuneRef { library: "vidar".into(), id: id.into() };
+        let v = crate::bare::vault::create_at(root, Some("P1 Vault".into()), None, &[], &[vidar("gate-fact"), vidar("gate-hook-command")]).unwrap();
         let v = s.lock(&v.id, LockedBy::Button, &v.hash).unwrap();
         VaultPin { id: v.id, hash: v.hash }
     }
@@ -211,7 +219,7 @@ mod tests {
             let got = loaded(&tmp.0, "tab-cx", sid);
             assert_eq!(got.source, "vault");
             let rows: Vec<(&str, &str, Option<&str>)> = got.files.iter().map(|f| (f.path.as_str(), f.memory_type.as_str(), f.source)).collect();
-            assert_eq!(rows, vec![("stock/gate-fact", "fact", Some("vault")), ("stock/gate-hook-command", "hook", Some("vault"))]);
+            assert_eq!(rows, vec![("vidar/core", "rule", Some("vault")), ("vidar/claude-settings", "setting", Some("vault")), ("vidar/codex-config", "setting", Some("vault")), ("vidar/gate-fact", "fact", Some("vault")), ("vidar/gate-hook-command", "hook", Some("vault"))]);
         }
         let json = serde_json::to_string(&loaded(&tmp.0, "tab-cx", None)).unwrap();
         assert!(json.contains("\"source\":\"vault\"") && !json.contains("sk-secret-1"));
@@ -262,6 +270,40 @@ mod tests {
         for secret in ["secret", "agents body", "sandbox", "Make images"] {
             assert!(!json.contains(secret), "{secret} leaked");
         }
+    }
+
+    #[test]
+    fn a_codex_record_carries_the_manifests_repo_skills_off() {
+        let tmp = TempDir::new("repo-off");
+        let pin = locked_vault(&tmp.0);
+        write_record(&tmp.0, pin, &tmp.0.join("home"), None);
+        let manifests = tmp.0.join("manifests");
+        std::fs::create_dir_all(&manifests).unwrap();
+        let m = |tab: &str, session: &str, off: &[&str]| serde_json::json!({"agent": "codex", "tab": tab, "falconSession": session, "repoSkillsOff": off});
+        std::fs::write(manifests.join("2026-11-02T100000000Z-tab-cx-1.json"), m("tab-cx", "fs-cx-0001", &["x", "y"]).to_string()).unwrap();
+        std::fs::write(manifests.join("2026-11-02T110000000Z-tab-cx-1.json"), m("tab-cx", "fs-other", &["z"]).to_string()).unwrap();
+        let got = loaded_with(&tmp.0, Some(&manifests), "tab-cx", Some("fs-cx-0001"));
+        assert_eq!(got.repo_skills_off, vec!["x".to_string(), "y".to_string()]);
+        assert!(serde_json::to_string(&got).unwrap().contains("\"repoSkillsOff\":[\"x\",\"y\"]"));
+        assert!(got.codex_files.is_empty());
+        assert!(!serde_json::to_string(&got).unwrap().contains("codexFiles"));
+        let bare = loaded_with(&tmp.0, None, "tab-cx", Some("fs-cx-0001"));
+        assert!(bare.repo_skills_off.is_empty());
+        assert!(!serde_json::to_string(&bare).unwrap().contains("repoSkillsOff"));
+    }
+
+    #[test]
+    fn a_codex_record_carries_the_manifests_codex_files() {
+        let tmp = TempDir::new("codex-files");
+        let pin = locked_vault(&tmp.0);
+        write_record(&tmp.0, pin, &tmp.0.join("home"), None);
+        let manifests = tmp.0.join("manifests");
+        std::fs::create_dir_all(&manifests).unwrap();
+        let m = serde_json::json!({"agent": "codex", "tab": "tab-cx", "falconSession": "fs-cx-0001", "codexFiles": [".codex/config.toml"]});
+        std::fs::write(manifests.join("2026-11-02T100000000Z-tab-cx-1.json"), m.to_string()).unwrap();
+        let got = loaded_with(&tmp.0, Some(&manifests), "tab-cx", Some("fs-cx-0001"));
+        assert_eq!(got.codex_files, vec![".codex/config.toml".to_string()]);
+        assert!(serde_json::to_string(&got).unwrap().contains("\"codexFiles\":[\".codex/config.toml\"]"));
     }
 
     #[test]

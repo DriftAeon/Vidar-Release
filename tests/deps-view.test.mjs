@@ -4,20 +4,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 import { packsDir } from "../tools/lib/release-layout.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
-Object.assign(globalThis, {
-  window,
-  document: window.document,
-  Node: window.Node,
-  HTMLElement: window.HTMLElement,
-  HTMLButtonElement: window.HTMLButtonElement,
-  Event: window.Event,
-  MouseEvent: window.MouseEvent,
-});
-Object.assign(globalThis, { SVGElement: window.SVGElement });
+installDom(["Node", "HTMLElement", "HTMLButtonElement", "Event", "MouseEvent", "SVGElement"]);
 const { renderDependencies, usedByLabels } = await import("../src/settings/dependencies-view.ts");
 // icons.ts has no imports, so node loads it directly; the page passes the same factory.
 const { lucide } = await import("../src/icons.ts");
@@ -355,29 +345,29 @@ test("an all-found report has no Needs You group", () => {
 test("a CLI with a newer release is a Needs You card with its versions, Update and Skip; Updating… shows while it runs", () => {
   const calls = [];
   const acts = { ...actions(), updateCli: (u, skip) => { calls.push([u.id, skip]); } };
-  const gemini = { id: "gemini", label: "Gemini CLI", installed: "0.65.0", latest: "0.66.0" };
+  const pi = { id: "pi", label: "Pi", installed: "0.65.0", latest: "0.66.0" };
   const paint = (busy) => {
     const root = document.createElement("div");
     document.body.replaceChildren(root);
-    renderDependencies(root, catalog, allFoundExcept(), null, null, acts, [], {}, lucide, iconImg, {}, { updates: [gemini], busy });
+    renderDependencies(root, catalog, allFoundExcept(), null, null, acts, [], {}, lucide, iconImg, {}, { updates: [pi], busy });
     return root;
   };
   let root = paint(null);
-  const c = root.querySelector('.deps-needs .deps-card[data-id="gemini"]');
+  const c = root.querySelector('.deps-needs .deps-card[data-id="pi"]');
   assert.ok(c, "no update card");
   assert.ok(c.classList.contains("is-update"));
   assert.equal(c.querySelector(".deps-where").textContent, "0.65.0 → 0.66.0");
   assert.equal(c.querySelector(".deps-mark").getAttribute("aria-label"), "Update Available");
   c.querySelector(".deps-update").click();
   c.querySelector(".deps-skip").click();
-  assert.deepEqual(calls, [["gemini", false], ["gemini", true]]);
+  assert.deepEqual(calls, [["pi", false], ["pi", true]]);
   // A CLI without a known newer release shows no version.
-  assert.equal(root.querySelector('.deps-ready .deps-row[data-id="pi"]').textContent.match(/\d+\.\d+/), null);
-  root = paint({ id: "gemini", label: "Updating…" });
-  const u = root.querySelector('.deps-card[data-id="gemini"] .deps-update');
+  assert.equal(root.querySelector('.deps-ready .deps-row[data-id="git"]').textContent.match(/\d+\.\d+/), null);
+  root = paint({ id: "pi", label: "Updating…" });
+  const u = root.querySelector('.deps-card[data-id="pi"] .deps-update');
   assert.equal(u.textContent, "Updating…");
   assert.equal(u.disabled, true);
-  assert.equal(root.querySelector('.deps-card[data-id="gemini"] .deps-skip').disabled, true);
+  assert.equal(root.querySelector('.deps-card[data-id="pi"] .deps-skip').disabled, true);
 });
 
 test("a pack awaiting Trust confirm asks inside its own card", () => {

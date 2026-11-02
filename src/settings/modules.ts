@@ -5,8 +5,9 @@ import { resolveModuleState } from "../modules/state";
 import { moduleListed, moduleOn, onModulesChange } from "../modules/registry";
 import { mergeVisibleOrder } from "../modules/order";
 import type { ModuleDescriptor } from "../modules/types";
+import { notifyModulesChanged } from "../modules/hidden";
 import { getPref, savePrefConfirmed } from "../prefs";
-import { SURFACE_ICONS, SURFACE_LABELS, WORKBENCH_MODULES } from "../panels/workbench-modules";
+import { BENCH_ICONS, SURFACE_LABELS, WORKBENCH_MODULES } from "../panels/workbench-modules";
 import { setWorkbenchTabVisibility, type Tab } from "../panels/workbench";
 import { setToolVisibility, syncToolOrder } from "../panels/toolbench";
 import { BUILTIN_TOOL_MODULES } from "../tools/registry";
@@ -18,6 +19,7 @@ import { backendLookupName, dedupeRackServers, rackServerId, reconcileRackOrder 
 import { applyOrder } from "../panels/reorder";
 import { moduleName, onModuleNamesChange, type RenameOutcome } from "../modules/names";
 import { addSettingRow, registerCategory } from "./registry";
+import { AGENT_IDS } from "../agents/id";
 import { bindRename, cancelRename, renameCell, whileRendering } from "./module-rename";
 
 type OrderKey = "order.workbenchTabs" | "order.tools" | "order.rack";
@@ -26,11 +28,6 @@ type Entry = { id: string; key: string; label: string; builtin?: string; level: 
 type Status = "Pending" | "Saved" | "Save Failed" | "Session Only";
 type Group = { title: string; orderKey: OrderKey; entries: Entry[] };
 
-const benchIcons: Record<string, ColorIcon> = {
-  relay: "relay", tray: "tray", doc: "doc",
-  flow: "flow", runelib: "runelib", lab: "lab", changes: "changes", unreal: "unreal",
-  ...SURFACE_ICONS,
-};
 const toolIcons: Record<string, ColorIcon> = { marquee: "marquee" };
 let root: HTMLElement | null = null;
 let rackEntries: Entry[] = [];
@@ -39,9 +36,7 @@ let readGeneration = 0;
 let statusGeneration = 0;
 
 /** The rack shows when either agent module is on (a Claude-free set still has Codex). */
-function rackAvailable(): boolean {
-  return moduleOn("claude") || moduleOn("codex");
-}
+function rackAvailable(): boolean { return AGENT_IDS.some(moduleOn); }
 
 function groups(): Group[] {
   const hidden = getPref("modules.hidden") ?? [];
@@ -50,7 +45,7 @@ function groups(): Group[] {
     hidden, order: getPref("order.workbenchTabs"),
   }, (entry) => `bench:${entry.id}`).modules.map(({ descriptor }) => ({
     id: `bench:${descriptor.id}`, key: descriptor.id, label: moduleName(descriptor.id, descriptor.label),
-    builtin: descriptor.label, level: descriptor.level, icon: benchIcons[descriptor.id],
+    builtin: descriptor.label, level: descriptor.level, icon: BENCH_ICONS[descriptor.id],
   }));
   const tools = resolveModuleState(BUILTIN_TOOL_MODULES.filter((m) => moduleListed(m.id)), {
     hidden, order: getPref("order.tools"),
@@ -104,7 +99,7 @@ function refreshLiveOrder(key: OrderKey) {
     const list = document.querySelector<HTMLElement>("#bar-modules .module-box .rack-list");
     if (list) applyOrder(list, key);
   }
-  document.dispatchEvent(new CustomEvent("vidar-modules-change"));
+  notifyModulesChanged();
 }
 
 function render() {
@@ -222,7 +217,7 @@ async function setVisible(entry: Entry, visible: boolean) {
   const pending = save("modules.hidden", value);
   if (entry.id.startsWith("bench:")) setWorkbenchTabVisibility(entry.key as Tab, visible);
   if (entry.id.startsWith("tool:")) setToolVisibility(entry.key, visible);
-  document.dispatchEvent(new CustomEvent("vidar-modules-change"));
+  notifyModulesChanged();
   render();
   await pending;
 }
@@ -307,7 +302,7 @@ export function registerModuleRows() {
   document.addEventListener("vidar-modules-change", () => { if (root?.isConnected) render(); });
   bindRename({ rerender: () => { if (root?.isConnected) render(); }, track: (work) => void track(work.then(renameStatus)) });
   onModuleNamesChange(() => { if (root?.isConnected) render(); });
-  let claudeAvailable = rackAvailable();
+  let agentRackAvailable = rackAvailable();
   const listedKey = () => [...WORKBENCH_MODULES, ...BUILTIN_TOOL_MODULES].filter((m) => moduleListed(m.id)).map((m) => m.id).join("\0");
   let listedSeen = listedKey();
   onModulesChange(() => {
@@ -317,8 +312,8 @@ export function registerModuleRows() {
       if (root?.isConnected) render();
     }
     const available = rackAvailable();
-    if (available === claudeAvailable) return;
-    claudeAvailable = available;
+    if (available === agentRackAvailable) return;
+    agentRackAvailable = available;
     if (root?.isConnected) void loadRack();
   });
 }

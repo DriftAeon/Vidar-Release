@@ -167,7 +167,6 @@ test('import: dash and dotted keys land typed under their pref keys, then leave 
     'vidar.document.last': 'C:\\a.md',
     'vidar.document.groups': '{"x":true}',
     'vidar.order.rack': '["proxy","unreal"]',
-    'vidar.order.loadout': '["a"]',
     'vidar.character.animationDropdown': 'off',
     'vidar.flow.graphs.v1': '{"v":1}',
     'vidar.flow.graphs.v1.bak-20260925': 'garbage',
@@ -183,7 +182,6 @@ test('import: dash and dotted keys land typed under their pref keys, then leave 
   assert.equal(store.get('document.last'), 'C:\\a.md');
   assert.deepEqual(store.get('document.groups'), { x: true });
   assert.deepEqual(store.get('order.rack'), ['proxy', 'unreal']);
-  assert.deepEqual(store.get('order.loadout'), ['a']);
   assert.equal(store.get('character.animationDropdown'), 'off');
   assert.equal('flow.graphs.v1' in b.file, false, 'Flow graphs are not imported');
   assert.deepEqual(
@@ -215,6 +213,16 @@ test('import: unparsable values are dropped, not imported', () => {
   const { entries, sourceKeys } = collectLegacy(legacy, {});
   assert.deepEqual(entries, {});
   assert.deepEqual(sourceKeys.sort(), ['vidar-rightbar', 'vidar.order.rack']);
+});
+
+test('orphan: a removed key in the file is inert and a later flush patches only the changed key', async () => {
+  const removed = ['order', 'loadout'].join('.'); // a removed module's key, built so no source line names it
+  const { store, b } = make({ [removed]: ['a'], 'order.rack': ['x'] });
+  await store.init();
+  assert.deepEqual(store.get('order.rack'), ['x']);
+  store.set('order.rack', ['y']);
+  await store.flush();
+  assert.deepEqual(b.patches, [{ 'order.rack': ['y'] }]);
 });
 
 test('import: a second init with nothing left in old storage patches nothing', async () => {

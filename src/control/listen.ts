@@ -6,12 +6,14 @@
 // main.ts needs only the one `import "./control/listen"` line.
 
 import { listen as ipcListen, invoke } from "../ipc";
+import { errText } from "../err-text";
+import { basename } from "../paths";
 import { sessionTitle } from "../panels/sessions";
 import { openApproval, cancelApproval, liveApprovals } from "../asks/approvals";
 import { APPROVAL_TITLES } from "../asks/approval";
 import {
   driveSnapshot, showDocument, showDisplay, focusTarget, resolveTab, requesterTabId, readTranscript, promptTab, spawnTab, hasRenderedAgent,
-  hostedTab, tabPromptReady, tabBusy, tabDead, sendPromptTo, laneToast, hostedRenderedAgent,
+  hostedTab, tabPromptReady, tabBusy, tabDead, sendPromptTo, laneToast, hostedRenderedAgent, LaunchVaultFor,
 } from "./registry";
 import { EFFORT_LEVELS } from "../agents/protocol";
 import type { Requester } from "./requester";
@@ -23,7 +25,7 @@ import { briefRows } from "./brief-card";
 import { cardText, laneRows } from "./lane-card";
 import { handleFlowCard, listenFlowObserve } from "./flow";
 import { startFlowApprovalRelay } from "../flow/approvals-relay";
-import { publishCtlAsk, hostedClaudeAsker, CTL_ASK_STEER } from "../relay/source-ctl-asks";
+import { publishCtlAsk, hostedPendingAsker, CTL_ASK_STEER } from "../relay/source-ctl-asks";
 import { promptTargetRefusal, promptDeliveryRefusal } from "./prompt-gate";
 
 export type { Requester };
@@ -76,7 +78,7 @@ ipcListen<{ id: string; pane: "document" | "display"; path: string; focus: boole
     const { id, pane, path, focus, requester } = e.payload;
     const problem = requesterProblem(requester);
     if (problem) { reply(id, false, `err ${problem}`); return; }
-    const name = path.split("\\").pop() ?? path;
+    const name = basename(path);
     const open = pane === "display" ? showDisplay(path, focus) : showDocument(path, focus);
     void open.then((r) => {
       reply(id, r.ok, r.ok ? `shown ${pane} ${name}` : `err ${r.reason ?? "open failed"}`);
@@ -149,7 +151,6 @@ function cardResult(id: string, cardId: string, ok: boolean, line: string, verdi
   void invoke("control_result", payload);
 }
 
-const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 // `--notify` subscriptions (lanes.ts); turn ends arrive as `vidar-reply-done`,
 // which replay never fires (reply-events.ts).
@@ -287,6 +288,13 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
       const title = typeof details.title === "string" && details.title ? details.title.slice(0, MAX_TITLE) : undefined;
       // Only a Falcon-hosted body takes a composer-less prompt (rendered.ts `sendPrompt`); refuse before the card.
       if (!hostedRenderedAgent(agent)) { cardResult(id, cardId, false, "err not a hosted agent"); return; }
+      // A set `vault` is checked here too (unknown id, a row that is not Bare); unset resolves at Approve to the
+      // user's Last Vault, and a spawn with none is refused there.
+      const vault = typeof details.vault === "string" && details.vault ? details.vault : undefined;
+      if (vault !== undefined) {
+        const picked = await LaunchVaultFor(agent, vault);
+        if ("refuse" in picked) { cardResult(id, cardId, false, `err ${picked.refuse}`); return; }
+      }
       // target null: the child does not exist yet; it is a hosted tab only if the agent is (checked at send).
       const slot = laneSlot(details, laneDeliverTo(details.deliver_to, () => requesterTabId(requester)), null);
       if (typeof slot === "string") { cardResult(id, cardId, false, `err ${slot}`); return; }
@@ -296,6 +304,7 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
       // Cwd and Title show only when set; Agent stays because the spawned agent can differ from the asker.
       const optionalRows: [string, string][] = [
         ...(cwd ? [["Cwd", cwd] as [string, string]] : []),
+        ...(vault ? [["Vault", vault] as [string, string]] : []),
         ...(title ? [["Title", title] as [string, string]] : []),
       ];
       // The agent process starts only on Approve; every other outcome releases the lease and starts nothing.
@@ -319,7 +328,7 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
           if (outcome.verdict === "deny") { lanes.release(lease); cardResult(id, cardId, false, `denied ${outcome.comment}`); return; }
           if (expiresAtMs - Date.now() < LATE_APPROVE_MS) { lanes.release(lease); cardResult(id, cardId, false, "err expired"); return; }
           if (requesterProblem(requester)) { lanes.release(lease); cardResult(id, cardId, false, "err requester gone"); return; }
-          void spawnTab({ agent, model, effort, cwd, title }).then(
+          void spawnTab({ agent, model, effort, cwd, title, vault }).then(
             (tabId) => {
               // One send once the new tab's transport takes it; never retried after it resolved.
               void lanes.promptOnce(tabId, text, lease).then(
@@ -338,7 +347,7 @@ ipcListen<{ id: string; cardId: string; verb: string; requester: Requester; deta
       // A question, not an approval: it goes to Relay (source-ctl-asks) and never opens the modal. Card id,
       // expiry and cancel behave as before; one ask in flight per asker keeps silent asks off the shared card cap.
       const askerTab = requesterTabId(requester);
-      if (hostedClaudeAsker(driveSnapshot().tabs, askerTab)) { cardResult(id, cardId, false, CTL_ASK_STEER); return; }
+      if (hostedPendingAsker(driveSnapshot().tabs, askerTab)) { cardResult(id, cardId, false, CTL_ASK_STEER); return; }
       const choices = Array.isArray(details.choices) ? details.choices.map(String) : undefined;
       const choiceDetails = Array.isArray(details.details) ? details.details.map(String) : undefined;
       const refused = publishCtlAsk(

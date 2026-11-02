@@ -22,7 +22,7 @@ pub fn memory_slug(cwd: &str) -> String {
 
 /// `~\.claude\projects\<memory_slug(cwd)>\memory`.
 pub fn memory_dir(home: &Path, cwd: &Path) -> PathBuf {
-    home.join(".claude").join("projects").join(memory_slug(&cwd.to_string_lossy())).join("memory")
+    super::sources::user_dirs(home).into_iter().next().unwrap_or_else(|| home.to_path_buf()).join("projects").join(memory_slug(&cwd.to_string_lossy())).join("memory")
 }
 
 /// The library a memory folder imports into, for a cwd.
@@ -66,13 +66,8 @@ pub fn files(dir: &Path) -> Vec<PathBuf> {
 /// `(front matter lines, body)` of a memory file, BOM and CRLF normalised.
 fn front_and_body(text: &str) -> (Vec<String>, String) {
     let text = crate::fsx::strip_bom(text).replace("\r\n", "\n");
-    let mut lines = text.split('\n');
-    if lines.next().map(str::trim_end) == Some("---") {
-        let rest: Vec<&str> = text.split('\n').skip(1).collect();
-        if let Some(end) = rest.iter().position(|l| l.trim_end() == "---") {
-            let front = rest[..end].iter().map(|s| s.to_string()).collect();
-            return (front, rest[end + 1..].join("\n"));
-        }
+    if let Some((front, body)) = crate::rules::rune::split_header(&text) {
+        return (front.lines().map(str::to_string).collect(), body.to_string());
     }
     (Vec::new(), text)
 }
@@ -132,6 +127,17 @@ pub fn read_dir(dir: &Path) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn front_and_body_outputs_are_pinned() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(front_and_body("---\nname: a\n---\nBody\nx\n"), (s(&["name: a"]), "Body\nx\n".into()));
+        assert_eq!(front_and_body("\u{feff}---\r\nname: a\r\n--- \r\nB\r\n"), (s(&["name: a"]), "B\n".into()));
+        assert_eq!(front_and_body("---\n---\nB"), (s(&[]), "B".into()));
+        assert_eq!(front_and_body("---\nname: a\n---"), (s(&["name: a"]), "".into()));
+        assert_eq!(front_and_body("---\nname: a\nB"), (s(&[]), "---\nname: a\nB".into()));
+        assert_eq!(front_and_body("plain\n"), (s(&[]), "plain\n".into()));
+    }
 
     #[test]
     fn a_memory_folder_reads_as_sections_in_name_order_without_the_index() {

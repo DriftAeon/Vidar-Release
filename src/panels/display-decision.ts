@@ -3,6 +3,7 @@
 // verdicts without importing the Display strip.
 
 import { invoke } from "../ipc";
+import { basename } from "../paths";
 
 export interface Decision {
   file: string;
@@ -27,7 +28,7 @@ export interface DecisionView {
 const REQUEST_ID = /-[0-9a-f]{8}$/;
 
 export function hasRequestId(path: string): boolean {
-  const name = path.split("\\").pop() ?? path;
+  const name = basename(path);
   const dot = name.lastIndexOf(".");
   return REQUEST_ID.test(dot > 0 ? name.slice(0, dot) : name);
 }

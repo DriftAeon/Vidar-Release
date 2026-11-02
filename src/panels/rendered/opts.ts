@@ -6,6 +6,7 @@ import type { RulesLaunch } from "../../rules/inject";
 import type { RenderedHostId } from "./host-profile";
 import type { AgentTransport, RenderedAgent } from "./transport";
 import type { chipState } from "./state-chip";
+import type { VaultGate } from "./vault-gate";
 
 interface RenderedSessionInfo {
   sessionId: string;
@@ -85,6 +86,9 @@ export interface RenderedOpts {
   /** Every `refreshState()`: the status chip, the pending approval card's tool (or null) and
    *  whether history is still replaying (the left-bar tab row, sessions/tab-state-feeds.ts). */
   onTabState: ((chip: ReturnType<typeof chipState>, pendingTool: string | null, hydrating: boolean) => void) | null;
+  /** A Bare tab waiting for its Rune Vault: spawn() holds until the gate is released (vault-gate.ts).
+   *  `null` = spawn at once. */
+  vaultGate: VaultGate | null;
 }
 
 type OptionalKeys<T> = { [K in keyof T]-?: {} extends Pick<T, K> ? K : never }[keyof T];

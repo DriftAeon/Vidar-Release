@@ -18,11 +18,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { resolve as resolveId } from "../lib/paths.mjs";
+import { resolve as resolveId, root as repoRoot } from "../lib/paths.mjs";
 import { LANES as DEPS_LANES } from "./lanes-deps.mjs";
 import { LANES as CODE_LANES } from "./lanes-code.mjs";
 import { LANES as SYSTEMS_LANES } from "./lanes-systems.mjs";
-const REPO = path.resolve(path.join(import.meta.dirname, "..", ".."));
+const REPO = repoRoot();
 const LIST_CAP = 200;
 
 export const ALL_LANES = [...CODE_LANES, ...SYSTEMS_LANES, ...DEPS_LANES];

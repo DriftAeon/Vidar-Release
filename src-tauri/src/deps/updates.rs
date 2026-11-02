@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use serde::Serialize;
 use serde_json::Value;
+use super::NativeChannel;
 
 static CHECK: Mutex<Option<Vec<Offer>>> = Mutex::new(None);
 static UPDATE_LOCK: Mutex<()> = Mutex::new(());
@@ -68,14 +69,49 @@ fn npm_command() -> Option<Command> {
     Some(cmd)
 }
 
+/// The channel `rule` names in a settings JSON when it is one of `rule.names`, else `names[0]`
+/// (unreadable settings included). `None` only when the rule lists no names.
+fn channel_name<'a>(rule: &'a NativeChannel, settings: &str) -> Option<&'a str> {
+    let json: Value = serde_json::from_str(settings).unwrap_or(Value::Null);
+    let picked = json[rule.setting.as_str()].as_str();
+    rule.names.iter().find(|n| Some(n.as_str()) == picked).or(rule.names.first()).map(String::as_str)
+}
+
+fn channel_url(rule: &NativeChannel, channel: &str) -> String {
+    rule.url.replace("{channel}", channel)
+}
+
+/// A release-channel body (`2.1.314\n`) as a version, if it is one.
+fn parse_channel_body(body: &str) -> Option<String> {
+    let version = body.trim();
+    safe_version(version).then(|| version.to_string())
+}
+
+/// The version a native install's own updater can reach: its release channel, which can lag the
+/// npm `latest` tag. The ureq build has no TLS, so curl.exe (ships with Windows) fetches.
+fn channel_latest(rule: &NativeChannel, deadline: Instant) -> Option<String> {
+    let settings = super::expand_env(&rule.settings)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .unwrap_or_default();
+    let mut curl = Command::new("curl.exe");
+    curl.args(["-fsS", "--max-time", "5", &channel_url(rule, channel_name(rule, &settings)?)]);
+    parse_channel_body(&process::run(curl, deadline)?)
+}
+
 fn check_one(id: &str, deadline: Instant) -> Option<Offer> {
     let have = installed(id, deadline)?;
-    let mut npm = npm_command()?;
-    npm.args(["view", &have.package, "version", "--json", "--fetch-retries=0", "--fetch-timeout=5000",
-        "--registry=https://registry.npmjs.org"]);
-    let text = process::run(npm, deadline)?;
-    let latest: String = serde_json::from_str(&text).ok()?;
-    if !safe_version(&latest) { return None; }
+    let channel = if have.npm { None } else { entry(id)?.rule.channel().cloned() };
+    let latest = if let Some(rule) = channel {
+        channel_latest(&rule, deadline)?
+    } else {
+        let mut npm = npm_command()?;
+        npm.args(["view", &have.package, "version", "--json", "--fetch-retries=0", "--fetch-timeout=5000",
+            "--registry=https://registry.npmjs.org"]);
+        let text = process::run(npm, deadline)?;
+        let latest: String = serde_json::from_str(&text).ok()?;
+        if !safe_version(&latest) { return None; }
+        latest
+    };
     let label = entry(id)?.label;
     Some(Offer { id: id.into(), label, installed: have.version, latest })
 }
@@ -192,7 +228,7 @@ mod tests {
     fn cli_updates_cover_the_catalog_rules() {
         let catalog = crate::deps::parse_catalog(crate::deps::CATALOG_JSON).unwrap();
         let ids: Vec<&str> = catalog.deps.iter().filter(|e| e.update.is_some()).map(|e| e.id.as_str()).collect();
-        assert_eq!(ids, ["gemini", "pi"]);
+        assert_eq!(ids, ["pi"]);
         assert!(catalog.deps.iter().filter_map(|e| e.update.as_ref()).all(|r| r.package().is_some() && !r.native()));
     }
 
@@ -218,6 +254,33 @@ mod tests {
         assert!(!reports_version(Some(""), "0.164.0"));
         assert!(!reports_version(Some("codex-cli 0.163.0"), "0.164.0"));
         assert!(!reports_version(Some("0.164.01"), "0.164.0"));
+    }
+
+    fn rule() -> NativeChannel {
+        NativeChannel { url: "https://example.test/rel/{channel}".into(), settings: String::new(),
+            setting: "chan".into(), names: vec!["latest".into(), "stable".into()] }
+    }
+
+    #[test]
+    fn channel_reads_settings_and_falls_back_to_first_name() {
+        let r = rule();
+        assert_eq!(channel_name(&r, r#"{"chan":"latest"}"#), Some("latest"));
+        assert_eq!(channel_name(&r, r#"{"chan":"stable"}"#), Some("stable"));
+        assert_eq!(channel_name(&r, r#"{"chan":"beta/../x"}"#), Some("latest"));
+        assert_eq!(channel_name(&r, r#"{"chan":3}"#), Some("latest"));
+        assert_eq!(channel_name(&r, r#"{"other":1}"#), Some("latest"));
+        assert_eq!(channel_name(&r, "not json"), Some("latest"));
+        assert_eq!(channel_name(&NativeChannel { names: vec![], ..r }, ""), None);
+    }
+
+    #[test]
+    fn channel_url_and_body_parse() {
+        assert_eq!(channel_url(&rule(), "stable"), "https://example.test/rel/stable");
+        assert_eq!(parse_channel_body("2.1.314\n").as_deref(), Some("2.1.314"));
+        assert_eq!(parse_channel_body("  2.1.308\r\n").as_deref(), Some("2.1.308"));
+        for body in ["", "\n", "<html>404</html>", "latest", "2.1.314;calc"] {
+            assert!(parse_channel_body(body).is_none(), "{body}");
+        }
     }
 
     #[test]

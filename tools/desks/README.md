@@ -10,7 +10,7 @@ pack; until it is set up, the Astra launcher row is hidden and Astra asks are re
 - `astra-dispatch.ps1`: publishes a review request for Vidar to open.
 - `codex-notify.ps1`: the Codex `notify` hook; writes `done.json` when a review finishes.
 - `hidden-run\`: a small windowless wrapper for that hook (`build.ps1`, `hidden-run.cs`).
-- `gemini-review.ps1`, `codex-meter.ps1`: optional helpers (a Gemini review, the Codex meter).
+- `codex-meter.ps1`: an optional helper (the Codex meter).
 - `workbench.ps1`: reads the tray blocks in `bridge\workbench`; not part of Astra.
 
 Not in it: the Vidar side (`src-tauri\src\open.rs`, `review.rs`) ships with Vidar and stays idle

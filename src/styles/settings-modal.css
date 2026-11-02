@@ -85,7 +85,7 @@
   font-family: Consolas, "Cascadia Mono", monospace; font-size: var(--font-12); color: var(--fg-dim);
 }
 .ws-btn.ws-add { align-self: flex-start; }
-/* toggle state (Agents On/Off, Macros Submit) and the disabled floor for every .ws-btn */
+/* toggle state (Agents On/Off) and the disabled floor for every .ws-btn */
 .ws-btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .ws-btn:disabled, .ws-btn:disabled:hover { opacity: 0.5; cursor: default; color: var(--fg-dim); border-color: var(--border); }
 /* Sheen Cap (2026-10-12; mock M3 variant 3): every settings button wears the title bar's
@@ -247,7 +247,8 @@
 .deps-item .deps-mark { height: var(--space-16); }
 /* An optional miss that is fine reads dimmed, not badged (MCP rack rule). */
 .deps-row.deps-item.is-missing.is-optional .deps-label { color: var(--fg-dim); }
-.deps-item .ws-btn { padding: var(--space-2); }
+/* square on the 24px row: .ws-btn's 28px min-height made the icon buttons taller than wide */
+.deps-item .ws-btn { width: var(--row-24); height: var(--row-24); min-height: 0; padding: 0; }
 .deps-item .ws-btn .icn { width: var(--space-12); height: var(--space-12); }
 /* Settings › Characters: expandable pack rows */
 .ch-list { display: flex; flex-direction: column; gap: var(--space-4); }

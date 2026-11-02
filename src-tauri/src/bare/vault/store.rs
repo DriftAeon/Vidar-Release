@@ -10,20 +10,23 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use super::{content_sha, sha12, vault_hash, Listed, LockedBy, MemberEdit, RuneRef, RunesetCopy, SetSource, Template, Vault, VaultFrom};
+use super::{content_sha, sha12, vault_hash, Listed, LockedBy, MemberEdit, RuneRef, RunesetCopy, SetSource, Vault, VaultFrom};
 use crate::rules::library::Library;
 use crate::rules::rune::{self, State};
 
 /// Serializes every vault write in the process (D-d).
 static WRITER: Mutex<()> = Mutex::new(());
 
-/// Ids a user name never slugs to: the sessions folder, the launcher pre-pick file, the stock
-/// templates and Custom vaults.
+/// Ids a user name never slugs to: the sessions folder, the launcher pre-pick file, the in-memory blank
+/// vaults (`blank-`), older Custom vault ids, and per-start copies.
 const RESERVED: &[&str] = &["sessions", "defaults"];
-const RESERVED_PREFIXES: &[&str] = &["stock-", "custom-"];
+const RESERVED_PREFIXES: &[&str] = &["custom-", "copy-", "blank-"];
 
-/// One vault edit. Wire: `{"op":"addRune","ref":{"library":"stock","id":"x"}}`; `member` carries a
-/// `MemberEdit`: `{"op":"member","ref":{"library":"kit","runeset":"kit","rune":{..},"on":false}}`.
+#[path = "copies.rs"]
+mod copies;
+
+/// One vault edit. Wire: `{"op":"addRune","ref":{"library":"vidar","id":"x"}}`; `member` carries a
+/// `MemberEdit`: `{"op":"member","ref":{"library":"installed","runeset":"installed","rune":{..},"on":false}}`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "op", content = "ref", rename_all = "camelCase")]
 pub enum Op {
@@ -77,6 +80,13 @@ struct Draft {
 }
 
 impl Draft {
+    /// Puts the Vidar Runeset at index 0 with an empty copy when the draft has none.
+    fn reserve_vidar(&mut self) {
+        if !self.sets.iter().any(|(c, _)| super::vidar::is_reserved(&c.source)) {
+            self.sets.insert(0, super::vidar::reserved_copy(now()));
+        }
+    }
+
     fn hash(&self) -> String {
         let sets: Vec<(SetSource, String)> = self.sets.iter().map(|(c, b)| (c.source.clone(), content_sha(b))).collect();
         vault_hash(&sets, &self.runes)
@@ -101,19 +111,11 @@ fn check_hash(hash: &str) -> Result<(), String> {
 
 /// A user name as a vault id: lowercase letters and digits, single hyphens.
 fn slug(name: &str) -> String {
-    let mut out = String::new();
-    for c in name.trim().chars().flat_map(char::to_lowercase) {
-        if c.is_ascii_alphanumeric() {
-            out.push(c);
-        } else if !out.is_empty() && !out.ends_with('-') {
-            out.push('-');
-        }
-    }
-    out.trim_end_matches('-').to_string()
+    crate::rules::slug::slug(name, usize::MAX)
 }
 
-/// The id a variant of vault `id` is based on: `id` itself unless it is reserved (`stock-`, `custom-`), then
-/// the variant's name slug with any reserved prefix removed ("Stock Claude Variant" -> `claude-variant`),
+/// The id a variant of vault `id` is based on: `id` itself unless it is reserved (`custom-`), then
+/// the variant's name slug with any reserved prefix removed ("Custom Claude Variant" -> `claude-variant`),
 /// `variant` when nothing is left.
 fn variant_base(id: &str, name: &str) -> String {
     if !RESERVED_PREFIXES.iter().any(|p| id.starts_with(p)) {
@@ -272,6 +274,11 @@ impl Store {
         Store { root: root.to_path_buf(), dir: crate::paths::rune_vaults_dir_in(root) }
     }
 
+    /// The Vidar root this store reads under.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
     fn vault_dir(&self, id: &str) -> Result<PathBuf, String> {
         rune::check_id(id).map_err(|e| format!("vault id {id:?}: {e}"))?;
         if RESERVED.contains(&id) {
@@ -294,15 +301,14 @@ impl Store {
     }
 
     fn save_at(&self, path: &Path, v: &Vault) -> Result<(), String> {
-        let json = serde_json::to_string_pretty(v).map_err(|e| e.to_string())? + "\n";
-        write_file(path, json.as_bytes())
+        write_file(path, &crate::fsx::json_pretty_bytes(v, true)?)
     }
 
     fn save(&self, v: &Vault) -> Result<(), String> {
         self.save_at(&self.vault_dir(&v.id)?.join("vault.json"), v)
     }
 
-    /// Vaults in the vaults folder by id, then the stock templates.
+    /// Vaults in the vaults folder by id.
     pub fn list(&self) -> Result<Vec<Listed>, String> {
         let mut out = Vec::new();
         if let Ok(rd) = std::fs::read_dir(&self.dir) {
@@ -314,21 +320,7 @@ impl Store {
                 }
             }
         }
-        if let Ok(rd) = std::fs::read_dir(crate::paths::rune_templates_dir_in(&self.root)) {
-            let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).collect();
-            files.sort();
-            for f in files {
-                if let Ok(t) = crate::fsx::read_json::<Template>(&f) {
-                    out.push(Listed { id: t.id, name: t.name, template: true, hash: String::new(), locked_utc: None });
-                }
-            }
-        }
         Ok(out)
-    }
-
-    pub(crate) fn template(&self, id: &str) -> Result<Template, String> {
-        rune::check_id(id).map_err(|e| format!("template id {id:?}: {e}"))?;
-        crate::fsx::read_json(&crate::paths::rune_templates_dir_in(&self.root).join(format!("{id}.json")))
     }
 
     /// The vault as it was at `hash`: the vault itself when its hash matches, else `revs/<hash>/vault.json`.
@@ -345,16 +337,21 @@ impl Store {
         crate::fsx::read_json(&path)
     }
 
+    /// A placed runeset copy's raw bytes (the locked revision's when the vault is locked).
+    pub fn copy_bytes(&self, v: &Vault, c: &RunesetCopy) -> Result<Vec<u8>, String> {
+        let live = self.vault_dir(&v.id)?.join(&c.file);
+        match v.locked_utc { Some(_) => read(&self.rev_dir(&v.id, &v.hash)?.join(&c.file)).or_else(|_| read(&live)), None => read(&live) }
+    }
+
     /// A placed runeset's snapshot body (header stripped, CR dropped) and its scope, as resolve reads it
     /// (the spawn renders the set's own lines around its slots).
     pub fn snapshot_body(&self, v: &Vault, c: &RunesetCopy) -> Result<(String, rune::State), String> {
-        let dir = self.vault_dir(&v.id)?;
-        let bytes = match v.locked_utc {
-            Some(_) => read(&self.rev_dir(&v.id, &v.hash)?.join(&c.file)).or_else(|_| read(&dir.join(&c.file)))?,
-            None => read(&dir.join(&c.file))?,
-        };
+        let reserved = super::vidar::is_reserved(&c.source);
+        let bytes = if reserved && super::vidar::is_blank(v) { super::vidar::empty_copy() } else { self.copy_bytes(v, c)? };
         let state = rune::parse(&String::from_utf8_lossy(&bytes).replace('\r', "")).map(|r| r.state).unwrap_or(rune::State::Active);
-        Ok((set_body(&bytes).0, state))
+        // an unlocked vault's Vidar Runeset lists its slots live from the shipped set; a locked one's frozen list is its body
+        let body = if reserved && v.locked_utc.is_none() { super::vidar::live_body(&self.root, &bytes) } else { set_body(&bytes).0 };
+        Ok((body, state))
     }
 
     // ---- libraries (runes stored once; resolved where they live today by `layer::library_dir_named`) ----
@@ -369,24 +366,6 @@ impl Store {
         let lib = self.library(own)?;
         Ok(lib.tombstone(id).is_none()
             && lib.all_runes().0.iter().any(|(r, _)| r.id == id && r.activate == "recall" && r.state == State::Active && r.meets(scope)))
-    }
-
-    /// The stock vault for template `id` (`stock-claude`, `stock-codex`), vault id = template id; written
-    /// from the template only when absent. Edits to this vault use `edit`'s variant/original choice.
-    pub fn ensure_stock(&self, id: &str) -> Result<Vault, String> {
-        if !id.starts_with("stock-") {
-            return Err(format!("{id:?} is not a stock vault"));
-        }
-        let _w = writer();
-        if let Ok(v) = self.get(id) {
-            return Ok(v);
-        }
-        if self.vault_dir(id)?.exists() {
-            return Err(format!("stock vault {id:?} exists but is unreadable"));
-        }
-        let t = self.template(id)?;
-        let d = self.draft_from(&t.runesets, &t.runes)?;
-        self.write(id, &t.name, now(), Some(VaultFrom::Template { template: t.id }), d)
     }
 
     /// The file for `id` in `lib`: the library's own kind folders, else any sub-folder (item kinds the
@@ -468,6 +447,10 @@ impl Store {
                     d.off.retain(|x| x != r);
                 }
                 Op::RemoveRune(r) => {
+                    let carries = d.sets.iter().any(|(c, _)| super::vidar::is_reserved(&c.source));
+                    if carries && crate::bare::layer::is_vidar_library(&r.library) && super::vidar::is_required(&self.root, &r.id) {
+                        return Err(super::vidar::REQUIRED.into());
+                    }
                     let i = d.runes.iter().position(|x| x == r).ok_or_else(|| format!("rune {} is not in the vault", r.key()))?;
                     d.runes.remove(i);
                     // switched off, not forgotten: the view still lists it off (Vault::off)
@@ -475,12 +458,14 @@ impl Store {
                         d.off.push(r.clone());
                     }
                 }
+                Op::AddRuneset(s) if super::vidar::is_reserved(s) => d.reserve_vidar(),
                 Op::AddRuneset(s) => {
                     if !d.sets.iter().any(|(c, _)| &c.source == s) {
                         d.sets.push(self.snapshot(s)?);
                     }
                     d.off_sets.retain(|x| x != s);
                 }
+                Op::RemoveRuneset(s) if super::vidar::is_reserved(s) => return Err(super::vidar::STAYS.into()),
                 Op::RemoveRuneset(s) => {
                     let i = d.sets.iter().position(|(c, _)| &c.source == s).ok_or_else(|| format!("runeset {}/{} is not in the vault", s.library, s.set))?;
                     d.sets.remove(i);
@@ -495,6 +480,10 @@ impl Store {
                         .iter_mut()
                         .find(|(c, _)| c.source.library == m.library && c.source.set == m.runeset)
                         .ok_or_else(|| format!("runeset {}/{} is not in the vault", m.library, m.runeset))?;
+                    if super::vidar::is_reserved(&SetSource { library: m.library.clone(), set: m.runeset.clone() }) {
+                        *bytes = super::vidar::toggle(&self.root, bytes, &m.rune, m.on)?;
+                        continue;
+                    }
                     let scope = set_body(bytes).1;
                     let member = || self.is_recall_member(&m.library, &m.rune.id, &scope);
                     *bytes = toggle_member(bytes, m, &member)?;
@@ -502,13 +491,6 @@ impl Store {
             }
         }
         Ok(())
-    }
-
-    fn draft_from(&self, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Draft, String> {
-        let mut d = Draft { sets: Vec::new(), runes: Vec::new(), off: Vec::new(), off_sets: Vec::new() };
-        let ops: Vec<Op> = runesets.iter().cloned().map(Op::AddRuneset).chain(runes.iter().cloned().map(Op::AddRune)).collect();
-        self.apply(&mut d, &ops)?;
-        Ok(d)
     }
 
     /// Writes `d` as vault `id` (snapshots, stale snapshot files removed, then `vault.json`).
@@ -559,8 +541,22 @@ impl Store {
 
     // ---- create, edit, lock ----
 
+    /// `exists: <name>` when a named vault or a template already has `name` (case-insensitive); copy-* and
+    /// custom-* vaults never count. The user-facing create asks; internal callers keep the id suffix.
+    pub fn refuse_taken_name(&self, name: &str) -> Result<(), String> {
+        let want = name.trim().to_lowercase();
+        let taken = self.list()?.iter().any(|l| !l.id.starts_with("copy-") && !l.id.starts_with("custom-") && l.name.trim().to_lowercase() == want);
+        if taken { Err(format!("exists: {}", name.trim())) } else { Ok(()) }
+    }
+
     /// A named vault: from a template, a vault at a hash, or nothing, plus `runesets` (copied now) and one-off runes.
+    #[cfg(test)]
     pub fn create(&self, name: &str, from: Option<VaultFrom>, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Vault, String> {
+        self.create_in(name, from, runesets, runes, false)
+    }
+
+    /// `create`; `reserve` puts the Vidar Runeset at index 0 when the draft has none (`vault::create_at`).
+    pub(crate) fn create_in(&self, name: &str, from: Option<VaultFrom>, runesets: &[SetSource], runes: &[RuneRef], reserve: bool) -> Result<Vault, String> {
         let base = slug(name);
         if base.is_empty() {
             return Err(format!("vault name {name:?} has no letters or digits"));
@@ -571,10 +567,6 @@ impl Store {
         let _w = writer();
         let mut d = match &from {
             None => Draft { sets: Vec::new(), runes: Vec::new(), off: Vec::new(), off_sets: Vec::new() },
-            Some(VaultFrom::Template { template }) => {
-                let t = self.template(template)?;
-                self.draft_from(&t.runesets, &t.runes)?
-            }
             Some(VaultFrom::Vault { vault, hash }) => {
                 let v = self.load_at(vault, hash)?;
                 self.draft_of(&self.state_dir(&v, hash)?, &v)?
@@ -582,24 +574,11 @@ impl Store {
         };
         let ops: Vec<Op> = runesets.iter().cloned().map(Op::AddRuneset).chain(runes.iter().cloned().map(Op::AddRune)).collect();
         self.apply(&mut d, &ops)?;
+        if reserve {
+            d.reserve_vidar();
+        }
         let id = self.free_id(&base)?;
         self.write(&id, name.trim(), now(), from, d)
-    }
-
-    /// A Custom vault, `custom-<content hash6>`; an identical pick (same snapshots, same runes) reuses it (D-i, D-g).
-    pub fn create_custom(&self, runesets: &[SetSource], runes: &[RuneRef]) -> Result<Vault, String> {
-        let _w = writer();
-        let d = self.draft_from(runesets, runes)?;
-        let hash = d.hash();
-        for at in 0..=6 {
-            let id = format!("custom-{}", &hash[at..at + 6]);
-            match self.get(&id) {
-                Ok(v) if v.hash == hash => return Ok(v),
-                Ok(_) => continue,
-                Err(_) => return self.write(&id, "Custom", now(), None, d),
-            }
-        }
-        Err("no free Custom vault id".into())
     }
 
     /// Edits vault `id`. A locked vault refuses `Unlocked`; `Variant` writes a new vault whose `from` names
@@ -694,6 +673,18 @@ impl Store {
             let body = read(&rev_body(&rev, &r.library, &r.id))?;
             pins.insert(format!("{}/{}", r.library, r.id), sha12(&body));
         }
+        // The Vidar Runeset freezes with the lock: bodies overwrite any older rev file (never write-if-absent),
+        // and the member list is kept in `members()` order.
+        if let Some(c) = v.runesets.iter().find(|c| super::vidar::is_reserved(&c.source)) {
+            let copy = self.copy_bytes(&v, c)?;
+            let mut frozen = Vec::new();
+            for r in super::vidar::frozen_members(&self.root, &copy, &resolved.runes)? {
+                write_file(&rev_body(&rev, &r.library, &r.id), r.body.as_bytes())?;
+                pins.insert(format!("{}/{}", r.library, r.id), sha12(r.body.as_bytes()));
+                frozen.push(r.id.clone());
+            }
+            write_file(&rev.join(snapshot_file(&c.source)), &super::vidar::locked_list(&frozen))?;
+        }
         v.locked_utc = Some(now());
         v.locked_by = Some(by);
         v.pins = pins;
@@ -743,14 +734,36 @@ impl Store {
     /// one-offs. Unlocked reads the libraries (and writes `revs/<hash>/` if absent); locked reads only
     /// `revs/<hash>/` and the pins, and reports drift.
     pub fn resolve(&self, id: &str) -> Result<Resolved, String> {
-        let v = self.get(id)?;
+        self.resolve_at(&self.get(id)?)
+    }
+
+    /// Resolve `v` as given: a locked vault reads its revision at `v.hash` (a vault at an old hash gets
+    /// its locked rev, never the current library).
+    pub fn resolve_at(&self, v: &Vault) -> Result<Resolved, String> {
+        if super::vidar::is_blank(v) {
+            return self.resolve_blank();
+        }
         if v.locked_utc.is_some() {
-            let mut r = self.resolve_locked(&v)?;
-            r.drift = self.drift_of(&v)?;
+            let mut r = self.resolve_locked(v)?;
+            r.drift = self.drift_of(v)?;
             Ok(r)
         } else {
-            self.resolve_unlocked(&v)
+            self.resolve_unlocked(v)
         }
+    }
+
+    /// The blank vault (`vidar::blank_vault`): the Vidar Runeset's required members, read live from the shipped
+    /// set. Nothing is written, so no revision folder appears for a vault that is not on disk.
+    fn resolve_blank(&self) -> Result<Resolved, String> {
+        let (mut runes, mut warnings) = (Vec::new(), Vec::new());
+        let lib = self.library(crate::bare::layer::VIDAR_LIBRARY)?;
+        for slot in super::vidar::members(&self.root, &super::vidar::empty_copy(), None, None).into_iter().filter(|s| s.on) {
+            match Self::locate(&lib, &slot.id)? {
+                Some(p) => runes.push(ResolvedRune { library: crate::bare::layer::VIDAR_LIBRARY.into(), id: slot.id, body: String::from_utf8_lossy(&read(&p)?).into_owned(), recall: false }),
+                None => warnings.push(format!("`vidar/{}` slotted in runeset vidar/vidar is not in its library; skipped", slot.id)),
+            }
+        }
+        Ok(Resolved { runes, drift: Vec::new(), warnings })
     }
 
     fn resolve_unlocked(&self, v: &Vault) -> Result<Resolved, String> {
@@ -771,6 +784,8 @@ impl Store {
                 continue;
             }
             let (body, scope) = set_body(&bytes);
+            // the Vidar Runeset resolves live from the shipped set, not from its copy's lines
+            let body = if super::vidar::is_reserved(&c.source) { super::vidar::live_body(&self.root, &bytes) } else { body };
             let own = c.source.library.as_str();
             let off = recall_off(&bytes);
             for line in body.lines() {
@@ -834,7 +849,13 @@ impl Store {
         };
         let (mut out, mut seen, mut warnings) = (Vec::new(), HashSet::new(), Vec::new());
         for c in &v.runesets {
-            let bytes = read(&rev.join(&c.file)).or_else(|_| read(&dir.join(&c.file)))?;
+            // the Vidar Runeset reads only what its lock froze: the revision's list file and `vidar/*` bodies
+            let reserved = super::vidar::is_reserved(&c.source);
+            let bytes = if reserved {
+                std::fs::read(rev.join(&c.file)).map_err(|_| super::vidar::unreadable(&c.source.set))?
+            } else {
+                read(&rev.join(&c.file)).or_else(|_| read(&dir.join(&c.file)))?
+            };
             if set_is_off(&bytes) {
                 continue;
             }
@@ -864,6 +885,7 @@ impl Store {
                             seen.insert(key);
                             out.push(ResolvedRune { library: lib, id, body, recall: false });
                         }
+                        None if reserved => return Err(super::vidar::unreadable(&id)),
                         None => warnings.push(format!("`{key}` has no copied body in revision {}; skipped", v.hash)),
                     }
                 }
@@ -891,6 +913,9 @@ impl Store {
         let mut out = Vec::new();
         for (key, pin) in &v.pins {
             let Some((lib, id)) = key.split_once('/') else { continue };
+            if super::vidar::is_vidar_key(key) {
+                continue;
+            }
             let l = libs.entry(lib.to_string()).or_insert_with(|| self.library(lib).ok());
             let now = l.as_ref().and_then(|l| Self::locate(l, id).ok().flatten()).and_then(|p| std::fs::read(p).ok()).map(|b| sha12(&b));
             if now.as_deref() != Some(pin.as_str()) {
@@ -906,116 +931,10 @@ impl Store {
 /// A text kind's body may show; an item kind's never does (its view is `rune_items` redacted).
 const TEXT_KINDS: &[&str] = &["rule", "fact", "procedure", "set"];
 
+#[path = "store_view.rs"]
+mod view;
+
 impl Store {
-    /// Drift of `v` as read (a session's earlier revision carries its own pins); empty unless locked.
-    pub fn view_drift(&self, v: &Vault) -> Result<Vec<RuneRef>, String> {
-        if v.locked_utc.is_none() {
-            return Ok(Vec::new());
-        }
-        self.drift_of(v)
-    }
-
-    /// The runes `v` loads, as the Runes View draws them: each runeset's slots in order, its
-    /// `<?recall?>` members after them (sorted by id), then the one-offs, each once. `from_rev` reads the
-    /// bodies and snapshots copied into `revs/<hash>/` (a locked vault, or a session's earlier
-    /// revision); otherwise the libraries. Writes nothing. Item runes come back redacted; a missing copy
-    /// or a file that does not parse is left out with a warning that names only its ref. The third list is
-    /// what the vault holds switched off (never loaded), so Modify can draw them off: a copy's
-    /// `recall-off` and `slot-off` members, then `Vault::off`; a body missing from the revision is read
-    /// from its library.
-    #[allow(clippy::type_complexity)]
-    pub fn view_runes(&self, v: &Vault, from_rev: bool, drift: &[RuneRef]) -> Result<(Vec<super::ViewRune>, Vec<String>, Vec<super::ViewRune>), String> {
-        let (dir, rev) = (self.vault_dir(&v.id)?, self.rev_dir(&v.id, &v.hash)?);
-        let rev = from_rev.then_some(rev.as_path());
-        let drifted: HashSet<String> = drift.iter().map(RuneRef::key).collect();
-        let mut libs: HashMap<String, Option<Library>> = HashMap::new();
-        let mut sections: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
-        let (mut out, mut seen, mut warnings, mut off) = (Vec::new(), HashSet::new(), Vec::new(), Vec::new());
-        let mut push = |set: Option<&SetSource>, lib: &str, id: &str, text: Option<String>, recall: bool, libs: &mut HashMap<String, Option<Library>>, out: &mut Vec<super::ViewRune>, warnings: &mut Vec<String>| {
-            let Some(text) = text else {
-                warnings.push(format!("rune {lib}/{id} has no readable copy; left out"));
-                return;
-            };
-            let section = sections.entry(lib.to_string()).or_insert_with(|| import_sections(libs.entry(lib.to_string()).or_insert_with(|| self.library(lib).ok()).as_ref())).get(id).cloned().unwrap_or_default();
-            match view_rune(set, lib, id, &text, recall, section, drifted.contains(&format!("{lib}/{id}"))) {
-                Some(r) => out.push(r),
-                None => warnings.push(format!("rune {lib}/{id} does not parse; left out")),
-            }
-        };
-        for c in &v.runesets {
-            let bytes = match rev {
-                Some(r) => read(&r.join(&c.file)).or_else(|_| read(&dir.join(&c.file)))?,
-                None => read(&dir.join(&c.file))?,
-            };
-            let (body, scope) = set_body(&bytes);
-            let own = c.source.library.as_str();
-            let slotted: Vec<(String, String)> = body.lines().filter_map(|l| slot_ref(l, own)).collect();
-            for (lib, id) in &slotted {
-                if seen.insert(format!("{lib}/{id}")) {
-                    let text = self.view_body(&mut libs, rev, lib, id);
-                    push(Some(&c.source), lib, id, text, false, &mut libs, &mut out, &mut warnings);
-                }
-            }
-            if body.lines().any(|l| l == "<?recall?>") {
-                let held = recall_off(&bytes);
-                for (id, text) in self.view_recall(&mut libs, rev, v, own, &scope) {
-                    if !held.contains(&id) && seen.insert(format!("{own}/{id}")) {
-                        push(Some(&c.source), own, &id, Some(text), true, &mut libs, &mut out, &mut warnings);
-                    }
-                }
-                for id in &held {
-                    let text = self.view_body(&mut libs, rev, own, id).or_else(|| self.view_body(&mut libs, None, own, id));
-                    push(Some(&c.source), own, id, text, true, &mut libs, &mut off, &mut warnings);
-                }
-            }
-            // slot members the copy switched off; one whose library rune is gone (Delete Rune) drops quietly
-            for (lib, id) in slot_off(&bytes, own) {
-                if slotted.iter().any(|(l, i)| l == &lib && i == &id) {
-                    continue;
-                }
-                if let Some(text) = self.view_body(&mut libs, rev, &lib, &id).or_else(|| self.view_body(&mut libs, None, &lib, &id)) {
-                    push(Some(&c.source), &lib, &id, Some(text), false, &mut libs, &mut off, &mut warnings);
-                }
-            }
-        }
-        for r in &v.runes {
-            if seen.insert(r.key()) {
-                let text = self.view_body(&mut libs, rev, &r.library, &r.id);
-                push(None, &r.library, &r.id, text, false, &mut libs, &mut out, &mut warnings);
-            }
-        }
-        // one-offs switched off (Vault::off): listed off, never loaded; a rune gone from its library drops quietly
-        for r in &v.off {
-            if v.runes.contains(r) {
-                continue;
-            }
-            if let Some(text) = self.view_body(&mut libs, rev, &r.library, &r.id).or_else(|| self.view_body(&mut libs, None, &r.library, &r.id)) {
-                push(None, &r.library, &r.id, Some(text), false, &mut libs, &mut off, &mut warnings);
-            }
-        }
-        // runesets switched off whole (Vault::off_sets): the library runeset's runes listed off under its head;
-        // one gone from its library, or placed again, drops quietly
-        for s in &v.off_sets {
-            if v.runesets.iter().any(|c| &c.source == s) {
-                continue;
-            }
-            let Ok((_, bytes)) = self.snapshot(s) else { continue };
-            let (body, scope) = set_body(&bytes);
-            let own = s.library.as_str();
-            for (lib, id) in body.lines().filter_map(|l| slot_ref(l, own)) {
-                if let Some(text) = self.view_body(&mut libs, None, &lib, &id) {
-                    push(Some(s), &lib, &id, Some(text), false, &mut libs, &mut off, &mut warnings);
-                }
-            }
-            if body.lines().any(|l| l == "<?recall?>") {
-                for (id, text) in self.view_recall(&mut libs, None, v, own, &scope) {
-                    push(Some(s), own, &id, Some(text), true, &mut libs, &mut off, &mut warnings);
-                }
-            }
-        }
-        Ok((out, warnings, off))
-    }
-
     /// A rune file's text: the revision's copy when `rev` is set, else the library's file.
     fn view_body(&self, libs: &mut HashMap<String, Option<Library>>, rev: Option<&Path>, lib: &str, id: &str) -> Option<String> {
         if rune::check_id(lib).is_err() || rune::check_id(id).is_err() {
@@ -1061,10 +980,10 @@ impl Store {
         found
     }
 
-    /// The library names a vault can use (`layer::library_dir_named`): `stock`, each folder under the
+    /// The library names a vault can use (`layer::library_dir_named`): `vidar`, each folder under the
     /// imports folder (the overrides folder excepted), then the rules library by its folder name.
     pub(crate) fn library_names(&self) -> Vec<String> {
-        let mut names = vec!["stock".to_string()];
+        let mut names = vec![crate::bare::layer::VIDAR_LIBRARY.to_string()];
         let (imports, overrides) = (crate::paths::rune_imports_dir_in(&self.root), crate::paths::legacy_rune_overrides_dir_in(&self.root));
         if let Ok(rd) = std::fs::read_dir(&imports) {
             let mut dirs: Vec<String> = rd
@@ -1100,19 +1019,35 @@ impl Store {
             };
             let sections = import_sections(Some(&lib));
             for (r, path) in lib.all_runes().0 {
-                if r.kind == "set" || r.state != State::Active || lib.tombstone(&r.id).is_some() || r.agent.as_deref().is_some_and(|a| a != agent) {
+                if r.kind == "set" || r.state != State::Active || lib.tombstone(&r.id).is_some() || !r.fits(crate::agent_spec::parse(agent), None) {
                     continue;
                 }
                 let Ok(bytes) = std::fs::read(&path) else { continue };
                 let section = sections.get(&r.id).cloned().unwrap_or_default();
                 match view_rune(None, &name, &r.id, &String::from_utf8_lossy(&bytes), r.activate == "recall", section, false) {
-                    Some(v) => out.push(v),
+                    Some(mut v) => {
+                        v.path = plain_path(&path);
+                        out.push(v);
+                    }
                     None => warnings.push(format!("rune {name}/{} does not parse; left out", r.id)),
                 }
             }
         }
         (out, warnings)
     }
+}
+
+/// A library file as a plain drive-rooted path: `/` to `\`, a `\\?\` prefix dropped, UNC, relative and dot
+/// paths refused (the rules of the trust module's `plain_absolute`, which the lexical-key cap keeps out of
+/// this file); empty when it is none, so the View hides Edit and Open Folder.
+fn plain_path(p: &Path) -> String {
+    let s = p.to_string_lossy().trim().replace('/', "\\");
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    let b = s.as_bytes();
+    if b.len() < 3 || !b[0].is_ascii_alphabetic() || b[1] != b':' || b[2] != b'\\' || s[3..].split('\\').any(|c| c == "." || c == "..") {
+        return String::new();
+    }
+    s.to_string()
 }
 
 /// Rune id -> heading path from a library's `import.json` `bricks` (absent file: none).
@@ -1135,7 +1070,7 @@ fn view_rune(set: Option<&SetSource>, lib: &str, id: &str, text: &str, recall: b
     let text_kind = TEXT_KINDS.contains(&r.kind.as_str());
     let item = if text_kind { None } else { Some(crate::bare::rune_items::redacted_rune(&r)?) };
     Some(super::ViewRune {
-        set: set.cloned(),
+        set: set.cloned(), also: Vec::new(),
         library: lib.to_string(),
         id: id.to_string(),
         body: if text_kind { r.body.trim_matches('\n').to_string() } else { String::new() },
@@ -1144,6 +1079,7 @@ fn view_rune(set: Option<&SetSource>, lib: &str, id: &str, text: &str, recall: b
         description: r.description,
         section,
         recall,
+        path: String::new(),
         origin: r.origin,
         closes_when: r.closes_when,
         why: r.why,
@@ -1151,5 +1087,23 @@ fn view_rune(set: Option<&SetSource>, lib: &str, id: &str, text: &str, recall: b
         paths: r.paths,
         item,
         drift,
+        needed_by: None,
+        required: false,
     })
+}
+
+#[cfg(test)]
+mod slug_pins {
+    use super::slug;
+
+    #[test]
+    fn vault_id_slug_outputs_are_pinned() {
+        assert_eq!(slug("  Mixed Case  "), "mixed-case");
+        assert_eq!(slug("  Foo__Bar!! "), "foo-bar");
+        assert_eq!(slug("--x--"), "x");
+        assert_eq!(slug("Ünï Café 99"), "n-caf-99");
+        assert_eq!(slug("!!!"), "");
+        assert_eq!(slug(""), "");
+        assert_eq!(slug(&"abcdefghij".repeat(6)).len(), 60);
+    }
 }

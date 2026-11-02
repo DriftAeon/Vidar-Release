@@ -227,7 +227,7 @@ fn spawn_with_sets(host: &Arc<Host>, conn: &Conn, fake: &Fake, resume: Option<&s
             profile: None,
             payload_file: None, mcp_file: None,
             row_key: None, sets,
-            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+            set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
         }),
     );
     (

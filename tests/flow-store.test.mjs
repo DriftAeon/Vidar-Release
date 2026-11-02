@@ -24,7 +24,7 @@ import {
   LEGACY_LAYOUT_KEY,
 } from '../src/flow/store-core.ts';
 import { EDIT_RULE, RETIRED_STARTER_IDS, STARTER_TEMPLATES } from '../src/flow/templates.ts';
-import { validateGraph, setLiveModelIds, setLiveVaultIds, setVaultAgentOf } from '../src/flow/validate.ts';
+import { validateGraph, setLiveModelIds, setLiveVaultIds } from '../src/flow/validate.ts';
 
 // Map-backed StorageLike stub — never touches window/localStorage (leaf-module rule, §7).
 function mapStorage(seed = {}) {
@@ -454,6 +454,8 @@ test('normalizeLegacyGraph: once its empty required fields are filled, the norma
   const { graph } = normalizeLegacyGraph(legacyMockGraph());
   graph.nodes.find((n) => n.id === 'input').fields.find((f) => f.k === 'content').v = 'x';
   for (const id of ['agent', 'review']) graph.nodes.find((n) => n.id === id).fields.find((f) => f.k === 'task').v = 'do it';
+  assert.match(validateGraph(graph).issues.map((i) => i.message).join('\n'), /no vault selected/, 'a saved agent node still names no vault');
+  for (const n of graph.nodes) if (n.kind === 'agent') n.vault = 'v-mine';
   assert.deepEqual(validateGraph(graph).issues, []);
 });
 
@@ -489,20 +491,18 @@ test('vault: the node field round-trips through the envelope', () => {
   assert.equal(loadGraphsEnvelope(storage).graphs[0].nodes[1].vault, 'v-custom');
 });
 
-test('validate: another agent\'s stock vault and an unknown vault fail, the node\'s own passes', () => {
+test('validate: an agent node with no vault cannot Run, an unknown vault fails, a listed one passes', () => {
   setLiveModelIds(() => ['claude-sonnet-5', 'codex-default']);
-  setVaultAgentOf((m) => (m.startsWith('codex') ? 'codex' : 'claude'));
-  setLiveVaultIds(() => ['stock-claude', 'stock-codex', 'v-custom']);
+  setLiveVaultIds(() => ['v-mine', 'v-custom']);
   try {
     const msgs = (n) => validateGraph(vaultGraph(n)).issues.map((i) => i.message);
-    assert.deepEqual(msgs({}), []);
-    assert.deepEqual(msgs({ vault: 'stock-claude' }), []);
+    assert.match(msgs({}).join('\n'), /Node "a" has no vault selected/);
+    assert.match(msgs({ vault: '' }).join('\n'), /no vault selected/);
+    assert.deepEqual(msgs({ vault: 'v-mine' }), []);
     assert.deepEqual(msgs({ vault: 'v-custom' }), []);
-    assert.match(msgs({ vault: 'stock-codex' }).join('\n'), /Stock Vault for Another Agent/);
     assert.match(msgs({ vault: 'v-gone' }).join('\n'), /Unknown Vault/);
   } finally {
     setLiveModelIds(null);
-    setVaultAgentOf(null);
     setLiveVaultIds(null);
   }
 });

@@ -18,7 +18,11 @@ use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_V1: u32 = 1;
 pub const PROTOCOL_V2: u32 = 2;
-pub const PROTOCOL_VERSION: u32 = PROTOCOL_V2;
+/// The first stamp whose host honours `SpawnParams.env` (the env runes). An older host
+/// ignores the field and drops the runes silently, so a client refuses an env-rune spawn
+/// on a connection negotiated below this (Vidar `falcon/ops.rs` `env_runes_refusal`).
+pub const PROTOCOL_V3: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = PROTOCOL_V3;
 
 /// The capability that admits [`Op::SteerPrompt`].
 pub const CAPABILITY_STEER: &str = "steer";
@@ -474,9 +478,9 @@ pub struct SpawnParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
     /// A Bare row's built payload (`<home>\layer\payload-<hash12>.md`), handed to the sidecar
-    /// as `--payload` (Codex: read once and passed as `-c developer_instructions=`) in place of
-    /// the profile's static one. Profile only; the host admits it
-    /// only under the profile home's `layer\` (`claude.rs`). Optional both ways, like `profile`.
+    /// as `--payload` (Codex: read once and passed as `-c developer_instructions=`); the sidecar
+    /// has no static fallback and refuses a Bare row without it. Profile only; the host admits
+    /// it only under the profile home's `layer\` (`claude.rs`). Optional both ways, like `profile`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payload_file: Option<String>,
     /// A Claude Bare MCP config directly under the profile home's layer.
@@ -522,6 +526,14 @@ pub struct SpawnParams {
     /// omitted on the wire when empty, empty when absent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plugin_names: Vec<String>,
+    /// A Claude Bare session's env runes (`Loadout.env`, Vidar's `bare::env::rune_env`), as
+    /// name/value pairs in vault order. Profile only: the host lays them over the profile's
+    /// `overlay` and `rendered.overlay` and re-checks every name with the same
+    /// `bare_env::admit_rune_env`, refusing the spawn on a name either overlay or the spawn's
+    /// plumbing sets (`claude.rs` `bare_spawn`). Optional both ways: omitted on the wire when
+    /// empty, empty when absent; an older host ignores it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -780,7 +792,7 @@ mod tests {
                 mcp_file: None,
                 row_key: None,
                 sets: None,
-                set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
             }),
         };
         let text = serde_json::to_string(&request).unwrap();
@@ -802,12 +814,12 @@ mod tests {
         assert!(old.plugin_names.is_empty());
         assert!(!serde_json::to_string(&old).unwrap().contains("plugin_names"));
         let new: Request = serde_json::from_str(
-            r#"{"id":2,"op":"spawn","cwd":"C:\\work","permission_mode":"default","plugin_names":["vidar-app","gate"]}"#,
+            r#"{"id":2,"op":"spawn","cwd":"C:\\work","permission_mode":"default","plugin_names":["roster","gate"]}"#,
         )
         .unwrap();
         let Op::Spawn(new) = new.op else { panic!("expected spawn") };
-        assert_eq!(new.plugin_names, ["vidar-app", "gate"]);
-        assert!(serde_json::to_string(&new).unwrap().contains(r#""plugin_names":["vidar-app","gate"]"#));
+        assert_eq!(new.plugin_names, ["roster", "gate"]);
+        assert!(serde_json::to_string(&new).unwrap().contains(r#""plugin_names":["roster","gate"]"#));
     }
 
     #[test]
@@ -1010,7 +1022,7 @@ mod tests {
                 mcp_file: None,
                 row_key: None,
                 sets: None,
-                set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(),
+                set_plugin_dirs: Vec::new(), codex_home: None, claude_config_dir: None, plugin_names: Vec::new(), env: Vec::new(),
             }),
             Op::Attach { session: s() },
             Op::Hydrate {
@@ -1180,6 +1192,8 @@ mod tests {
     }
 }
 
+#[path = "protocol/agent_env.rs"]
+pub(crate) mod agent_env;
 #[cfg(test)]
 #[path = "protocol/gateway_tests.rs"]
 mod gateway_tests;

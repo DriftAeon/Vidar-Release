@@ -32,7 +32,7 @@ fn guard() -> Guard {
 }
 
 fn profiles(name: &str) -> PathBuf {
-    crate::paths::root().join("profiles").join("bare").join(name)
+    crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join(name)
 }
 
 /// A Codex config generated with `model` under `<t>\<sub>`, parsed back, and its bytes.
@@ -40,7 +40,7 @@ fn codex_with_model(t: &Tmp, sub: &str, model: Option<&str>) -> (TomlDoc, String
     let (root, home) = (t.0.join("root"), t.0.join(sub));
     prepare_dirs(&home, &["codex-home".into()]).unwrap();
     let target = home.join("codex-home").join("config.toml");
-    generate_codex_config_with(&profiles("codex.config.template.toml"), &target, &root, &home, Path::new(PWSH), PAYLOAD, &guard(), None, &McpTables::default(), &HookTrust::default(), model).unwrap();
+    generate_codex_config_with(&profiles("codex-config.toml"), &target, &root, &home, Path::new(PWSH), PAYLOAD, &guard(), None, &McpTables::default(), &HookTrust::default(), model).unwrap();
     let text = std::fs::read_to_string(&target).unwrap();
     (parse_toml_lite(&text).unwrap(), text)
 }
@@ -62,7 +62,7 @@ fn a_model_rune_is_a_top_level_codex_key_and_none_leaves_the_bytes() {
     let (root, home) = (t.0.join("root"), t.0.join("h3"));
     prepare_dirs(&home, &["codex-home".into()]).unwrap();
     let target = home.join("codex-home").join("config.toml");
-    generate_codex_config_for(&profiles("codex.config.template.toml"), &target, &root, &home, Path::new(PWSH), PAYLOAD, &guard(), None, &McpTables::default()).unwrap();
+    generate_codex_config_for(&profiles("codex-config.toml"), &target, &root, &home, Path::new(PWSH), PAYLOAD, &guard(), None, &McpTables::default()).unwrap();
     assert_eq!(std::fs::read_to_string(&target).unwrap(), plain_text);
 }
 
@@ -78,7 +78,7 @@ fn a_model_rune_is_a_claude_settings_key_and_none_leaves_the_bytes() {
     let t = Tmp::new("claude-model");
     let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
     prepare_dirs(&home, &["claude-config".into()]).unwrap();
-    let template = profiles("claude.settings.template.json");
+    let template = profiles("claude-settings.json");
     let dir = home.join("claude-config");
     let (plain, with, again) = (dir.join("plain.json"), dir.join("settings.json"), dir.join("again.json"));
     generate_settings(&template, &plain, &root, &home, &guard(), &[]).unwrap();

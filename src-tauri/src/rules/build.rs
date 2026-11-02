@@ -156,8 +156,7 @@ pub fn store(rules_dir: &Path, key: &str, bytes: &[u8]) -> Result<(PathBuf, Opti
         }
     };
     map.insert(key.to_string(), hash);
-    let json = serde_json::to_vec_pretty(&map).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(&map_path(rules_dir), &json)?;
+    crate::fsx::write_json_pretty(&map_path(rules_dir), &map, false)?;
     Ok((file, None))
 }
 

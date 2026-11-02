@@ -6,6 +6,7 @@ import { buildFull } from "../browser/full";
 import { attachKeys, focusRow } from "../browser/keys";
 import type { Adapter, Comments, Detail, Item, Loaded, RenderCtx } from "../browser/types";
 import { relativeTime } from "../browser/when";
+import { errText } from "../err-text";
 import { invoke } from "../ipc";
 import type { JiraCommentsPage, JiraIssueDetail, JiraRef } from "./ipc";
 import { adfRenderer } from "./adf";
@@ -34,9 +35,6 @@ export function toComments(page: JiraCommentsPage): Comments {
   };
 }
 
-function errText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 function failed(e: unknown): { error: { title: string; message: string } } {
   const err = e as Partial<ErrReply["error"]> | null;

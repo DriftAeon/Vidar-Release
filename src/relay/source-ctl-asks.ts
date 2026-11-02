@@ -3,6 +3,8 @@
 // whichever of answer, dismiss, expiry or cancel gets there first.
 
 import { listen } from "../ipc";
+import { AGENTS } from "../agents/descriptor";
+import { isAgentId } from "../agents/id";
 import { ctlAskDeniedLine, ctlAskReplyLine, recordFromAskInput, type AskReply, type QuestionRecord } from "../asks/record";
 import { setItems, type RelayItem, type RelayVerdict } from "./store";
 
@@ -36,9 +38,9 @@ export const CTL_ASK_BUSY = 'an ask for "ctl-ask" is already on screen or queued
 export const CTL_ASK_STEER = "err use --pending or AskUserQuestion";
 
 /** A plain blocking ask from a Falcon-hosted Claude Rendered tab (the shape of `driveSnapshot().tabs`). */
-export function hostedClaudeAsker(tabs: { id: string; body?: string; agent?: string; hosted?: boolean }[], tab: string | null): boolean {
+export function hostedPendingAsker(tabs: { id: string; body?: string; agent?: string; hosted?: boolean }[], tab: string | null): boolean {
   const t = tab ? tabs.find((x) => x.id === tab) : undefined;
-  return !!t && t.body === "rendered" && t.agent === "claude" && t.hosted === true;
+  return !!t && t.body === "rendered" && isAgentId(t.agent) && AGENTS[t.agent].flowSdk && t.hosted === true;
 }
 
 function publish(): void {

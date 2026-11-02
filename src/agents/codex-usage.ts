@@ -3,10 +3,10 @@
 
 import type { AgentEvent, Usage } from "./protocol";
 
-type Json = Record<string, unknown>;
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, type Json } from "../json.ts";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
 
 /** the last request's usage and the model's context window (null when the notification omits it) */
 export function codexTokenUsage(p: Json): { usage: Usage; contextWindow: number | null } {

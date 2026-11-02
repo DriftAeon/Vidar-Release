@@ -68,7 +68,7 @@
 .doc-om-fold[aria-current="true"] .n { color: var(--accent); }
 .doc-om-fold:focus-visible, .doc-om-file:focus-visible, .doc-om-act:focus-visible { outline: 1px solid var(--fg-dim); outline-offset: -1px; }
 
-/* reorder.ts drag state, same look as Loadout's .rack-row.dragging (modules.css) */
+/* reorder.ts drag state, same look as the rack's .rack-row.dragging (modules.css) */
 .doc-om-fold.dragging { opacity: 0.6; outline: 1px solid var(--accent); outline-offset: -1px; cursor: grabbing; }
 
 .doc-om-foot {

@@ -98,6 +98,5 @@
 .br-link:active { color: var(--fg); }
 .br-link:disabled { color: var(--fg-dim); cursor: progress; text-decoration: none; }
 
-.br-spin { animation: br-spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
-@keyframes br-spin { to { transform: rotate(360deg); } }
+.br-spin { animation: spin 800ms linear infinite; } /* motion: progress spinner, continuous, not a state change */
 @media (prefers-reduced-motion: reduce) { .br-spin { animation: none; } }

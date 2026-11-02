@@ -10,6 +10,7 @@ import { renderNodeMatrix } from "../../control/node-matrix";
 import { iconImg } from "../../icon-img";
 import { btn, el } from "./dom";
 import { cardShell } from "./card-shell";
+import { errText } from "../../err-text";
 
 export interface TabApprovalsDeps {
   /** this body's tab id: only records whose asker.tab is this id are drawn */
@@ -66,7 +67,7 @@ export function createTabApprovals(deps: TabApprovalsDeps) {
       try {
         await entry.answer({ verdict, comment: msg.value.trim(), where: tabName ?? tabId });
       } catch (e) {
-        error.textContent = e instanceof Error ? e.message : String(e);
+        error.textContent = errText(e);
       }
       busy = false;
       allow.disabled = deny.disabled = false;

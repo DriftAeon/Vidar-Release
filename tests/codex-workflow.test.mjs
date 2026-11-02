@@ -9,6 +9,7 @@ setupDom({ stubs: {
 const { CodexAdapter } = await import("../src/agents/codex.ts");
 const { createCards } = await import("../src/panels/rendered/cards.ts");
 const { createTextStream } = await import("../src/panels/rendered/text-stream.ts");
+await (await import("../src/panels/markdown-lazy.ts")).markdownReady(); // the parser loads on first use; these tests paint synchronously
 const { toolClass } = await import("../src/panels/rendered/tool-class.ts");
 
 function harness(resume) {

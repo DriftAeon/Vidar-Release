@@ -12,7 +12,7 @@ export const CATEGORY_ICONS: Readonly<Record<string, ColorIcon>> = {
   dependencies: "set-dependencies",
   general: "set-general",
   cards: "set-cards",
-  flow: "flow",
+  flow: "flow", // home-ok: a Settings category id, not a module
   modules: "set-all",
   build: "set-build",
 };

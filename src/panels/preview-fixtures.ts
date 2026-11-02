@@ -51,7 +51,7 @@ function marker(o: Record<string, unknown>) {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export async function runFixtures(host: FixtureHost) {
+async function runFixtures(host: FixtureHost) {
   // The frames must be laid out: CSS backgrounds, fonts, cursors, <object> and
   // SVG references only load for rendered boxes (eager <img> is the exception).
   // Driven over CDP the workbench may be collapsed — open it on this tab first.

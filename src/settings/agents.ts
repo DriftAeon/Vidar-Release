@@ -1,5 +1,5 @@
 // Settings › Agents: the built-in rows with an On/Off toggle and, on Rendered rows, a Model field; then
-// "Your Agents", the custom rows vidar.json appends. Macros sit on the same page (macros.ts).
+// "Your Agents", the custom rows vidar.json appends.
 //
 // The edit logic is agents-edit.ts (pure, tested); this file only reads and draws. Every save
 // re-reads vidar.json, recomputes the hits with attributeOverlay and applies ONE operation to
@@ -10,6 +10,8 @@
 // shows as "Not Saved: …" on the row and survives a modal close (general.ts pattern).
 
 import { invoke } from "../ipc";
+import { AGENTS } from "../agents/descriptor";
+import { isAgentId } from "../agents/id";
 import { getPref } from "../prefs";
 import { label } from "../format";
 import { plainRowsControl, plainRowsOn } from "./plain-rows";
@@ -30,11 +32,11 @@ import {
   type CustomFields, type OverlayEntry,
 } from "./agents-edit";
 import { codexEffortLevels, codexModelSelect, effortSelect, modelSelect, primarySelect } from "./agent-selects";
-import { registerMacroRows } from "./macros";
 import { saveRefusal } from "./save-refusal";
 import { isShortcutsModalOpen, REVERT_EVENT } from "./modal";
 import { drawLauncherOrder, initLauncherOrder } from "./launcher-order";
 import { focusOnNextDraw, isRedrawing, liveList, refreshLive, type Live } from "./live-list";
+import { wsButton, span } from "../dom";
 import { addSettingRow, registerCategory } from "./registry";
 
 const AGENTS_CATEGORY = "agents";
@@ -110,20 +112,7 @@ function argsFor(command: string): string[] | undefined {
 // ---------------------------------------------------------------------------------------------
 // Drawing
 
-function button(label: string, cls = ""): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = `ws-btn ${cls}`.trim();
-  b.textContent = label;
-  return b;
-}
 
-function span(cls: string, text: string): HTMLSpanElement {
-  const s = document.createElement("span");
-  s.className = cls;
-  s.textContent = text;
-  return s;
-}
 
 /** A text field that commits on change (blur or Enter) and reverts on Escape / the modal's
  *  REVERT_EVENT, like General's rows. `commit` gets the trimmed value; returning false reverts. */
@@ -176,7 +165,7 @@ function typeSelect(value: string, onPick: (id: string) => void): HTMLSelectElem
 }
 
 function folderButton(cwd: string | undefined, onPick: (cwd: string) => void, setError: SetError): HTMLButtonElement {
-  const b = button(cwd ? folderName(cwd) : "Choose Folder", "ag-folder");
+  const b = wsButton(cwd ? folderName(cwd) : "Choose Folder", "ag-folder");
   b.title = cwd ? `Opens In ${cwd}` : "Opens In The Launcher's Folder";
   b.addEventListener("click", () => {
     void pickFolder(cwd).then((picked) => {
@@ -216,15 +205,16 @@ function builtinsControl(setError: SetError): HTMLElement {
       // Model only on a live Rendered row: on an Off row a model would land on a disabled entry.
       if (shown && v.merged.body === "rendered") {
         const model = v.merged.model ?? "";
-        const claude = v.merged.id === "claude";
+        const descriptor = isAgentId(v.merged.id) ? AGENTS[v.merged.id] : null;
+        const usesSdkModel = descriptor?.flowSdk === true;
         const save = (next: string) => {
           void run("builtin", setError, (fresh) => setModel(fresh.overlay, fresh.hits, builtinAgents(), v.key, next));
         };
-        const codex = v.merged.id === "codex";
-        const codexModels = codex ? getPref("codexModels") ?? [] : [];
-        const listed = codex ? codexModelSelect(model, codexModels, save) : null;
-        if (claude) {
-          bind.appendChild(modelSelect(model, getPref("claudeModels") ?? [], save));
+        const models = descriptor ? getPref(descriptor.modelPref) ?? [] : [];
+        const effortModels = models.filter((m): m is typeof m & { effortLevels: readonly string[] } => "effortLevels" in m);
+        const listed = descriptor && !usesSdkModel ? codexModelSelect(model, effortModels, save) : null;
+        if (usesSdkModel) {
+          bind.appendChild(modelSelect(model, models, save));
           if (model === "") name.appendChild(span("ag-note", "Pin A Model To Keep Fable Off"));
         } else if (listed) {
           bind.appendChild(listed);
@@ -232,17 +222,17 @@ function builtinsControl(setError: SetError): HTMLElement {
           const input = field("ag-model", model, "CLI Default", save);
           input.setAttribute("aria-label", "Model");
           bind.appendChild(input);
-          if (codex) name.appendChild(span("ag-note", "Open A Codex Tab To List Models"));
+          if (descriptor) name.appendChild(span("ag-note", `Open A ${descriptor.name} Tab To List Models`));
         }
-        if (claude || codex) {
+        if (descriptor) {
           const pick = (next: string) => {
             void run("builtin", setError, (fresh) => setEffort(fresh.overlay, fresh.hits, builtinAgents(), v.key, next));
           };
-          bind.appendChild(effortSelect(v.merged.effort ?? "", pick, codex ? codexEffortLevels(model, codexModels) : undefined));
+          bind.appendChild(effortSelect(v.merged.effort ?? "", pick, usesSdkModel ? undefined : codexEffortLevels(model, effortModels)));
         }
       }
       if (v.offWith) {
-        const b = button(`Off With ${v.offWith}`);
+        const b = wsButton(`Off With ${v.offWith}`);
         b.disabled = true;
         bind.appendChild(b);
       } else {
@@ -251,7 +241,7 @@ function builtinsControl(setError: SetError): HTMLElement {
           const next = s.rows.find((r) => r.role === "astra");
           if (next) name.appendChild(span("ag-note", `Reviews Go To ${labelOf(next)}`));
         }
-        const b = button(on ? "On" : "Off");
+        const b = wsButton(on ? "On" : "Off");
         b.setAttribute("aria-pressed", String(on));
         b.title = on ? `Hide ${labelOf(v.merged)} From The Launcher` : `Show ${labelOf(v.merged)} In The Launcher`;
         b.addEventListener("click", () => {
@@ -303,7 +293,7 @@ function customsControl(setError: SetError): HTMLElement {
     for (const v of customViews(s, builtinViews(s))) {
       const row = document.createElement("div");
       row.className = "ws-row";
-      const remove = button("Remove", "ws-remove");
+      const remove = wsButton("Remove", "ws-remove");
       remove.addEventListener("click", () => {
         remove.disabled = true;
         void run("custom", setError, onCustom(v, (f, k) => removeCustom(f.overlay, f.hits, builtinAgents(), k)));
@@ -349,13 +339,13 @@ function customsControl(setError: SetError): HTMLElement {
       const type = typeSelect(d.id, (id) => { d.id = id; });
       const command = field("ag-cmd", d.command, "Command", (next) => { d.command = next; tryAdd(); }, (raw) => { d.command = raw; });
       const folder = folderButton(d.cwd || undefined, (cwd) => { d.cwd = cwd; refreshAll(); }, setError);
-      const discard = button("Discard", "ws-remove");
+      const discard = wsButton("Discard", "ws-remove");
       discard.addEventListener("click", () => { draft = null; setError(""); refreshAll(); });
       row.append(label, type, command, folder, discard);
       root.appendChild(row);
     }
 
-    const add = button("Add Agent", "ws-add");
+    const add = wsButton("Add Agent", "ws-add");
     add.disabled = draft !== null;
     add.addEventListener("click", () => {
       draft = { label: "", id: "shell", command: "", cwd: "" };
@@ -388,7 +378,7 @@ const primaryControl = (setError: SetError): HTMLElement => primarySelect(effect
 let registered = false;
 
 /** Adds the Agents page once, above Keybinds: Primary Agent, built-in rows, Launcher Order, Your
- *  Agents, Macros. Also binds the primary agent's sources, once, at boot. */
+ *  Agents. Also binds the primary agent's sources, once, at boot. */
 export function registerAgentRows(): void {
   if (registered) return;
   registered = true;
@@ -440,6 +430,5 @@ export function registerAgentRows(): void {
     keywords: () => "custom add agent command folder",
     control: customsControl,
   });
-  registerMacroRows(AGENTS_CATEGORY);
   onSettingsChanged((e) => { if (e.keys.includes("agents")) refreshAll(); });
 }

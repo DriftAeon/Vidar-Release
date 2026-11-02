@@ -1,8 +1,10 @@
 // Display-only text formatting shared across panels. Config keys and wire values stay
 // exactly as written; only what the user reads is touched.
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { AGENTS } from "./agents/descriptor.ts";
 
 // The one display-case home: every visible capitalisation in src/ goes through label, titleWords or a
-// function below (tools/ui/lint-case.mjs refuses a hand-rolled copy elsewhere).
+// function below (tools/gate/one-home.mjs refuses a hand-rolled copy elsewhere).
 // Words that read as acronyms or fixed spellings in the UI. Anything not listed falls back to title case,
 // so a new transport or scope still renders sanely without editing this table.
 const ACRONYMS: Record<string, string> = {
@@ -140,11 +142,23 @@ const MODEL_NAMES: ReadonlyMap<string, string> = new Map([
   ["gpt-6-astra", "GPT 6 Astra"],
 ]);
 
+function stripModelAgentPrefix(id: string, separators: string, ignoreCase = false): string {
+  for (const agent of Object.values(AGENTS)) {
+    const stem = agent.modelPrefix?.slice(0, -1);
+    if (!stem) continue;
+    const head = id.slice(0, stem.length);
+    const separator = id[stem.length];
+    if ((ignoreCase ? head.toLowerCase() === stem.toLowerCase() : head === stem)
+      && separator !== undefined && separators.includes(separator)) return id.slice(stem.length + 1);
+  }
+  return id;
+}
+
 /** Left-bar row model line: any id or alias to a Title Case display name. "claude-sonnet-5-5" and
  *  "sonnet-5.5" → "Sonnet 5.5", "gpt-5.4-codex" → "GPT 5.4 Codex", "opus-5.5[1m]" → "Opus 5.5 1M".
  *  Numeric tokens join with dots; unknown words get Title Case; idempotent on its own output. */
 export const modelRowName = (id: string): string => {
-  const tokens = id.trim().replace(/\[1m\]$/i, " 1M").replace(/^claude[-_ ]/i, "").split(/[-_\s]+/)
+  const tokens = stripModelAgentPrefix(id.trim().replace(/\[1m\]$/i, " 1M"), "-_ ", true).split(/[-_\s]+/)
     .filter((t) => t && !/^\d{8}$/.test(t));
   if (!tokens.length) return "";
   const isVer = (t: string) => /^\d+(\.\d+)*$/.test(t);
@@ -165,10 +179,44 @@ export const prettyModel = (id: string): string => {
   // any GPT id (case, - _ or space separated) reads like the Codex picker row
   if (/^gpt[-_\s]/i.test(id.trim())) return codexModelLabel(id);
   // settings aliases: "opus[1m]" → "Opus 1M"
-  const parts = id.replace(/\[1m\]$/i, "-1M").replace(/^claude-/, "").split("-").filter((p) => !/^\d{8}$/.test(p));
+  const parts = stripModelAgentPrefix(id.replace(/\[1m\]$/i, "-1M"), "-").split("-").filter((p) => !/^\d{8}$/.test(p));
   if (!parts.length) return id;
   const name = label(parts[0]);
   const nums = parts.slice(1).filter((p) => /^\d+$/.test(p)).join(".");
   const rest = parts.slice(1).filter((p) => !/^\d+$/.test(p)).join(" ");
   return [name, nums, rest].filter(Boolean).join(" ");
 };
+
+// Number and time text shared by panels (non-case formatting).
+
+/** A whole number as at least two digits. */
+export const pad2 = (n: number): string => String(n).padStart(2, "0");
+
+/** Local "HH:MM" for an epoch-millisecond time. */
+export function clock(ms: number): string {
+  const d = new Date(ms);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** Milliseconds as mm:ss, or h:mm:ss past an hour. */
+export function mmss(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  return h ? `${h}:${pad2(Math.floor(s / 60) % 60)}:${pad2(s % 60)}` : `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
+}
+
+/** Age in seconds as "42s ago" / "5m ago" / "3h ago" (launcher rows, status). */
+export function agoSecs(secs: number): string {
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  return `${Math.floor(secs / 3600)}h ago`;
+}
+
+/** Age of an epoch-millisecond time as "just now" / "5m ago" / "3h ago", then the local date (comment cards). */
+export function agoSince(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(ms).toLocaleDateString();
+}

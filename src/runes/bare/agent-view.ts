@@ -4,39 +4,31 @@
 // IPC contract. No roster import: the panel hands the model lists in, so
 // `node --test` loads this.
 import { EFFORT_LEVELS } from "../../agents/protocol";
+import type { AgentId } from "../../agents/id";
+// @ts-ignore TS5097: node --test loads this module directly
+import { AGENTS } from "../../agents/descriptor.ts";
+// @ts-ignore TS5097: node --test loads this module directly
+import { FLOW_MODELS } from "../../flow/claude-models.ts";
 import { label } from "../../format";
 import { codexEffortLevels, effortSelect, modelSelect } from "../../settings/agent-selects";
 import {
-  generating, type BareActiveLibrary, type BareFlow, type BareLocalSources, type GenOutcome, type GenState,
+  generating, inputAgent, type BareActiveLibrary, type BareFlow, type BareLocalSources, type GenOutcome, type GenState,
 } from "./flow";
 import { iconImg } from "../../icon-img";
+import { button, el } from "../../dom";
 import {
   ADD_TO_VAULT_LABEL, elapsedLabel, emptyProgress, groupedProgress, progressCards, reduceProgress, stopProgress,
   type GeneratedRef, type ProgressCard, type ProgressState,
 } from "./progress";
 
-export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
-
-export function btn(label: string, cls: string, run: () => void, disabled = false): HTMLButtonElement {
-  const b = el("button", cls, label);
-  b.type = "button";
-  b.disabled = disabled;
-  b.addEventListener("click", run);
-  return b;
-}
-
 /** The choices for the focused tab's agent: the Claude roster or the saved Codex catalog. */
 export interface GenModel { value: string; label: string; effortLevels?: readonly string[] }
 export interface GenCtx { models: GenModel[] }
 
-const TIP_CODEX_READS = " Codex can read files while generating; it cannot write them.";
+const readTip = (agent: AgentId): string =>
+  ` ${AGENTS[agent].name} can read files while generating; it cannot write them.`;
 export const TIP_GENERATING = "Generating…";
-const CLAUDE_DEFAULT = "claude-sonnet-5";
+const SDK_DEFAULT = FLOW_MODELS.sonnet;
 
 const END_LABEL: Record<Exclude<GenState, "done" | "readOnly">, string> = {
   failed: "Generation Failed", login: "Not Logged In", timeout: "Timed Out", cancelled: "Cancelled",
@@ -52,9 +44,9 @@ export function doneTitle(model: string, effort: string, r: { durationMs: number
 }
 
 /** Pure: the Generate tooltip (ipc.md); no size is known per file, so the token count is left out. */
-export function generateTip(model: string, codex: boolean, tokensK: number | null = null): string {
+export function generateTip(model: string, agent: AgentId, tokensK: number | null = null): string {
   const what = tokensK === null ? "Sends the ticked rules" : `Sends about ${tokensK}K tokens of rules`;
-  return `${what} to ${model}.${codex ? TIP_CODEX_READS : ""}`;
+  return `${what} to ${model}.${AGENTS[agent].flowSdk ? "" : readTip(agent)}`;
 }
 
 /** Pure: splits generator warnings into the "N Warnings" label with its tooltip and the merge failures kept visible. */
@@ -66,7 +58,7 @@ export function warningSummary(warnings: string[]): { label: string | null; tip:
 }
 
 export interface AgentViewDeps {
-  codex: boolean;
+  agent?: AgentId;
   flow: BareFlow;
   gen?: () => GenCtx;
   paint(): void;
@@ -126,7 +118,8 @@ export interface AgentView {
 }
 
 export function createAgentView(deps: AgentViewDeps): AgentView {
-  const { codex, flow } = deps;
+  const agent = inputAgent(deps as unknown as AgentViewDeps & Record<string, unknown>);
+  const { flow } = deps;
   const ctx = (): GenCtx => deps.gen?.() ?? { models: [] };
   let model = "";
   let effort = "";
@@ -135,15 +128,16 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
   let phase: "idle" | "running" | "ended" = "idle";
   let doneText: { model: string; title: string; gen: GeneratedRef; added: boolean } | null = null;
   let progress: ProgressState = emptyProgress();
+  const shown: { model?: HTMLSelectElement; effort?: HTMLSelectElement } = {};
 
   const modelLabel = (v: string): string => ctx().models.find((m) => m.value === v)?.label ?? v;
-  const efforts = (): readonly string[] => (codex ? codexEffortLevels(model, ctx().models.map((m) => ({ ...m, effortLevels: m.effortLevels ?? [] }))) : EFFORT_LEVELS);
+  const efforts = (): readonly string[] => (AGENTS[agent].flowSdk ? EFFORT_LEVELS : codexEffortLevels(model, ctx().models.map((m) => ({ ...m, effortLevels: m.effortLevels ?? [] }))));
 
   function ensureDefaults(): void {
     const models = ctx().models;
     if (!models.length) return;
     if (!models.some((m) => m.value === model)) {
-      model = (!codex && models.find((m) => m.value === CLAUDE_DEFAULT)?.value) || models[0].value;
+      model = (AGENTS[agent].flowSdk && models.find((m) => m.value === SDK_DEFAULT)?.value) || models[0].value;
       effort = "";
     }
     const levels = efforts();
@@ -267,16 +261,19 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
     get running() { return phase === "running"; },
     selects() {
       ensureDefaults();
-      const m = modelSelect(model, ctx().models, (v) => { model = v; ensureDefaults(); deps.paint(); });
-      const e = effortSelect(effort, (v) => { effort = v; deps.paint(); }, efforts());
+      // a pick repaints the view, which replaces both selects: focus moves to the new one so arrow keys keep
+      // stepping the list (they went to a detached select after the first step, 2026-10-29 Explorer re-check)
+      const m = modelSelect(model, ctx().models, (v) => { model = v; ensureDefaults(); deps.paint(); shown.model?.focus(); });
+      const e = effortSelect(effort, (v) => { effort = v; deps.paint(); shown.effort?.focus(); }, efforts());
+      shown.model = m; shown.effort = e;
       return [m, e];
     },
     generateButton(sources, ticked, any) {
       if (!this.available) return null;
       ensureDefaults();
       const other = generating();
-      const b = btn("Generate", "ws-btn ws-add", () => { void start(sources, ticked); }, !any || other || !model || !effort);
-      b.title = other ? "Generating in Another Tab" : generateTip(modelLabel(model), codex);
+      const b = button("Generate", "ws-btn ws-add", () => { void start(sources, ticked); }, !any || other || !model || !effort);
+      b.title = other ? "Generating in Another Tab" : generateTip(modelLabel(model), agent);
       return b;
     },
     generatingView() {
@@ -290,8 +287,8 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
       } else if (!cards) out.push(lineRow(phase === "running" ? "running" : "pending", ""));
       const actions = el("div", "rp-actions");
       if (phase === "running") {
-        actions.appendChild(btn("Cancel", "ws-btn", () => { if (runId) void flow.cancelGenerate(runId); }, !runId));
-      } else actions.appendChild(btn("Back", "ws-btn", () => deps.done()));
+        actions.appendChild(button("Cancel", "ws-btn", () => { if (runId) void flow.cancelGenerate(runId); }, !runId));
+      } else actions.appendChild(button("Back", "ws-btn", () => deps.done()));
       out.push(actions);
       return out;
     },
@@ -305,7 +302,7 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
       const add = deps.addToVault;
       if (add && !doneText.added) {
         const d = doneText;
-        const b = btn(ADD_TO_VAULT_LABEL, "ws-btn", () => {
+        const b = button(ADD_TO_VAULT_LABEL, "ws-btn", () => {
           b.disabled = true;
           b.setAttribute("aria-busy", "true");
           void add(d.gen).then((ok) => { if (ok) d.added = true; }, () => undefined).finally(() => { b.disabled = false; b.removeAttribute("aria-busy"); deps.paint(); });

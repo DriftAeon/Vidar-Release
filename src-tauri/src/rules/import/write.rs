@@ -164,7 +164,7 @@ pub fn import_json(split: &Split, meta: &Meta) -> String {
         })
         .collect();
     let v = serde_json::json!({ "source": meta.source, "sha256": split.sha256, "date": meta.date, "bricks": bricks });
-    serde_json::to_string_pretty(&v).unwrap_or_default() + "\n"
+    crate::fsx::json_pretty_text(&v, true).unwrap_or_else(|_| "\n".into())
 }
 
 /// Write the library into `dir` (the `runtime\runes\<name>` folder). `kept` ids are active, the rest draft;
@@ -184,8 +184,11 @@ pub fn write_library(
         return Err("source paths: requires at least one glob".into());
     }
     check_id(meta.name).map_err(|e| format!("library name: {e}"))?;
-    if meta.name == "stock" {
-        return Err("library name `stock` is reserved".into());
+    if crate::bare::layer::is_vidar_library(meta.name) {
+        return Err(format!("library name `{}` is reserved", meta.name));
+    }
+    if crate::bare::vault::migrate_lib_rename::retired(meta.name) {
+        return Err(format!("library name `{}` is reserved (a retired library name)", meta.name));
     }
     if CONTEXTS.contains(&meta.name) {
         return Err(format!("library name: `{}` is a scope context name", meta.name));
@@ -232,13 +235,15 @@ mod reserved_name_tests {
     use super::*;
 
     #[test]
-    fn stock_is_reserved_before_any_import_write() {
+    fn vidar_is_reserved_before_any_import_write() {
         let split = super::super::split::split("# Hello\nA rule.\n", &[], "");
         let tick = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("vidar-refuse-stock-{}-{tick}", std::process::id()));
-        let meta = Meta { name: "stock", source: "test", date: "2026-10-25" };
-        let error = write_library(&dir, &split, &meta, &[], &[], false).unwrap_err();
-        assert!(error.contains("stock") && error.contains("reserved"), "{error}");
-        assert!(!dir.exists());
+        for name in ["vidar"] {
+            let dir = std::env::temp_dir().join(format!("vidar-refuse-{name}-{}-{tick}", std::process::id()));
+            let meta = Meta { name, source: "test", date: "2026-10-25" };
+            let error = write_library(&dir, &split, &meta, &[], &[], false).unwrap_err();
+            assert!(error.contains(name) && error.contains("reserved"), "{error}");
+            assert!(!dir.exists());
+        }
     }
 }

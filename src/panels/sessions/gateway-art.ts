@@ -1,6 +1,11 @@
 // A Claude tab's art says which gateway it runs under. The ids come from the module registry
 // (agent.gateway), never a table here; an art the registry does not know fails closed.
 import { gatewayModuleRows } from "../../modules/registry";
+import { AGENTS } from "../../agents/descriptor";
+import { sessionSupports } from "./types";
+
+/** The plain tab art of the agent that runs gateways. */
+const GATEWAY_ART = Object.values(AGENTS).filter((a) => sessionSupports(a.id, "gateway"))[0].art;
 
 /** A gateway module id, validated against the registry. */
 export type GatewayId = string;
@@ -13,7 +18,7 @@ export type ClaudeArt =
 
 /** Pure: classify an art against a set of gateway ids. */
 export function classifyClaudeArt(art: string | undefined, gateways: ReadonlySet<string>): ClaudeArt {
-  if (!art || art === "claude") return { kind: "plain" };
+  if (!art || art === GATEWAY_ART) return { kind: "plain" };
   return gateways.has(art) ? { kind: "gateway", id: art } : { kind: "unknown" };
 }
 

@@ -1,6 +1,6 @@
 {
   "id": "w-runes-new-custom-vault",
-  "title": "Build a Custom Vault From Two Sets and One Rune",
+  "title": "Build a New Rune Vault From Two Sets and One Rune",
   "style": "new-user",
   "scope": "vidar",
   "surfaces": ["launcher", "runes"],
@@ -9,10 +9,10 @@
   "core": false,
   "source": [],
   "steps": [
-    { "intent": "open the launcher, press Pick Vault on a Claude Bare row, choose Custom in the Rune Vault list and tick the First and Second sets" },
-    { "intent": "press Launch to start a session on that Custom vault, without sending a message" },
-    { "intent": "in Runes, press Modify, then Add Rune and add one single rune that is not in either set" },
-    { "intent": "press Done and check the view lists the runes from First, from Second and the single one I added" },
-    { "intent": "check the vault name the session shows is the new Custom vault, and that Lock still reads Lock" }
+    { "intent": "start a new Claude tab, and in the Runes panel press New Rune Vault; in the Rune Library on the left tick the First and Second sets and one single rune that is not in either set" },
+    { "intent": "press Done, give the vault a name and save it; check the vault list comes back with that vault picked" },
+    { "intent": "press Start Session to begin a session on the new vault, without sending a message" },
+    { "intent": "check the view lists the runes from First, from Second and the single one I added" },
+    { "intent": "check the vault name the session shows is the name I gave, and that Lock still reads Lock" }
   ]
 }

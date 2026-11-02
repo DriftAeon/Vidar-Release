@@ -177,6 +177,23 @@ test("run log: valid line written, none without the env var", () => {
   assert.equal(fs.existsSync(path.join(off, "run-log.jsonl")), false);
 });
 
+test("run log: a paste to a named receiver logs without a warning", () => {
+  const dir = tmp();
+  const env = { VIDAR_EXPLORER_RUN: dir };
+  const errs = [];
+  const orig = console.error;
+  console.error = (...a) => errs.push(a.join(" "));
+  try { logVerb(env, "act", "9333", ["paste", "composer"], { target: "composer", input: {} }, 0); } finally { console.error = orig; }
+  assert.deepEqual(errs, []);
+  const line = JSON.parse(fs.readFileSync(path.join(dir, "run-log.jsonl"), "utf8").trim());
+  assert.deepEqual(line.target, { selector: "composer" });
+});
+
+test("act key with a ref before the key says how to focus first", async () => {
+  const ctx = { ...fakeCtx(null), env: {}, flags: {}, a1: "key", a2: "e5", cardOpts: "Enter", events: [] };
+  await assert.rejects(act(ctx), /usage: act key <Key> \(focus with act press first\)/);
+});
+
 test("turn cap refuses the send past N, per port", () => {
   const dir = tmp();
   const env = { VIDAR_DRIVE_TURNS: "2", VIDAR_EXPLORER_RUN: dir };

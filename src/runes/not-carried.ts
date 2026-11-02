@@ -14,7 +14,7 @@ const RUNE_ID = /^[a-z0-9][a-z0-9-]*$/;
 
 /** A warning in the Not Carried format whose kind is a rune kind and whose id is a rune id; null otherwise.
  *  `guard` (not a rune), the legacy `outputStyle` spelling, and a `permission` that names a tool or mode
- *  (`mcp__plugin_vidar_drive`, `acceptEdits`) fall through to plain prose. */
+ *  (`mcp__vidar_drive`,`acceptEdits`) fall through to plain prose. */
 export function parseNotCarried(warning: string): NotCarried | null {
   const m = LINE.exec(warning);
   if (!m) return null;

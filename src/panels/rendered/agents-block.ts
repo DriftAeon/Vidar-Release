@@ -8,6 +8,7 @@ import { iconImg } from "../../icon-img";
 import { getPref, setPref } from "../../prefs";
 import { createDismissedStore } from "./agents-dismissed";
 import { markSlot, type Mark } from "./marks";
+import { pad2 } from "../../format";
 import { fmtTokens } from "./format";
 import { AGENT_WORD, agentState, awaitingPill, createAgentsDrawer, fillCalls, reportVerdict, setHidden, setSlotMark, setState, setText, stateMark, type AgentState } from "./agents-drawer";
 import type { RenderedState, ToolRecord, WaitingRow } from "./state";
@@ -29,7 +30,7 @@ function fmtElapsed(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60), h = Math.floor(m / 60);
   const mm = m % 60, ss = s % 60;
-  return h > 0 ? `${h}:${String(mm).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`;
+  return h > 0 ? `${h}:${pad2(mm)}` : `${m}:${pad2(ss)}`;
 }
 
 const CHIP_ORDER: AgentState[] = ["running", "needs", "done", "failed"];

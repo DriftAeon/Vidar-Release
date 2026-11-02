@@ -13,7 +13,7 @@ import { flushGraphSave, activeDraft } from "./store";
 import { validateGraph } from "./validate";
 import { startRun, cancelRun, heldRunIds } from "./engine";
 import { getRun, runsForGraph } from "./runs-store";
-import { paintRun, clearRunPaint, CANCEL_RUN_TOOLTIP } from "./run-view";
+import { paintRun, clearRunPaint, statusLabel, CANCEL_RUN_TOOLTIP } from "./run-view";
 import { showFlowToast } from "./viewport";
 
 /** The active graph, its `nodes`/`edges` pointed at the live working copy (`S.nodes`/`S.edges`)
@@ -32,7 +32,7 @@ function runStatusLabel(status: FlowRunStatus): string {
     case "running":
       return "Running";
     case "success":
-      return "Success";
+      return statusLabel("ok"); // the node map's word, so run and node cannot drift
     case "error":
       return "Error";
     case "canceled":

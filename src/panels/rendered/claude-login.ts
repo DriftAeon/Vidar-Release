@@ -11,6 +11,7 @@ import { DRIVE_CLASS } from "../rendered-drive";
 import { btn } from "./dom";
 import { codexLogin, loginCard, type CodexLoginDeps, type LoginCard } from "./api-key-card";
 import type { AgentAdapter } from "../../agents/protocol";
+import { AGENT_PROFILE } from "../../agents/agent-profile";
 import type { AgentTransport, RenderedAgent } from "./transport";
 
 // The tip wording lives in agents/login-tips.ts; these names stay importable from here.
@@ -151,8 +152,14 @@ export interface TabLoginDeps extends CodexLoginDeps {
  *  identity; not where respawn is refused: the respawn would throw), else Codex's. A Claude login
  *  respawns the session so it reads the new credentials, as /clear does, keeping the session id
  *  so the conversation resumes. */
-export function tabLogin(S: { adapter: AgentAdapter; isAlive: boolean; loggedOut: boolean; sessionId?: string | null }, deps: TabLoginDeps) {
-  if (deps.opts.agent !== "claude") return codexLogin(S, deps);
+export function tabLogin(S: TabLoginState, deps: TabLoginDeps) {
+  // an agent whose CLI answers a login check (agent-profile `loginCheck`) logs in through the CLI card; the rest through their adapter
+  return AGENT_PROFILE[deps.opts.agent].loginCheck ? cliTabLogin(S, deps) : codexLogin(S, deps);
+}
+
+type TabLoginState = { adapter: AgentAdapter; isAlive: boolean; loggedOut: boolean; sessionId?: string | null };
+
+function cliTabLogin(S: TabLoginState, deps: TabLoginDeps) {
   const reach = claudeReach(deps.hostCan, deps.transport);
   return claudeLogin({
     ...claudeLoginCalls(deps.opts.tabId, deps.transport.profile ?? null),

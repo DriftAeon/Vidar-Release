@@ -1,6 +1,10 @@
 # setup-voice.ps1 - one command that sets up Vidar's local voice stack.
 #
-#   pwsh -File tools/voice/setup-voice.ps1 [-DryRun] [-Yes] [-Speak] [-Root <checkout>]
+#   pwsh -File tools/voice/setup-voice.ps1 [-Only whisper|venv|kokoro|wakeword] [-DryRun] [-Yes] [-Speak] [-Root <checkout>]
+#
+# -Only runs one install alone: whisper (CLI and model), venv (Python 3.11 venv and pip
+# packages, plus the Speak extra with -Speak), kokoro (model files), wakeword (models). The
+# confirm table and -DryRun cover just that install. Without -Only every step runs.
 #
 # Steps: Python 3.11 (py launcher), venv, pip packages (lean ONNX set; -Speak adds the
 # KPipeline Speak voice extra), Whisper CLI and model, Kokoro ONNX model files, wake-word
@@ -22,6 +26,8 @@
 # Refuses: nothing is installed globally, no admin, no PATH change. Python itself is not
 # downloaded: install Python 3.11 first if `py -3.11` is missing.
 param(
+  [ValidateSet('whisper', 'venv', 'kokoro', 'wakeword')]
+  [string]$Only,
   [switch]$DryRun,
   [switch]$Yes,
   [switch]$Speak,
@@ -60,6 +66,12 @@ $KokoroSha256 = @{
   'voices-v1.0.bin'       = $null
 }
 $whisperModel = 'tiny.en-q8_0'
+
+# True when -Only is unset or names this install.
+function Want {
+  param([string]$Name)
+  return (-not $Only) -or ($Only -eq $Name)
+}
 
 function Step {
   param([string]$Name, [bool]$Present, [string]$What, [scriptblock]$Action)
@@ -129,14 +141,14 @@ try {
 } catch { $py311 = $false }
 
 $hasVenv = Test-Path $venvPython
-$missing = @(Get-MissingPackages $requirements)
-$missingSpeak = @(if ($Speak) { Get-MissingPackages $requirementsSpeak })
+$missing = @(if (Want 'venv') { Get-MissingPackages $requirements })
+$missingSpeak = @(if ($Speak -and (Want 'venv')) { Get-MissingPackages $requirementsSpeak })
 
 $whisperFile = Join-Path $whisperDir "ggml-$whisperModel.bin"
 $whisperCli = Join-Path $whisperDir 'whisper-cli.exe'
-$whisperReady = (Test-Path $whisperFile) -and (Test-Path $whisperCli)
+$whisperReady = (-not (Want 'whisper')) -or ((Test-Path $whisperFile) -and (Test-Path $whisperCli))
 
-$kokoroMissing = @($KokoroBytes.Keys | Where-Object { -not (Test-KokoroFile $_) })
+$kokoroMissing = @($KokoroBytes.Keys | Where-Object { (Want 'kokoro') -and -not (Test-KokoroFile $_) })
 
 # Wake-word models: every manifest entry wakeword-models.ps1 pins (models[] and the files[]
 # entries with a sha256). That script writes into its own checkout, not -Root.
@@ -146,7 +158,7 @@ $wm = Get-Content -LiteralPath $wakeManifest -Raw | ConvertFrom-Json
 $wakeEntries = @($wm.models) + @($wm.files | Where-Object { $_ -isnot [string] -and $_.PSObject.Properties['sha256'] -and $_.sha256 })
 $wakeMissing = @($wakeEntries | ForEach-Object {
   Join-Path $Root ($_.file.Substring('{vidar}/'.Length) -replace '/', '\')
-} | Where-Object { -not (Test-Path -LiteralPath $_) })
+} | Where-Object { (Want 'wakeword') -and -not (Test-Path -LiteralPath $_) })
 
 # --- What will be downloaded ---
 
@@ -184,7 +196,9 @@ if ($wakeMissing.Count -gt 0) {
     'CC BY-NC-SA 4.0 (models)' '~7 MB' 'SHA-256 and byte size against the openwakeword.json pack manifest'
 }
 
-if (-not $py311) {
+if (-not (Want 'venv')) {
+  # Python is only used for the venv and its packages.
+} elseif (-not $py311) {
   Write-Host '[fail]  Python 3.11 - `py -3.11` not found; install Python 3.11 and rerun'
   if (-not $DryRun) { exit 1 }
 } else {
@@ -218,14 +232,16 @@ if ($rows.Count -gt 0) {
 
 # --- Run ---
 
-Step 'Venv' $hasVenv "create $venvDir" {
-  Invoke-Checked 'py' @('-3.11', '-m', 'venv', $venvDir)
-}
+if (Want 'venv') {
+  Step 'Venv' $hasVenv "create $venvDir" {
+    Invoke-Checked 'py' @('-3.11', '-m', 'venv', $venvDir)
+  }
 
-Step 'Packages' ($missing.Count -eq 0) "pip install -r $requirements" {
-  Invoke-Checked $venvPython @('-m', 'pip', 'install', '--cache-dir', $pipCache, '-r', $requirements)
+  Step 'Packages' ($missing.Count -eq 0) "pip install -r $requirements" {
+    Invoke-Checked $venvPython @('-m', 'pip', 'install', '--cache-dir', $pipCache, '-r', $requirements)
+  }
+  if ($missing.Count -gt 0) { Show-Missing $missing }
 }
-if ($missing.Count -gt 0) { Show-Missing $missing }
 
 if ($Speak) {
   Step 'Speak extra' ($missingSpeak.Count -eq 0) "pip install -r $requirementsSpeak" {
@@ -234,11 +250,13 @@ if ($Speak) {
   if ($missingSpeak.Count -gt 0) { Show-Missing $missingSpeak }
 }
 
-Step 'Whisper' $whisperReady "fetch-whisper.ps1 -Model $whisperModel" {
-  Invoke-Checked 'pwsh' @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'fetch-whisper.ps1'), '-Model', $whisperModel)
+if (Want 'whisper') {
+  Step 'Whisper' $whisperReady "fetch-whisper.ps1 -Model $whisperModel" {
+    Invoke-Checked 'pwsh' @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'fetch-whisper.ps1'), '-Model', $whisperModel)
+  }
 }
 
-foreach ($f in $KokoroBytes.Keys) {
+foreach ($f in @($KokoroBytes.Keys | Where-Object { Want 'kokoro' })) {
   $dest = Join-Path $kokoroDir $f
   Step "Kokoro $f" (Test-KokoroFile $f) "download to $kokoroDir" {
     New-Item -ItemType Directory -Force $kokoroDir | Out-Null
@@ -259,9 +277,11 @@ foreach ($f in $KokoroBytes.Keys) {
   }
 }
 
-Step 'Wake word' ($wakeMissing.Count -eq 0) 'wakeword-models.ps1' {
-  Invoke-Checked 'pwsh' @('-NoProfile', '-File', $wakeScript)
+if (Want 'wakeword') {
+  Step 'Wake word' ($wakeMissing.Count -eq 0) 'wakeword-models.ps1' {
+    Invoke-Checked 'pwsh' @('-NoProfile', '-File', $wakeScript)
+  }
+  foreach ($w in $wakeMissing) { Write-Host "          missing: $w" }
 }
-foreach ($w in $wakeMissing) { Write-Host "          missing: $w" }
 
 if ($DryRun) { Write-Host 'Dry run: nothing changed.' } else { Write-Host 'Voice setup done.' }

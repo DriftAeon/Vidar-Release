@@ -59,6 +59,8 @@ function snapshot() {
     // A Falcon-hosted tab survives the relaunch and comes back through readopt.ts; restoring it
     // too would open the same thread a second time.
     if (s.falconSession || s.rendered?.hosted()) continue;
+    // a tab still picking its vault has no thread and no vault: a restore would open it with neither
+    if (s.pendingVault?.pending) continue;
     views.set(id, {
       tabKey: s.tabKey,
       agent: s.agent,

@@ -1,4 +1,4 @@
-// Sweep lanes for code: knip, tsc-unused, rustc, allows, ipc-unused, same-name, tests-touched.
+// Sweep lanes for code: knip, knip-test-only, tsc-unused, rustc, allows, ipc-unused, same-name, tests-touched.
 // Not a CLI; loaded by tools/sweep/scan.mjs. Usage: node tools/sweep/scan.mjs --lanes knip,tsc-unused
 // Refuses (lane error, never "fixed"): unparseable knip JSON, tsc output with no recognisable diagnostics,
 // a cargo check that fails to build. Vendor dirs and test files are skipped by the walkers.
@@ -38,6 +38,10 @@ function knip(ctx) {
   } catch (e) {
     return fail(cmd, `unparseable knip JSON (exit ${r.code}): ${e.message}; ${r.stderr.trim().slice(0, 200)}`);
   }
+  return { ok: true, cmd, findings: knipFindings(j, "knip") };
+}
+
+function knipFindings(j, lane) {
   const findings = [];
   for (const issue of j.issues || []) {
     for (const [type, items] of Object.entries(issue)) {
@@ -47,11 +51,33 @@ function knip(ctx) {
         if (!name) continue;
         const line = Array.isArray(it) ? it[0]?.line : it.line;
         findings.push({
-          key: `knip:${type}:${issue.file}:${name}`, file: issue.file, line, msg: `${type} ${name}`,
+          key: `${lane}:${type}:${issue.file}:${name}`, file: issue.file, line, msg: `${type} ${name}`,
         });
       }
     }
   }
+  return findings;
+}
+
+/* ---- knip-test-only: dead in production, live in the default run (read only by a test) ---- */
+function knipTestOnly(ctx) {
+  const inc = "--include exports,types,files,duplicates --reporter json --no-exit-code";
+  const cmds = [
+    `npx --no -- knip --production --config knip.production.json ${inc}`,
+    `npx --no -- knip ${inc}`,
+  ];
+  const [prod, def] = cmds.map((c) => {
+    const r = ctx.exec(c);
+    try {
+      return { j: JSON.parse(r.stdout) };
+    } catch (e) {
+      return { err: `unparseable knip JSON (exit ${r.code}): ${e.message}; ${r.stderr.trim().slice(0, 200)}` };
+    }
+  });
+  const cmd = cmds.join(" ; ");
+  if (prod.err || def.err) return fail(cmd, prod.err || def.err);
+  const seen = new Set(knipFindings(def.j, "k").map((f) => f.key));
+  const findings = knipFindings(prod.j, "knip-test-only").filter((f) => !seen.has(f.key.replace("knip-test-only", "k")));
   return { ok: true, cmd, findings };
 }
 
@@ -206,6 +232,7 @@ function testsTouched(ctx) {
 
 export const LANES = [
   { id: "knip", kind: "tracked", run: knip },
+  { id: "knip-test-only", kind: "tracked", run: knipTestOnly },
   { id: "tsc-unused", kind: "tracked", run: tscUnused },
   { id: "rustc", kind: "tracked", run: rustc },
   { id: "allows", kind: "tracked", run: allows },

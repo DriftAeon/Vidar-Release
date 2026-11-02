@@ -234,7 +234,7 @@ export async function adoptHosted(
     // A gateway session keeps the identity the host summary reports: tab art, and the gateway a /clear respawns under.
     art: s.gateway ?? AGENTS[agent].art,
     // A Rendered Bare session keeps its launch profile: a /clear respawn stays bare, and the panels
-    // read the tab's own home (rack, loadout, handoffs).
+    // read the tab's own home (rack, handoffs).
     profile: s.profile,
     // and its row: a /clear respawn rebuilds that row's payload (the host echoes the key)
     rowKey: s.profile ? s.row_key : undefined,

@@ -16,6 +16,7 @@ globalThis.CSS ??= { escape: (s) => String(s) };
 const { ClaudeAdapter } = await import("../src/agents/claude.ts");
 const { createGroups } = await import("../src/panels/rendered/groups.ts");
 const { createTextStream } = await import("../src/panels/rendered/text-stream.ts");
+await (await import("../src/panels/markdown-lazy.ts")).markdownReady(); // the parser loads on first use; these tests paint synchronously
 
 const PARENT = "toolu_01Agent";
 const rec = (id, content, parent = null) =>

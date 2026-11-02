@@ -1,0 +1,17 @@
+{
+  "id": "w-runes-same-group-both-panes",
+  "title": "A Rune Sits in the Same Group in Both Panes",
+  "style": "new-user",
+  "scope": "vidar",
+  "surfaces": ["launcher", "runes"],
+  "tags": ["runes", "vault"],
+  "realModel": false,
+  "core": false,
+  "source": [],
+  "steps": [
+    { "intent": "start a new Claude tab, and in the Runes panel press New Rune Vault" },
+    { "intent": "in the Rune Library on the left, find two runes that sit in the Rune Satchel and turn both on" },
+    { "intent": "check the vault view on the right shows both runes under one Rune Satchel card, not split across cards named after where they came from" },
+    { "intent": "for each runeset the library lists, check the vault view puts its runes under a card with that same runeset name" }
+  ]
+}

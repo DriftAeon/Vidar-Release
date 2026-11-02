@@ -44,6 +44,7 @@ async function open(status, search = searchOf([DB_HIT], [PAGE_HIT])) {
   answers.notion_search = search;
   answers.open_url = undefined;
   root = mountNotionView(document.body);
+  root.style.display = "flex"; // the workbench host shows the pane before onShown (workbench.ts); jsdom 30.1 refuses focus under display: none
   onNotionShown();
   await settle();
 }

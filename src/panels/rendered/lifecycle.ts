@@ -160,7 +160,16 @@ export function createLifecycle(S: RenderedState, deps: LifecycleDeps) {
     S.isAlive = false;
   }
   let rulesNoted = false; // prepare-time warnings land once per body, not on every Resume or Retry
+  /** The one wait on the vault gate: every spawn() entry (first start, /clear, Restart, Retry, a rune-guard
+   *  retry, respawnFresh) shares it, so a pick starts exactly one process. */
+  let gated: Promise<void> | null = null;
   function spawn(): Promise<void> {
+    const gate = opts.vaultGate;
+    if (gate?.pending) {
+      // S.spawning stays null while waiting: stopAgent has nothing to wait for or kill, and the chip reads Picking
+      gated ??= gate.wait().then(() => { gated = null; return S.disposed ? undefined : spawn(); });
+      return gated;
+    }
     // the chip reads Starting… while a spawn is in flight (state-chip.ts): repaint once it clears. spawnInner starts
     // a microtask later, so S.spawning is already set when its own status paint runs (with a pinned model the
     // status line never reads "Starting…", and that paint read Ready: E1 run 4, case 2)

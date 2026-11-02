@@ -34,11 +34,10 @@ import { CodexLogin, EXITED_REASON } from "./codex-login";
 import { pretty } from "../format";
 type Decision = Parameters<AgentAdapter["encodePermission"]>[1];
 
-type Json = Record<string, unknown>;
+// @ts-ignore TS5097: node --test loads this module directly
+import { obj, str, type Json } from "../json.ts";
 
-const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const obj = (v: unknown): Json | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : null);
 
 export class CodexAdapter implements AgentAdapter {
   private send: (line: string) => unknown = () => {};

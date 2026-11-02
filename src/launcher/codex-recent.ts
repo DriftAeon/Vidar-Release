@@ -2,13 +2,12 @@
 // (list_codex_threads). Same column and row look as the Claude one in recent.ts.
 import { invoke } from "../ipc";
 import type { CodexThreadRow } from "../ipc";
-import { DASH, prettyModel } from "../format";
+import { agoSecs as ago, DASH, prettyModel } from "../format";
 import { codexThreadHolder, refreshRawCodexThreads } from "../panels/sessions";
 import type { AgentType, Location } from "../config";
 import { spawnFrom } from "./roster";
 import { openColumn, placeColumn } from "./columns";
 import { twoLineRow } from "./menu-rows";
-import { ago } from "./ago";
 import { lucide } from "../icons";
 import { cachedList } from "./recent-cache";
 

@@ -4,7 +4,7 @@
 export type RuneLibraryKey = "global" | "vidar";
 export type RuneState = "draft" | "active" | "disabled";
 
-export interface RuneSetMember {
+interface RuneSetMember {
   id: string;
   /** Came from the `<?recall?>` marker rather than a slot line. */
   recall: boolean;
@@ -38,7 +38,7 @@ export interface RuneItem {
   body: string;
 }
 
-export interface RuneLibrary {
+interface RuneLibrary {
   key: RuneLibraryKey;
   root: string;
   present: boolean;
@@ -67,7 +67,7 @@ export interface LoadHistory {
   bareSets: Record<string, string>;
 }
 
-export interface RunesLoadedFile {
+interface RunesLoadedFile {
   path: string;
   memoryType: string;
   /** `start`: instructions at session start; `touch`: nested memory loaded on a file touch. */
@@ -79,5 +79,5 @@ export interface RunesLoadedFile {
 }
 
 export type RunesLoaded =
-  | { source: "transcript" | "vault" | "rollout"; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; runeTriggers?: Record<string, string>; skills?: string[]; truncated: boolean }
-  | { source: "none"; reason: string; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; runeTriggers?: Record<string, string>; skills?: string[]; truncated: boolean };
+  | { source: "transcript" | "vault" | "rollout"; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; runeTriggers?: Record<string, string>; skills?: string[]; repoSkillsOff?: string[]; codexFiles?: string[]; truncated: boolean }
+  | { source: "none"; reason: string; files: RunesLoadedFile[]; reads?: string[]; runeReads?: string[]; runeTriggers?: Record<string, string>; skills?: string[]; repoSkillsOff?: string[]; codexFiles?: string[]; truncated: boolean };

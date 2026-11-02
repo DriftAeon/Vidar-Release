@@ -21,14 +21,18 @@
 .su-close:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: 0; color: var(--accent); }
 .su-close:active { background: var(--bg-hover); border-color: var(--border-strong); }
 
-/* Primary action: Update, Update All, Open Release. The Sheen .ws-btn with a flat --accent face; the
-   label is --bg, which reads 5.10:1 or better on the accent in every theme (Onyx 9.46, Cobalt 7.13,
-   Ember 5.10, Olive 6.65). Hover lightens the face, press sinks it, disabled falls back to the .ws-btn floor. */
+/* Primary action: Update, Update All, Open Release. The Sheen Cap shape (Trust Folder, rendered.css) on
+   the accent: a gradient that only lightens above --accent, plus the inner top highlight. The label is
+   --bg, which reads 5.10:1 or better on the plain accent in every theme (Onyx 9.46, Cobalt 7.13, Ember
+   5.10, Olive 6.65); the lighter stops only raise that. Hover lifts, press sinks to the flat accent,
+   disabled falls back to the .ws-btn floor. */
 .startup-updates .ws-btn.ws-primary {
-  --face: var(--accent); --depth: none; --edge: var(--accent); color: var(--bg);
+  --face: linear-gradient(180deg, color-mix(in srgb, var(--accent), var(--fg-bright) 22%), var(--accent) 60%);
+  --depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 30%, transparent); --edge: var(--accent); color: var(--bg);
 }
 .startup-updates .ws-btn.ws-primary:hover:not(:disabled) {
-  --face: color-mix(in srgb, var(--accent), var(--fg-bright) 14%); --depth: none; --edge: var(--accent); color: var(--bg);
+  --face: linear-gradient(180deg, color-mix(in srgb, var(--accent), var(--fg-bright) 32%), color-mix(in srgb, var(--accent), var(--fg-bright) 10%) 60%);
+  --depth: inset 0 1px 0 color-mix(in srgb, var(--fg-bright) 40%, transparent); --edge: var(--accent); color: var(--bg);
 }
 .startup-updates .ws-btn.ws-primary:focus-visible { outline: var(--border-w) solid var(--fg-bright); outline-offset: var(--space-2); color: var(--bg); }
 .startup-updates .ws-btn.ws-primary:active:not(:disabled) {

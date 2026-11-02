@@ -12,33 +12,20 @@ use super::api::{self, endpoint, ApiError, ErrorKind};
 use super::pace::{self, Pacer};
 use super::parse::{self, Hit, Me, Page, Row, Source};
 use super::transport::{Live, Transport};
+use crate::net::HOLD_MIN_SECS;
 use super::vault;
 use crate::credman::Store;
 use crate::net::{self, Limits, Request, Secret};
 
 /// The whole budget of one command.
-pub const DEADLINE: Duration = Duration::from_secs(20);
+pub const DEADLINE: Duration = net::tiers::COMMAND;
 
 /// The connect generation: each connect takes a new one at its start and Disconnect bumps it, so
 /// a connect that outlived its reply (or was overtaken) never saves.
 pub static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// `T` or `{ error: { kind, message, retryAfter? } }`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
-pub enum Answer<T> {
-    Ok(T),
-    Error { error: ApiError },
-}
-
-impl<T> From<Result<T, ApiError>> for Answer<T> {
-    fn from(r: Result<T, ApiError>) -> Self {
-        match r {
-            Ok(v) => Answer::Ok(v),
-            Err(error) => Answer::Error { error },
-        }
-    }
-}
+pub type Answer<T> = net::Answer<T, ErrorKind>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +110,7 @@ fn exchange(c: &Ctx, token: &Secret, req: &Request, cap: usize) -> Result<net::R
         return Err(ApiError::new(ErrorKind::Rate, format!("rate limited, try again in {left} s")).after(Some(left)));
     }
     let headers = api::headers(token, req.method);
-    c.net.send(req, &headers, limits(cap)).map_err(|e| redact(api::send_error(&e, token), token))
+    c.net.send(req, &headers, limits(cap)).map_err(|e| redact(net::send_error(&e, token, "Notion"), token))
 }
 
 /// Steps 3-4 and the status mapping.
@@ -136,7 +123,7 @@ fn settle(c: &Ctx, token: &Secret, reply: net::Reply) -> Result<Value, ApiError>
     let out = api::classify(reply.status, reply.retry_after, &reply.body, token);
     let mut result = out.result;
     if let Some(wait) = out.hold {
-        let held = c.pacer.hold(wait.unwrap_or(pace::HOLD_MIN_SECS));
+        let held = c.pacer.hold(wait.unwrap_or(HOLD_MIN_SECS));
         if let Err(e) = &mut result {
             e.retry_after = Some(held);
         }
@@ -248,7 +235,7 @@ where
     // The JoinError is dropped, never formatted: its text is a panic payload.
     match joined {
         Ok(Ok(result)) => result.into(),
-        Ok(Err(net::Elapsed::Timeout)) => Answer::Error { error: network("no reply within 20 s") },
+        Ok(Err(net::Elapsed::Timeout)) => Answer::Error { error: network(&net::timeout_message(DEADLINE)) },
         Ok(Err(_)) => Answer::Error { error: network("request stopped without a reply") },
         Err(_) => Answer::Error { error: network("request task failed") },
     }

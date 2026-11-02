@@ -1,6 +1,7 @@
 // Jira bench filter bar: Project, Type, Status, Assignee pickers, a Search box and Clear Filters.
 // The panel owns the filter state and the reloads; this file draws the bar and its popovers (fixed on body,
 // so the pane's overflow cannot clip them) and reports each change. Remote text goes in through textContent.
+import { el } from "../dom";
 import { lucide } from "../icons";
 import {
   ASSIGNEES, CATEGORIES, MAX_PICKS, MAX_TEXT, applicable, barShape, blankFilters, filtersSet, togglePick, typeIcon,
@@ -37,12 +38,6 @@ interface Item { id: string; label: string; mono?: string; icon?: Node; on: bool
 export const LIST_FAILED = "Couldn't load this list from Jira.";
 export const STATUS_NARROWS = "Narrows your saved query; it can't add statuses the query leaves out.";
 const LABELS: Record<Kind, string> = { project: "Project", type: "Type", status: "Status", assignee: "Assignee" };
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = cls;
-  return node;
-}
 
 export function buildFilterBar(h: BarHandlers): FilterBar {
   const root = el("div", "jx-filters wb-actions");

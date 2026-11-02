@@ -10,8 +10,8 @@
   "source": [],
   "steps": [
     { "intent": "start a Claude Bare tab on an unlocked vault, open Runes and press Modify" },
-    { "intent": "press a rune's State switch until it reads State: Off; open Add Rune and check an addable rune's switch reads State: Off or State: On" },
-    { "intent": "press Delete Rune on another rune, then press Cancel on the notice to back out halfway" },
+    { "intent": "press a rune's checkbox until it reads State: Off; in the Rune Library check that rune's row reads State: Off too" },
+    { "intent": "in the Rune Library, press Delete Rune on another rune, then press Cancel on the notice to back out halfway" },
     { "intent": "press Done, leave Runes and come back" },
     { "intent": "check the cancelled rune is still listed, the vault is still the one in use, and the rune I switched keeps its State" }
   ]

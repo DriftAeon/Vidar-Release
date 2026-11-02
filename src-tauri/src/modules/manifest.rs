@@ -304,11 +304,14 @@ pub fn key_var_for(id: &str, rules: &GatewayRules) -> String {
 /// `pack.json` of one pack folder to its module (the implicit content module when it has no
 /// `module` block) and the lowercase hex SHA-256 of the file bytes this call read (BOM
 /// included, so it equals a file hash of `pack.json`), or the broken reason.
-pub fn read_pack(folder: &str, dir: &Path, c: &Contract) -> Result<(ModuleDecl, String), String> {
+/// The third value is the pack's `release` from the same bytes (None when absent or not text).
+pub fn read_pack(folder: &str, dir: &Path, c: &Contract) -> Result<(ModuleDecl, String, Option<String>), String> {
     use sha2::{Digest, Sha256};
     let (decl, bytes) = read_pack_bytes(folder, dir, c)?;
     let sha256: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
-    Ok((decl, sha256))
+    let body = bytes.strip_prefix(b"\xEF\xBB\xBF".as_slice()).unwrap_or(&bytes);
+    let release = serde_json::from_slice::<Value>(body).ok().and_then(|v| v.get("release").and_then(Value::as_str).map(str::to_string));
+    Ok((decl, sha256, release))
 }
 
 fn read_pack_bytes(folder: &str, dir: &Path, c: &Contract) -> Result<(ModuleDecl, Vec<u8>), String> {
@@ -333,6 +336,7 @@ fn read_pack_bytes(folder: &str, dir: &Path, c: &Contract) -> Result<(ModuleDecl
     if !id_ok(id) {
         return Err(format!("Id {id} Does Not Match {}", c.id_pattern));
     }
+    super::compat::check_schema_version(&pack)?;
     super::compat::check_pack_compat(&pack, env!("CARGO_PKG_VERSION"), super::compat::CORE_CONTRACT)?;
     let Some(block) = pack.get("module") else {
         let label = pack.pointer("/ui/label").and_then(Value::as_str).unwrap_or(id).to_string();

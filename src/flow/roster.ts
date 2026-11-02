@@ -4,10 +4,13 @@
 // such entry. Not under `node --test` (it reads the module registry).
 
 import { effectivePrimary } from "../agents/primary";
+import { AGENTS } from "../agents/descriptor";
+import { AGENT_IDS } from "../agents/id";
 import { moduleOn, modulesOf } from "../modules/registry";
 import { getPref } from "../prefs";
 import type { ModelId } from "./model";
-import { backendOfRunner, setBackendLookup, type FlowBackend } from "./runner";
+import { agentOfBackend, appServerDefaultModel, backendOfRunner, sdkAgent, setBackendLookup, type FlowBackend } from "./runner";
+import { FLOW_MODELS } from "./claude-models";
 import { leadRunner } from "./roster-order";
 import { setLiveModelIds } from "./validate";
 
@@ -23,31 +26,31 @@ export interface ModelOption {
   runner: FlowBackend;
 }
 
-/** The module whose rows a runner's models show under: hidden while that module is off. */
-const RUNNER_MODULE: Record<FlowBackend, string> = { sdk: "claude", codex: "codex" };
+/** The app-server agent owns the saved model list. */
+const appServerAgent = () => AGENT_IDS.find((id) => !AGENTS[id].flowSdk)!;
 
 /** Core models, in display order. */
 const CORE_ROSTER: readonly ModelOption[] = [
-  { id: "claude-sonnet-5", label: "Sonnet 5", wired: true, runner: "sdk" },
-  { id: "claude-opus-5-5", label: "Opus 5.5", wired: true, runner: "sdk" },
-  { id: "claude-fable-5-1", label: "Fable 5.1", wired: true, runner: "sdk" },
-  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5", wired: true, runner: "sdk" },
-  { id: "codex-default", label: "Codex Default", wired: true, runner: "codex" },
+  { id: FLOW_MODELS.sonnet, label: "Sonnet 5", wired: true, runner: AGENTS[sdkAgent()].flowBackend },
+  { id: FLOW_MODELS.opus, label: "Opus 5.5", wired: true, runner: AGENTS[sdkAgent()].flowBackend },
+  { id: FLOW_MODELS.fable, label: "Fable 5.1", wired: true, runner: AGENTS[sdkAgent()].flowBackend },
+  { id: FLOW_MODELS.haiku, label: "Haiku 4.5", wired: true, runner: AGENTS[sdkAgent()].flowBackend },
+  { id: appServerDefaultModel(), label: "Codex Default", wired: true, runner: AGENTS[appServerAgent()].flowBackend },
 ];
 
 /** Core models of the modules that are on, the saved Codex model list, then the flowModels of
  *  the active agent modules in registry order. */
 function currentRoster(): ModelOption[] {
-  let out: ModelOption[] = CORE_ROSTER.filter((o) => moduleOn(RUNNER_MODULE[o.runner]));
-  if (moduleOn(RUNNER_MODULE.codex)) {
-    for (const c of getPref("codexModels") ?? []) {
-      if (!out.some((o) => o.id === c.value)) out.push({ id: c.value, label: c.label, wired: true, runner: "codex" });
+  let out: ModelOption[] = CORE_ROSTER.filter((o) => moduleOn(agentOfBackend(o.runner)));
+  if (moduleOn(appServerAgent())) {
+    for (const c of getPref(AGENTS[appServerAgent()].modelPref) ?? []) {
+      if (!out.some((o) => o.id === c.value)) out.push({ id: c.value, label: c.label, wired: true, runner: AGENTS[appServerAgent()].flowBackend });
     }
   }
   // The primary agent's runner group leads: palette and adaptModelsToWired take wired[0].
-  if (effectivePrimary() === "codex") out = leadRunner(out, "codex");
+  if (effectivePrimary() === appServerAgent()) out = leadRunner(out, AGENTS[appServerAgent()].flowBackend);
   for (const m of modulesOf("agent")) {
-    const runner = backendOfRunner(m.agent?.gateway?.runner) ?? "sdk";
+    const runner = backendOfRunner(m.agent?.gateway?.runner) ?? AGENTS[sdkAgent()].flowBackend;
     for (const f of m.flowModels ?? []) {
       if (!out.some((o) => o.id === f.id)) out.push({ id: f.id, label: f.label, wired: true, runner });
     }

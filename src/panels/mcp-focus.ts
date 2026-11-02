@@ -4,7 +4,8 @@
 // (Claude's); an own-config tab's Bare row selects its set home.
 import { isGateway } from "../launcher/agent-kind";
 import { invoke } from "../ipc";
-import type { AgentId } from "../agents/id";
+// @ts-ignore TS5097: the .ts specifier lets node --test load this file without a bundler
+import { AGENT_IDS, unknownAgent, type AgentId } from "../agents/id.ts";
 import type { McpRack } from "./rack";
 import type { FocusedSession } from "./sessions";
 import { tabIdentity } from "./sessions/vault-tabs";
@@ -19,23 +20,22 @@ interface FocusRow {
   profiledOwnTab: boolean;
   /** the config carries per-project disabled state (gateways excluded) */
   projectScoped: boolean;
-  /** the module that must be on for this row to apply */
-  module: string;
+  /** the row an unknown or gated-off agent reads (exactly one row); the agent's module id is its AgentId */
+  defaultRow: boolean;
 }
 
 // Keyed by AgentId: a third agent fails tsc here until its row is written.
 const FOCUS_ROWS: Record<AgentId, FocusRow> = {
   claude: {
-    ownConfig: false, profiledOwnTab: true, projectScoped: true, module: "claude",
+    ownConfig: false, profiledOwnTab: true, projectScoped: true, defaultRow: true,
     read: ({ project, profile, tab, row }) => invoke("read_mcp_servers", { project, profile, tab, row }),
   },
   codex: {
-    ownConfig: true, profiledOwnTab: true, projectScoped: false, module: "codex",
+    ownConfig: true, profiledOwnTab: true, projectScoped: false, defaultRow: false,
     read: ({ profile, tab, row }) => invoke("read_codex_mcp_servers", { tab, falconSession: tab ? tabIdentity(tab).falconSession : null, profile, row }),
   },
 };
-/** The row an unknown or gated-off agent reads. */
-const DEFAULT_ROW: AgentId = "claude";
+const DEFAULT_ROW: AgentId = AGENT_IDS.find((id) => FOCUS_ROWS[id].defaultRow) ?? unknownAgent(undefined as never);
 
 export interface McpFocus {
   /** the own-config agent's id (its tab's own config is read); null = the default row's config */
@@ -56,7 +56,7 @@ export function mcpFocus(s: FocusedSession | null, moduleOn: (id: string) => boo
   const id = (s?.agent ?? "") as AgentId;
   // an id with no row (a gateway, a shell) reads the default config
   const facts = Object.hasOwn(FOCUS_ROWS, id) ? FOCUS_ROWS[id] : undefined;
-  const row = facts && moduleOn(facts.module) ? facts : null;
+  const row = facts && moduleOn(id) ? facts : null;
   // a profiled (Bare) tab of a profiled-own-tab row reads the combination home its own session runs on
   const own = !!row && (row.ownConfig || (row.profiledOwnTab && !!s!.profile));
   return {

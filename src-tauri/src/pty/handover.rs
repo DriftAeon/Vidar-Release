@@ -66,7 +66,7 @@ fn adopt_blocking(state: &PtyManager, pid: u32, session_id: String) -> Result<Ad
     // The parent must predate the child, or the parent pid was reused and the
     // real shell is gone — killing whatever now holds that pid would be wrong.
     match (crate::procs::creation_time(r.shell_pid), crate::procs::creation_time(pid)) {
-        (Some(shell_t), Some(claude_t)) if shell_t <= claude_t => {}
+        (Some(shell_t), Some(child_t)) if shell_t <= child_t => {}
         _ => return Err("hosting shell is gone or was replaced".into()),
     }
 

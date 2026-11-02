@@ -8,19 +8,17 @@ import { backendOfModel, backendOfRunner, setBackendLookup, CODEX_DEFAULT_MODEL 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 
 test('every backend string maps to a flow.rs match arm', () => {
-  // Dispatch is `agent_of` in flow/bare.rs: the `"sdk"` arm is the Claude sidecar, and any other
-  // backend must parse to the agent a Flow adapter (`agent()` in flow/{claude,codex}.rs) speaks for.
+  // Dispatch is `agent_of` in flow/bare.rs: it finds the agent whose `backend_of` word matches.
+  // `backend_of` has one `Agent::X => "word"` arm per sidecar agent (`"sdk"`) and the app-server
+  // agent's word is its own id (`agent.as_str()`).
   const bare = read('../src-tauri/src/flow/bare.rs');
-  const sdk = [...bare.matchAll(/^\s*"([a-z-]+)"\s*=>\s*Some\(super::claude::agent\(\)\)/gm)].map((m) => m[1]);
-  const adapter = (f, fn) => {
-    const rs = read(`../src-tauri/src/flow/${f}.rs`);
-    const m = rs.match(/const [A-Z_]+_MODULE: &str = "([a-z-]+)";/);
-    assert.ok(m && new RegExp(`fn agent\\(\\)[^{]*\\{\\s*crate::agent_spec::parse\\([A-Z_]+_MODULE\\)`).test(rs), `${f}.rs agent()`);
-    return m[1];
-  };
-  assert.match(bare, /agent_spec::parse\(other\)\.filter\(/, 'a non-sdk backend must be an adapted agent id');
-  const arms = [...sdk, adapter('codex')];
-  assert.equal(adapter('claude'), 'claude');
+  const body = bare.match(/fn backend_of\(agent: Agent\) -> &'static str \{\s*match agent \{([\s\S]*?)\r?\n    \}\r?\n\}/);
+  assert.ok(body, 'backend_of match');
+  const words = [...body[1].matchAll(/Agent::([A-Za-z]+)\s*=>\s*(?:"([a-z-]+)"|agent\.as_str\(\))/g)];
+  const arms = words.map((m) => m[2] ?? m[1].toLowerCase());
+  assert.equal(words.length, [...body[1].matchAll(/Agent::[A-Za-z]+\s*=>/g)].length, 'every backend_of arm is a word or the id');
+  assert.match(bare, /ALL\.into_iter\(\)\.find\(\|a\| backend_of\(\*a\) == backend\)/, 'agent_of finds by backend_of');
+  assert.match(read('../src-tauri/src/flow/claude.rs'), /const CLAUDE_MODULE: &str = "claude";/);
   assert.deepEqual(arms.sort(), ['codex', 'sdk']);
   setBackendLookup((id) => ({ 'claude-sonnet-5': 'sdk', [CODEX_DEFAULT_MODEL]: 'codex' })[id]);
   for (const model of ['claude-sonnet-5', CODEX_DEFAULT_MODEL, 'unknown-model', undefined]) {

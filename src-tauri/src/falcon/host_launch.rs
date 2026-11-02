@@ -146,6 +146,7 @@ fn spawn_host(
     cwd: &Path,
     breakaway: bool,
 ) -> std::io::Result<std::process::Child> {
+    use crate::proc_job::SpawnExt;
     use std::os::windows::process::CommandExt;
     let mut cmd = std::process::Command::new(exe);
     // Host CLI contract: the shell derives the Vidar root from
@@ -160,9 +161,7 @@ fn spawn_host(
     .stdin(std::process::Stdio::null())
     .stdout(std::process::Stdio::null())
     .stderr(std::process::Stdio::null());
-    for key in crate::pty::SCRUBBED_ENV {
-        cmd.env_remove(key);
-    }
+    cmd.scrubbed();
     let mut flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
     if breakaway {
         flags |= CREATE_BREAKAWAY_FROM_JOB;

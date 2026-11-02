@@ -44,7 +44,7 @@ fn a_style_switch_leaves_only_the_current_style_file_and_an_unchanged_launch_wri
     let t = Tmp::new("switch");
     let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
     prepare_dirs(&home, &["claude-config".into()]).unwrap();
-    let template = crate::paths::root().join("profiles").join("bare").join("claude.settings.template.json");
+    let template = crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("claude-settings.json");
     let target = home.join("claude-config").join("settings.json");
     let styles = home.join("claude-config").join("output-styles");
     let run = |extras: &SettingsExtras| generate_settings_with(&template, &target, &root, &home, &guard(), &[], extras).unwrap();
@@ -76,9 +76,25 @@ fn a_style_dir_outside_the_home_is_never_swept() {
     let outside = t.0.join("elsewhere");
     std::fs::create_dir_all(outside.join("output-styles")).unwrap();
     std::fs::write(outside.join("output-styles").join("keep.md"), "x").unwrap();
-    let template = crate::paths::root().join("profiles").join("bare").join("claude.settings.template.json");
+    let template = crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("claude-settings.json");
     generate_settings_with(&template, &outside.join("settings.json"), &root, &home, &guard(), &[], &SettingsExtras::default()).unwrap();
     assert_eq!(md_files(&outside.join("output-styles")), ["keep.md"]);
+}
+
+#[test]
+fn the_drive_allow_rune_rides_settings_json_and_no_allowed_tools_flag() {
+    let t = Tmp::new("drive-allow");
+    let (root, home) = (t.0.join("root"), t.0.join("agent-home"));
+    prepare_dirs(&home, &["claude-config".into()]).unwrap();
+    let template = crate::paths::rune_vidar_dir_in(&crate::paths::root()).join("settings").join("claude-settings.json");
+    let target = home.join("claude-config").join("settings.json");
+    let extras = SettingsExtras { allow: vec!["mcp__vidar_drive".into()], ..Default::default() };
+    generate_settings_with(&template, &target, &root, &home, &guard(), &[], &extras).unwrap();
+    let doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&target).unwrap()).unwrap();
+    assert!(doc["permissions"]["allow"].as_array().unwrap().iter().any(|a| a == "mcp__vidar_drive"), "{doc}");
+    let p = load_profile(&crate::paths::root(), "bare").unwrap();
+    let args = claude_line::claude_args(&p, "P", &|s| s.to_string(), &|| false, None, &claude_line::VaultArgs::default()).unwrap();
+    assert!(!args.iter().any(|a| a == "--allowedTools"), "{args:?}");
 }
 
 fn rune(text: &str) -> RuneItem {
@@ -135,7 +151,7 @@ fn codex_ok(env: &Env, _: &CodexBinary) -> Option<(PathBuf, Option<String>)> {
     Some((PathBuf::from(r"X:\npm\node_modules\@openai\codex\bin\codex.js"), Some(pinned("codex"))))
 }
 
-/// A Codex spawn in a temp root on a vault holding the given stock rune ids; its config.toml text and the launch.
+/// A Codex spawn in a temp root on a vault holding the given Vidar rune ids; its config.toml text and the launch.
 fn spawn_with(tag: &str, runes: &[&str]) -> (String, String, Tmp) {
     spawn_off(tag, runes, &[])
 }
@@ -145,12 +161,12 @@ fn spawn_off(tag: &str, runes: &[&str], off: &[&str]) -> (String, String, Tmp) {
     let t = Tmp::new(tag);
     copy_dir(&crate::paths::root().join("profiles").join("bare"), &t.0.join("profiles").join("bare"));
     // The identity rule gives the payload a body (an empty one refuses the spawn).
-    let stock = |id: &str| vault::RuneRef { library: "stock".into(), id: id.into() };
-    let refs: Vec<vault::RuneRef> = ["bare-identity-codex"].iter().chain(runes).map(|id| stock(id)).collect();
+    let vidar_ref = |id: &str| vault::RuneRef { library: "vidar".into(), id: id.into() };
+    let refs: Vec<vault::RuneRef> = ["bare-identity-codex"].iter().chain(runes).map(|id| vidar_ref(id)).collect();
     let store = vault::store::Store::open(&t.0);
-    let mut v = store.create("builtin-probe", None, &[], &refs).unwrap();
+    let mut v = vault::create_at(&t.0, Some("builtin-probe".into()), None, &[], &refs).unwrap();
     if !off.is_empty() {
-        let ops: Vec<vault::store::Op> = off.iter().map(|id| vault::store::Op::RemoveRune(stock(id))).collect();
+        let ops: Vec<vault::store::Op> = off.iter().map(|id| vault::store::Op::RemoveRune(vidar_ref(id))).collect();
         v = store.edit(&v.id, &ops, vault::store::EditMode::Unlocked).unwrap();
     }
     let probes = CodexProbes { find: &fake_find, codex: &codex_ok };
@@ -177,9 +193,9 @@ fn a_vault_with_one_codex_built_in_keeps_it_on_and_switches_the_other_four_off()
 const ALL_FIVE: [&str; 5] = ["codex-imagegen", "codex-openai-docs", "codex-review-agent", "codex-skill-creator", "codex-skill-installer"];
 
 #[test]
-fn a_vault_older_than_the_built_in_runes_leaves_codex_s_built_ins_alone() {
+fn a_vault_with_no_codex_built_in_placed_switches_all_five_off() {
     let (config, seen, _t) = spawn_with("cx-none", &[]);
-    assert!(!config.contains("[skills.bundled]") && !config.contains("[[skills.config]]"), "{config}");
+    assert!(config.contains("[skills.bundled]\nenabled = false") && !config.contains("[[skills.config]]"), "{config}");
     assert!(!seen.contains("codex-builtin"), "{seen}");
 }
 
@@ -195,4 +211,75 @@ fn a_vault_with_two_built_ins_switched_off_disables_those_two() {
 fn a_vault_with_all_five_built_ins_switched_off_disables_the_bundled_set() {
     let (config, _seen, _t) = spawn_off("cx-all-off", &ALL_FIVE, &ALL_FIVE);
     assert!(config.contains("[skills.bundled]\nenabled = false"), "{config}");
+}
+
+// ---- Claude setting rune and built-ins at spawn ----
+
+fn vidar_ref(id: &str) -> vault::RuneRef {
+    vault::RuneRef { library: "vidar".into(), id: id.into() }
+}
+
+/// A temp install root holding a copy of the shipped profiles tree.
+fn claude_root(tag: &str) -> Tmp {
+    let t = Tmp::new(tag);
+    copy_dir(&crate::paths::root().join("profiles").join("bare"), &t.0.join("profiles").join("bare"));
+    t
+}
+
+/// A Claude Raw spawn on a vault holding the given Vidar rune ids (and `extra` refs); the generated settings.json or the refusal.
+fn claude_spawn(t: &Tmp, runes: &[&str]) -> Result<serde_json::Value, String> {
+    let refs: Vec<vault::RuneRef> = ["bare-identity"].iter().chain(runes).map(|id| vidar_ref(id)).collect();
+    let v = vault::create_at(&t.0, Some("setting-probe".into()), None, &[], &refs)?;
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    let opts = LaunchOpts { vault: Some(&v.id), ..LaunchOpts::default() };
+    let launch = prepare_with("bare", &t.0, &t.0.join("home"), inherited(), &Ambient::default(), &guard(), &probes, &opts)?;
+    Ok(serde_json::from_slice(&std::fs::read(&launch.manifest.homes.settings).unwrap()).unwrap())
+}
+
+#[test]
+fn settings_json_comes_from_the_setting_rune_and_an_unplaced_built_in_is_off() {
+    let t = claude_root("cl-none");
+    let s = claude_spawn(&t, &[]).unwrap();
+    assert!(s.get("permissions").is_some() && s.get("enabledPlugins").is_some(), "{s}");
+    assert_eq!(s["skillOverrides"]["simplify"], "off", "{s}");
+    assert_eq!(s["skillOverrides"]["doctor"], "off", "{s}");
+    assert_eq!(s["skillOverrides"]["design"], "off", "{s}");
+    assert_eq!(s["disableBundledSkills"], true, "{s}");
+    for p in ["cc-plugin-sec-default", "cc-plugin-agents-md", "cc-plugin-telemetry", "cc-plugin-plugin-authoring"] {
+        assert_eq!(s["enabledPlugins"][format!("{p}@builtin")], false, "{p}: {s}");
+    }
+}
+
+#[test]
+fn a_placed_claude_built_in_skill_keeps_bundled_skills_on_and_is_not_overridden() {
+    let t = claude_root("cl-simplify");
+    let s = claude_spawn(&t, &["claude-simplify"]).unwrap();
+    assert_eq!(s["disableBundledSkills"], false, "{s}");
+    assert!(s["skillOverrides"].get("simplify").is_none(), "{s}");
+    assert_eq!(s["skillOverrides"]["verify"], "off", "{s}");
+    let t = claude_root("cl-doctor");
+    let s = claude_spawn(&t, &["claude-doctor"]).unwrap();
+    assert_eq!(s["disableBundledSkills"], false, "{s}");
+    assert!(s["skillOverrides"].get("doctor").is_none(), "{s}");
+}
+
+#[test]
+fn a_second_setting_rune_for_one_agent_is_refused() {
+    let t = claude_root("cl-two");
+    let dir = crate::paths::rune_vidar_dir_in(&t.0).join("settings");
+    let extra = std::fs::read_to_string(dir.join("claude-settings.md")).unwrap().replace("name: claude-settings", "name: claude-settings-two").replace("required-by: vidar\n", "");
+    std::fs::write(dir.join("claude-settings-two.md"), extra).unwrap();
+    let e = claude_spawn(&t, &["claude-settings-two"]).err().unwrap();
+    assert!(e.contains("two Claude setting runes") && e.contains("spawn refused"), "{e}");
+}
+
+#[test]
+fn a_setting_rune_missing_a_key_refuses_the_spawn() {
+    let t = claude_root("cl-lacks");
+    let file = crate::paths::rune_vidar_dir_in(&t.0).join("settings").join("claude-settings.json");
+    let mut doc: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    doc.as_object_mut().unwrap().remove("skillOverrides");
+    std::fs::write(&file, serde_json::to_string(&doc).unwrap()).unwrap();
+    let e = claude_spawn(&t, &[]).err().unwrap();
+    assert_eq!(e, "This locked vault predates a required setting; start a new Rune Vault.");
 }

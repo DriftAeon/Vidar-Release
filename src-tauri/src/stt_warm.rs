@@ -16,7 +16,6 @@
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,7 +30,6 @@ use serde_json::Value;
 use crate::proc_job::JobChild;
 use crate::voice_slots::{self, Resolved, Slot};
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const LOAD_DEADLINE: Duration = Duration::from_secs(30);
 
 /// Reply budget for a clip of `audio_secs`: max(10 s, 5 s + audio_secs x 0.5). A long dictation
@@ -201,7 +199,7 @@ fn begin_in(slot: &Mutex<Option<Warm>>, key: Key, mut cmd: Command, load: Durati
             w.kill("replaced by a different warm command");
         }
     }
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).creation_flags(CREATE_NO_WINDOW);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = match JobChild::spawn(&mut cmd) {
         Ok(c) => c,
         Err(e) => {
@@ -413,6 +411,7 @@ pub fn stt_warm_status() -> WarmStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::windows::process::CommandExt;
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
 

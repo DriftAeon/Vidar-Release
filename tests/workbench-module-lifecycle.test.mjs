@@ -20,7 +20,7 @@ const view = (id, mount, prefix, extra = "") => `
 `;
 
 const dom = setupDom({ stubs: {
-  prefs: "export function getPref(key) { return key === 'modules.hidden' ? globalThis.__benchLifecycle.hidden : undefined; }",
+  prefs: "export function getPref(key) { return key === 'modules.hidden' ? globalThis.__benchLifecycle.hidden : undefined; } export function setPref() { return true; }",
   ipc:"export function getCurrentWebview() { return { onDragDropEvent() { return Promise.resolve(() => {}); } }; }",
   "modules/registry": "export const moduleListed = () => true; export const onModulesChange = () => () => {};",
   "panels/sessions": "export function openWorkbench() {} export function isWorkbenchOpen() { return true; }",
@@ -58,7 +58,7 @@ const dom = setupDom({ stubs: {
 const bench = await import("../src/panels/workbench.ts");
 bench.mountWorkbench(document.body, { open() {}, collapse() {} });
 const root = document.querySelector("#workbench");
-const ids = ["relay", "tray", "doc", "flow", "runelib", "lab", "changes", "unreal", "jira", "notion", "slack"];
+const ids = ["relay", "tray", "doc", "flow", "runelib", "changes", "unreal", "jira", "notion", "slack", "lab"];
 
 test("optional chunks stay unloaded while off and a rapid on/off cannot mount stale views", async () => {
   await dom.flush();
@@ -99,7 +99,7 @@ test("bench registry preserves markup, initial selection, mount order and body i
   const buttons = [...track.querySelectorAll(".wb-tab")];
   assert.deepEqual(buttons.map(b => b.dataset.tab), ids);
   assert.deepEqual(buttons.map(b => b.dataset.key), ids);
-  const labels = ["Relay", "Tray", "Document", "Flow", "Runes", "Lab", "Changes", "Unreal", "Jira", "Notion", "Slack"];
+  const labels = ["Relay", "Tray", "Document", "Flow", "Runes", "Changes", "Unreal", "Jira", "Notion", "Slack", "Lab"];
   buttons.forEach((button, index) => {
     assert.equal(button.tagName, "BUTTON");
     assert.equal(button.getAttribute("aria-label"), labels[index]);

@@ -34,7 +34,7 @@ export function deriveRendered(chip: ReturnType<typeof chipState>, pendingTool: 
   let phase: TabPhase;
   let reason: TabReason | null = null;
   const k = chip.key;
-  if (k === "restoring" || k === "login") phase = "unknown";
+  if (k === "restoring" || k === "login" || k === "picking") phase = "unknown";
   else if (k === "disconnected") phase = "lost";
   else if (k === "stopped") phase = "dead";
   else if (k === "approval") {

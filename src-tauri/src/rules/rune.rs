@@ -11,6 +11,41 @@ pub enum State {
     Disabled,
 }
 
+/// Where a session runs: a `surface:` header names the one a rune serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Surface {
+    Raw,
+    Rendered,
+    Flow,
+}
+
+impl Surface {
+    #[cfg(test)]
+    pub const ALL: [Surface; 3] = [Surface::Raw, Surface::Rendered, Surface::Flow];
+
+    pub fn parse(s: &str) -> Option<Surface> {
+        match s {
+            "raw" => Some(Surface::Raw),
+            "rendered" => Some(Surface::Rendered),
+            "flow" => Some(Surface::Flow),
+            _ => None,
+        }
+    }
+}
+
+/// The one scope rule: a tag fits when it is absent or equals the wanted value; a `None` want filters nothing.
+fn tag_fits<T: PartialEq>(tag: Option<T>, want: Option<T>) -> bool {
+    match (tag, want) {
+        (Some(t), Some(w)) => t == w,
+        _ => true,
+    }
+}
+
+/// `Rune::fits` for a caller that holds the typed tags (an item rune's agent) instead of the `Rune`.
+pub fn scope_fits(tag_agent: Option<crate::agent_spec::Agent>, tag_surface: Option<Surface>, agent: Option<crate::agent_spec::Agent>, surface: Option<Surface>) -> bool {
+    tag_fits(tag_agent, agent) && tag_fits(tag_surface, surface)
+}
+
 #[derive(Clone, Debug)]
 pub struct Rune {
     pub id: String,
@@ -30,8 +65,19 @@ pub struct Rune {
     pub enforced_by: Vec<String>,
     /// Everything after the closing `---` line, LF-normalised, otherwise verbatim.
     pub body: String,
-    /// `agent:` (`claude` or `codex`): the one agent that can run it; the other warns, never bars.
+    /// `agent:` (`claude` or `codex`): the one agent that can run it; `fits` leaves it out for the other.
     pub agent: Option<String>,
+    /// `surface:` (`raw`, `rendered` or `flow`): the one surface it serves; `None` = every surface.
+    pub surface: Option<Surface>,
+    /// `needs:` rune ids this rune requires.
+    #[allow(dead_code, reason = "read from A.1d")]
+    pub needs: Vec<String>,
+    /// `ctl: yes`.
+    #[allow(dead_code, reason = "read from A.1d")]
+    pub ctl: bool,
+    /// `built-in: <name>`: the agent CLI's own skill or plugin this rune stands for (a plugin as
+    /// `<plugin>@builtin`); the vault places it on, and every one left out is written off.
+    pub built_in: Option<String>,
     /// `required-by:` (only `vidar`): dropping the rune from a vault warns.
     pub required_by: Option<String>,
     /// The item-kind keys (skill, agent, hook, mcp, permission, plugin); all empty for the text kinds.
@@ -83,7 +129,7 @@ pub struct ItemKeys {
     pub env: Vec<String>,
 }
 
-pub const KINDS: [(&str, &str); 12] = [
+pub const KINDS: [(&str, &str); 13] = [
     ("rules", "rule"),
     ("facts", "fact"),
     ("procedures", "procedure"),
@@ -96,11 +142,12 @@ pub const KINDS: [(&str, &str); 12] = [
     ("plugins", "plugin"),
     ("styles", "output-style"),
     ("models", "model"),
+    ("settings", "setting"),
 ];
 
 /// The kinds that are items a session carries beside its text (model R1: every kind is a rune).
 /// Twin of `ITEM_KINDS` in `tools/runes/header.mjs`.
-pub const ITEM_KINDS: [&str; 8] = ["skill", "agent", "hook", "mcp", "permission", "plugin", "output-style", "model"];
+pub const ITEM_KINDS: [&str; 9] = ["skill", "agent", "hook", "mcp", "permission", "plugin", "output-style", "model", "setting"];
 
 pub fn is_item_kind(kind: &str) -> bool {
     ITEM_KINDS.contains(&kind)
@@ -112,7 +159,7 @@ pub const BLOCK_KEYS: [&str; 4] = ["run", "open", "allow", "ask"];
 /// The item keys each item kind may carry; `env`, `agent` and `required-by` are open to more kinds.
 fn item_keys_of(kind: &str) -> &'static [&'static str] {
     match kind {
-        "skill" | "agent" | "plugin" => &["source"],
+        "skill" | "agent" | "plugin" | "setting" => &["source"],
         "hook" => &["event", "matcher", "run", "open", "command"],
         "mcp" => &["module", "server"],
         "permission" => &["allow", "ask", "mode"],
@@ -176,6 +223,12 @@ impl Rune {
     /// Member scope contains `global`, or shares a name with `other`.
     pub fn meets(&self, other: &[String]) -> bool {
         self.scope.iter().any(|s| s == "global" || other.contains(s))
+    }
+
+    /// Whether this rune belongs to `agent` on `surface`: an `agent:` tag fits only that agent, a
+    /// `surface:` header only that surface, no tag every one; a `None` argument is not filtered.
+    pub fn fits(&self, agent: Option<crate::agent_spec::Agent>, surface: Option<Surface>) -> bool {
+        scope_fits(self.agent.as_deref().and_then(crate::agent_spec::parse), self.surface, agent, surface)
     }
 
     /// `required-by: vidar`: dropping this rune from a vault warns.
@@ -260,12 +313,23 @@ fn header_fields(lines: &[&str]) -> Result<(Vec<(String, Val)>, Vec<String>), St
     Ok((out, blocks))
 }
 
-/// The keys an item kind needs: a `source`; a hook's `event` and one of `command` or `run`; an mcp's
-/// `module` and `server`; a permission's `allow`, `ask` or `mode`.
-fn check_item(kind: &str, k: &ItemKeys) -> Result<(), String> {
+/// The keys an item kind needs: a `source` (a built-in skill or plugin has none: its `built-in` name
+/// stands for it); a hook's `event` and one of `command` or `run`; an mcp's `module` and `server`; a
+/// permission's `allow`, `ask` or `mode`.
+fn check_item(kind: &str, k: &ItemKeys, built_in: Option<&str>) -> Result<(), String> {
     let blank = |v: &Option<String>| v.as_deref().is_none_or(|s| s.trim().is_empty());
+    if let Some(name) = built_in {
+        if !matches!(kind, "skill" | "plugin") {
+            return Err(format!("`built-in` applies to skill and plugin runes, not kind `{kind}`"));
+        }
+        if k.source.is_some() {
+            return Err("a built-in rune has no `source`".into());
+        }
+        let ok = !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'@'));
+        return if ok { Ok(()) } else { Err(format!("`built-in` name `{name}` is not a plain CLI name")) };
+    }
     match kind {
-        "skill" | "agent" | "plugin" if blank(&k.source) => Err(format!("a {kind} rune needs `source`")),
+        "skill" | "agent" | "plugin" | "setting" if blank(&k.source) => Err(format!("a {kind} rune needs `source`")),
         "hook" if blank(&k.event) => Err("a hook rune needs `event`".into()),
         "hook" => match (&k.command, k.run.is_empty(), k.open.is_empty()) {
             (Some(c), true, true) if !c.expose().trim().is_empty() => Ok(()),
@@ -284,9 +348,32 @@ fn check_item(kind: &str, k: &ItemKeys) -> Result<(), String> {
     }
 }
 
+/// The frontmatter fence split shared by readers that only need the header: `(header, body)` where
+/// `header` is the text between the opening and closing `---` lines (each line keeps its ending; read it
+/// with `.lines()`) and `body` is everything after the closing line. A leading BOM and CRLF are
+/// tolerated and a fence line may carry trailing whitespace. `None` without an opening fence on the first
+/// line or without a closing one. Key readers stay with their callers.
+pub fn split_header(text: &str) -> Option<(&str, &str)> {
+    let text = crate::fsx::strip_bom(text);
+    let mut lines = text.split_inclusive('\n');
+    let first = lines.next()?;
+    if first.trim_end() != "---" {
+        return None;
+    }
+    let start = first.len();
+    let mut pos = start;
+    for line in lines {
+        if line.trim_end() == "---" {
+            return Some((&text[start..pos], &text[pos + line.len()..]));
+        }
+        pos += line.len();
+    }
+    None
+}
+
 /// Parse one rune file (CRLF tolerated).
 pub fn parse(text: &str) -> Result<Rune, String> {
-    let text = text.strip_prefix('\u{FEFF}').unwrap_or(text).replace("\r\n", "\n");
+    let text = crate::fsx::strip_bom(text).replace("\r\n", "\n");
     let mut lines = text.split_inclusive('\n');
     let first = lines.next().unwrap_or_default();
     if first.trim_end() != "---" {
@@ -371,6 +458,20 @@ pub fn parse(text: &str) -> Result<Rune, String> {
             return Err(format!("invalid agent `{a}` (claude or codex)"));
         }
     }
+    let surface = match scalar("surface") {
+        None => None,
+        Some(s) => Some(Surface::parse(&s).ok_or_else(|| format!("invalid surface `{s}` (raw, rendered or flow)"))?),
+    };
+    let yes = |key: &str| -> Result<bool, String> {
+        match scalar(key).as_deref() {
+            None | Some("no") => Ok(false),
+            Some("yes") => Ok(true),
+            Some(other) => Err(format!("invalid {key} `{other}` (yes or no)")),
+        }
+    };
+    let ctl = yes("ctl")?;
+    let built_in = scalar("built-in");
+    let needs = list("needs");
     let required_by = scalar("required-by");
     if let Some(r) = required_by.as_deref() {
         if r != "vidar" {
@@ -404,9 +505,16 @@ pub fn parse(text: &str) -> Result<Rune, String> {
     if kind == "model" && agent.is_none() {
         return Err("a model rune needs `agent` (claude or codex): model names differ per agent".into());
     }
-    check_item(&kind, &item)?;
+    if kind == "setting" && agent.is_none() {
+        return Err("a setting rune needs `agent` (claude or codex): each agent has its own settings file".into());
+    }
+    check_item(&kind, &item, built_in.as_deref())?;
     Ok(Rune {
         agent,
+        surface,
+        needs,
+        ctl,
+        built_in,
         required_by,
         item,
         paths,
@@ -449,31 +557,31 @@ mod tests {
         }
     }
 
-    fn stock_fixture(rel: &str) -> String {
+    fn vidar_fixture(rel: &str) -> String {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        std::fs::read_to_string(root.join("tests/fixtures/rune-vault/stock-runes").join(rel)).unwrap()
+        std::fs::read_to_string(root.join("tests/fixtures/rune-vault/vidar-runes").join(rel)).unwrap()
     }
 
     #[test]
     fn every_item_kind_fixture_parses_with_its_keys() {
-        let hook = super::parse(&stock_fixture("hooks/gate-hook-run.md")).unwrap();
+        let hook = super::parse(&vidar_fixture("hooks/gate-hook-run.md")).unwrap();
         assert_eq!((hook.kind.as_str(), hook.item.event.as_deref(), hook.item.matcher.as_deref()), ("hook", Some("PreToolUse"), Some("Bash")));
         assert_eq!(hook.item.run, ["{{root}}/tests/fixtures/rune-vault/sources/hooks/gate-hook-run.mjs"]);
-        let cmd = super::parse(&stock_fixture("hooks/gate-hook-command.md")).unwrap();
+        let cmd = super::parse(&vidar_fixture("hooks/gate-hook-command.md")).unwrap();
         assert_eq!(cmd.agent.as_deref(), Some("codex"));
         assert!(cmd.item.command.as_ref().unwrap().expose().contains("sk-secret-1"));
         assert!(!format!("{cmd:?}").contains("sk-secret-1"), "a parsed rune's Debug prints the command");
-        let perm = super::parse(&stock_fixture("permissions/gate-permission.md")).unwrap();
-        assert_eq!((perm.item.allow.as_slice(), perm.item.ask.as_slice(), perm.item.mode.as_deref()), (&["mcp__plugin_vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..], Some("auto")));
-        let mcp = super::parse(&stock_fixture("mcp/vidar-drive.md")).unwrap();
+        let perm = super::parse(&vidar_fixture("permissions/gate-permission.md")).unwrap();
+        assert_eq!((perm.item.allow.as_slice(), perm.item.ask.as_slice(), perm.item.mode.as_deref()), (&["mcp__vidar_drive".to_string()][..], &["mcp__gate_write".to_string()][..], Some("auto")));
+        let mcp = super::parse(&vidar_fixture("mcp/vidar-drive.md")).unwrap();
         assert_eq!((mcp.item.module.as_deref(), mcp.item.server.as_deref()), (Some("vidar-drive"), Some("vidar_drive")));
-        for (rel, kind) in [("skills/gate-skill.md", "skill"), ("agents/gate-agent.md", "agent"), ("plugins/vidar-app.md", "plugin")] {
-            let r = super::parse(&stock_fixture(rel)).unwrap();
+        for (rel, kind) in [("skills/gate-skill.md", "skill"), ("agents/gate-agent.md", "agent"), ("plugins/roster.md", "plugin")] {
+            let r = super::parse(&vidar_fixture(rel)).unwrap();
             assert_eq!(r.kind, kind);
             assert!(r.item.source.as_deref().unwrap().starts_with("{{root}}/"), "{rel}");
             assert!(super::is_item_kind(kind) && r.activate == "none");
         }
-        let id = super::parse(&stock_fixture("rules/bare-identity.md")).unwrap();
+        let id = super::parse(&vidar_fixture("rules/bare-identity.md")).unwrap();
         assert!(id.required_by_vidar() && !super::is_item_kind(&id.kind));
     }
 
@@ -498,12 +606,79 @@ mod tests {
         assert!(bad("kind: hook\nevent: Stop\ncommand: a\nrun:\n  - b.mjs\n").contains("not both"));
         assert!(bad("kind: mcp\nmodule: m\n").contains("`module` and `server`"));
         assert!(bad("kind: permission\n").contains("`allow`, `ask` or `mode`"));
-        assert!(bad("kind: rule\nagent: gemini\n").contains("claude or codex"));
+        assert!(bad("kind: rule\nagent: acme\n").contains("claude or codex"));
         assert!(bad("kind: rule\nrequired-by: me\n").contains("(vidar)"));
         let e = bad("kind: plugin\nsource: a\nenv:\n  - 1BAD=sk-secret-1\n");
         assert!(e.contains("NAME=value") && !e.contains("sk-secret-1"), "{e}");
         let ok = super::parse("---\nname: x\nkind: plugin\nscope: [global]\nsource: a\nenv: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1\n---\n").unwrap();
         assert_eq!(ok.item.env, ["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1"]);
+    }
+
+    #[test]
+    fn fits_follows_the_agent_and_surface_tags() {
+        use super::Surface;
+        let rune = |tags: &str| super::parse(&format!("---\nname: x\nkind: rule\nscope: [global]\n{tags}---\n")).unwrap();
+        let agents = crate::agent_spec::ALL;
+        let wants_agent: Vec<Option<crate::agent_spec::Agent>> = std::iter::once(None).chain(agents.iter().copied().map(Some)).collect();
+        let wants_surface: Vec<Option<Surface>> = std::iter::once(None).chain(Surface::ALL.iter().copied().map(Some)).collect();
+        let tag_agents: Vec<Option<crate::agent_spec::Agent>> = std::iter::once(None).chain(agents.iter().copied().map(Some)).collect();
+        let tag_surfaces: Vec<Option<Surface>> = std::iter::once(None).chain(Surface::ALL.iter().copied().map(Some)).collect();
+        let surface_word = |s: Surface| match s {
+            Surface::Raw => "raw",
+            Surface::Rendered => "rendered",
+            Surface::Flow => "flow",
+        };
+        for ta in &tag_agents {
+            for ts in &tag_surfaces {
+                let mut head = String::new();
+                if let Some(a) = ta {
+                    head += &format!("agent: {}\n", a.as_str());
+                }
+                if let Some(s) = ts {
+                    head += &format!("surface: {}\n", surface_word(*s));
+                }
+                let r = rune(&head);
+                for wa in &wants_agent {
+                    for ws in &wants_surface {
+                        let want = ta.is_none_or(|t| wa.is_none_or(|w| w == t)) && ts.is_none_or(|t| ws.is_none_or(|w| w == t));
+                        assert_eq!(r.fits(*wa, *ws), want, "tags {head:?} want {wa:?} {ws:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn surface_needs_ctl_and_built_in_parse() {
+        let head = "---\nname: x\nkind: rule\nscope: [global]\n";
+        let r = super::parse(&format!("{head}surface: flow\nneeds: [a, b]\nctl: yes\n---\n")).unwrap();
+        assert_eq!((r.surface, r.needs.as_slice(), r.ctl, r.built_in.as_deref()), (Some(super::Surface::Flow), &["a".to_string(), "b".to_string()][..], true, None));
+        let d = super::parse(&format!("{head}---\n")).unwrap();
+        assert_eq!((d.surface, d.needs.len(), d.ctl, d.built_in), (None, 0, false, None));
+        assert!(super::parse(&format!("{head}surface: tv\n---\n")).unwrap_err().contains("invalid surface"));
+        assert!(super::parse(&format!("{head}ctl: maybe\n---\n")).is_err());
+    }
+
+    #[test]
+    fn built_in_names_a_cli_skill_or_plugin_and_takes_no_source() {
+        let head = |kind: &str| format!("---\nname: x\nkind: {kind}\nscope: [global]\nagent: claude\n");
+        let ok = super::parse(&format!("{}built-in: simplify\n---\n", head("skill"))).unwrap();
+        assert_eq!(ok.built_in.as_deref(), Some("simplify"));
+        let plug = super::parse(&format!("{}built-in: cc-plugin-tips@builtin\n---\n", head("plugin"))).unwrap();
+        assert_eq!(plug.built_in.as_deref(), Some("cc-plugin-tips@builtin"));
+        let both = super::parse(&format!("{}built-in: simplify\nsource: a\n---\n", head("skill"))).unwrap_err();
+        assert!(both.contains("has no `source`"), "{both}");
+        let rule = super::parse(&format!("{}built-in: simplify\n---\n", head("rule"))).unwrap_err();
+        assert!(rule.contains("applies to skill and plugin"), "{rule}");
+        assert!(super::parse(&format!("{}built-in: a b\n---\n", head("skill"))).is_err());
+    }
+
+    #[test]
+    fn a_setting_rune_needs_source_and_agent() {
+        let ok = super::parse("---\nname: s\nkind: setting\nscope: [global]\nagent: claude\nsource: {{root}}/a.json\n---\n").unwrap();
+        assert_eq!((ok.kind.as_str(), ok.item.source.as_deref()), ("setting", Some("{{root}}/a.json")));
+        assert!(super::parse("---\nname: s\nkind: setting\nscope: [global]\nagent: claude\n---\n").unwrap_err().contains("needs `source`"));
+        assert!(super::parse("---\nname: s\nkind: setting\nscope: [global]\nsource: a\n---\n").unwrap_err().contains("needs `agent`"));
     }
 
     #[test]

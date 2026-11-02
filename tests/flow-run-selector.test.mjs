@@ -14,7 +14,7 @@ setupDom({
     "flow/roster": "export const wiredModels = () => []; export const modelLabel = (id) => id;",
     "flow/engine": "export const startRun = () => ({ id: 'x' }); export const cancelRun = () => {}; export const heldRunIds = () => globalThis.__held;",
     "flow/runs-store": "export const getRun = (id) => globalThis.__runs.find((r) => r.id === id) ?? null; export const runsForGraph = () => globalThis.__runs;",
-    "flow/run-view": "export const paintRun = (r) => { globalThis.__painted = r.id; }; export const clearRunPaint = () => { globalThis.__painted = null; }; export const CANCEL_RUN_TOOLTIP = 'Cancel';",
+    "flow/run-view": "export const paintRun = (r) => { globalThis.__painted = r.id; }; export const clearRunPaint = () => { globalThis.__painted = null; }; export const CANCEL_RUN_TOOLTIP = 'Cancel'; export const statusLabel = (s) => (s === 'ok' ? 'Done' : '');",
     "flow/viewport": "export const showFlowToast = () => {}; export const forgetViewport = () => {};",
   },
 });
@@ -46,7 +46,7 @@ test("run words: 64 unique Title Case nouns, stable per id", () => {
 test("the label is word, date and time joined by spaces", () => {
   const label = runLabel("run-a", "2026-10-18T12:51:00");
   assert.match(label, new RegExp(`^${runWord("run-a")} \\S+ \\S+ \\S+`));
-  assert.doesNotMatch(label, /[,—()]|Success|Run /);
+  assert.doesNotMatch(label, /[,—()]|Done|Run /);
 });
 
 test("the selector opens a dropdown of icon rows with the status as the tooltip", () => {
@@ -59,14 +59,14 @@ test("the selector opens a dropdown of icon rows with the status as the tooltip"
   // closed face: the selected run's icon and name
   assert.match(controls.runPick.querySelector(".nm").textContent, new RegExp(`^${runWord("run-a")} `));
   assert.match(controls.runPick.querySelector(".nm img.icn").src, /check-circle/);
-  assert.equal(controls.runPick.title, "Success");
+  assert.equal(controls.runPick.title, "Done");
   controls.runPick.click();
   const rows = [...document.querySelectorAll("#flow-pick-menu .display-pick-row")];
   assert.equal(rows.length, 7, "the Run row plus six runs");
   assert.equal(rows[0].textContent, "Run");
   const byIcon = rows.slice(1).map((r) => [r.querySelector("img.icn").src.match(/([\w-]+)\.svg$/)[1], r.title]);
   assert.deepEqual(byIcon, [
-    ["check-circle", "Success"], ["dismiss-circle", "Error"], ["warning", "Interrupted"],
+    ["check-circle", "Done"], ["dismiss-circle", "Error"], ["warning", "Interrupted"],
     ["cancel", "Canceled"], ["shield", "Denied"], ["timer", "Running"],
   ]);
   assert.ok(rows[1].classList.contains("active"));

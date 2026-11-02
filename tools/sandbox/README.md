@@ -4,6 +4,7 @@ Sandbox loop and write gate for a Vidar zip: the live install and the real profi
 
 - `check-zip.ps1`: checks a release zip without extracting it (no `runtime/` entry, required paths present).
 - `launch.ps1`: extracts a zip into a sandbox with a fake user profile and fresh-logon env, refuses any redirect that lands in the real profile, starts `vidar.exe` (`-DryRun` stops before starting).
+- `zip-boot.ps1`: unseeded boot check, run after `local-zip.ps1` on the fresh zip: launches it in a `%TEMP%\vidar-zipboot-<stamp>` sandbox with no seeded Falcon bundle, DevTools on port 9334, and reports the install root, the shipped bundle, the Rendered rows, onboarding and the host as PASS, FAIL or INCONCLUSIVE (exit 0, 1, 3; refused 2). Starts Vidar, so the main thread runs it, never a subagent (`-DryRun` only); dev-only, not in a release export. The verdict is the pure `zip-boot.mjs`.
 - `clean-smoke.ps1`: checks a zip and its `.sha256`, then writes a Windows Sandbox run folder (`vidar.wsb`, templates from `clean-smoke/`); zip folder read-only, one writable mapping limited to the run folder; `-DryRun` writes nothing, `-Open` is the user's.
 - `profile-snapshot.ps1`: path, size, mtime and SHA-256 snapshot of the real-profile roots; `-Compare` diffs two.
 - `write-audit.ps1`: reads a kernel FileIO trace and flags writes by the sandbox's process tree into the real profile.

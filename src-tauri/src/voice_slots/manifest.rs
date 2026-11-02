@@ -160,15 +160,15 @@ struct PackJson {
     /// The pack's module declaration (contracts/modules.json); the module registry reads it,
     /// voice ignores it.
     #[serde(default)]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // read by the module registry, not by voice
     module: Value,
     /// Pack release version and the core range it needs; the module registry and `scan_pack`
     /// both check them (`modules::compat::check_pack_compat`).
     #[serde(default)]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // read by the module registry, not by voice
     release: Value,
     #[serde(default)]
-    #[allow(dead_code)]
+    #[allow(dead_code)] // read by the module registry, not by voice
     requires: Value,
 }
 
@@ -315,8 +315,16 @@ fn read_limited(path: &Path, limit: u64, what: &str) -> Result<Vec<u8>, String> 
 /// no `slots` contributes nothing to voice. Junctions and symlinks are followed
 /// (`fs::metadata`); a link that cannot be followed is an error row. A missing or unreadable
 /// `packs\` is one error row naming it.
-pub fn scan(packs_dir: &Path) -> Scan {
+pub fn scan(packs_dir: &Path, ledger: Option<&Path>) -> Scan {
     let mut out = Scan::default();
+    // The pack ledger's load floor. Unreadable or absent: no floor (fail open).
+    let floor = ledger.and_then(|f| match crate::modules::ledger::load(f) {
+        Ok(l) => Some(l),
+        Err(e) => {
+            eprintln!("voice slots: pack ledger not used: {e}");
+            None
+        }
+    });
     let rd = match std::fs::read_dir(packs_dir) {
         Ok(rd) => rd,
         Err(e) => {
@@ -343,12 +351,12 @@ pub fn scan(packs_dir: &Path) -> Scan {
     }
     dirs.sort();
     for (folder, dir) in dirs {
-        scan_pack(&folder, &dir, &mut out);
+        scan_pack(&folder, &dir, floor.as_ref(), &mut out);
     }
     out
 }
 
-fn scan_pack(folder: &str, dir: &Path, out: &mut Scan) {
+fn scan_pack(folder: &str, dir: &Path, floor: Option<&crate::modules::ledger::Ledger>, out: &mut Scan) {
     let pack_file = dir.join("pack.json");
     let broken = |file: &Path, reason: String| Broken { adapter: None, slot: None, file: file.to_path_buf(), reason };
     let (pack, raw) = match read_limited(&pack_file, PACK_JSON_BYTES, "pack.json").and_then(|b| {
@@ -372,6 +380,12 @@ fn scan_pack(folder: &str, dir: &Path, out: &mut Scan) {
         crate::modules::compat::check_pack_compat(&raw, env!("CARGO_PKG_VERSION"), crate::modules::compat::CORE_CONTRACT)
     {
         return out.broken.push(broken(&pack_file, reason));
+    }
+    // The module registry's load floor, applied here too so a pack it refuses adds no adapters.
+    if let (Some(l), Some(release)) = (floor, raw.get("release").and_then(Value::as_str)) {
+        if let Some(reason) = crate::modules::ledger::floor_reason(l, folder, release) {
+            return out.broken.push(broken(&pack_file, reason));
+        }
     }
     let limits = &contract().limits;
     for (key, files) in &pack.slots {
@@ -648,6 +662,10 @@ mod tests {
     }
 
     fn scan_temp_pack(tag: &str, extra: &str) -> Scan {
+        scan_temp_pack_floor(tag, extra, None)
+    }
+
+    fn scan_temp_pack_floor(tag: &str, extra: &str, floor: Option<&crate::modules::ledger::Ledger>) -> Scan {
         let root = std::env::temp_dir().join(format!("vidar-scan-pack-{}-{tag}", std::process::id()));
         let dir = root.join("a");
         std::fs::create_dir_all(dir.join("voice")).expect("temp pack dir");
@@ -656,9 +674,25 @@ mod tests {
         let pack = format!(r#"{{"id":"a","version":1{extra},"slots":{{"tts":["voice/x.json"]}}}}"#);
         std::fs::write(dir.join("pack.json"), pack).expect("pack.json");
         let mut out = Scan::default();
-        scan_pack("a", &dir, &mut out);
+        scan_pack("a", &dir, floor, &mut out);
         let _ = std::fs::remove_dir_all(&root);
         out
+    }
+
+    #[test]
+    fn scan_pack_skips_a_pack_below_its_floor() {
+        use crate::modules::ledger::{Entry, Ledger, Rel};
+        let rel = |r: &str| Rel { release: r.into(), digest: "d".into() };
+        let mut l = Ledger::default();
+        l.packs.insert("a".into(), Entry { floor: "1.2.0".into(), current: rel("1.2.0"), previous: None });
+        let below = scan_temp_pack_floor("below", r#","release":"1.0.0""#, Some(&l));
+        assert!(below.adapters.is_empty());
+        assert_eq!(below.broken.len(), 1);
+        assert_eq!(below.broken[0].reason, "Release 1.0.0 Is Older Than 1.2.0");
+        let equal = scan_temp_pack_floor("equal", r#","release":"1.2.0""#, Some(&l));
+        assert!(equal.broken.is_empty() && equal.adapters.len() == 1);
+        let none = scan_temp_pack_floor("nofloor", r#","release":"1.0.0""#, None);
+        assert_eq!(none.adapters.len(), 1);
     }
 
     #[test]

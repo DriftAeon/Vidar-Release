@@ -1,7 +1,6 @@
 //! src-tauri\src\bare\set_loadout.rs — one resolver from picked rune sets to what a spawn carries
 //! `resolve` reads distinct set refs in pick order and their Bare runes (no sidecars, bundles or
 //! overrides: a launch loads only what the vault holds). Invalid refs and unreadable inputs become warnings; the launch owns all writes.
-#![allow(dead_code)] // W2's launch paths and W3's View adopt `resolve`.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -14,14 +13,16 @@ use super::recall_skill;
 use super::set_layer::{self, Permissions};
 use crate::agent_spec;
 use crate::falcon::Agent;
-use crate::rules::{context::RenderCtx, library::Library, rune::State};
+use crate::rules::{
+    context::RenderCtx,
+    library::Library,
+    rune::{State, Surface},
+};
 
-/// The machine paths `resolve` reads: the install root, vidar.json, the agent's Bare home and the
-/// user's home for any rune source that needs expansion.
+/// The machine paths `resolve` reads: the install root, vidar.json and the user's home for any rune source that needs expansion.
 pub(crate) struct ResolveEnv<'a> {
     pub root: &'a Path,
     pub config: &'a Path,
-    pub home: &'a Path,
     pub user_home: Option<&'a Path>,
 }
 
@@ -43,6 +44,39 @@ pub(crate) struct Unsupported {
     pub kind: String,
     pub item: String,
     pub reason: String,
+}
+
+/// A setting rune a loadout carries: its id and its `source` as written (`{{root}}`-relative; the launch
+/// expands it, so the loadout hash holds no machine path).
+#[derive(Clone, Debug, Default, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SettingRef {
+    pub id: String,
+    pub source: String,
+}
+
+/// What a vault leaves off of the agent's own skills and plugins: every `built-in:` rune in the Vidar
+/// library that fits the agent and is not placed. `managed` is false for a launch without a vault.
+#[derive(Clone, Debug, Default, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BuiltIns {
+    pub managed: bool,
+    /// CLI names of the skills left off.
+    pub off_skills: Vec<String>,
+    /// CLI names of the plugins left off (`<plugin>@builtin`).
+    pub off_plugins: Vec<String>,
+    /// Some built-in skill is placed, so the agent's bundled set stays installed.
+    pub skills_placed: bool,
+    /// CLI names of the built-in skills the vault places (`built_ins_of`'s `placed_skills`); hashed
+    /// when any, so a loadout with none hashes as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub placed_skills: Vec<String>,
+}
+
+impl BuiltIns {
+    pub(crate) fn is_empty(&self) -> bool {
+        !self.managed
+    }
 }
 
 /// Everything a spawn of these sets carries for one agent.
@@ -69,6 +103,12 @@ pub(crate) struct Loadout {
     /// Plugin rune folders, absolute (`<root>\plugins\<name>`); a vault spawn only (L2b passes them).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub plugins: Vec<String>,
+    /// The vault's one setting rune for this agent: the settings file the launch starts from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setting: Option<SettingRef>,
+    /// The agent's own skills and plugins the vault leaves off; a vault spawn only.
+    #[serde(skip_serializing_if = "BuiltIns::is_empty")]
+    pub built_ins: BuiltIns,
     /// hash12 of the canonical JSON of every field above.
     pub hash: String,
     /// The guard objects behind `guards` (`{ event, matcher?, run, open? }`, paths absolute), same order;
@@ -87,6 +127,9 @@ pub(crate) struct Loadout {
     /// Item runes' `env:` entries (values are secrets; never logged). A vault spawn only (L2b sets them).
     #[serde(skip)]
     pub env: Vec<(String, crate::rules::rune::Secret)>,
+    /// Any rune this loadout carries is `ctl: yes` (the session may drive Vidar). Mint sites read it (R.2).
+    #[serde(skip)]
+    pub ctl: bool,
 }
 
 /// The one Not Carried warning line, for a launch's `Loadout.unsupported` row.
@@ -338,13 +381,15 @@ struct Held {
     recall: bool,
 }
 
+/// Keeps only the runes that fit `agent` on `surface` (`Rune::fits`; a `None` surface, the Codex model
+/// probe's, filters none).
 /// Resolves vault `v` (`Store::resolve`: unlocked reads the libraries and writes `revs/<hash>/` where
 /// absent; locked reads its revision and reports drift) into the existing `Loadout` fields. Item runes
 /// go through `rune_items` (skills, agents, guards, MCP names, permissions, plugins, env); text runes
 /// render in each runeset's own lines, one-offs after: an always rule as its body, a recall, paths or
 /// procedure rune as a pointer into the on-demand skill. Nothing reads a launcher row, a sidecar or a
 /// bundle (model R1, R2).
-pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault::store::Store, v: &super::vault::Vault) -> Result<VaultLoadout, String> {
+pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, surface: Option<Surface>, store: &super::vault::store::Store, v: &super::vault::Vault) -> Result<VaultLoadout, String> {
     use super::rune_items::{self, MapEnv, Mapped, RuneItem};
     use crate::rules::rune::{self, Rune};
 
@@ -355,7 +400,7 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
         out.hash = hash_of(&out);
         return Ok(VaultLoadout { loadout: out, warnings, text: None, sets });
     }
-    let resolved = store.resolve(&v.id)?;
+    let resolved = store.resolve_at(v)?;
     warnings.extend(resolved.warnings);
     for d in &resolved.drift {
         warnings.push(format!("Rune `{}` changed in its library after vault {:?} locked; the locked copy loads", d.key(), v.id));
@@ -364,6 +409,9 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
     // `Store::resolve` already skips Disabled runesets, so a later set's `<?recall?>` keeps their slots.
     let mut held: Vec<Held> = Vec::new();
     let mut items: Vec<RuneItem> = Vec::new();
+    // The vault's active runes that fit this agent and surface, by id, and, per such rune, what it needs.
+    let mut present: BTreeSet<String> = BTreeSet::new();
+    let mut wants: Vec<(String, Vec<String>)> = Vec::new();
     for r in &resolved.runes {
         let parsed: Rune = match rune::parse(&r.body.replace('\r', "")) {
             Ok(p) => p,
@@ -378,6 +426,15 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
             }
             continue;
         }
+        // The one agent and surface scope: a rune tagged for another leaves the loadout, silently.
+        if !parsed.fits(Some(agent), surface) {
+            continue;
+        }
+        present.insert(parsed.id.clone());
+        out.ctl |= parsed.ctl;
+        if !parsed.needs.is_empty() {
+            wants.push((parsed.id.clone(), parsed.needs.clone()));
+        }
         if rune::is_item_kind(&parsed.kind) {
             match RuneItem::from_rune(&parsed) {
                 Ok(Some(it)) => items.push(it),
@@ -387,6 +444,14 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
             continue;
         }
         held.push(Held { library: r.library.clone(), rune: parsed, recall: r.recall });
+    }
+    // S3: a rune that fits and needs a rune that is not placed and fitting (off, removed, or tagged
+    // for another agent or surface) refuses the spawn.
+    let display = |id: &str| crate::rules::slug::upper_first(&id.replace('-', " "));
+    for (id, needs) in &wants {
+        if let Some(missing) = needs.iter().find(|n| !present.contains(*n)) {
+            return Err(format!("{} needs {}; spawn refused", display(id), display(missing)));
+        }
     }
 
     // Items: the merged pieces, and per item what the agent cannot carry (`Loadout.unsupported`).
@@ -419,6 +484,14 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
     out.model = pieces.model;
     out.plugins = pieces.plugins;
     out.env = pieces.env;
+    let mut settings = pieces.settings.into_iter();
+    if let Some((id, source)) = settings.next() {
+        if let Some((again, _)) = settings.next() {
+            return Err(format!("Rune Vault holds two {} setting runes (`{id}`, `{again}`); a vault holds one per agent; spawn refused", agent_label(agent)));
+        }
+        out.setting = Some(SettingRef { id, source });
+    }
+    out.built_ins = built_ins_of(store, agent, surface, &pieces.built_in_skills, &pieces.built_in_plugins);
     drop_unsupported(agent, &mut out);
     out.guards = out.guard_items.iter().map(set_layer::guard_name).collect();
 
@@ -512,24 +585,33 @@ pub(crate) fn resolve_vault(env: &ResolveEnv, agent: Agent, store: &super::vault
     let text = crate::rules::context::tidy(&lines.join("\n"));
     let text = text.trim().to_string();
 
-    // A `required-by: vidar` rune of the agent's stock template that this vault lacks warns, never bars.
-    let present: BTreeSet<String> = resolved.runes.iter().map(|r| format!("{}/{}", r.library, r.id)).collect();
-    // Template and stock library resolve under the store's root, as the vault's own runes do.
-    if let Ok(t) = store.template(&format!("stock-{}", agent.as_str())) {
-        let stock = store.library("stock").ok();
-        for r in t.runes.iter().filter(|r| r.library == "stock" && !present.contains(&r.key())) {
-            let text = stock.as_ref().and_then(|l| l.entry(&r.id).ok().flatten()).and_then(|e| crate::fsx::read_text(&e.path).ok());
-            if text.and_then(|t| super::vault::store::header_value(&t, "required-by")).as_deref() == Some("vidar") {
-                warnings.push(rune_items::drop_warning(&r.id));
-            }
-        }
-    }
     out.hash = hash_of(&out);
     Ok(VaultLoadout { loadout: out, warnings, text: (!text.is_empty()).then_some(text), sets })
 }
 
+/// The built-ins a vault leaves off: the Vidar library's `built-in:` runes that fit `agent` and `surface`,
+/// minus the ones the vault placed (`placed_*`, by CLI name).
+fn built_ins_of(store: &super::vault::store::Store, agent: Agent, surface: Option<Surface>, placed_skills: &[String], placed_plugins: &[String]) -> BuiltIns {
+    let mut out = BuiltIns { managed: true, skills_placed: !placed_skills.is_empty(), placed_skills: placed_skills.to_vec(), ..Default::default() };
+    let Ok(lib) = store.library(layer::VIDAR_LIBRARY) else { return out };
+    for (rune, _) in lib.all_runes().0 {
+        let Some(name) = rune.built_in.clone() else { continue };
+        if rune.state != State::Active || !rune.fits(Some(agent), surface) {
+            continue;
+        }
+        let (placed, off) = match rune.kind.as_str() {
+            "plugin" => (placed_plugins, &mut out.off_plugins),
+            _ => (placed_skills, &mut out.off_skills),
+        };
+        if !placed.contains(&name) && !off.contains(&name) {
+            off.push(name);
+        }
+    }
+    out
+}
+
 /// hash12 of the loadout's wire JSON without `hash` (struct field order, so stable across runs).
-fn hash_of(l: &Loadout) -> String {
+pub(super) fn hash_of(l: &Loadout) -> String {
     let mut v = serde_json::to_value(l).expect("serializable loadout");
     if let Some(o) = v.as_object_mut() {
         o.remove("hash");
@@ -590,19 +672,13 @@ mod tests {
     }
 
     fn run(t: &Tmp, agent: Agent, sets: &[SetRef]) -> (Loadout, Vec<String>) {
-        let (config, home) = (crate::paths::config_path_in(&t.0), t.0.join("home"));
-        let env = ResolveEnv { root: &t.0, config: &config, home: &home, user_home: Some(&t.0) };
+        let config = crate::paths::config_path_in(&t.0);
+        let env = ResolveEnv { root: &t.0, config: &config, user_home: Some(&t.0) };
         resolve(&env, agent, sets)
     }
 
     fn ids(l: &[RuneRef]) -> Vec<&str> {
         l.iter().map(|r| r.id.as_str()).collect()
-    }
-
-    fn guard_script(t: &Tmp, name: &str) -> String {
-        let p = t.0.join("hooks").join(name);
-        write(&p, "// guard\n");
-        p.to_string_lossy().replace('\\', "\\\\")
     }
 
     #[test]
@@ -615,9 +691,8 @@ mod tests {
         let store = super::super::vault::store::Store::open(&t.0);
         let v = store.create("Disabled Set Probe", None, &[super::super::vault::SetSource { library: "imp".into(), set: "disabled-set".into() }], &[]).unwrap();
         let config = crate::paths::config_path_in(&t.0);
-        let home = t.0.join("home");
-        let env = ResolveEnv { root: &t.0, config: &config, home: &home, user_home: Some(&t.0) };
-        let loaded = resolve_vault(&env, Agent::Claude, &store, &v).unwrap();
+        let env = ResolveEnv { root: &t.0, config: &config, user_home: Some(&t.0) };
+        let loaded = resolve_vault(&env, Agent::Claude, None, &store, &v).unwrap();
         assert!(loaded.loadout.rules.is_empty(), "disabled set leaked rule text");
         assert!(loaded.loadout.skills.is_empty(), "disabled set mapped its skill item");
         assert!(loaded.text.is_none());
@@ -633,12 +708,88 @@ mod tests {
         let store = super::super::vault::store::Store::open(&t.0);
         let v = store.create("Styled", None, &[super::super::vault::SetSource { library: "imp".into(), set: "styled".into() }], &[]).unwrap();
         let config = crate::paths::config_path_in(&t.0);
-        let home = t.0.join("home");
-        let env = ResolveEnv { root: &t.0, config: &config, home: &home, user_home: Some(&t.0) };
-        assert_eq!(resolve_vault(&env, Agent::Claude, &store, &v).unwrap().loadout.output_style.map(|s| s.name).as_deref(), Some("compact"));
-        let codex = resolve_vault(&env, Agent::Codex, &store, &v).unwrap();
+        let env = ResolveEnv { root: &t.0, config: &config, user_home: Some(&t.0) };
+        assert_eq!(resolve_vault(&env, Agent::Claude, None, &store, &v).unwrap().loadout.output_style.map(|s| s.name).as_deref(), Some("compact"));
+        let codex = resolve_vault(&env, Agent::Codex, None, &store, &v).unwrap();
         assert!(codex.loadout.output_style.is_none());
         assert!(codex.loadout.unsupported.iter().any(|u| u.kind == "output-style"));
+    }
+
+    /// One runeset `s` in library `imp` holding rule runes `(id, extra header lines)`, as a vault.
+    fn scoped(t: &Tmp, runes: &[(&str, &str)]) -> (super::super::vault::store::Store, super::super::vault::Vault) {
+        let mut body = String::new();
+        for (id, header) in runes {
+            rune(t, Some("imp"), "rule", id, &format!("scope: [global]\n{header}"), &format!("Text of {id}"));
+            body.push_str(&format!("- <?rune {id}?>\n"));
+        }
+        rune(t, Some("imp"), "set", "s", "scope: [global]\n", &body);
+        let store = super::super::vault::store::Store::open(&t.0);
+        let v = store.create("Scoped", None, &[super::super::vault::SetSource { library: "imp".into(), set: "s".into() }], &[]).unwrap();
+        (store, v)
+    }
+
+    fn scoped_ids(t: &Tmp, agent: Agent, surface: Option<Surface>, store: &super::super::vault::store::Store, v: &super::super::vault::Vault) -> Result<(Vec<String>, bool), String> {
+        let config = crate::paths::config_path_in(&t.0);
+        let env = ResolveEnv { root: &t.0, config: &config, user_home: Some(&t.0) };
+        resolve_vault(&env, agent, surface, store, v).map(|l| (l.loadout.rules.iter().map(|r| r.id.clone()).collect(), l.loadout.ctl))
+    }
+
+    #[test]
+    fn a_codex_only_member_is_absent_from_claude_and_present_on_codex() {
+        let t = root("agent-scope");
+        let (store, v) = scoped(&t, &[("shared", ""), ("codex-only", "agent: codex\n")]);
+        let (claude, _) = scoped_ids(&t, Agent::Claude, Some(Surface::Rendered), &store, &v).unwrap();
+        assert_eq!(claude, ["shared"]);
+        let (codex, _) = scoped_ids(&t, Agent::Codex, Some(Surface::Rendered), &store, &v).unwrap();
+        assert_eq!(codex, ["shared", "codex-only"]);
+    }
+
+    #[test]
+    fn a_rendered_surface_rune_loads_on_rendered_only() {
+        let t = root("surface-scope");
+        let (store, v) = scoped(&t, &[("shared", ""), ("gate-like", "agent: claude\nsurface: rendered\n")]);
+        for surface in [Surface::Raw, Surface::Flow] {
+            let (ids, _) = scoped_ids(&t, Agent::Claude, Some(surface), &store, &v).unwrap();
+            assert_eq!(ids, ["shared"], "{surface:?}");
+        }
+        let (rendered, _) = scoped_ids(&t, Agent::Claude, Some(Surface::Rendered), &store, &v).unwrap();
+        assert_eq!(rendered, ["shared", "gate-like"]);
+    }
+
+    #[test]
+    fn an_unmet_need_refuses_the_spawn_with_the_names() {
+        let t = root("unmet-need");
+        let (store, v) = scoped(&t, &[("needy-rune", "needs: [absent-rune]\n")]);
+        let err = scoped_ids(&t, Agent::Claude, Some(Surface::Rendered), &store, &v).unwrap_err();
+        assert_eq!(err, "Needy rune needs Absent rune; spawn refused");
+    }
+
+    #[test]
+    fn a_need_held_only_for_the_other_agent_refuses_the_spawn() {
+        let t = root("held-need");
+        let (store, v) = scoped(&t, &[("needy-rune", "needs: [other-rune]\n"), ("other-rune", "agent: codex\n")]);
+        let err = scoped_ids(&t, Agent::Claude, Some(Surface::Rendered), &store, &v).unwrap_err();
+        assert_eq!(err, "Needy rune needs Other rune; spawn refused");
+        let (ids, _) = scoped_ids(&t, Agent::Codex, Some(Surface::Rendered), &store, &v).unwrap();
+        assert_eq!(ids, ["needy-rune", "other-rune"]);
+    }
+
+    #[test]
+    fn a_claude_loadout_with_drive_allow_and_vidar_drive_resolves() {
+        let t = root("drive-need");
+        let (store, v) = scoped(&t, &[("drive-allow", "needs: [vidar-drive]\n"), ("vidar-drive", "")]);
+        let (ids, _) = scoped_ids(&t, Agent::Claude, Some(Surface::Rendered), &store, &v).unwrap();
+        assert_eq!(ids, ["drive-allow", "vidar-drive"]);
+    }
+
+    #[test]
+    fn ctl_follows_a_placed_control_rune() {
+        let t = root("ctl-flag");
+        let (store, v) = scoped(&t, &[("plain", ""), ("vidar-control", "ctl: yes\n")]);
+        assert!(scoped_ids(&t, Agent::Claude, Some(Surface::Rendered), &store, &v).unwrap().1);
+        let t2 = root("ctl-flag-off");
+        let (store2, v2) = scoped(&t2, &[("plain", "")]);
+        assert!(!scoped_ids(&t2, Agent::Claude, Some(Surface::Rendered), &store2, &v2).unwrap().1);
     }
 
     #[test]

@@ -228,7 +228,7 @@ pub fn check_codex_agent(path: &str, home: Option<&Path>) -> Result<AgentCopy, S
 }
 
 /// A Codex launch copies exactly the skill sources resolved from its Rune Vault.
-/// The stock vidar-control source is one of those only when its skill rune is present.
+/// The vidar-control source is one of those only when its skill rune is present.
 pub(crate) fn codex_skills_in(_root: &Path, skills: &[String]) -> Vec<String> {
     skills.to_vec()
 }
@@ -666,8 +666,7 @@ fn seed_home_ledger(agent: Agent, home_dir: &Path, dir: &Path) -> Result<(), Str
         return Ok(());
     }
     let path = dir.join(HOME_LEDGER);
-    let json = serde_json::to_string_pretty(&seeded).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(&path, json.as_bytes()).map_err(|e| format!("Bare copies ledger {} not seeded ({e})", path.display()))
+    crate::fsx::write_json_pretty(&path, &seeded, false).map_err(|e| format!("Bare copies ledger {} not seeded ({e})", path.display()))
 }
 
 /// The skill folders a plan's listing covers: every one, in plan order.
@@ -692,7 +691,7 @@ fn installed_listing(skills_dir: &Path, order: &[String], ledger: &Ledger, warni
             warnings.push(format!("Skill {:?}: its installed SKILL.md is missing or not what Vidar placed; not listed", placed.name));
             continue;
         };
-        let text = std::str::from_utf8(&bytes).map(|t| t.strip_prefix('\u{feff}').unwrap_or(t)).unwrap_or("");
+        let text = std::str::from_utf8(&bytes).map(crate::fsx::strip_bom).unwrap_or("");
         match frontmatter(text) {
             (Some(name), Some(description)) if plain_name(&name) && !name.contains(char::is_whitespace) => out.push(Listed { name, description }),
             _ => warnings.push(format!("Skill {:?} has no usable name or description; not listed", placed.name)),
@@ -704,15 +703,10 @@ fn installed_listing(skills_dir: &Path, order: &[String], ledger: &Ledger, warni
 /// A SKILL.md frontmatter's `name` and `description`, each `None` when absent, empty or not a
 /// value `scalar` accepts; the description may also be a folded `>`/`|` block. No closing `---`
 /// is no frontmatter.
-fn frontmatter(text: &str) -> (Option<String>, Option<String>) {
-    let mut lines = text.lines().map(|l| l.trim_end_matches('\r'));
-    if lines.next().map(str::trim) != Some("---") {
-        return (None, None);
-    }
-    let rest: Vec<&str> = lines.collect();
-    let Some(end) = rest.iter().position(|l| l.trim() == "---") else { return (None, None) };
-    let block = &rest[..end];
-    (scalar(block, "name", false), scalar(block, "description", true))
+pub(super) fn frontmatter(text: &str) -> (Option<String>, Option<String>) {
+    let Some((header, _)) = crate::rules::rune::split_header(text) else { return (None, None) };
+    let block: Vec<&str> = header.lines().collect();
+    (scalar(&block, "name", false), scalar(&block, "description", true))
 }
 
 /// One frontmatter value joined onto one line: a plain scalar (a trailing ` # comment` stripped),
@@ -781,9 +775,9 @@ pub fn listing(skills: &[Listed]) -> String {
     if skills.is_empty() {
         return String::new();
     }
-    let mut out = String::from("Skills Vidar copied in (call by $name):\n");
+    let mut out = String::from("Skills Vidar copied in (refer to them by name; the user invokes one by typing $<name>):\n");
     for s in skills {
-        out.push_str(&format!("- ${}: {}\n", s.name, s.description));
+        out.push_str(&format!("- {}: {}\n", s.name, s.description));
     }
     out
 }
@@ -831,8 +825,7 @@ fn sync_into(ledger_path: &Path, home_dir: &Path, skills_dir: &Path, agents_dir:
     if ledger != before {
         let written = std::fs::create_dir_all(ledger_path.parent().unwrap_or(home_dir))
             .map_err(|e| e.to_string())
-            .and_then(|_| serde_json::to_string_pretty(&ledger).map_err(|e| e.to_string()))
-            .and_then(|json| crate::fsx::atomic_write(ledger_path, json.as_bytes()));
+            .and_then(|_| crate::fsx::write_json_pretty(ledger_path, &ledger, false));
         if let Err(e) = written {
             warnings.push(format!("Bare copies ledger {} not saved ({e})", ledger_path.display()));
         }
@@ -843,6 +836,18 @@ fn sync_into(ledger_path: &Path, home_dir: &Path, skills_dir: &Path, agents_dir:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frontmatter_outputs_are_pinned() {
+        let n = |s: &str| Some(s.to_string());
+        assert_eq!(frontmatter("---\nname: a\ndescription: b\n---\nBody"), (n("a"), n("b")));
+        assert_eq!(frontmatter("---\r\nname: a\r\ndescription: \"b c\"\r\n---\r\nBody"), (n("a"), n("b c")));
+        assert_eq!(frontmatter("---\nname: a\ndescription: >\n  folded\n  text\n---\n"), (n("a"), n("folded text")));
+        assert_eq!(frontmatter("---\n---\nname: a\n"), (None, None));
+        assert_eq!(frontmatter("---\nname: a\n"), (None, None));
+        assert_eq!(frontmatter("name: a\n---\n"), (None, None));
+        assert_eq!(frontmatter(""), (None, None));
+    }
     use crate::bare::home;
 
     struct TempDir(PathBuf);
@@ -1213,7 +1218,10 @@ mod tests {
         assert_eq!(frontmatter("no frontmatter\ndescription: x\n"), (None, None));
         assert_eq!(frontmatter("---\nname: n\ndescription: x\n"), (None, None), "no closing ---");
         let l = listing(&[Listed { name: "a".into(), description: "A.".into() }, Listed { name: "b".into(), description: "B.".into() }]);
-        assert_eq!(l, "Skills Vidar copied in (call by $name):\n- $a: A.\n- $b: B.\n");
+        assert_eq!(
+            l,
+            "Skills Vidar copied in (refer to them by name; the user invokes one by typing $<name>):\n- a: A.\n- b: B.\n"
+        );
         assert_eq!(listing(&[]), "");
     }
 
@@ -1352,7 +1360,7 @@ description: "a \\ b" # c"#), (Some("ti\"dy".into()), Some(r"a \ b".into())));
         let sets = [super::super::layer::SetRef { library: None, set: set.to_string() }];
         // The checkout's root for the bundle catalog; the fixture sets carry no rune members.
         let root = crate::paths::root();
-        let env = ResolveEnv { root: &root, config, home: &f.home, user_home: None };
+        let env = ResolveEnv { root: &root, config, user_home: None };
         let (loadout, warnings) = super::super::set_loadout::resolve(&env, Agent::Codex, &sets);
         let mut plan = plan_for(Agent::Codex, &codex_skills_in(&f.src, &loadout.skills), &loadout.agents, Some(&f.home));
         plan.warnings.splice(0..0, warnings);

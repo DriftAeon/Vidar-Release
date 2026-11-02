@@ -14,7 +14,6 @@
 // `git.exe` on PATH. A bare `bash.exe` on PATH can be System32\bash.exe (WSL): never used.
 
 use std::io::Read;
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -22,10 +21,8 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::proc_job::JobChild;
-use crate::pty::SCRUBBED_ENV;
+use crate::proc_job::{JobChild, SpawnExt};
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const RUN_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_COMMAND: usize = 16 * 1024;
 const STREAM_CAP: usize = 30_000;
@@ -169,11 +166,8 @@ fn run(bash: &Path, cwd: &Path, command: &str, timeout: Duration) -> Result<Bang
         .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-    for key in SCRUBBED_ENV {
-        cmd.env_remove(key);
-    }
+        .stderr(Stdio::piped());
+    cmd.scrubbed();
     cmd.env_remove("VIDAR_TAB");
     cmd.env_remove("VIDAR_TAB_NAME");
     let mut child = JobChild::spawn(&mut cmd).map_err(|e| format!("Git Bash not runnable: {e}"))?;
@@ -181,23 +175,17 @@ fn run(bash: &Path, cwd: &Path, command: &str, timeout: Duration) -> Result<Bang
     let stderr = child.stderr.take().ok_or("no stderr")?;
     let out_t = thread::spawn(move || drain(stdout));
     let err_t = thread::spawn(move || drain(stderr));
-    let started = Instant::now();
     let mut timed_out = false;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(st)) => break Some(st),
-            Ok(None) => {
-                if started.elapsed() >= timeout {
-                    timed_out = true;
-                    child.kill();
-                    break child.wait().ok();
-                }
-                thread::sleep(Duration::from_millis(20));
-            }
-            Err(e) => {
-                child.kill();
-                return Err(format!("wait failed: {e}"));
-            }
+    let status = match child.wait_bounded(Instant::now() + timeout) {
+        Ok(Some(st)) => Some(st),
+        Ok(None) => {
+            timed_out = true;
+            child.kill();
+            child.wait().ok()
+        }
+        Err(e) => {
+            child.kill();
+            return Err(format!("wait failed: {e}"));
         }
     };
     // bash is gone, but a backgrounded grandchild (`sleep 600 &`) still holds the pipes and
@@ -325,7 +313,7 @@ mod tests {
     fn pid_alive(pid: u32) -> bool {
         let out = Command::new("tasklist")
             .args(["/FI", &format!("PID eq {pid}"), "/NH", "/FO", "CSV"])
-            .creation_flags(CREATE_NO_WINDOW)
+            .quiet()
             .output()
             .expect("tasklist");
         String::from_utf8_lossy(&out.stdout).contains(&format!("\"{pid}\""))

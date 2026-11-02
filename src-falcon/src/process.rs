@@ -60,6 +60,7 @@ use windows::{
     },
 };
 
+use crate::protocol::agent_env::{session_env_len, with_session_env};
 use crate::security::{win_error, OwnedHandle};
 
 /// Bytes of one child stdout line before the line is dropped with a marker.
@@ -100,23 +101,13 @@ const WRITE_ABANDONED: u8 = 3;
 /// `pty::SCRUBBED_ENV` reasoning: Falcon may itself be launched from inside an
 /// agent's tool shell, and the hosted CLI must not inherit that conversation's
 /// markers.
-pub const SCRUBBED_ENV: &[&str] = &[
-    "CLAUDE_CODE_SSE_PORT",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDECODE",
-    "CLAUDE_CODE_CHILD_SESSION",
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_PID",
-    "ANTHROPIC_API_KEY",
+///
+/// The agents' own names come from the table (`Agent::session_markers` plus `host_scrub`),
+/// laid over [`SCRUB_BASE`] by `with_session_env`.
+const SCRUB_BASE: &[&str] = &[
     "VIDAR_TAB",
     "VIDAR_TAB_NAME",
-    "CODEX_SANDBOX",
-    "CODEX_SANDBOX_NETWORK_DISABLED",
     "VIDAR_CTL_TOKEN",
-    // When set, the CLI's applyFlagSettings refuses effort changes ("overrides effort for this session"), breaking the live effort picker.
-    "CLAUDE_CODE_EFFORT_LEVEL",
     // Re-added per child by `claude.rs::spawn_request` only when the spawn
     // carries one; never inherited from Falcon's own environment.
     "VIDAR_CTL_SECRET",
@@ -130,6 +121,9 @@ pub const SCRUBBED_ENV: &[&str] = &[
     "VIDAR_ROOT",
     "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
 ];
+const SCRUBBED_LEN: usize = session_env_len(SCRUB_BASE.len(), true);
+const SCRUBBED_BUILT: [&str; SCRUBBED_LEN] = with_session_env(SCRUB_BASE, true);
+pub const SCRUBBED_ENV: &[&str] = &SCRUBBED_BUILT;
 
 /// What a child's env is built from before `SpawnRequest.env` is laid over it. `SCRUBBED_ENV`
 /// leaves either base.

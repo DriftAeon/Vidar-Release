@@ -14,13 +14,12 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use super::split::slug;
-use crate::agent_spec::{parse, Agent};
+use crate::agent_spec::{parse, spec, Agent, ALL};
+use crate::rules::codex::codex_home_from as home_from_env;
 use crate::rules::rune::{check_id, CONTEXTS};
 
 /// The largest source read (D5).
 pub const MAX_BYTES: u64 = 256 * 1024;
-/// The library a Codex home's `memories\memory_summary.md` fills.
-pub const CODEX_MEMORY: &str = "codex-memory";
 /// Codex reads this before, and instead of, `AGENTS.md`.
 pub const AGENTS_OVERRIDE: &str = "AGENTS.override.md";
 
@@ -110,25 +109,63 @@ fn file_base(path: &Path) -> String {
     format!("{dir}-{stem}-md")
 }
 
+/// Each agent's per-user folder under `home` that holds loose rules, skills, agents, memory and settings in Claude
+/// Code's layout; Codex keeps its files in the Codex home instead.
+pub fn user_dirs(home: &Path) -> Vec<PathBuf> {
+    ALL.into_iter()
+        .filter_map(|a| match a {
+            Agent::Claude => Some(home.join(spec(a).user_dir)),
+            Agent::Codex => None,
+        })
+        .collect()
+}
+
+/// An agent's user-level instruction file, when it lives under `home` or the Codex home.
+fn user_file(a: Agent, home: Option<&Path>, codex_home: Option<&Path>) -> Option<PathBuf> {
+    match a {
+        Agent::Claude => home.map(|h| h.join(spec(a).user_dir).join(spec(a).instructions_file)),
+        Agent::Codex => codex_home.map(codex_agents),
+    }
+}
+
+/// The library an agent's own memory summary fills, when `path` is it.
+fn memory_library(a: Agent, codex_home: Option<&Path>, path: &Path) -> Option<String> {
+    match a {
+        Agent::Claude => None,
+        Agent::Codex => codex_home
+            .map(|c| c.join("memories").join("memory_summary.md"))
+            .filter(|s| same_path(s, path))
+            .map(|_| format!("{}-memory", a.as_str())),
+    }
+}
+
+/// `primaryAgent`: blank is Claude; a string the agent table does not parse is an error (`plan` refuses it).
+pub fn primary_agent(primary: &str) -> Result<Agent, String> {
+    if primary.is_empty() {
+        return Ok(ALL[0]);
+    }
+    parse(primary).ok_or_else(|| format!("invalid: primaryAgent `{primary}` is not an agent"))
+}
+
 fn candidates(home: Option<&Path>, codex_home: Option<&Path>, cwd: Option<&Path>, primary: &str) -> Vec<Candidate> {
     let mut out = Vec::new();
-    if let Some(h) = home {
-        out.push(Candidate { path: h.join(".claude").join("CLAUDE.md"), agent: Agent::Claude.as_str(), base: "claude-user".into() });
-    }
-    if let Some(c) = codex_home {
-        out.push(Candidate { path: codex_agents(c), agent: Agent::Codex.as_str(), base: "codex-user".into() });
+    for a in ALL {
+        if let Some(path) = user_file(a, home, codex_home) {
+            out.push(Candidate { path, agent: a.as_str(), base: format!("{}-user", a.as_str()) });
+        }
     }
     if let Some(c) = cwd {
-        for (file, agent) in [("CLAUDE.md", Agent::Claude.as_str()), ("AGENTS.md", Agent::Codex.as_str())] {
-            let path = c.join(file);
+        for a in ALL {
+            let path = c.join(spec(a).instructions_file);
             if !out.iter().any(|o: &Candidate| same_path(&o.path, &path)) {
-                out.push(Candidate { base: file_base(&path), path, agent });
+                out.push(Candidate { base: file_base(&path), path, agent: a.as_str() });
             }
         }
     }
-    // The primary agent is Claude when unset (`primaryAgent`); the one parse of the setting's string.
-    let primary = parse(primary).unwrap_or(Agent::Claude).as_str();
-    out.sort_by_key(|c| c.agent != primary); // stable: listed order within each agent
+    // An unknown `primaryAgent` lists in neutral order (`plan` refuses it through `primary_agent`).
+    if let Ok(primary) = primary_agent(primary) {
+        out.sort_by_key(|c| c.agent != primary.as_str()); // stable: listed order within each agent
+    }
     out
 }
 
@@ -165,7 +202,7 @@ fn readable(path: &Path) -> bool {
 /// `None` when it sits under the Bare agent homes (a Bare tab's own home is never an import source).
 pub fn live_codex_home(home: Option<&Path>) -> Option<PathBuf> {
     let homes = agent_homes_root();
-    crate::rules::codex::codex_home_from(std::env::var_os("CODEX_HOME"), home.map(Path::to_path_buf))
+    home_from_env(std::env::var_os("CODEX_HOME"), home.map(Path::to_path_buf))
         .filter(|c| !homes.as_deref().is_some_and(|h| under_root(c, h)))
 }
 
@@ -203,8 +240,7 @@ pub fn library_of_in(imports: &Path, path: &Path, home: Option<&Path>, codex_hom
     if let Some(s) = list_in(imports, home, codex_home, cwd, primary).into_iter().find(|s| same_path(Path::new(&s.path), path)) {
         return s.library;
     }
-    let summary = codex_home.map(|c| c.join("memories").join("memory_summary.md"));
-    let base = if summary.is_some_and(|s| same_path(&s, path)) { CODEX_MEMORY.to_string() } else { file_base(path) };
+    let base = ALL.into_iter().find_map(|a| memory_library(a, codex_home, path)).unwrap_or_else(|| file_base(path));
     library_for(imports, &base, &tilde(path, home)).0
 }
 
@@ -264,6 +300,29 @@ mod tests {
         assert_eq!(library_of_in(&imports, &root.join("x/Rules.md"), Some(&home), Some(&codex_home), None, ""), "x-rules-md");
         assert!(read(&cwd.join("notes.txt")).is_err());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn primary_agent_blank_is_claude_and_unknown_is_refused() {
+        assert_eq!(primary_agent(""), Ok(Agent::Claude));
+        assert_eq!(primary_agent("codex"), Ok(Agent::Codex));
+        for bad in ["grok", "Claude"] {
+            assert!(primary_agent(bad).unwrap_err().starts_with("invalid: primaryAgent"), "{bad}");
+        }
+        // The list keeps its neutral order (Claude's files first) when the setting is unknown.
+        let (home, codex) = (Path::new(r"C:\h\user"), Path::new(r"C:\h\user\.codex"));
+        for primary in ["", "grok", "Claude"] {
+            let got = candidates(Some(home), Some(codex), None, primary);
+            assert_eq!(got.iter().map(|c| c.agent).collect::<Vec<_>>(), [Agent::Claude.as_str(), Agent::Codex.as_str()], "{primary}");
+        }
+    }
+
+    #[test]
+    fn a_codex_memory_summary_fills_the_codex_memory_library() {
+        let root = std::env::temp_dir().join(format!("vidar-import-sources-mem-{}", std::process::id()));
+        let (imports, codex) = (root.join("imports"), root.join("codex"));
+        let summary = codex.join("memories").join("memory_summary.md");
+        assert_eq!(library_of_in(&imports, &summary, None, Some(&codex), None, ""), "codex-memory");
     }
 
     #[test]

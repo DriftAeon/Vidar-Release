@@ -3,9 +3,6 @@
 //! names a launcher row. Lookup: `falconSession`, then `threadId`, then `tab`; the newest match wins.
 //! The launch paths write records (L2a); adopt with no record builds or reuses a vault (D-g); the
 //! Falcon event reader and the Codex app-server reader add the thread id once it is known (L3c).
-// `record`'s callers are split across the launch, adopt and reader paths; some helpers are test-only.
-#![allow(dead_code)]
-
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -76,8 +73,7 @@ pub fn write(root: &Path, r: &Record) -> Result<PathBuf, String> {
     let d = dir(root);
     std::fs::create_dir_all(&d).map_err(|e| format!("{}: {e}", d.display()))?;
     let path = d.join(format!("{}-{}-{}.json", stamp(&r.created_utc), r.agent, hex8()));
-    let json = serde_json::to_string_pretty(r).map_err(|e| e.to_string())? + "\n";
-    crate::fsx::atomic_write(&path, json.as_bytes())?;
+    crate::fsx::write_json_pretty(&path, r, true)?;
     Ok(path)
 }
 
@@ -145,17 +141,39 @@ pub fn thread_id_in_line(line: &serde_json::Value) -> Option<&str> {
     None
 }
 
-/// Adopt with no record (D-g): build or reuse the Custom vault of the host-echoed sets on the agent's
-/// stock floor (`super::floored_custom`), then write the record. A running session never gets the vault pick.
+/// Every vault id a session record names. Fails closed: a record file that cannot be read or parsed
+/// aborts, since the vault it names could be swept (`Store::sweep_copies`). A missing folder names none.
+pub(crate) fn named_vaults(root: &Path) -> Result<std::collections::HashSet<String>, String> {
+    let rd = match std::fs::read_dir(dir(root)) {
+        Ok(rd) => rd,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+        Err(e) => return Err(format!("{}: {e}", dir(root).display())),
+    };
+    let mut out = std::collections::HashSet::new();
+    for e in rd {
+        let p = e.map_err(|e| e.to_string())?.path();
+        if p.extension().is_some_and(|x| x == "json") {
+            out.insert(crate::fsx::read_json::<Record>(&p).map_err(|e| format!("session record {}: {e}", p.display()))?.vault.id);
+        }
+    }
+    Ok(out)
+}
+
+/// Adopt with no record (D-g): start a blank vault plus the host-echoed sets (`super::create_at` with no
+/// name and no `from`: the Vidar Runeset at index 0, then the echoed sets), then write the record. A Falcon session
+/// adopted twice keeps its first record: it is re-read under `ADOPT` before a copy is minted. A running
+/// session never gets the vault pick.
 pub fn adopt(root: &Path, agent: &str, tab: &str, falcon_session: &str, echoed_sets: &[SetSource]) -> Result<Record, String> {
+    static ADOPT: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let Some(parsed) = crate::agent_spec::parse(agent) else {
         return Err(format!("Agent {agent:?} is not claude or codex; vault refused"));
     };
-    let v = super::floored_custom(root, parsed.as_str(), echoed_sets, &[])?;
-    let body = match parsed {
-        crate::agent_spec::Agent::Claude => "rendered",
-        crate::agent_spec::Agent::Codex => "hosted",
-    };
+    let _g = ADOPT.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(r) = find(root, tab, Some(falcon_session), None)?.filter(|r| r.falcon_session.as_deref() == Some(falcon_session)) {
+        return Ok(r);
+    }
+    let v = super::create_at(root, None, None, echoed_sets, &[])?;
+    let body = crate::agent_spec::spec(parsed).adopt_body;
     let mut r = record(parsed.as_str(), body, tab, VaultPin { id: v.id, hash: v.hash }, "", "");
     r.falcon_session = Some(falcon_session.to_string());
     write(root, &r)?;

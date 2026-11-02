@@ -1,4 +1,5 @@
 use std::path::Path;
+use crate::proc_job::SpawnExt;
 use std::process::Command;
 
 // Exact-match only (never contains/starts_with): NTFS ADS shapes like
@@ -64,6 +65,7 @@ pub fn open_in_editor(path: String, line: u32) -> Result<(), String> {
     // spawn, never wait: first Rider launch takes seconds
     Command::new(&exe)
         .args(expand_args(&arg_template, &plain, line))
+        .scrubbed()
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

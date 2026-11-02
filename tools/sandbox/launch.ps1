@@ -3,6 +3,7 @@
 # the real user) and a fresh-logon environment (tools\release\clean-env.ps1), then start vidar.exe.
 # Who runs it: the user, in a normal terminal outside any agent session (stop S5), or the main thread
 # (clean-env start). Subagents run -DryRun only.
+# Every start ends by blanking voice.hotkey in app\vidar.json (blank-voice-hotkey.mjs): the live app owns Ctrl+Shift+G.
 #
 # Usage: pwsh -File tools/sandbox/launch.ps1 -Zip <zip> [-Base <dir>] [-LiveRoot <dir>] [-Port <n>] [-Seed <set>] [-DryRun]
 #        pwsh -File tools/sandbox/launch.ps1 -From <folder> [-Base <dir>] [-Port <n>] [-SeedBundle <dir>] [-ArgumentList <string>] [-DryRun]
@@ -363,7 +364,7 @@ New-Item -ItemType Directory -Force -Path $app | Out-Null
 $keep = Get-VidarRel -Id runtime   # runtime\homes and the rest of runtime\ survive a rebuild; never copied.
 if ($reuse) {
   Get-ChildItem -LiteralPath $app -Force | Where-Object { $_.Name -ne $keep } | Remove-Item -Recurse -Force
-  # runes-seed.mjs wrote vidar.json, contracts\module-bundles.json and runes-e2e\ (all gone with the wipe above,
+  # runes-seed.mjs wrote vidar.json and runes-e2e\ (all gone with the wipe above,
   # then restored by the copy below) and app\runtime\runes\ (kept by the wipe, so removed here). A manifest from an
   # earlier seeded run means an unseeded Start also drops what that run wrote under the base, then the manifest.
   $seedManifest = Join-Path $Base ".runes-seed-manifest.json"
@@ -397,6 +398,15 @@ if ($From) {
 } else {
   Get-ChildItem -LiteralPath $srcDir -Force | Where-Object { $_.Name -ne $keep } |
     ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination (Join-Path $app $_.Name) }
+  # runtime\ is skipped above, except the Falcon bundle the zip ships (contract falconBundles): without it a
+  # sandbox made from a zip has no host to start.
+  $bundleRel = Get-VidarRel -Id falconBundles
+  $zipBundles = Join-Path $srcDir $bundleRel
+  if (Test-Path -LiteralPath $zipBundles -PathType Container) {
+    $bundlesOut = Join-Path $app $bundleRel
+    New-Item -ItemType Directory -Force -Path $bundlesOut | Out-Null
+    Get-ChildItem -LiteralPath $zipBundles -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $bundlesOut -Recurse -Force }
+  }
   Remove-Item -LiteralPath $incoming -Recurse -Force
 }
 # The shell resolves User Shell Folders (%USERPROFILE%\Desktop, ...) through the redirected profile: a
@@ -429,6 +439,12 @@ if ($SeedBundle) {
 }
 
 if ($Seed) { Invoke-Seed $prof }
+
+# Last write to app\vidar.json, after the copy and every seed: the live app holds the global voice hotkey, so a
+# sandbox that registers it gets a "taken" popup on every start (blank hotkey = no registration, src/voice.ts).
+$hk = & node (Join-Path $PSScriptRoot "blank-voice-hotkey.mjs") --to $Base @(if ($DryRun) { "--dry-run" }) 2>&1
+if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("blank-voice-hotkey.mjs exited ${LASTEXITCODE}: $hk"); exit $LASTEXITCODE }
+"$hk"
 
 if ($DryRun) { "DryRun: redirects satisfied; vidar.exe not started."; exit 0 }
 $p = Start-CleanProcess -FilePath $exe -WorkingDirectory $app -ArgumentList $ArgumentList -Extra ([hashtable]$extra)

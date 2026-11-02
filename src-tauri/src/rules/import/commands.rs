@@ -123,6 +123,7 @@ fn ordinals<'a>(sections: impl Iterator<Item = &'a Vec<String>>) -> Vec<usize> {
 }
 
 fn plan(env: &Env, path: &str) -> Result<Plan, String> {
+    sources::primary_agent(env.primary)?;
     let path = sources::expand(path, env.home);
     let raw = sources::read(&path)?;
     // A memory folder names its library from its project folder (fold 7, 8), never by `sources` name logic.

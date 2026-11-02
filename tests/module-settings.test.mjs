@@ -177,7 +177,7 @@ test('three lists include current rack rows and Relay stays fixed On', async () 
   await tick();
   assert.deepEqual([...section(root, 'order.workbenchTabs').querySelectorAll('[data-module-id]')]
     .map((r) => r.dataset.moduleId),
-  ['bench:relay', 'bench:tray', 'bench:doc', 'bench:flow', 'bench:runelib', 'bench:lab', 'bench:changes', 'bench:unreal', 'bench:jira', 'bench:notion', 'bench:slack']);
+  ['bench:relay', 'bench:tray', 'bench:doc', 'bench:flow', 'bench:runelib', 'bench:changes', 'bench:unreal', 'bench:jira', 'bench:notion', 'bench:slack', 'bench:lab']);
   assert.deepEqual([...section(root, 'order.tools').querySelectorAll('[data-module-id]')]
     .map((r) => r.dataset.moduleId), ['tool:marquee', 'tool:eyedropper']);
   const rackIds = [...section(root, 'order.rack').querySelectorAll('[data-module-id]')]

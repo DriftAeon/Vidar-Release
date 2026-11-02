@@ -6,8 +6,8 @@ import { APPROVAL_TITLES, type ApprovalRecord, type ApprovalOutcome } from "../.
 import { openApproval } from "../../asks/approvals";
 import { depsReport } from "../../deps/state";
 import { rel } from "../../paths";
-import { sandboxBlocker } from "./astra-sandbox";
-import type { TerminalSession } from "./types";
+import { ASTRA_AGENT, sandboxBlocker } from "./astra-sandbox";
+import { sessionSupports, type TerminalSession } from "./types";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
 let writeToSession: (id: string, data: string) => Promise<boolean> = async () => false;
@@ -48,7 +48,7 @@ const SUBMIT_PAUSE_MS = 1200;
 function hasNeverFlag(args?: string[]): boolean {
   // The flag must sit on the codex invocation itself, not anywhere in the
   // joined args (a quoted "-a never" inside other text would otherwise pass).
-  const cmd = (args ?? []).find((a) => /^\s*codex(\s|$)/.test(a)) ?? "";
+  const cmd = (args ?? []).find((a) => a.trimStart().startsWith(`${ASTRA_AGENT} `) || a.trim() === ASTRA_AGENT) ?? "";
   return /(^|\s)(-a|--ask-for-approval)\s+never(\s|$)/.test(cmd);
 }
 
@@ -64,7 +64,7 @@ function astraCwds(): string[] | null {
 function armBlocker(id: string): string | null {
   const s = sessions.get(id);
   if (!s?.alive) return "tab is not alive";
-  if (s.agent !== "codex") return "only Codex tabs can be Astra";
+  if (!sessionSupports(s.agent, "thread")) return "only Codex tabs can be Astra";
   if (!hasNeverFlag(s.launchArgs)) return "relaunch Codex with -a never (Astra launcher)";
   return sandboxBlocker({ launchArgs: s.launchArgs, shell: s.shell, cwd: s.cwd, allowedCwds: astraCwds() });
 }
@@ -102,7 +102,7 @@ async function handleDispatch(d: DispatchEvent) {
   }
   // A leading slash is a Codex command, not a prompt; a brief never starts with one.
   if (/^\s*\//.test(d.text)) return refuse("text starts with a slash command");
-  const codexUp = () => invoke("pty_has_descendant", { id, exe: "codex.exe" }).catch(() => false);
+  const codexUp = () => invoke("pty_has_descendant", { id, exe: `${ASTRA_AGENT}.exe` }).catch(() => false);
   if (!(await codexUp())) return refuse("astra tab isn't running codex");
   // The user approves the exact bytes typed; the requester is only what the file claims.
   const tabTitle = sessions.get(id)?.container.dataset.title ?? id;

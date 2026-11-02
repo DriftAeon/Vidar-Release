@@ -15,7 +15,7 @@ const reg = [
 const all = () => true;
 
 test("rows follow the step order, not the registry order", () => {
-  assert.deepEqual(moduleRows(reg, all).map((r) => r.key), ["tray", "doc", "runelib", "lab", "jira", "slack"]);
+  assert.deepEqual(moduleRows(reg, all).map((r) => r.key), ["tray", "doc", "runelib", "jira", "slack", "lab"]);
   assert.deepEqual(ONBOARDING_MODULE_IDS.slice(0, 4), ["tray", "doc", "flow", "runelib"]);
 });
 

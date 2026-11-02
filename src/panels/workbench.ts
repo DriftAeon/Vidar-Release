@@ -19,6 +19,7 @@ import { applyOrder, enableReorder } from "./reorder";
 import { onPress } from "./press";
 import { mountTray, onPaste, dropPaths } from "./workbench-tray";
 import { OPTIONAL_SURFACE_IDS, WORKBENCH_MODULES } from "./workbench-modules";
+import { notifyModulesChanged } from "../modules/hidden";
 import * as prefs from "../prefs";
 import { openModuleContextMenu, type ModuleMenuAction } from "../modules/context-menu";
 import { moduleListed, onModulesChange } from "../modules/registry";
@@ -140,7 +141,7 @@ function setSavedVisibility(id: Tab, visible: boolean) {
   const key = `bench:${id}`;
   const hidden = getPref("modules.hidden") ?? [];
   const next = visible ? hidden.filter((entry) => entry !== key) : [...hidden, key];
-  if (prefs.setPref("modules.hidden", next)) document.dispatchEvent(new CustomEvent("vidar-modules-change"));
+  if (prefs.setPref("modules.hidden", next)) notifyModulesChanged();
 }
 
 function tabMenuActions(clicked?: Tab): ModuleMenuAction[] {
@@ -444,6 +445,14 @@ export function revealWorkbenchTab(next: Tab) {
   if (!setTab(next, true)) return false;
   revealWorkbench();
   return true;
+}
+
+/** A tab waiting for its Rune Vault picks in the Runes panel, so the panel must be reachable: a saved-hidden Runes
+ *  tab is unhidden for this session (not saved; the next visibility sync re-applies the saved choice) and a closed
+ *  workbench opens. False only when the release set does not list Runes. */
+export function revealRunesForPick(): boolean {
+  if (hiddenTabs.has("runelib")) setWorkbenchTabVisibility("runelib", true);
+  return revealWorkbenchTab("runelib");
 }
 
 function mountOptionalTab(id: OptionalTab) {

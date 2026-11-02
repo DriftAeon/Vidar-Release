@@ -177,10 +177,10 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-rune-set-toggle`\n- `allow-bare-local-sources`\n- `allow-bare-actives`\n- `allow-bare-layer-set`\n- `allow-bare-set-layer-write`\n- `allow-bare-module-bundles`\n- `allow-bare-set-fork`\n- `allow-bare-set-extend`\n- `allow-bare-sets-list`\n- `allow-bare-launch`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-codex-trust-offer`\n- `allow-codex-trust-folder`\n- `allow-vidar-worktree-open`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-p4-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-stages`\n- `allow-read-stage-asset`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-archive-display-file`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-caption-metrics`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-check-release`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-loadout`\n- `allow-read-codex-loadout`\n- `allow-file-kb`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-permission-modes`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`",
+          "description": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-runes-load-history`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-bare-local-sources`\n- `allow-bare-module-bundles`\n- `allow-bare-library-delete`\n- `allow-bare-sets-list`\n- `allow-bare-launch`\n- `allow-rune-vault-list`\n- `allow-rune-vault-read`\n- `allow-rune-vault-create`\n- `allow-rune-vault-edit`\n- `allow-rune-vault-lock`\n- `allow-rune-vault-session`\n- `allow-rune-vault-defaults`\n- `allow-rune-vault-default-set`\n- `allow-rune-vault-library-runes`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-codex-trust-offer`\n- `allow-codex-trust-folder`\n- `allow-vidar-worktree-open`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-p4-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-unreal-mcp-status`\n- `allow-unreal-asset-card`\n- `allow-unreal-find`\n- `allow-unreal-asset-diff`\n- `allow-unreal-engine-pin`\n- `allow-unreal-engine-pin-set`\n- `allow-unreal-engine-choices`\n- `allow-unreal-graph-text`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-stages`\n- `allow-read-stage-asset`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-caption-metrics`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-check-release`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-node-permissions`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`",
           "type": "string",
           "const": "main-all",
-          "markdownDescription": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-rune-set-toggle`\n- `allow-bare-local-sources`\n- `allow-bare-actives`\n- `allow-bare-layer-set`\n- `allow-bare-set-layer-write`\n- `allow-bare-module-bundles`\n- `allow-bare-set-fork`\n- `allow-bare-set-extend`\n- `allow-bare-sets-list`\n- `allow-bare-launch`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-codex-trust-offer`\n- `allow-codex-trust-folder`\n- `allow-vidar-worktree-open`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-p4-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-stages`\n- `allow-read-stage-asset`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-archive-display-file`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-caption-metrics`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-check-release`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-loadout`\n- `allow-read-codex-loadout`\n- `allow-file-kb`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-permission-modes`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`"
+          "markdownDescription": "Every app command, granted to the main window\n#### This permission set includes:\n\n- `allow-detect-dependencies`\n- `allow-check-cli-updates`\n- `allow-update-cli`\n- `allow-codex-skew`\n- `allow-modules-list`\n- `allow-module-art`\n- `allow-module-trust-current`\n- `allow-spawn-pty`\n- `allow-write-pty`\n- `allow-pty-has-descendant`\n- `allow-review-ready`\n- `allow-review-result`\n- `allow-open-ready`\n- `allow-open-result`\n- `allow-control-result`\n- `allow-list-pending-asks`\n- `allow-claim-pending-ask`\n- `allow-release-pending-ask`\n- `allow-settle-pending-ask`\n- `allow-resize-pty`\n- `allow-pty-flow`\n- `allow-kill-pty`\n- `allow-adopt-session`\n- `allow-spawn-codex-appserver`\n- `allow-codex-list-models`\n- `allow-rules-prepare`\n- `allow-runes-catalog`\n- `allow-runes-loaded`\n- `allow-runes-load-history`\n- `allow-rules-import-sources`\n- `allow-rules-import-scan`\n- `allow-rules-import-apply`\n- `allow-rules-generate`\n- `allow-rules-generate-cancel`\n- `allow-bare-local-sources`\n- `allow-bare-module-bundles`\n- `allow-bare-library-delete`\n- `allow-bare-sets-list`\n- `allow-bare-launch`\n- `allow-rune-vault-list`\n- `allow-rune-vault-read`\n- `allow-rune-vault-create`\n- `allow-rune-vault-edit`\n- `allow-rune-vault-lock`\n- `allow-rune-vault-session`\n- `allow-rune-vault-defaults`\n- `allow-rune-vault-default-set`\n- `allow-rune-vault-library-runes`\n- `allow-lab-item`\n- `allow-agent-send`\n- `allow-kill-agent`\n- `allow-codex-trust-offer`\n- `allow-codex-trust-folder`\n- `allow-vidar-worktree-open`\n- `allow-agent-reap-all`\n- `allow-list-codex-threads`\n- `allow-list-external-sessions`\n- `allow-list-recent-sessions`\n- `allow-read-session-meta`\n- `allow-read-codex-model`\n- `allow-read-codex-limits`\n- `allow-codex-rollout-threads`\n- `allow-status-snapshot`\n- `allow-open-folder`\n- `allow-pick-folder`\n- `allow-open-document`\n- `allow-open-in-browser`\n- `allow-claude-installed-version`\n- `allow-claude-auth-status`\n- `allow-claude-auth-status-bare`\n- `allow-claude-login-run`\n- `allow-claude-login-cancel`\n- `allow-review-workspace`\n- `allow-changes-status`\n- `allow-changes-p4-status`\n- `allow-changes-act`\n- `allow-changes-commit`\n- `allow-changes-sync`\n- `allow-changes-rename-branch`\n- `allow-unreal-status`\n- `allow-unreal-mcp-status`\n- `allow-unreal-asset-card`\n- `allow-unreal-find`\n- `allow-unreal-asset-diff`\n- `allow-unreal-engine-pin`\n- `allow-unreal-engine-pin-set`\n- `allow-unreal-engine-choices`\n- `allow-unreal-graph-text`\n- `allow-jira-status`\n- `allow-jira-connect`\n- `allow-jira-disconnect`\n- `allow-jira-issues`\n- `allow-jira-types`\n- `allow-jira-projects`\n- `allow-jira-issue`\n- `allow-jira-comments`\n- `allow-notion-status`\n- `allow-notion-connect`\n- `allow-notion-disconnect`\n- `allow-notion-search`\n- `allow-notion-source`\n- `allow-notion-query`\n- `allow-notion-page`\n- `allow-notion-blocks`\n- `allow-slack-status`\n- `allow-slack-connect`\n- `allow-slack-disconnect`\n- `allow-slack-inbox`\n- `allow-bang-run`\n- `allow-save-clip`\n- `allow-write-workbench-entry`\n- `allow-delete-workbench-entry`\n- `allow-archive-workbench-entry`\n- `allow-list-workbench-entries`\n- `allow-write-workbench-png`\n- `allow-read-workbench-png`\n- `allow-save-clip-image`\n- `allow-read-drop-text`\n- `allow-read-drop-png`\n- `allow-read-character-model`\n- `allow-list-characters`\n- `allow-add-character`\n- `allow-repin-character`\n- `allow-update-character`\n- `allow-remove-character`\n- `allow-set-default-character`\n- `allow-list-stages`\n- `allow-read-stage-asset`\n- `allow-list-documents`\n- `allow-read-document`\n- `allow-stat-document`\n- `allow-create-document`\n- `allow-write-document`\n- `allow-read-comments`\n- `allow-save-comments`\n- `allow-read-display-file`\n- `allow-read-display-png`\n- `allow-list-display`\n- `allow-save-display-decision`\n- `allow-read-display-decision`\n- `allow-delete-display-file`\n- `allow-set-caption-color`\n- `allow-caption-metrics`\n- `allow-open-url`\n- `allow-build-stamp`\n- `allow-check-release`\n- `allow-read-config`\n- `allow-read-default-cwd`\n- `allow-codex-cwd-refused`\n- `allow-save-locations`\n- `allow-save-shortcuts`\n- `allow-save-voice`\n- `allow-save-character-view`\n- `allow-read-switch`\n- `allow-set-switch`\n- `allow-swap-pending`\n- `allow-swap-state`\n- `allow-swap-start`\n- `allow-release-build-catalog`\n- `allow-release-build-start`\n- `allow-release-build-cancel`\n- `allow-release-build-state`\n- `allow-patch-settings`\n- `allow-reload-config`\n- `allow-read-state`\n- `allow-patch-state`\n- `allow-open-in-editor`\n- `allow-falcon-available`\n- `allow-falcon-spawn`\n- `allow-falcon-send`\n- `allow-falcon-kill`\n- `allow-falcon-list`\n- `allow-falcon-adopt`\n- `allow-falcon-detach`\n- `allow-falcon-retract`\n- `allow-falcon-steer`\n- `allow-falcon-show`\n- `allow-falcon-hosted-session`\n- `allow-falcon-hosted-held`\n- `allow-driver-mode-get`\n- `allow-driver-mode-set`\n- `allow-falcon-handoff-write`\n- `allow-falcon-handoff-peek`\n- `allow-falcon-handoff-clear`\n- `allow-read-mcp-servers`\n- `allow-read-codex-mcp-servers`\n- `allow-list-mcp-tools`\n- `allow-list-mcp-tools-stdio`\n- `allow-proxy-status`\n- `allow-lmstudio-status`\n- `allow-ocr-begin`\n- `allow-ocr-cancel`\n- `allow-ocr-capture`\n- `allow-colour-sample`\n- `allow-voice-devices`\n- `allow-voice-register`\n- `allow-voice-start`\n- `allow-voice-stop`\n- `allow-speak-last`\n- `allow-speak-stop`\n- `allow-speak-arm`\n- `allow-speak-status`\n- `allow-speak-off`\n- `allow-listen-start`\n- `allow-listen-stop`\n- `allow-listen-status`\n- `allow-listen-delivered`\n- `allow-stt-warm-status`\n- `allow-voice-slots-status`\n- `allow-voice-slots-status-one`\n- `allow-voice-slots-trust`\n- `allow-voice-slots-pick`\n- `allow-save-wakeword`\n- `allow-flow-run-node`\n- `allow-flow-node-permissions`\n- `allow-flow-answer-permission`\n- `allow-flow-cancel-node`\n- `allow-flow-cancel-run`\n- `allow-flow-store-open`\n- `allow-flow-store-write`\n- `allow-flow-output-read`"
         },
         {
           "description": "Enables the add_character command without any pre-configured scope.",
@@ -225,22 +225,16 @@
           "markdownDescription": "Enables the bang_run command without any pre-configured scope."
         },
         {
-          "description": "Enables the bare_actives command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-bare-actives",
-          "markdownDescription": "Enables the bare_actives command without any pre-configured scope."
-        },
-        {
           "description": "Enables the bare_launch command without any pre-configured scope.",
           "type": "string",
           "const": "allow-bare-launch",
           "markdownDescription": "Enables the bare_launch command without any pre-configured scope."
         },
         {
-          "description": "Enables the bare_layer_set command without any pre-configured scope.",
+          "description": "Enables the bare_library_delete command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-bare-layer-set",
-          "markdownDescription": "Enables the bare_layer_set command without any pre-configured scope."
+          "const": "allow-bare-library-delete",
+          "markdownDescription": "Enables the bare_library_delete command without any pre-configured scope."
         },
         {
           "description": "Enables the bare_local_sources command without any pre-configured scope.",
@@ -253,24 +247,6 @@
           "type": "string",
           "const": "allow-bare-module-bundles",
           "markdownDescription": "Enables the bare_module_bundles command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the bare_set_extend command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-bare-set-extend",
-          "markdownDescription": "Enables the bare_set_extend command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the bare_set_fork command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-bare-set-fork",
-          "markdownDescription": "Enables the bare_set_fork command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the bare_set_layer_write command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-bare-set-layer-write",
-          "markdownDescription": "Enables the bare_set_layer_write command without any pre-configured scope."
         },
         {
           "description": "Enables the bare_sets_list command without any pre-configured scope.",
@@ -549,12 +525,6 @@
           "markdownDescription": "Enables the falcon_steer command without any pre-configured scope."
         },
         {
-          "description": "Enables the file_kb command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-file-kb",
-          "markdownDescription": "Enables the file_kb command without any pre-configured scope."
-        },
-        {
           "description": "Enables the flow_answer_permission command without any pre-configured scope.",
           "type": "string",
           "const": "allow-flow-answer-permission",
@@ -573,16 +543,16 @@
           "markdownDescription": "Enables the flow_cancel_run command without any pre-configured scope."
         },
         {
+          "description": "Enables the flow_node_permissions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-flow-node-permissions",
+          "markdownDescription": "Enables the flow_node_permissions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the flow_output_read command without any pre-configured scope.",
           "type": "string",
           "const": "allow-flow-output-read",
           "markdownDescription": "Enables the flow_output_read command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the flow_permission_modes command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-flow-permission-modes",
-          "markdownDescription": "Enables the flow_permission_modes command without any pre-configured scope."
         },
         {
           "description": "Enables the flow_run_node command without any pre-configured scope.",
@@ -765,10 +735,22 @@
           "markdownDescription": "Enables the lmstudio_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the module_accept_release command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-module-accept-release",
+          "markdownDescription": "Enables the module_accept_release command without any pre-configured scope."
+        },
+        {
           "description": "Enables the module_art command without any pre-configured scope.",
           "type": "string",
           "const": "allow-module-art",
           "markdownDescription": "Enables the module_art command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the module_restore_previous command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-module-restore-previous",
+          "markdownDescription": "Enables the module_restore_previous command without any pre-configured scope."
         },
         {
           "description": "Enables the module_trust_current command without any pre-configured scope.",
@@ -939,12 +921,6 @@
           "markdownDescription": "Enables the read_codex_limits command without any pre-configured scope."
         },
         {
-          "description": "Enables the read_codex_loadout command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-read-codex-loadout",
-          "markdownDescription": "Enables the read_codex_loadout command without any pre-configured scope."
-        },
-        {
           "description": "Enables the read_codex_mcp_servers command without any pre-configured scope.",
           "type": "string",
           "const": "allow-read-codex-mcp-servers",
@@ -1009,12 +985,6 @@
           "type": "string",
           "const": "allow-read-drop-text",
           "markdownDescription": "Enables the read_drop_text command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the read_loadout command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-read-loadout",
-          "markdownDescription": "Enables the read_loadout command without any pre-configured scope."
         },
         {
           "description": "Enables the read_mcp_servers command without any pre-configured scope.",
@@ -1161,16 +1131,76 @@
           "markdownDescription": "Enables the rules_prepare command without any pre-configured scope."
         },
         {
-          "description": "Enables the rune_set_toggle command without any pre-configured scope.",
+          "description": "Enables the rune_vault_create command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-rune-set-toggle",
-          "markdownDescription": "Enables the rune_set_toggle command without any pre-configured scope."
+          "const": "allow-rune-vault-create",
+          "markdownDescription": "Enables the rune_vault_create command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_default_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-default-set",
+          "markdownDescription": "Enables the rune_vault_default_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_defaults command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-defaults",
+          "markdownDescription": "Enables the rune_vault_defaults command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_edit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-edit",
+          "markdownDescription": "Enables the rune_vault_edit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_library_runes command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-library-runes",
+          "markdownDescription": "Enables the rune_vault_library_runes command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-list",
+          "markdownDescription": "Enables the rune_vault_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_lock command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-lock",
+          "markdownDescription": "Enables the rune_vault_lock command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_read command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-read",
+          "markdownDescription": "Enables the rune_vault_read command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_vault_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-vault-session",
+          "markdownDescription": "Enables the rune_vault_session command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rune_write command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rune-write",
+          "markdownDescription": "Enables the rune_write command without any pre-configured scope."
         },
         {
           "description": "Enables the runes_catalog command without any pre-configured scope.",
           "type": "string",
           "const": "allow-runes-catalog",
           "markdownDescription": "Enables the runes_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the runes_load_history command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-runes-load-history",
+          "markdownDescription": "Enables the runes_load_history command without any pre-configured scope."
         },
         {
           "description": "Enables the runes_loaded command without any pre-configured scope.",
@@ -1359,6 +1389,54 @@
           "markdownDescription": "Enables the swap_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the unreal_asset_card command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-asset-card",
+          "markdownDescription": "Enables the unreal_asset_card command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_asset_diff command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-asset-diff",
+          "markdownDescription": "Enables the unreal_asset_diff command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_engine_choices command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-engine-choices",
+          "markdownDescription": "Enables the unreal_engine_choices command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_engine_pin command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-engine-pin",
+          "markdownDescription": "Enables the unreal_engine_pin command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_engine_pin_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-engine-pin-set",
+          "markdownDescription": "Enables the unreal_engine_pin_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_find command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-find",
+          "markdownDescription": "Enables the unreal_find command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_graph_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-graph-text",
+          "markdownDescription": "Enables the unreal_graph_text command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the unreal_mcp_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-unreal-mcp-status",
+          "markdownDescription": "Enables the unreal_mcp_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the unreal_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-unreal-status",
@@ -1497,22 +1575,16 @@
           "markdownDescription": "Denies the bang_run command without any pre-configured scope."
         },
         {
-          "description": "Denies the bare_actives command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-bare-actives",
-          "markdownDescription": "Denies the bare_actives command without any pre-configured scope."
-        },
-        {
           "description": "Denies the bare_launch command without any pre-configured scope.",
           "type": "string",
           "const": "deny-bare-launch",
           "markdownDescription": "Denies the bare_launch command without any pre-configured scope."
         },
         {
-          "description": "Denies the bare_layer_set command without any pre-configured scope.",
+          "description": "Denies the bare_library_delete command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-bare-layer-set",
-          "markdownDescription": "Denies the bare_layer_set command without any pre-configured scope."
+          "const": "deny-bare-library-delete",
+          "markdownDescription": "Denies the bare_library_delete command without any pre-configured scope."
         },
         {
           "description": "Denies the bare_local_sources command without any pre-configured scope.",
@@ -1525,24 +1597,6 @@
           "type": "string",
           "const": "deny-bare-module-bundles",
           "markdownDescription": "Denies the bare_module_bundles command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the bare_set_extend command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-bare-set-extend",
-          "markdownDescription": "Denies the bare_set_extend command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the bare_set_fork command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-bare-set-fork",
-          "markdownDescription": "Denies the bare_set_fork command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the bare_set_layer_write command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-bare-set-layer-write",
-          "markdownDescription": "Denies the bare_set_layer_write command without any pre-configured scope."
         },
         {
           "description": "Denies the bare_sets_list command without any pre-configured scope.",
@@ -1821,12 +1875,6 @@
           "markdownDescription": "Denies the falcon_steer command without any pre-configured scope."
         },
         {
-          "description": "Denies the file_kb command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-file-kb",
-          "markdownDescription": "Denies the file_kb command without any pre-configured scope."
-        },
-        {
           "description": "Denies the flow_answer_permission command without any pre-configured scope.",
           "type": "string",
           "const": "deny-flow-answer-permission",
@@ -1845,16 +1893,16 @@
           "markdownDescription": "Denies the flow_cancel_run command without any pre-configured scope."
         },
         {
+          "description": "Denies the flow_node_permissions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-flow-node-permissions",
+          "markdownDescription": "Denies the flow_node_permissions command without any pre-configured scope."
+        },
+        {
           "description": "Denies the flow_output_read command without any pre-configured scope.",
           "type": "string",
           "const": "deny-flow-output-read",
           "markdownDescription": "Denies the flow_output_read command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the flow_permission_modes command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-flow-permission-modes",
-          "markdownDescription": "Denies the flow_permission_modes command without any pre-configured scope."
         },
         {
           "description": "Denies the flow_run_node command without any pre-configured scope.",
@@ -2037,10 +2085,22 @@
           "markdownDescription": "Denies the lmstudio_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the module_accept_release command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-module-accept-release",
+          "markdownDescription": "Denies the module_accept_release command without any pre-configured scope."
+        },
+        {
           "description": "Denies the module_art command without any pre-configured scope.",
           "type": "string",
           "const": "deny-module-art",
           "markdownDescription": "Denies the module_art command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the module_restore_previous command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-module-restore-previous",
+          "markdownDescription": "Denies the module_restore_previous command without any pre-configured scope."
         },
         {
           "description": "Denies the module_trust_current command without any pre-configured scope.",
@@ -2211,12 +2271,6 @@
           "markdownDescription": "Denies the read_codex_limits command without any pre-configured scope."
         },
         {
-          "description": "Denies the read_codex_loadout command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-read-codex-loadout",
-          "markdownDescription": "Denies the read_codex_loadout command without any pre-configured scope."
-        },
-        {
           "description": "Denies the read_codex_mcp_servers command without any pre-configured scope.",
           "type": "string",
           "const": "deny-read-codex-mcp-servers",
@@ -2281,12 +2335,6 @@
           "type": "string",
           "const": "deny-read-drop-text",
           "markdownDescription": "Denies the read_drop_text command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the read_loadout command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-read-loadout",
-          "markdownDescription": "Denies the read_loadout command without any pre-configured scope."
         },
         {
           "description": "Denies the read_mcp_servers command without any pre-configured scope.",
@@ -2433,16 +2481,76 @@
           "markdownDescription": "Denies the rules_prepare command without any pre-configured scope."
         },
         {
-          "description": "Denies the rune_set_toggle command without any pre-configured scope.",
+          "description": "Denies the rune_vault_create command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-rune-set-toggle",
-          "markdownDescription": "Denies the rune_set_toggle command without any pre-configured scope."
+          "const": "deny-rune-vault-create",
+          "markdownDescription": "Denies the rune_vault_create command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_default_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-default-set",
+          "markdownDescription": "Denies the rune_vault_default_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_defaults command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-defaults",
+          "markdownDescription": "Denies the rune_vault_defaults command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_edit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-edit",
+          "markdownDescription": "Denies the rune_vault_edit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_library_runes command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-library-runes",
+          "markdownDescription": "Denies the rune_vault_library_runes command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-list",
+          "markdownDescription": "Denies the rune_vault_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_lock command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-lock",
+          "markdownDescription": "Denies the rune_vault_lock command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_read command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-read",
+          "markdownDescription": "Denies the rune_vault_read command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_vault_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-vault-session",
+          "markdownDescription": "Denies the rune_vault_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rune_write command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rune-write",
+          "markdownDescription": "Denies the rune_write command without any pre-configured scope."
         },
         {
           "description": "Denies the runes_catalog command without any pre-configured scope.",
           "type": "string",
           "const": "deny-runes-catalog",
           "markdownDescription": "Denies the runes_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the runes_load_history command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-runes-load-history",
+          "markdownDescription": "Denies the runes_load_history command without any pre-configured scope."
         },
         {
           "description": "Denies the runes_loaded command without any pre-configured scope.",
@@ -2629,6 +2737,54 @@
           "type": "string",
           "const": "deny-swap-state",
           "markdownDescription": "Denies the swap_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_asset_card command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-asset-card",
+          "markdownDescription": "Denies the unreal_asset_card command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_asset_diff command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-asset-diff",
+          "markdownDescription": "Denies the unreal_asset_diff command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_engine_choices command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-engine-choices",
+          "markdownDescription": "Denies the unreal_engine_choices command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_engine_pin command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-engine-pin",
+          "markdownDescription": "Denies the unreal_engine_pin command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_engine_pin_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-engine-pin-set",
+          "markdownDescription": "Denies the unreal_engine_pin_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_find command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-find",
+          "markdownDescription": "Denies the unreal_find command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_graph_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-graph-text",
+          "markdownDescription": "Denies the unreal_graph_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the unreal_mcp_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-unreal-mcp-status",
+          "markdownDescription": "Denies the unreal_mcp_status command without any pre-configured scope."
         },
         {
           "description": "Denies the unreal_status command without any pre-configured scope.",

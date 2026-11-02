@@ -30,7 +30,6 @@ import type { RecentSession } from "./launcher/recent";
 import type { LoadHistory, RunesCatalog, RunesLoaded, RuneLibraryKey } from "./runes/types";
 import type { LabItem } from "./lab/types";
 import type { ExternalSession } from "./launcher/locations";
-import type { Loadout } from "./panels/loadout";
 import type { McpRack, McpTool } from "./panels/rack";
 import type { BackendStatus } from "./panels/backend-status";
 import type { LmStatus } from "./panels/lmstudio";
@@ -61,25 +60,6 @@ export interface CodexLimits {
   observed_ms: number;
 }
 
-export interface CodexLoadout {
-  home: string | null;
-  instructions: import("./panels/loadout").KbFile[];
-  developerInstructionsChars: number | null;
-  skills: { name: string; description: string }[];
-  /** `<home>\agents\*.toml` of the tab's Codex home; `[]` when none. `readOnlyByPrompt`: the role opens
-   *  with Vidar's read-only marker (derived from a read-only Claude agent; held by prompt, not sandboxed). */
-  agents: { name: string; model: string | null; readOnlyByPrompt: boolean }[];
-  model: string | null;
-  effort: string | null;
-  sandbox: string | null;
-  approval: string | null;
-  reviewer: string | null;
-  network: boolean | null;
-  notify: string[];
-  rulesFiles: number;
-  notes: string[];
-}
-
 /** One changed path (changes.rs `ChangedFile`). x/y are porcelain v2 status letters ("." = unchanged,
  *  "?" = untracked); a count is null for a binary file and 0 for a side with no change. */
 export interface ChangedFile {
@@ -107,6 +87,30 @@ export interface UnrealStatus {
   liveCoding: { result: "succeeded" | "failed"; at: number | null } | null;
   diags: UnrealDiag[];
 }
+/** `unreal_mcp_status` (unreal/proxy.rs): `reason` is tooltip text; riderLink is null unless Rider MCP is up and a root was sent. */
+export interface UnrealPill { up: boolean; reason: string }
+export interface UnrealMcpPills { editorMcp: UnrealPill; riderMcp: UnrealPill; riderLink: UnrealPill | null }
+/** `unreal_engine_pin*` (unreal/pin.rs): a pin is the user naming the engine; set with engine null clears it. */
+export interface UnrealEnginePin { root: string; uproject: string; engine: string; engineVersion: string; pinnedAt: number }
+export interface UnrealEngineChoice { engine: string; engineVersion: string }
+/** `unreal_asset_card` (unreal/asset.rs): root is the head's project root; notes are display strings; a refused path rejects with a string. */
+export interface UnrealAssetProp { name: string; typeName: string; value: string }
+export interface UnrealAssetCard {
+  path: string; objectName: string | null; parentClass: string | null; assetClass: string | null;
+  props: UnrealAssetProp[]; lastChange: { sha: string; author: string; when: string } | null; notes: string[];
+}
+/** `unreal_find`: checkDidntRun means the overrides check could not run (message says why); never read it as none. */
+export type UnrealFindMode = "assetName" | "childBlueprintsOf" | "overridesOf";
+export type UnrealFindStatus = "matches" | "noMatches" | "overrides" | "verifiedNone" | "checkDidntRun";
+export interface UnrealFindRow { assetPath: string; name: string; detail: string | null }
+export interface UnrealFindResult { status: UnrealFindStatus; rows: UnrealFindRow[]; message: string | null }
+/** `unreal_asset_diff` (unreal/diff.rs): cwd is the Changes repo root, path repo-relative as git status gives it; staged = HEAD vs index, else index vs working tree.
+ *  A null side is a property missing there (added or deleted); unknown means no verdict (read failed, conflicted, nothing readable), never "no changes". */
+export type UnrealAssetDiffStatus = "changed" | "noChanges" | "unknown";
+export interface UnrealAssetDiffRow { name: string; typeName: string; old: string | null; new: string | null }
+export interface UnrealAssetDiff { status: UnrealAssetDiffStatus; rows: UnrealAssetDiffRow[]; notes: string[] }
+/** `unreal_graph_text` (unreal/graph.rs): rejects with "Editor MCP Is Down"; notes are display strings. */
+export interface UnrealGraphText { graphs: { name: string; text: string }[]; notes: string[] }
 export interface ChangesSyncResult { pulled: boolean; pushed: boolean; output: string }
 /** `syncError` set = the commit landed and the requested sync failed. */
 export interface ChangesCommitResult { sha: string; stderr: string; sync: ChangesSyncResult | null; syncError: string | null; warning: string | null }
@@ -139,29 +143,22 @@ export interface RulesGenerated {
 }
 /** Bare Runes tab local files (src-tauri/src/rules/import/local.rs). */
 export type BareFileKind = "rules" | "memory" | "skill" | "agent" | "hook" | "mcp";
+export type BareFileReason = "pathScoped" | "notMjs" | "guardDriver" | "tooLarge" | "shadowed" |
+  "summaryOnly" | "notHosted" | "stdio" | "notModule" | "commandArgs";
 export interface BareLocalFile {
   path: string; shown: string; kind: BareFileKind; library?: string; section?: string;
   scope: "global" | "project"; ticked: boolean; pickable: boolean;
-  reason?: "pathScoped" | "notMjs" | "guardDriver"
-    | "tooLarge" | "shadowed" | "summaryOnly" | "notHosted" | "stdio" | "notModule" | "commandArgs";
+  reason?: BareFileReason;
   guard?: { event: string; matcher?: string; run: string[] };
   /** Absent = a Claude row; mcp rows carry the hosted server name and its pinned url. */
   agent?: AgentId; hosted?: string; url?: string;
 }
 export interface BareLocalSources { files: BareLocalFile[]; memoryDir: string | null; guardsKey: boolean }
 export interface BareGuard { event: string; matcher?: string; run?: string[]; command?: string; source?: string }
-/** Inputs converted into item runes by Add Kit or Attach. */
-export interface ItemRuneInputs {
-  skills?: string[]; agents?: string[]; guards?: (BareGuard & { open?: string[] })[];
-  codexAgents?: string[]; codexGuards?: (BareGuard & { open?: string[] })[];
-  modules?: Record<string, { off: string[] }>;
-}
-/** bare_kit_create: `created` false = a Kit already existed, nothing written; `dropped` = items left out (bare/kit.rs). */
-export interface BareKitCreated { created: boolean; dropped: { id: string; reason: string }[] }
-/** A library template file (bare_kit_item_create, bare_library_files); `path` is a skill's folder, else the file. */
-export interface BareLibraryFile { kind: "skill" | "agent" | "hook"; agent: AgentId | null; name: string; path: string }
+export interface BareModuleMcp { name: string; hasUrl: boolean; hasCommand: boolean; agents?: string[]; optional?: boolean }
+export interface BareModuleBundle { mcp: BareModuleMcp[]; skills: string[]; agents: string[]; guards: BareGuard[] }
 export interface BareModuleBundles {
-  bundles: Record<string, { mcp: { name: string; hasUrl: boolean; hasCommand: boolean; agents?: string[]; optional?: boolean }[]; skills: string[]; agents: string[]; guards: BareGuard[] }>;
+  bundles: Record<string, BareModuleBundle>;
   warnings: string[];
 }
 /** `bare_launch`: what a tab's newest Bare manifest carried (bare/manifest.rs `LaunchRecord`);
@@ -185,20 +182,15 @@ export interface RulesImportCommands {
   rules_generate_cancel: Cmd<{ runId: string }, null>;
   bare_local_sources: Cmd<{ cwd: string }, BareLocalSources>;
   bare_sets_list: Cmd<undefined, SetRef[]>;
-  bare_items_import: Cmd<{ library: string; layer: ItemRuneInputs }, { runes: (RuneRef & { kind: string })[]; dropped: { id: string; reason: string }[] }>;
   bare_module_bundles: Cmd<undefined, BareModuleBundles>;
-  bare_set_fork: Cmd<{ library: string; set: string; name: string }, null>;
-  bare_kit_create: Cmd<{ layer: ItemRuneInputs }, BareKitCreated>;
-  bare_kit_item_create: Cmd<{ library: string; agent: AgentId; kind: BareLibraryFile["kind"]; name: string }, BareLibraryFile>;
-  bare_library_files: Cmd<{ library: string }, BareLibraryFile[]>;
-  /** Moves a rune (or, without `rune`, a whole import library) into the library backup; `vaults` are the unlocked vaults that dropped it. */
-  bare_library_delete: Cmd<{ library: string; rune?: string }, { vaults: string[] }>;
+  /** Moves a rune or a runeset (`rune` names it) into the library backup; `vaults` are the unlocked vaults that dropped it. */
+  bare_library_delete: Cmd<{ library: string; rune: string }, { vaults: string[] }>;
   bare_launch: Cmd<{ tab: string }, BareLaunch | null>;
 }
 /** Rune Vault (src-tauri/src/bare/vault; wire: tests/fixtures/rune-vault/vaults). */
 export interface RuneRef { library: string; id: string }
 export interface SetSource { library: string; set: string }
-export type VaultFrom = { vault: string; hash: string } | { template: string };
+export type VaultFrom = { vault: string; hash: string };
 export type VaultLockedBy = "button" | "first-message";
 export interface Vault {
   version: number; id: string; name: string; createdUtc: string; from: VaultFrom | null;
@@ -216,7 +208,10 @@ export type VaultOp =
 export interface VaultMember { library: string; runeset: string; rune: RuneRef; on: boolean }
 /** `rune_vault_library_runes` reply (L3d): each rune in the `ViewRune` shape (`runes/bare/cake.ts` `VaultViewRune`,
  *  `set` null, item kinds redacted) that a vault for the agent can take as a one-off. */
-export interface VaultLibraryRunes { runes: (RuneRef & { kind: string; description: string; set: null })[]; warnings: string[] }
+export interface VaultLibraryRunes { runes: (RuneRef & { kind: string; description: string; set: null })[]; runesets: LibraryRuneset[]; warnings: string[] }
+/** One library runeset the Rune Library groups by (`bare::vault::library_sets`): its member refs in body order;
+ *  `fixed` when Delete Runeset refuses it (the Vidar library or the rules library). */
+export interface LibraryRuneset { library: string; set: string; members: RuneRef[]; fixed: boolean }
 export interface VaultSession {
   version: number; createdUtc: string; agent: string; body: string; tab: string;
   falconSession: string | null; threadId: string | null; vault: { id: string; hash: string }; home: string; loadoutHash: string;
@@ -224,10 +219,9 @@ export interface VaultSession {
 interface RuneVaultCommands {
   rune_vault_list: Cmd<undefined, VaultListed[]>;
   /** `hash` reads the revision a session loaded. */
-  rune_vault_read: Cmd<{ id: string; hash?: string | null }, VaultView>;
+  rune_vault_read: Cmd<{ id: string | null; hash?: string | null; agent?: string | null }, VaultView>;
   rune_vault_library_runes: Cmd<{ agent: string }, VaultLibraryRunes>;
-  /** `name: null` makes a Custom vault (an identical pick reuses it). */
-  /** `name: null` is a Custom vault, floored by the backend on `agent`'s stock template (required then). */
+  /** `name: null` always starts a new `copy-*` vault: from `from`, else a blank vault holding only the Vidar Runeset. */
   rune_vault_create: Cmd<{ name: string | null; from?: VaultFrom | null; runesets: SetSource[]; runes: RuneRef[]; agent?: string }, Vault>;
   rune_vault_edit: Cmd<{ id: string; ops: VaultOp[]; mode: "unlocked" | "variant" | "invalidate" }, Vault>;
   rune_vault_lock: Cmd<{ id: string; by: VaultLockedBy; expectHash: string }, Vault>;
@@ -298,7 +292,6 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   settle_pending_ask: Cmd<{ id: string; sha256: string }, void>;
   save_display_decision: Cmd<{ path: string; sha256: string; verdict: string; comment: string }, number>;
   read_display_decision: Cmd<{ path: string }, DecisionView | null>;
-  archive_display_file: Cmd<{ path: string }, string>;
   delete_display_file: Cmd<{ path: string }, void>;
   // pty
   spawn_pty: Cmd<{ id: string; cols: number; rows: number; shell?: string | null; cwd?: string | null; args?: string[] | null; tabName?: string | null; ptyGen: number; profile?: string | null; rowKey?: string | null; sets?: SetRef[]; vault?: string; agent?: string | null }, void>;
@@ -362,6 +355,14 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   changes_sync: Cmd<{ cwd: string; mode: "sync" | "pull" | "push" }, ChangesSyncResult>;
   changes_rename_branch: Cmd<{ cwd: string; name: string }, void>;
   unreal_status: Cmd<{ cwd: string }, UnrealStatus>;
+  unreal_mcp_status: Cmd<{ root: string | null }, UnrealMcpPills>;
+  unreal_engine_pin: Cmd<{ root: string }, UnrealEnginePin | null>;
+  unreal_engine_pin_set: Cmd<{ root: string; engine: string | null }, UnrealEnginePin | null>;
+  unreal_engine_choices: Cmd<undefined, UnrealEngineChoice[]>;
+  unreal_asset_card: Cmd<{ root: string; asset: string }, UnrealAssetCard>;
+  unreal_find: Cmd<{ root: string; mode: UnrealFindMode; query: string }, UnrealFindResult>;
+  unreal_asset_diff: Cmd<{ cwd: string; path: string; staged: boolean }, UnrealAssetDiff>;
+  unreal_graph_text: Cmd<{ root: string; asset: string }, UnrealGraphText>;
   // Jira, Notion and Slack bench tabs: JiraCommands, NotionCommands, SlackCommands (src/<module>/ipc.ts)
   bang_run: Cmd<{ cwd: string; command: string }, { stdout: string; stderr: string; code: number | null; timedOut: boolean; truncated: boolean }>;
   // chrome, editor
@@ -401,10 +402,6 @@ interface Commands extends VoiceCommands, SettingsCommands, RulesImportCommands,
   falcon_frontend_status: Cmd<undefined, FalconFrontendStatus>;
   falcon_frontend_reload: Cmd<undefined, FalconFrontendStatus>;
   falcon_frontend_booted: Cmd<undefined, void>;
-  // logs, loadout
-  read_loadout: Cmd<{ cwd: string; settingsPaths: string[]; pluginDir?: string | null; profile?: string | null; tab?: string | null; row?: string | null }, Loadout>;
-  file_kb: Cmd<{ path: string }, number | null>;
-  read_codex_loadout: Cmd<{ tab: string | null; falconSession?: string | null; profile: string | null; row?: string | null; cwd: string }, CodexLoadout>;
   // mcp, lm studio, ports
   read_mcp_servers: Cmd<{ project: string | null; profile?: string | null; tab?: string | null; row?: string | null }, McpRack>;
   read_codex_mcp_servers: Cmd<{ tab: string | null; falconSession?: string | null; profile: string | null; row?: string | null }, McpRack>;

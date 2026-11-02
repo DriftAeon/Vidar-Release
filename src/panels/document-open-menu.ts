@@ -13,7 +13,7 @@
 
 import "./document-open-menu.css";
 import { getPref, setPref } from "../prefs";
-import { titleWords } from "../format";
+import { pad2, titleWords } from "../format";
 import { prettyName } from "./display-name";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
@@ -110,14 +110,19 @@ export function clearOpenDocLabel() {
 /** The faint × on the face, shown only while a document is open. A span, not a nested button;
  *  its click and Enter/Space never reach the trigger, so the menu stays closed. */
 function clearControl(): HTMLSpanElement {
+  return dismissControl(() => hooks?.onClear());
+}
+
+/** The same × for any Docs bar message (document.ts's open-failed line): `onFire` runs on click or Enter/Space. */
+export function dismissControl(onFire: () => void, label = "Clear"): HTMLSpanElement {
   const x = document.createElement("span");
   x.className = "doc-open-clear";
   x.setAttribute("role", "button");
   x.tabIndex = 0;
-  x.title = "Clear";
-  x.setAttribute("aria-label", "Clear");
+  x.title = label;
+  x.setAttribute("aria-label", label);
   x.appendChild(lucide("x", "icn")); // grey line glyph: the red colour close reads as delete
-  const fire = (e: Event) => { e.preventDefault(); e.stopPropagation(); hooks?.onClear(); };
+  const fire = (e: Event) => { e.preventDefault(); e.stopPropagation(); onFire(); };
   x.addEventListener("click", fire);
   x.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") fire(e);
@@ -217,7 +222,7 @@ function menuTime(ms: number, now = new Date()): string {
     return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h`;
   }
   if (age === 1) return "Yesterday";
-  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return `${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
 /** The pref if that folder still exists, else the folder holding the open file, else the first. */

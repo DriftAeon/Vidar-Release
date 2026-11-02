@@ -4,6 +4,7 @@
 // Steps come from the registry in steps.ts; each step change writes `onboarding.progress`.
 // Mouse first: nothing takes default focus, and a step change moves focus to the step container.
 
+import { button } from "../dom";
 import { getPref, setPref } from "../prefs";
 import type { OnboardingProgress, OnboardingStep } from "./progress";
 import { footerState, runesShown, stepView, type FooterState, type StepCtx } from "./steps";
@@ -47,14 +48,6 @@ const LEFTBAR_BLOCKED = ["new-session", "relay-btn"];
 
 export function onboardingOpen(): boolean {
   return live !== null;
-}
-
-function button(text: string, cls: string): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = cls;
-  b.textContent = text;
-  return b;
 }
 
 function save(l: Live, finished: boolean): void {

@@ -1,7 +1,7 @@
 // src\launcher\locations.ts — the launcher's location column and what hangs off it: bodies (Raw /
 // Rendered / Resume), Active (adopt an external Claude session) and Select Workspace (none saved yet). Split from main.ts.
 import { invoke } from "../ipc";
-import { DASH } from "../format";
+import { agoSecs as ago, DASH } from "../format";
 import { createSession } from "../panels/sessions";
 import { resolveDefaultCwd } from "../config";
 import type { AgentType, Location } from "../config";
@@ -16,16 +16,16 @@ import { appendHostedRow } from "./hosted";
 import { closeLauncher, launcherSub } from "./menu";
 import { hideColsFrom, hoverOpen, openColumn, placeColumn } from "./columns";
 import { markFor, menuRow } from "./menu-rows";
-import { ago } from "./ago";
 import { openRecent } from "./recent";
 import { prefetchCodexRecent } from "./codex-recent";
 import { pickWorkspace } from "./workspaces";
 import { showSessionsToast } from "../panels/sessions/zoom";
+import { revealRunesForPick } from "../panels/workbench";
 import { prepareRules } from "../rules/prepare";
 import { isGateway } from "./agent-kind";
-import { attachSetPick } from "./set-pick";
 import { bodyOrder, launcherLead, resumeVariant } from "./body-order";
 import { isAgentId, type AgentId } from "../agents/id";
+import { errText } from "../err-text";
 
 const locationOptions: Record<AgentId, { homeGuard: boolean; externalSessions: boolean; prefetchThreads: boolean }> = {
   claude: { homeGuard: false, externalSessions: true, prefetchThreads: false },
@@ -35,8 +35,9 @@ const locationOptions: Record<AgentId, { homeGuard: boolean; externalSessions: b
 // spawnFrom closes the launcher before it resolves a `{vidar}` cwd, so its rejection ("Vidar Folder
 // Unknown", vidar-path.ts) has no menu left to land in; every click here goes through this so the
 // reason reaches the toast instead of an unhandled rejection.
-function go(t: AgentType, loc: Location, title?: string, vault?: string): void {
-  spawnFrom(t, loc, title, undefined, undefined, undefined, undefined, vault).catch((e) => showSessionsToast(e instanceof Error ? e.message : String(e), 6000));
+function go(t: AgentType, loc: Location, title?: string, pending?: boolean): void {
+  // A pending Rendered Bare tab opens at once and waits for its Rune Vault; the Runes panel is where the pick happens
+  spawnFrom(t, loc, title, undefined, undefined, undefined, undefined, pending ? { pending: true } : undefined).then(() => { if (pending) revealRunesForPick(); }).catch((e) => showSessionsToast(errText(e), 6000));
 }
 
 export function openLocations(t: AgentType, anchor: HTMLElement, locations: Location[]) {
@@ -204,7 +205,7 @@ function openBodies(t: AgentType, rendered: AgentType | undefined, bare: AgentTy
   for (const o of bodyOrder(!!rendered, bare, launcherLead())) {
     if (o.kind === "raw") rows.push({ row: bodyRow("Raw", loc?.cwd ?? ""), launch: (l) => go(t, l) });
     else if (o.kind === "rendered" && rendered) rows.push({ row: bodyRow("Rendered", loc?.cwd ?? ""), launch: (l) => go({ ...rendered, cwd: undefined }, l) });
-    else if (o.kind === "bare") rows.push({ row: bodyRow(typeLabel(o.variant), loc?.cwd ?? ""), launch: (l) => go({ ...o.variant, cwd: undefined }, l), bare: o.variant });
+    else if (o.kind === "bare") rows.push({ row: bodyRow(typeLabel(o.variant), loc?.cwd ?? ""), launch: (l) => go({ ...o.variant, cwd: undefined }, l, undefined, o.variant.body === "rendered") });
   }
   if (!loc) {
     for (const r of rows) {
@@ -219,11 +220,6 @@ function openBodies(t: AgentType, rendered: AgentType | undefined, bare: AgentTy
   }
   for (const r of rows) {
     r.row.addEventListener("click", () => r.launch(loc));
-    // Pick Vault: every Bare row loads one Rune Vault; a plain click launches the pre-pick
-    if (r.bare) {
-      const variant = { ...r.bare, cwd: undefined };
-      attachSetPick(r.row, { variant: r.bare, launch: (vault) => go(variant, loc, undefined, vault), place: () => placeColumn(1, anchor) });
-    }
   }
   // Resume serves the Rendered variant the launcher leads with (Bare Rendered when it leads, or
   // when it is the only one shown)

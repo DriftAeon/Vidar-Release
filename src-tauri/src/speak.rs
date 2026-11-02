@@ -17,14 +17,12 @@
 // `stop` with `{owner}` = `OWNER`. The waits run in spawn_blocking,
 // off the webview thread.
 use std::io::Read;
-use std::os::windows::process::CommandExt;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::proc_job::JobChild;
+use crate::proc_job::{JobChild, CREATE_NO_WINDOW};
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const JOURNAL_MAX_BYTES: u64 = 1024 * 1024;
 /// The lifecycle `{owner}` Vidar passes (contracts/voice-slots.json `lifecycle.owner`): to every
 /// speak.py run as `--owner`, and into the tts slot's `stop`/`status`. The Kokoro adapter tags
@@ -160,7 +158,6 @@ fn spawn_run(cmd: &mut Command) -> Result<JobChild, String> {
         BREAKAWAY_REFUSED.store(true, Ordering::Relaxed);
         journal("speak", "no-breakaway: Vidar's job forbids breakaway; this run was not armed first", "");
     }
-    cmd.creation_flags(CREATE_NO_WINDOW);
     JobChild::spawn(cmd).map_err(|e| spawn_failed("speak", e))
 }
 
@@ -348,7 +345,7 @@ fn tts_lifecycle(what: &str) -> Result<serde_json::Value, String> {
         return Err(format!("TTS Slot: {} {what}: Unfilled Token {{{left}}}", r.adapter));
     }
     let mut c = Command::new(&cmd.command);
-    c.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).creation_flags(CREATE_NO_WINDOW);
+    c.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let child = JobChild::spawn(&mut c).map_err(|e| {
         journal(what, &format!("spawn-failed: {e}"), "");
         format!("TTS Slot: {} {what}: Cannot Run {}: {e}", r.adapter, cmd.command.display())
@@ -461,7 +458,7 @@ mod source_tests {
     #[test]
     fn claude_drops_the_codex_home_and_unknown_agents_are_ignored() {
         assert_eq!(s("C:\\p", Some("claude"), None).args(), ["--cwd", "C:\\p", "--agent", "claude"]);
-        assert_eq!(s("C:\\p", Some("gemini"), None).args(), ["--cwd", "C:\\p"]);
+        assert_eq!(s("C:\\p", Some("acme"), None).args(), ["--cwd", "C:\\p"]);
     }
 
     #[test]

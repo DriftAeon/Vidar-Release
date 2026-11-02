@@ -1,9 +1,17 @@
 // src\panels\sessions\astra-sandbox.ts — one concern: may this Codex tab be armed as Astra?
-// Pure (no imports, so node tests load it as is): astra-bridge.ts hands in the tab's launch facts and
+// astra-bridge.ts hands in the tab's launch facts and
 // the two folders an Astra tab may sit in. Arming is consent to type text into a tab whose Codex can
 // write files, so the check is an allowlist: the launch must be exactly the shape the Astra rows use,
 // and the tab's cwd one of the two report folders. Limit: this reads the launch args, not the live
 // process, and a `config.toml` `writable_roots` entry is invisible to it.
+// @ts-ignore TS5097: node --test imports this module directly
+import { AGENTS } from "../../agents/descriptor.ts";
+// @ts-ignore TS5097: node --test imports this module directly
+import type { AgentId } from "../../agents/id.ts";
+
+/** Which agent an Astra tab drives: exactly one (a Record, so a new id must answer). */
+const ASTRA_DRIVES: Record<AgentId, boolean> = { claude: false, codex: true };
+export const ASTRA_AGENT = Object.values(AGENTS).filter((a) => ASTRA_DRIVES[a.id])[0].id;
 
 export interface SandboxFacts {
   launchArgs: readonly string[] | undefined;
@@ -29,15 +37,15 @@ function commandTokens(args: readonly string[] | undefined): string[] | null {
     const cmd = args[2].trim();
     return cmd ? cmd.split(/\s+/) : null;
   }
-  return args[0] === "codex" ? [...args] : null; // the bare argv form
+  return args[0] === ASTRA_AGENT ? [...args] : null; // the bare argv form
 }
 
 /** `codex -a never -s <sandbox>` then, in any order and at most once each, `-m <v>`,
  * `-c model_verbosity=<v>` and `-c model_reasoning_effort=<low|medium|high|xhigh>`. */
-export function codexCommandOk(args: readonly string[] | undefined): boolean {
+export function sandboxCommandOk(args: readonly string[] | undefined): boolean {
   const t = commandTokens(args);
   if (!t || t.length < 5) return false;
-  if (t[0] !== "codex" || t[1] !== "-a" || t[2] !== "never" || t[3] !== "-s" || !SANDBOXES.has(t[4])) return false;
+  if (t[0] !== ASTRA_AGENT || t[1] !== "-a" || t[2] !== "never" || t[3] !== "-s" || !SANDBOXES.has(t[4])) return false;
   let sawModel = false;
   let sawVerbosity = false;
   let sawEffort = false;
@@ -69,7 +77,7 @@ export function normalizeWinPath(p: string): string | null {
 /** Why this tab's launch is outside the Astra sandbox shape, or null. */
 export function sandboxBlocker(f: SandboxFacts): string | null {
   if (f.shell) return REFUSE_SHELL;
-  if (!codexCommandOk(f.launchArgs)) return REFUSE_COMMAND;
+  if (!sandboxCommandOk(f.launchArgs)) return REFUSE_COMMAND;
   const cwd = f.cwd ? normalizeWinPath(f.cwd) : null;
   const allowed = (f.allowedCwds ?? []).map(normalizeWinPath);
   if (!cwd || !allowed.includes(cwd)) return REFUSE_CWD;

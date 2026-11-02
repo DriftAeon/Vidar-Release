@@ -7,8 +7,8 @@
 //! patch emits `settings-changed` so `src/config.ts` (batch B) can refresh
 //! its cache instead of re-invoking `read_config` on a poll.
 //!
-//! Thirteen keys today (the original five plus `agents`, `macros`, `editor`,
-//! `flowGridOpacity`, `primaryAgent`, `jira`, `moduleNames`, `window`, `characterStage`); a fourteenth key is one `KeySpec` entry, not a new command.
+//! Twelve keys today (the original five plus `agents`, `editor`,
+//! `flowGridOpacity`, `primaryAgent`, `jira`, `moduleNames`, `window`, `characterStage`); a thirteenth key is one `KeySpec` entry, not a new command.
 
 use std::path::Path;
 
@@ -92,24 +92,6 @@ fn validate_agents(v: &Value) -> Result<(), String> {
     for (i, a) in list.iter().enumerate() {
         if a.id.trim().is_empty() && blank(a.key.as_deref()) {
             return Err(format!("agents[{i}] needs a non-blank id or key"));
-        }
-    }
-    Ok(())
-}
-
-/// Whole-list replace of the macros; each entry needs a label and a command.
-fn validate_macros(v: &Value) -> Result<(), String> {
-    if !v.is_array() {
-        return Err("macros must be an array".into());
-    }
-    let list: Vec<crate::settings::schema::MacroCfg> =
-        serde_json::from_value(v.clone()).map_err(|e| format!("macros: {e}"))?;
-    for (i, m) in list.iter().enumerate() {
-        if m.label.trim().is_empty() {
-            return Err(format!("macros[{i}] needs a non-blank label"));
-        }
-        if m.command.is_empty() {
-            return Err(format!("macros[{i}] needs a command"));
         }
     }
     Ok(())
@@ -221,7 +203,6 @@ const KEYS: &[KeySpec] = &[
     KeySpec { key: "riderPath", validate: validate_rider_path, clear_on_empty: true },
     KeySpec { key: "documentApp", validate: validate_document_app, clear_on_empty: true },
     KeySpec { key: "agents", validate: validate_agents, clear_on_empty: false },
-    KeySpec { key: "macros", validate: validate_macros, clear_on_empty: false },
     KeySpec { key: "editor", validate: validate_editor, clear_on_empty: true },
     KeySpec { key: "flowGridOpacity", validate: validate_flow_grid_opacity, clear_on_empty: false },
     KeySpec { key: "primaryAgent", validate: validate_primary_agent, clear_on_empty: true },
@@ -348,7 +329,7 @@ mod tests {
         assert!(validate_primary_agent(&Value::from("")).is_ok());
         let err = validate_primary_agent(&Value::from("Claude")).unwrap_err();
         assert!(err.contains("primaryAgent"), "{err}");
-        assert!(validate_primary_agent(&Value::from("gemini")).is_err());
+        assert!(validate_primary_agent(&Value::from("acme")).is_err());
         assert!(validate_primary_agent(&Value::from("grok")).is_err());
         assert!(validate_primary_agent(&Value::from(" ")).is_err());
         assert!(validate_primary_agent(&Value::from(1)).is_err());
@@ -519,14 +500,6 @@ mod tests {
         assert!(validate_window(&Value::from("Ctrl+Alt+V")).is_err());
     }
 
-    #[test]
-    fn macros_need_a_label_and_a_command() {
-        assert!(validate_macros(&serde_json::json!([{ "label": "Go", "command": "go" }])).is_ok());
-        assert!(validate_macros(&serde_json::json!([{ "label": " ", "command": "go" }])).is_err());
-        assert!(validate_macros(&serde_json::json!([{ "label": "Go", "command": "" }])).is_err());
-        assert!(validate_macros(&serde_json::json!({ "label": "Go" })).is_err());
-    }
-
     /// A non-default value `validate` accepts for each `KEYS` entry. A new key
     /// with no arm here fails the round-trip test below, on purpose: the author
     /// must add a sample, which is the moment to also add the `VidarConfig` field.
@@ -538,7 +511,6 @@ mod tests {
             "riderPath" => Value::from(s(&dir.join("rider.exe"))),
             "documentApp" => Value::from(s(&dir.join("rider.exe"))),
             "agents" => serde_json::json!([{ "id": "probe", "key": "probe", "label": "Probe" }]),
-            "macros" => serde_json::json!([{ "label": "Probe", "command": "echo probe" }]),
             "editor" => serde_json::json!({ "exe": s(&dir.join("rider.exe")), "args": ["--line", "{line}", "{file}"] }),
             "flowGridOpacity" => Value::from(37),
             "primaryAgent" => Value::from("codex"),

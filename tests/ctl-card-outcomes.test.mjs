@@ -18,12 +18,13 @@ const { ipc } = setupDom({
       export const promptTab = async () => { globalThis.__prompted++; return true; };
       export const spawnTab = async () => { globalThis.__spawned++; return "t9"; };
       export const hasRenderedAgent = () => true; export const hostedRenderedAgent = () => true;
+      export const LaunchVaultFor = async () => ({ vault: undefined });
       export const hostedTab = () => globalThis.__hosted === true; export const tabPromptReady = () => true; export const tabBusy = () => false;
       export const tabDead = () => false; export const sendPromptTo = async () => {}; export const laneToast = () => {};`,
     "control/watch": "export const watchTab = () => {};",
     "control/flow": "export const handleFlowCard = () => {}; export const listenFlowObserve = () => {};",
     "flow/approvals-relay": "export const startFlowApprovalRelay = () => {};",
-    "relay/source-ctl-asks": "export const publishCtlAsk = () => null; export const hostedClaudeAsker = () => false; export const CTL_ASK_STEER = '';",
+    "relay/source-ctl-asks": "export const publishCtlAsk = () => null; export const hostedPendingAsker = () => false; export const CTL_ASK_STEER = '';",
   },
 });
 await import("../src/control/listen.ts");

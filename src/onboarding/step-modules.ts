@@ -6,7 +6,7 @@
 import { iconImg, type ColorIcon } from "../icon-img";
 import { moduleListed, onModulesChange } from "../modules/registry";
 import { moduleName, onModuleNamesChange } from "../modules/names";
-import { SURFACE_ICONS, WORKBENCH_MODULES } from "../panels/workbench-modules";
+import { BENCH_ICONS,WORKBENCH_MODULES } from "../panels/workbench-modules";
 import { getPref } from "../prefs";
 import { setModuleVisible } from "../settings/modules";
 import { moduleRows, rowOn } from "./modules-list";
@@ -31,7 +31,7 @@ registerStep({
         line.className = "ob-mod-row";
         const title = document.createElement("span");
         title.className = "ob-mod-name";
-        title.append(iconImg((SURFACE_ICONS[row.key] ?? row.key) as ColorIcon));
+        title.append(iconImg((BENCH_ICONS[row.key] ?? row.key) as ColorIcon));
         const text = document.createElement("span");
         text.textContent = name;
         title.append(text);

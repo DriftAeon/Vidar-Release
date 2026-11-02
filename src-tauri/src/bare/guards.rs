@@ -235,7 +235,7 @@ pub fn copy(_lock: &HomeLock, dir: &Path, guards: &[BareGuard]) -> Result<Copied
 
 #[path = "guards_codex.rs"]
 mod guards_codex;
-pub use guards_codex::{copy_codex, BareCodexGuard, CodexGroup, CODEX_HOOK_EVENTS};
+pub use guards_codex::{copy_codex, BareCodexGuard, CodexGroup};
 #[cfg(test)] // only tests.rs calls it from outside the module
 pub use guards_codex::codex_command;
 pub(crate) use guards_codex::codex_unsupported;

@@ -3,6 +3,7 @@
 // must still match what the form painted) -> sendPromptTo -> settle. Nothing is persisted but the ask.
 
 import { pendReplyParts, recordFromAskInput, type QuestionRecord } from "../asks/record";
+import { errText } from "../err-text";
 import { invoke, listen } from "../ipc";
 import { setItems, type RelayAsk, type RelayItem, type RelayVerdict } from "./store";
 
@@ -19,7 +20,7 @@ export function answerText(ask: Pick<RelayAsk, "id">, choice: string | null | un
 }
 
 const readAll = async (): Promise<RelayAsk[]> => (await invoke("list_pending_asks"))?.items ?? [];
-const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+const msgOf = errText;
 
 /** Rust's sentence-case refusals (pending_ask.rs) as the strip's Title Case lines; anything else passes through. */
 function mapRustError(e: unknown): unknown {

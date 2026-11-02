@@ -21,7 +21,7 @@ test("gateway identity selects the Claude CLI and may open Rendered through Falc
 });
 
 test("supported CLIs keep their body choices; Raw-only CLIs and unknown rows stay terminal", () => {
-  for (const agent of ["claude", "codex", "gemini", "pi", "shell"]) {
+  for (const agent of ["claude", "codex", "pi", "shell"]) {
     assert.equal(agentKind(agent), agent);
     assert.deepEqual(resolveBodyKind({ agent }), { kind: agent, body: "terminal" });
     assert.equal(resolveBodyKind({ agent, body: "rendered" }).body,
@@ -33,7 +33,7 @@ test("supported CLIs keep their body choices; Raw-only CLIs and unknown rows sta
 });
 
 test("pack Raw rows keep their existing tab kinds without gaining Rendered bodies", () => {
-  const modules = ["gemini", "pi", "local"].map((id) => ({
+  const modules = ["pi", "local"].map((id) => ({
     id, label: id, kind: "agent", source: "pack", when: { deps: [id] },
     agent: { rows: ["raw"], launch: { executable: id, args: [] } },
   }));
@@ -44,12 +44,10 @@ test("pack Raw rows keep their existing tab kinds without gaining Rendered bodie
   }
 });
 
-test("Loadout and MCP Rack stay empty for gateway tabs (wrapper fence is invisible to read_loadout)", async () => {
+test("MCP Rack Stays Empty for Gateway Tabs", async () => {
   const { readFileSync } = await import("node:fs");
-  const loadout = readFileSync(new URL("../src/panels/loadout.ts", import.meta.url), "utf8");
   // the rack's (and rail's) focus derivation lives in mcp-focus.ts
   const focus = readFileSync(new URL("../src/panels/mcp-focus.ts", import.meta.url), "utf8");
-  assert.match(loadout, /claude: \{\s*[^}]*skips: \(s\) => isGateway\(s\.art\)/);
   assert.match(focus, /claude: \{\s*ownConfig: false, profiledOwnTab: true, projectScoped: true/);
   assert.match(focus, /project: row\?\.projectScoped && !isGateway\(s!\.art\)/);
 });

@@ -9,9 +9,9 @@ const { mountBareView } = await import("../src/runes/bare/view.ts");
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); };
 test("a pinned vault revision supplies the View card and Modify supplies switches", async () => {
   const vault = { id: "daily", hash: "abc", name: "Daily", lockedUtc: null,
-    runesets: [{ source: { library: "kit", set: "kit" } }], runes: [], pins: {} };
+    runesets: [{ source: { library: "installed", set: "installed" } }], runes: [], pins: {} };
   const view = { vault, drift: [], warnings: [], runes: [
-    { set: { library: "kit", set: "kit" }, library: "kit", id: "verdict-first",
+    { set: { library: "installed", set: "installed" }, library: "installed", id: "verdict-first",
       kind: "rule", activate: "always", description: "Verdict First", section: ["Work"],
       recall: false, body: "Verdict first.", drift: false },
   ] };
@@ -20,16 +20,16 @@ test("a pinned vault revision supplies the View card and Modify supplies switche
   const handle = mountBareView(host, { agent: "claude", cwd: "C:/proj", profile: "bare",
     vault: { session: async () => ({ vault: { id: "daily", hash: "abc" } }),
       read: async () => view, lock: async () => vault },
-    vaultEdit: { current: async () => vault, currentView: async () => view,
+    vaultEdit: { read: async () => view,
       edit: async () => vault } },
   { localSources: async () => ({ files: [], memoryDir: null, guardsKey: false }),
-    itemsImport: async () => ({ runes: [], dropped: [] }), generate: async () => ({}),
+    generate: async () => ({}),
     generateCancel: async () => null });
   try {
     await settle();
     const shown = readRunes(host);
     assert.deepEqual(shown.sets.map((s) => [s.head, s.runes.map((r) => r.id)]),
-      [["Kit", ["verdict-first"]]]);
+      [["Installed", ["verdict-first"]]]);
     assert.equal(host.querySelectorAll(".runes-bare-switch, .runes-check").length, 0);
     handle.modeButton.click();
     await settle();

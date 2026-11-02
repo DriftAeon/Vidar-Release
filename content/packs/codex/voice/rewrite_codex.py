@@ -49,10 +49,10 @@ def child_env() -> dict[str, str]:
     }
 
 
-def build_cmd(codex: str, model: str, effort: str, out_file: str) -> list[str]:
+def build_cmd(cli: str, model: str, effort: str, out_file: str) -> list[str]:
     """The `codex exec` argv; the prompt is read from stdin (`-`)."""
     return [
-        codex, "exec", "--model", model,
+        cli, "exec", "--model", model,
         "-c", f"model_reasoning_effort={effort}",
         "-c", 'approval_policy="never"',
         "--sandbox", "read-only", "--ephemeral", "--skip-git-repo-check",
@@ -61,8 +61,8 @@ def build_cmd(codex: str, model: str, effort: str, out_file: str) -> list[str]:
 
 
 def _chat(system: str, user: str, model: str, effort: str) -> str:
-    codex = shutil.which("codex")
-    if not codex:
+    cli = shutil.which("codex")
+    if not cli:
         raise RuntimeError(
             "codex not found on PATH: install the Codex CLI, or pick another rewrite adapter"
         )
@@ -70,7 +70,7 @@ def _chat(system: str, user: str, model: str, effort: str) -> str:
     prompt = f"{system}\n\n---\n\n{user}"
     with tempfile.TemporaryDirectory(prefix="vidar-rewrite-codex-") as tmp:
         out_file = str(Path(tmp) / "last.txt")
-        cmd = build_cmd(codex, model, effort, out_file)
+        cmd = build_cmd(cli, model, effort, out_file)
         try:
             r = subprocess.run(
                 cmd, input=prompt, capture_output=True, timeout=120,

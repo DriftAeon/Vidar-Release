@@ -2,19 +2,14 @@
 // and 6). One green Add Workspace button opens the folder picker (pickWorkspace saves the folder, or reuses
 // it when it is already a workspace). Next stays off until a folder is added; Skip is the shell's. The pick
 // is written to the progress record so a resume at a later step keeps its cwd.
+import { el } from "../dom";
 import { folderName, pickWorkspace } from "../launcher/workspaces";
 import { registerStep, type StepCtx } from "./steps";
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 
 registerStep({
   id: "workspace",
   title: "Workspace",
+  hideTitle: true, // the heading read oddly over the Add Workspace button
   mount(body: HTMLElement, ctx: StepCtx) {
     const root = el("div", "ob-workspace");
     body.appendChild(root);

@@ -16,9 +16,10 @@ import {
 import {
   CONNECTIONS_URL, TOKENS_URL, buildNotionView, type ErrView, type NotionView, type SourceState, type TopState, type ViewState,
 } from "../notion/view";
-import { getPref, setPref } from "../prefs";
+import { hideModule } from "../modules/hidden";
 import { getFocusedSession } from "./sessions/lookup";
 import { writeToSession } from "./sessions";
+import { errText } from "../err-text";
 
 let view: NotionView | undefined;
 /** Bumped by mount, hide and dispose: a list read in flight from before is dropped. */
@@ -207,10 +208,7 @@ async function type(text: string): Promise<void> {
 }
 
 function hideTab(): void {
-  const key = "bench:notion";
-  const hidden = getPref("modules.hidden") ?? [];
-  if (hidden.includes(key)) return;
-  if (setPref("modules.hidden", [...hidden, key])) document.dispatchEvent(new document.defaultView!.CustomEvent("vidar-modules-change"));
+  hideModule("bench:notion");
 }
 
 async function onSubmit(token: string): Promise<void> {
@@ -245,7 +243,7 @@ async function onDisconnect(): Promise<void> {
     await invoke("notion_disconnect");
   } catch (e) {
     if (gen !== mountGen || mine !== seq || !view) return;
-    state = { ...state, hint: e instanceof Error ? e.message : String(e) }; // the Rust text
+    state = { ...state, hint: errText(e) }; // the Rust text
     draw();
     return;
   }

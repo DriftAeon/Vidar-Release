@@ -19,8 +19,12 @@ import { copyButton } from "../file-actions";
 import { copyText } from "../../clipboard";
 
 // The Codex tip wording lives in agents/login-tips.ts; the name stays importable from here.
-import { CODEX_LOGIN_TIP } from "../../agents/login-tips";
-export { CODEX_LOGIN_TIP };
+export { CODEX_LOGIN_TIP } from "../../agents/login-tips";
+import { AGENT_IDS } from "../../agents/id";
+import { AGENT_PROFILE } from "../../agents/agent-profile";
+
+/** The warn tip of a flip to logged out (login.ts), whichever agent drew it. */
+const isLoginTip = (text: string | null): boolean => AGENT_IDS.some((id) => text === AGENT_PROFILE[id].loginTip("card"));
 
 export const API_KEY_CARD = "blk-login";
 export const LOGIN_TITLE = "Log In To Codex";
@@ -121,12 +125,15 @@ export function loginCard(on: LoginCardHandlers, look?: LoginCardLook): LoginCar
   const shell = cardShell({
     root: "div",
     classes: `blk ${DRIVE_CLASS.card} ${API_KEY_CARD}`,
-    parts: ["head", "title"],
+    parts: ["head", "title", "dismiss"],
     title,
     partClasses: { head: "approval-head", title: "approval-title" },
+    dismiss: () => shell.root.remove(), // the folded row leaves the view only; a later logout gets a new card
   });
   const card = shell.root;
   const head = shell.head!;
+  const dismiss = shell.dismiss!;
+  dismiss.remove(); // joins the head only once the card folds to its Logged In row
   shieldHead(shell, title);
   let view: LoginView = "choice";
   let field: HTMLInputElement | null = null;
@@ -177,7 +184,7 @@ export function loginCard(on: LoginCardHandlers, look?: LoginCardLook): LoginCar
       const glyph = el("span", `${DRIVE_CLASS.result} ok`);
       glyph.title = LOGIN_DONE;
       glyph.appendChild(svgEl("check", LOGIN_DONE));
-      head.appendChild(glyph);
+      head.append(glyph, dismiss);
     },
     drop() {
       clear();
@@ -243,7 +250,7 @@ export function codexLogin(S: { adapter: AgentAdapter; isAlive: boolean; session
     try { deps.mount(c.card); } finally { mounting = false; }
     // the card replaces the warn tip the flip just drew (login.ts), which sits right above it
     const prev = c.card.previousElementSibling;
-    if (prev?.classList.contains("blk-notice") && prev.textContent === CODEX_LOGIN_TIP) prev.remove();
+    if (prev?.classList.contains("blk-notice") && isLoginTip(prev.textContent)) prev.remove();
     return c;
   };
   return {

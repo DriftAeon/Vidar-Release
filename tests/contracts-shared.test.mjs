@@ -37,3 +37,18 @@ test("the sidecar's effort literal equals contracts/effort-levels.json", () => {
   assert.ok(literal, "claude-sidecar.mjs EFFORT_LEVELS literal not found");
   assert.deepEqual(JSON.parse(literal[1]), levels);
 });
+
+test("the control spawn verb reads its effort levels from contracts/effort-levels.json", () => {
+  const verbs = readFileSync(resolve(ROOT, "tools/control/verbs.mjs"), "utf8");
+  assert.ok(/"contracts",\s*"effort-levels\.json"/.test(verbs), "control/verbs.mjs reads the effort contract");
+  assert.ok(/--effort must be one of \$\{levels\.join\(", "\)\}/.test(verbs), "usage message is built from the contract levels");
+  assert.ok(!/\[\s*"low"[^\]]*\]\.includes\(effort\)/.test(verbs), "no effort literal restated in verbs.mjs");
+});
+
+test("the lab case modes are the permission-mode contract with dontAsk in place of auto", () => {
+  const modes = JSON.parse(readFileSync(resolve(ROOT, "contracts/permission-modes.json"), "utf8"));
+  const cases = readFileSync(resolve(ROOT, "tools/lab/cases.mjs"), "utf8");
+  const literal = cases.match(/const MODES = (\[[^\]]*\])/);
+  assert.ok(literal, "lab/cases.mjs MODES literal not found");
+  assert.deepEqual(JSON.parse(literal[1]), modes.map((m) => (m === "auto" ? "dontAsk" : m)));
+});

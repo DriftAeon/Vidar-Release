@@ -4,13 +4,13 @@
 //! entry that fails the same checks is never used.
 
 use crate::credman::{Cred, CredStore, Store};
-use crate::net::Secret;
+use crate::net::{printable, Secret};
+pub use crate::net::TOKEN_MAX_BYTES;
 
 use super::api::user_id_ok;
 use super::parse::host_ok;
 
 pub const TARGET_PREFIX: &str = "Vidar/Slack/";
-pub const TOKEN_MAX_BYTES: usize = 1024;
 const TOKEN_PREFIX: &str = "xoxp-";
 
 /// The live store for this install root.
@@ -21,13 +21,8 @@ pub fn store() -> CredStore {
 /// A user token (`xoxp-` then more), 1-1024 bytes of printable ASCII with no whitespace. The message
 /// never echoes the token.
 pub fn validate_token(token: &Secret) -> Result<(), String> {
+    printable(token, TOKEN_MAX_BYTES)?;
     let t = token.expose();
-    if t.is_empty() || t.len() > TOKEN_MAX_BYTES {
-        return Err(format!("token must be 1-{TOKEN_MAX_BYTES} bytes"));
-    }
-    if !t.bytes().all(|b| (0x21..=0x7e).contains(&b)) {
-        return Err("token must be printable ASCII with no spaces".to_string());
-    }
     if !t.starts_with(TOKEN_PREFIX) || t.len() == TOKEN_PREFIX.len() {
         return Err("token must be a Slack user token".to_string());
     }

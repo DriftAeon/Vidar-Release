@@ -7,7 +7,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { invoke } from "../../ipc";
 import { xtermTheme } from "../../theme";
-import type { TerminalSession } from "./types";
+import { sessionSupports, type TerminalSession } from "./types";
 import { rescueBottombar } from "./bottombar-dock";
 import { armedId, disarmAstra } from "./astra-bridge";
 import { currentFont, showSessionsToast, zoomBy, zoomReset } from "./zoom";
@@ -18,6 +18,7 @@ import { registerFileLinks } from "./file-links";
 import { ptySpawnPayload } from "./pty-spawn";
 import { createPtyResize } from "./pty-resize";
 import { noteRawCodexSpawn, recordedVault } from "./lookup";
+import { errText } from "../../err-text";
 
 let sessions: ReadonlyMap<string, TerminalSession> = new Map();
 const clipboardWarnings = new WeakSet<TerminalSession>();
@@ -181,7 +182,7 @@ export async function attachTerminalBody(s: TerminalSession, launch: { shell?: s
   s.body = "terminal";
   s.launchArgs = launch.args;
   // its own rollouts are the ones written from now on (codex-thread.ts pickRawThreads)
-  if (s.agent === "codex") noteRawCodexSpawn(id);
+  if (sessionSupports(s.agent, "thread")) noteRawCodexSpawn(id);
   button.dataset.body = "terminal";
   term.open(container);
   // Capture before xterm's textarea listener; one Ctrl+V must have one owner.
@@ -251,7 +252,7 @@ export async function attachTerminalBody(s: TerminalSession, launch: { shell?: s
     if (armedId === id) disarmAstra();
     // A refused profiled spawn (bare) says why in the tab itself, not only in the toast.
     if (s.profile && s.term === term) {
-      const msg = (err instanceof Error ? err.message : String(err)).replace(/[\r\n]+/g, " ");
+      const msg = (errText(err)).replace(/[\r\n]+/g, " ");
       term.write(`\r\n\x1b[31m[${msg}]\x1b[0m\r\n`);
     }
     throw err;

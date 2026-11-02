@@ -60,6 +60,9 @@
     var(--border-strong) 0 calc(50% - var(--row-24) / 2),
     var(--group-tc) 0) 0 0 0 1;
 }
+/* open: the row shrinks to the 26px tab, so no band shows under it; the 3px above stays as margin.
+   Collapsed groups keep the 32px row. */
+.rendered .blk-activity[open] > summary { min-height: 0; margin-top: var(--space-3); } /* 3px above the 26px tab, kept as before: no new-ui 3px */
 .rendered .blk-activity[open]:not(.empty) > summary > .activity-label.chain-bar {
   margin-left: calc(-1 * var(--space-2));
   border-left: var(--space-2) solid transparent; border-radius: 0 var(--radius-6) var(--radius-6) 0;
@@ -136,7 +139,7 @@
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--border-w) * 2), currentColor calc(100% - var(--border-w) * 2 + 0.5px));
   mask: radial-gradient(farthest-side, transparent calc(100% - var(--border-w) * 2), currentColor calc(100% - var(--border-w) * 2 + 0.5px));
   border-radius: var(--radius-full);
-  animation: rendered-mark-spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */
+  animation: spin 900ms linear infinite; /* motion: continuous spinner, a rotation not a state transition */
 }
 @media (prefers-reduced-motion: reduce) {
   .chain-seg[data-monitor="armed"]::before, .blk-tool[data-monitor="armed"] > summary > .tool-badge::before { animation: none; background: var(--class-read); }

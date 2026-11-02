@@ -324,20 +324,7 @@ fn fixture(row: &str, case: Option<&Case>) -> Result<(PathBuf, PathBuf, PathBuf,
         "agents": [{ "key": row, "sets": [{ "set": SET }] }],
     });
     std::fs::write(&config, cfg.to_string()).unwrap();
-    seed_stock_templates(&scratch);
     Ok((scratch, cwd, config, slotted))
-}
-
-/// The checkout's stock vault templates copied into the scratch root: a Custom vault refuses without its
-/// agent's floor template (`vault::floored_custom`), and the scratch root is where the store sits.
-fn seed_stock_templates(scratch: &Path) {
-    let from = crate::paths::rune_templates_dir_in(&crate::paths::root());
-    let to = crate::paths::rune_templates_dir_in(scratch);
-    std::fs::create_dir_all(&to).unwrap();
-    for id in ["stock-claude", "stock-codex"] {
-        let name = format!("{id}.json");
-        std::fs::copy(from.join(&name), to.join(&name)).unwrap_or_else(|e| panic!("stock template {name}: {e}"));
-    }
 }
 
 /// Whether a home index entry is one a probe wrote: its sets name a temp `vidar-runes-probe-` library
@@ -365,8 +352,7 @@ fn drop_probe_entries(home: &Path, scratch: &Path, before: &[(Agent, Vec<String>
             index.remove(k);
         }
         dropped += gone.len();
-        let json = serde_json::to_vec_pretty(&index).map_err(|e| e.to_string())?;
-        crate::fsx::atomic_write(&file, &json).map_err(|e| format!("{}: {e}", file.display()))?;
+        crate::fsx::write_json_pretty(&file, &index, false).map_err(|e| format!("{}: {e}", file.display()))?;
     }
     Ok(dropped)
 }
@@ -474,7 +460,7 @@ fn probe_runes_runs_one_real_bare_turn_with_a_recall_set() {
 
     // As the launcher sends until L3a: the row's sets as the pick, which becomes a Custom vault (L2a).
     let pick = row_pick(&config, ROW);
-    let opts = LaunchOpts { row_key: Some(ROW), config: Some(&config), custom_sets: Some(&pick), ..Default::default() };
+    let opts = LaunchOpts { config: Some(&config), custom_sets: Some(&pick), ..Default::default() };
     let _entries = ProbeEntries::new(home::resolve().expect("home"), &scratch);
     let mut launch = prepare("bare", &opts).expect("prepare");
     // A case session's VIDAR_ROOT is the scratch dir, so a write task never reaches the live checkout.
@@ -531,7 +517,7 @@ fn probe_runes_runs_one_real_codex_exec_turn_with_a_recall_set() {
     // The row is admitted as pty.rs admits a Raw Codex row, but from the temp vidar.json.
     let row = admit_row_key(Some(CODEX_ROW.into()), Some("bare"), Some(&config)).expect("admit").expect("row key");
     let pick = row_pick(&config, &row);
-    let opts = LaunchOpts { row_key: Some(&row), config: Some(&config), custom_sets: Some(&pick), ..Default::default() };
+    let opts = LaunchOpts { config: Some(&config), custom_sets: Some(&pick), ..Default::default() };
     let probes = CodexProbes { find: &find_on_env_path, codex: &resolve_codex };
     let root = crate::paths::root();
     let cwd_text = cwd.to_string_lossy().into_owned();
@@ -591,20 +577,19 @@ fn rune_text(kind: &str, activate: Option<&str>, description: Option<&str>) -> S
     format!("---\nname: sample-rune\nkind: {kind}\nscope: [vidar]\n{a}{d}---\n# Sample\n\nBody.\n")
 }
 
-/// The vault step of prepare, without a spawn or a model call: the fixture's pick builds a Custom vault
-/// on each agent's stock floor in the scratch root.
+/// The vault step of prepare, without a spawn or a model call: the probe asks for the in-memory blank
+/// vault, which resolves for each agent in the scratch root and is never stored.
 #[test]
-fn probe_fixture_builds_a_floored_custom_vault_for_both_agents() {
+fn probe_fixture_resolves_the_blank_vault_for_both_agents() {
     if !crate::paths::runes_dir().exists() {
         eprintln!("skipped: the repo runes/ library is not in this tree (not shipped)");
         return;
     }
     let (scratch, _cwd, config, _slotted) = fixture(ROW, None).expect("fixture");
-    let pick = row_pick(&config, ROW);
-    let opts = LaunchOpts { row_key: Some(ROW), config: Some(&config), custom_sets: Some(&pick), ..Default::default() };
+    let opts = LaunchOpts { config: Some(&config), blank_vault: true, ..Default::default() };
     for agent in [Agent::Claude, Agent::Codex] {
         let v = vault_for(&scratch, &opts, agent).unwrap_or_else(|e| panic!("{}: {e}", agent.as_str())).expect("vault");
-        assert!(!v.id.is_empty(), "{} vault id", agent.as_str());
+        assert_eq!(v.id, format!("blank-{}", agent.as_str()), "{} vault id", agent.as_str());
     }
     let _ = std::fs::remove_dir_all(&scratch);
 }
@@ -727,7 +712,7 @@ fn probe_entries_leave_the_home_index_as_it_began() {
     let write = |a: Agent, index: &agent_homes::Index| {
         let f = agent_homes::index_file(a, &home);
         std::fs::create_dir_all(f.parent().unwrap()).unwrap();
-        std::fs::write(f, serde_json::to_vec_pretty(index).unwrap()).unwrap();
+        crate::fsx::write_json_pretty(&f, index, false).unwrap();
     };
     let mut claude = agent_homes::Index::new();
     claude.insert("aaaaaaaaaaaa".into(), entry("vault:claude-rendered", "claude-homes/aaaaaaaaaaaa"));

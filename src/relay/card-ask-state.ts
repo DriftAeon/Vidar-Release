@@ -5,6 +5,7 @@
 import { ASK_FOCUS_EVENT, ASK_SETTLED_EVENT, type AskFocusDetail, type AskSettledDetail } from "../asks/record";
 import { shown, subscribeShown } from "../panels/sessions/shown";
 import { markSlot } from "../panels/rendered/marks";
+import { clock } from "../format";
 import type { RelayItem } from "./store";
 
 /** how long a settled card stays once it has been seen with Relay on screen */
@@ -53,11 +54,6 @@ function arrow(): SVGSVGElement {
   p.setAttribute("d", "M19 12H5M11 6l-6 6 6 6");
   svg.appendChild(p);
   return svg;
-}
-
-function clock(ms: number): string {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 type SessionsMod = typeof import("../panels/sessions");

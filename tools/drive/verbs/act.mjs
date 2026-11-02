@@ -9,7 +9,7 @@ import { snapshot as realSnapshot } from "./snapshot.mjs";
 
 const ACTIONS = ["press", "key", "paste", "send"];
 
-async function newConsoleErrors(ctx, env) {
+export async function newConsoleErrors(ctx, env) {
   const all = (await (ctx.consoleVerb ?? consoleSinceLoad)(ctx)).messages.filter((m) => m.level === "error");
   const file = stateFile(env, `console-${ctx.PORT}.json`);
   let cursor = readState(file, { seen: 0 }).seen ?? 0;
@@ -24,6 +24,7 @@ export async function act(ctx) {
   const third = ctx.cardOpts && !String(ctx.cardOpts).startsWith("--") ? ctx.cardOpts : undefined;
   if (!ACTIONS.includes(verb) || target === undefined) throw new Error("usage: act <press|key|paste|send> <target> [<text>] [--settle ms]");
   if ((verb === "send" || verb === "paste") && third === undefined) throw new Error(`usage: act ${verb} <target> <text>`);
+  if (verb === "key" && third !== undefined) throw new Error("usage: act key <Key> (focus with act press first)");
   const quiet = ctx.flags?.settle && ctx.flags.settle !== true ? Number(ctx.flags.settle) : SETTLE_QUIET_MS;
   if (!Number.isFinite(quiet) || quiet < 0) throw new Error("act: --settle needs milliseconds");
 

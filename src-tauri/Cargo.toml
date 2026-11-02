@@ -90,11 +90,6 @@ windows = { version = "0.61", features = [
 # only, never the shipped binary.
 tauri = { version = "2.12", features = ["test"] }
 
-[features]
-# Rune Vault acceptance gate (bare/vault_gate_tests.rs): compiles only once the vault lanes land
-# the API it calls; `cargo test --features vault-gate -- vault_gate_tests`.
-vault-gate = []
-
 [profile.dev]
 incremental = true
 debug = "line-tables-only"

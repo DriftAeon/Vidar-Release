@@ -4,16 +4,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
-Object.assign(globalThis, {
-  window,
-  document: window.document,
-  Node: window.Node,
-  HTMLElement: window.HTMLElement,
-  HTMLButtonElement: window.HTMLButtonElement,
-});
+installDom(["Node", "HTMLElement", "HTMLButtonElement"]);
 
 const SRC = new URL("../src/", import.meta.url).href;
 const STUBS = {

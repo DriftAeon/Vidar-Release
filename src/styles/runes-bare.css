@@ -6,6 +6,10 @@
 /* set cards after the libraries keep the libraries' 4px rhythm, not the view's 16px section gap */
 .runes-bare > :is(.runes-group, .runes-card) + .runes-card { margin-top: calc(var(--space-4) - var(--space-16)); }
 .runes-bare[aria-busy="true"] { cursor: progress; }
+/* the Rune Library in the left-pane cover (panels/runes.ts syncCover). Its top inset is the vault pane head's top in
+   #workbench, from the same tokens: #workbench padding-top (--space-8), the #wb-tabs rail (border, --space-2 padding,
+   a --row-28 .wb-tab, --space-2, border), #workbench's gap (--space-8); so the two head rows share a top. */
+.runes-left-library { padding: calc(var(--space-8) + var(--border-w) + var(--space-2) + var(--row-28) + var(--space-2) + var(--border-w) + var(--space-8)) var(--space-10) var(--space-10); } /* space-10: the cover's side and bottom inset as before, matching .wb-pane-frame's padding (off the new-ui scale on purpose) */
 .runes-bare-note { font-size: var(--font-12); color: var(--fg-dim); }
 .runes-cond .runes-stale { margin-right: var(--space-4); }
 .runes-bare-center { display: flex; justify-content: center; gap: var(--space-8); padding: var(--space-24) 0; }
@@ -26,11 +30,7 @@
 .runes-bare .rp-source[data-kind]:not(.is-ro):focus-visible { border-color: var(--accent); }
 
 /* Generating: one line per source */
-/* heading labels between rune rows: plain text, not clickable, spacing above and no rule. Sub-labels stay plain; the
-   top-level categories collapse as nested set heads (.runes-cat, folder icon, dim mono row count),
-   which replaced the bold inset category label */
-.runes-cat > .runes-set-head .runes-sn { font-family: var(--font-title); }
-.runes-cat > .runes-set-head .runes-sc { font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--set-ink); }
+/* heading labels between rune rows: plain text, not clickable, spacing above and no rule. Sub-labels stay plain */
 .runes-bare-label { margin-top: var(--space-8); padding-left: var(--space-4); font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); pointer-events: none; user-select: none; }
 .runes-bare-label.sub { margin-top: var(--space-4); padding-left: var(--space-12); font-family: var(--font-ui); font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--fg-dim); }
 .runes-tray > .runes-bare-label:first-child { margin-top: 0; }
@@ -64,7 +64,7 @@
 .rg-done path { stroke: var(--ok-green); }
 .rg-failed path { stroke: var(--alert); }
 .rg-stopped rect { fill: var(--fg-dim); }
-.rg-running, .rg-retrying { animation: rg-spin 1s linear infinite; /* motion: progress spinner, continuous, not a state change */ }
+.rg-running, .rg-retrying { animation: spin 1s linear infinite; /* motion: progress spinner, continuous, not a state change */ }
 .runes-gen-card[data-state="running"]::after, .runes-gen-card[data-state="retrying"]::after {
   content: ""; position: absolute; bottom: 0; left: -30%; width: 30%; height: var(--space-2); background: var(--accent); pointer-events: none;
   animation: rg-sweep 1600ms linear infinite; /* motion: indeterminate progress sweep, continuous by definition */
@@ -86,7 +86,6 @@
 .runes-gen-src-tray { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-8) var(--space-4); }
 .runes-gen-card.is-twin { border-style: dashed; }
 .runes-gen-card.is-twin::after { content: none; }
-@keyframes rg-spin { to { transform: rotate(360deg); } }
 @keyframes rg-sweep { from { left: -30%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) {
   .rg-running, .rg-retrying { animation: none; }
@@ -115,13 +114,14 @@
 .rp-item[open] > summary.rp-source { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .rp-item > .rp-error { padding: var(--space-4) var(--space-8); }
 
-/* View / Modify: seated on the Key's last line at the right; Done takes the accent (it marks the editing state) */
-.runes-mode { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8); font-weight: var(--weight-strong); }
-.runes-mode[hidden] { display: none; }
-.runes-mode .icn { width: var(--space-12); height: var(--space-12); flex: none; }
-.runes-mode:disabled { opacity: 0.5; cursor: default; }
-.runes-mode:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
-.runes-mode.is-editing { color: var(--accent); border-color: var(--accent); background: var(--bg-selected); }
+/* Lock, then Modify, in the panel head's .runes-head-acts (runes.css spaces them); in Modify Done, then Cancel (Lock
+   hidden). Done is a plain button like the others. */
+.runes-lock, .runes-mode, .runes-cancel { flex: none; display: inline-flex; align-items: center; gap: var(--space-4); height: var(--row-24); padding: 0 var(--space-8); font-weight: var(--weight-strong); }
+.runes-lock[hidden], .runes-mode[hidden], .runes-cancel[hidden] { display: none; }
+.runes-lock .icn, .runes-mode .icn { width: var(--space-12); height: var(--space-12); flex: none; }
+.runes-lock:disabled, .runes-mode:disabled, .runes-cancel:disabled { opacity: 0.5; cursor: default; }
+.runes-lock:focus-visible, .runes-mode:focus-visible, .runes-cancel:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
+.runes-bare .rp-actions .ws-btn.is-editing { color: var(--accent); border-color: var(--accent); background: var(--bg-selected); }
 
 /* moved from the retired rules-bricks.css: the Bare view's empty line, error line, source list and action row */
 .rp-empty { color: var(--fg-dim); font-size: var(--font-13); padding: var(--space-8) 0; }
@@ -129,6 +129,7 @@
 .rp-error b { font-weight: var(--weight-strong); margin-right: var(--space-4); }
 
 .rp-sources { display: flex; flex-direction: column; gap: var(--space-4); }
+.rp-sources .runes-row > .rp-source { flex: 1 1 auto; min-width: 0; }
 .rp-source {
   text-align: left; padding: var(--space-8) var(--space-12); cursor: pointer;
   font-family: var(--font-mono); font-size: var(--font-12); color: var(--fg-dim);
@@ -143,13 +144,15 @@
 .rp-source:has(> .rp-name) { display: flex; align-items: baseline; gap: var(--space-12); padding: var(--space-4) var(--space-8); }
 .rp-source > .rp-name { flex: none; font-family: var(--font-ui); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); white-space: nowrap; }
 .rp-source > .rp-path { flex: 1 1 auto; min-width: 0; text-align: right; font-family: var(--font-mono); font-size: var(--font-12); color: color-mix(in srgb, var(--fg-dim) 80%, var(--bg)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rp-actions { display: flex; align-items: center; gap: var(--space-8); }
-.runes-bare .runes-module-item { width: 100%; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
-.runes-bare .runes-module-item:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
-.runes-bare .runes-module-item:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: calc(-1 * var(--border-w)); }
-.runes-bare .runes-module-item:active:not(:disabled) { background: var(--bg-selected); }
-.runes-bare .runes-module-item:disabled { cursor: default; opacity: 0.5; }
-.runes-bare .runes-module-item.is-dim { opacity: 0.5; }
+/* Local Files rows lead with their kind head's icon. Line-up with the head (:186): row edge 32 + border 1 + pad 4, then a
+   24px Kind slot, so the icon centre is 32 + 5 + 12 = 49 and the name starts at 32 + 29 + 8 = 69, like the head's title. */
+.rp-source.has-kicon { display: flex; align-items: center; padding-left: var(--space-4); }
+.rp-source.has-kicon > .rp-kslot { flex: none; align-self: center; display: flex; justify-content: center; width: var(--row-24); margin-right: var(--space-8); }
+.rp-source.has-kicon:has(> .rp-name) > .rp-kslot { margin-right: calc(var(--space-8) - var(--space-12)); } /* those rows' flex gap is 12 */
+.rp-source.has-kicon > .rp-kslot .icn { width: var(--space-16); height: var(--space-16); }
+.rp-source:disabled { opacity: var(--opacity-dim); cursor: default; }
+.rp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); }
+.rp-actions-end { display: flex; align-items: center; gap: var(--space-8); margin-left: auto; }
 .runes-bare .rp-source.is-dim { opacity: 0.5; }
 /* Modify's checkbox (check-box.ts), left of each rune bar and first in each head. On and partly on: --accent fill, --bg tick or dash; off: --bg box, --border-strong edge. */
 .runes-check {
@@ -166,6 +169,36 @@
 .runes-check:is([aria-checked="true"], [aria-checked="mixed"]):active:not(:disabled) { background: color-mix(in srgb, var(--accent) 90%, var(--bg)); }
 .runes-check:disabled { opacity: var(--opacity-dim); cursor: default; }
 .runes-check-slot { display: block; width: var(--space-16); height: var(--space-16); }
+/* Modify's panes (the vault and the Rune Library, view.ts `is-modifying`): a settled tick goes grey (--bg tick on --fg-dim:
+   default 4.99:1, cobalt 5.41:1, ember 5.06:1, olive 5.04:1), a change staged for Done keeps the accent; a staged
+   off is an empty box with the accent edge. */
+.runes-bare.is-modifying .runes-check:is([aria-checked="true"], [aria-checked="mixed"]):not(.is-pending) { background: var(--fg-dim); border-color: var(--fg-dim); }
+.runes-bare.is-modifying .runes-check.is-pending[aria-checked="false"] { border-color: var(--accent); }
+/* The Rune Library (view-library.ts): a head row holding the centred title, then the runeset cards and the Rune
+   Satchel. The head row carries the vault pane's head classes (.wb-pane-head.runes-head: flex, centred,
+   min-height --row-24), so both rows are one --row-24 tall; it sits the pane gap (.wb-pane, --space-8) above the
+   first card, not the view's 16px section gap, plus 19px so the first card lines up with the right panel's first
+   rune item (read off the running app: 14px, then 5px more); 8 - 16 + 19 = 11. */
+.runes-lib-head { margin-bottom: calc(var(--space-8) + var(--space-2) + var(--border-w)); }
+/* Inscription Caps: uppercase, widely tracked, between hairlines spanning only
+   the word, the library icon each side; an exception to Title Case for titles. The title is 24px (doubled) in a --row-32 box whose negative block margins hand back the 8px over --row-24, so the head still
+   takes one --row-24 of layout and the first-card line-up above holds. */
+.runes-lib-head { justify-content: center; gap: var(--space-12); }
+.runes-lib-head::before, .runes-lib-head::after {
+  content: ""; flex: none; width: var(--space-32); height: var(--space-32); /* doubled */
+  margin-block: calc((var(--row-24) - var(--space-32)) / 2); /* hands back the 8px over --row-24, like the title */
+  background: url("/icons/color/library.svg") center / contain no-repeat;
+}
+.runes-lib-title {
+  flex: none; min-width: 0; box-sizing: border-box; height: var(--row-32); line-height: calc(var(--row-32) - 2 * var(--border-w));
+  margin-block: calc((var(--row-24) - var(--row-32)) / 2);
+  padding: 0 var(--space-8); border-block: var(--border-w) solid var(--border-strong);
+  font-family: var(--font-title); font-size: var(--font-24); font-weight: var(--weight-strong); color: var(--fg);
+  text-transform: uppercase; letter-spacing: var(--tracking-inscribed);
+  text-indent: var(--tracking-inscribed); /* balances the tracking left after the last letter */
+}
+/* Delete Runeset's row at the end of an open runeset card, after the kind groups (the .rp-actions row) */
+.runes-set-acts { padding: var(--space-6) var(--space-4); } /* legacy space-6: the tray's own inset, as the last kind group's bottom margin this row replaces */
 /* Line-up: checkbox x = card edge + head pad 12 = tray pad 4 + row pad 8; the icon column spans the bar's edge, pad and
    Kind slot (1 + 4 + 24) with its icon centred over the Kind slot, so a head's title starts where the rune names do:
    16 + 8 + 29 + 8 = 61 past the checkbox on both. */
@@ -173,15 +206,24 @@
 .runes-set-head.has-check > .runes-scp { padding-left: calc(var(--border-w) + var(--space-4)); justify-content: center; }
 /* a group nested in a card (Modules) sits 4 + 1 in: its head pad gives that back so its checkbox stays on the line */
 .runes-set > .runes-set > .runes-set-head.has-check { padding-left: calc(var(--space-12) - var(--space-4) - var(--border-w)); }
-.runes-row { display: flex; align-items: flex-start; gap: var(--space-8); padding-left: var(--space-8); }
+/* Plain (View) group heads take the same geometry from a 4px lead: icon column = bar edge + pad + Kind slot (1 + 4 + 24),
+   icon centred, so its centre is 4 + 5 + 12 = 21 like the card icons below (4 tray + 1 + 4 + 12) and the title starts at
+   4 + 29 + 8 = 41 like the rune names. Set cards keep their own head. */
+.runes-set:not(.runes-card) > .runes-set-head:not(.has-check) { grid-template-columns: calc(var(--border-w) + var(--space-4) + var(--row-24)) minmax(0, 1fr) auto auto; padding-left: var(--space-4); }
+.runes-set:not(.runes-card) > .runes-set-head:not(.has-check) > .runes-scp { padding-left: calc(var(--border-w) + var(--space-4)); justify-content: center; }
+/* Modify's kind heads (a tray holding checkbox rows) take the rows' lead too: tray pad 4 + row pad 4 + checkbox 16 + gap 8 = 32
+   instead of 4, so the icon centre is 32 + 17 = 49 like the rune icons and the title starts at 32 + 29 + 8 = 69 like the names. */
+.runes-set:not(.runes-card):has(> .runes-tray > .runes-row) > .runes-set-head:not(.has-check) { padding-left: calc(var(--space-4) + var(--space-4) + var(--space-16) + var(--space-8)); }
+.runes-row { display: flex; align-items: flex-start; gap: var(--space-8); padding-left: var(--space-4); } /* tray pad 4 + 4 = an 8 inset left of the check, equal to its 8 gap on the right (was 4 + 8 = 12) */
 .runes-row > .runes-rn { flex: 1 1 auto; min-width: 0; }
 .runes-row > .runes-check { margin-top: calc((var(--row-24) - var(--space-16)) / 2); } /* centred on the 24px bar; stays by the bar when the card opens */
-/* Activate looks. Recall: dimmed at rest, a read one
-   stays as today, full on hover (an is-dim card keeps its own dim); the Activate chip loses its pill. Paths: 15% dim
-   (is-dim, 0.5, wins), first glob beside the name, the Activate chip stays. */
+/* Local Files rows never open, and their padded box is taller than the bar: centre the check on the whole box. */
+.rp-sources .runes-row { align-items: center; }
+.rp-sources .runes-row > .runes-check { margin-top: 0; }
+/* Activate looks (no Activate chip; the opened bar reads it). Recall: dimmed at rest, a read one
+   stays as today, full on hover (an is-dim card keeps its own dim). Paths: 15% dim (is-dim, 0.5, wins), first glob beside the name. */
 .runes-bare .runes-rn.act-recall:not(.is-read) { opacity: 0.5; }
 .runes-bare .runes-rn.act-recall:not(.is-dim):hover { opacity: 1; }
-.runes-bare .act-recall .runes-chip.a-recall { border-color: transparent; background: transparent; }
 .runes-bare .runes-rn.act-paths:not(.is-dim) { opacity: 0.85; }
 .runes-bare .runes-glob { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); }
 .runes-fork { padding: var(--space-8) var(--space-12); }
@@ -190,3 +232,14 @@
 .runes-fork-input:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
 .runes-fork-input:active:not(:disabled) { background: var(--bg-selected); }
 .runes-fork-input:disabled { opacity: 0.5; cursor: default; }
+
+/* Save Vault As (vault-save-as.ts): fields take the Flow name field look (.flow-picker-name) */
+.runes-saveas { display: flex; align-items: center; gap: var(--space-8); }
+.runes-write-field {
+  box-sizing: border-box; min-height: var(--row-28); font: inherit; font-size: var(--font-12); background: var(--bg); color: var(--fg);
+  border: var(--border-w) solid var(--border); border-radius: var(--radius-4); padding: var(--space-4) var(--space-8);
+}
+.runes-write-field:hover:not(:disabled) { border-color: var(--border-strong); }
+.runes-write-field:focus, .runes-write-field:focus-visible { outline: none; border-color: var(--accent); }
+.runes-write-field:disabled { opacity: 0.5; cursor: default; }
+.runes-saveas-name { width: calc(var(--space-16) * 10); }

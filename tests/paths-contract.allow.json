@@ -1,7 +1,7 @@
 {
   "agentLog": {
     "count": 0,
-    "reason": "call site still to move to the contract"
+    "reason": "call site still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "autoSend": {
     "count": 0,
@@ -12,11 +12,11 @@
     "reason": "call site still to move to the contract"
   },
   "bridge": {
-    "count": 3,
-    "reason": "call sites still to move to the contract; Rust part likewise"
+    "count": 5,
+    "reason": "call sites still to move to the contract; Rust part likewise; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "characters": {
-    "count": 11,
+    "count": 0,
     "reason": "call sites still to move to the contract; includes asset URLs and a common word"
   },
   "content": {
@@ -24,8 +24,8 @@
     "reason": "common word only: message and flow-node `content` keys (plus Codex request updatedInput), no layout call sites (seeded at B0); +1 voice_slots test include_str of the real claude-p manifest"
   },
   "clips": {
-    "count": 0,
-    "reason": "call site still to move to the contract"
+    "count": 1,
+    "reason": "call site still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "closeLock": {
     "count": 0,
@@ -36,28 +36,28 @@
     "reason": "vidar.json stays at root; readers still to move to the contract; +3 voice_slots/write.rs temp-root test fixtures"
   },
   "display": {
-    "count": 0,
-    "reason": "call sites still to move to the contract; partly a common word"
+    "count": 4,
+    "reason": "call sites still to move to the contract; partly a common word; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "displayArchive": {
     "count": 0,
     "reason": "call site still to move to the contract"
   },
   "docs": {
-    "count": 6,
+    "count": 5,
     "reason": "call sites still to move to the contract; partly a common word"
   },
   "falcon": {
-    "count": 0,
-    "reason": "call site still to move to the contract; Rust part likewise"
+    "count": 5,
+    "reason": "call site still to move to the contract; Rust part likewise; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "falconBuild": {
     "count": 0,
     "reason": "falcon-build.ps1"
   },
   "falconBundles": {
-    "count": 1,
-    "reason": "falcon scripts and Rust"
+    "count": 7,
+    "reason": "falcon scripts and Rust; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "falconFrontends": {
     "count": 0,
@@ -68,36 +68,36 @@
     "reason": "staged Falcon frontend, B2/B3 consume"
   },
   "falconPointer": {
-    "count": 1,
+    "count": 0,
     "reason": "falcon scripts and Rust"
   },
   "falconRegistry": {
-    "count": 4,
-    "reason": "falcon scripts and Rust"
+    "count": 6,
+    "reason": "falcon scripts and Rust; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "falconStore": {
-    "count": 0,
-    "reason": "falcon scripts and Rust"
+    "count": 1,
+    "reason": "falcon scripts and Rust; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "flowStore": {
-    "count": 0,
-    "reason": "call site still to move to the contract"
+    "count": 2,
+    "reason": "call site still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "inbox": {
-    "count": 0,
-    "reason": "call site still to move to the contract"
+    "count": 1,
+    "reason": "call site still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "localVoice": {
-    "count": 0,
-    "reason": "call sites still to move to the contract"
+    "count": 1,
+    "reason": "call sites still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "localVoicePython": {
-    "count": 0,
-    "reason": "call sites still to move to the contract"
+    "count": 1,
+    "reason": "call sites still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "open": {
-    "count": 1,
-    "reason": "mostly the common word 'open'; a whole-literal scan cannot tell"
+    "count": 3,
+    "reason": "mostly the common word 'open'; a whole-literal scan cannot tell; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "openDispatch": {
     "count": 1,
@@ -108,8 +108,8 @@
     "reason": "call site still to move to the contract"
   },
   "packs": {
-    "count": 10,
-    "reason": "call sites still to move to the contract; +4 voice_slots temp-root test fixtures; +1 voice_slots codex-exec manifest test"
+    "count": 12,
+    "reason": "call sites still to move to the contract; +4 voice_slots temp-root test fixtures; +1 voice_slots codex-exec manifest test; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "review": {
     "count": 0,
@@ -136,12 +136,12 @@
     "reason": "`runes` is the paths-contract id: resolve(\"runes\") in tools/runes/repo.mjs, plus the same id in src-tauri/src/rules mod.rs and parity.rs tests and the temp-repo library copy in tools/runes/cook.test.mjs; the rest are the `runes` JSON key of the generator envelope (src-tauri/src/rules/generate/envelope.rs) and of the progress event (generate/progress_tests.rs), not a path"
   },
   "runs": {
-    "count": 0,
-    "reason": "call site still to move to the contract"
+    "count": 7,
+    "reason": "call site still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "sessions": {
-    "count": 0,
-    "reason": "call site still to move to the contract; partly a common word"
+    "count": 1,
+    "reason": "call site still to move to the contract; partly a common word; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "speakJournal": {
     "count": 0,
@@ -152,11 +152,11 @@
     "reason": "call sites still to move to the contract"
   },
   "stages": {
-    "count": 0,
-    "reason": "stage packs (content/stages), reached only through paths.rs stages_dir"
+    "count": 2,
+    "reason": "stage packs (content/stages), reached only through paths.rs stages_dir; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "state": {
-    "count": 48,
+    "count": 0,
     "reason": "common word and control-bus verb name (verbs.mjs, tools/mcp); `state` is a header key in tools/runes/header.mjs, src-tauri/src/rules/rune.rs and its KEYS twin in src-tauri/src/rules/generate/render.rs, not a path; only a few are the state dir"
   },
   "tools": {
@@ -164,16 +164,16 @@
     "reason": "call sites still to move to the contract; partly a common word"
   },
   "uiState": {
-    "count": 9,
+    "count": 0,
     "reason": "call sites still to move to the contract; Rust part likewise; +2 falcon/layout.rs Shape.ui_state (pinned to the contract by its test); +4 settings/state.rs history tests build temp state files"
   },
   "vendor": {
-    "count": 3,
+    "count": 0,
     "reason": "call sites still to move to the contract; partly a common word"
   },
   "voice": {
-    "count": 0,
-    "reason": "call site still to move to the contract"
+    "count": 1,
+    "reason": "call site still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   },
   "whisper": {
     "count": 0,
@@ -184,7 +184,43 @@
     "reason": "call sites still to move to the contract; Rust part likewise"
   },
   "workbench": {
+    "count": 3,
+    "reason": "call sites still to move to the contract; multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "rules": {
+    "count": 11,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "runeVidar": {
     "count": 1,
-    "reason": "call sites still to move to the contract"
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "runeImports": {
+    "count": 4,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "migrations": {
+    "count": 2,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "driverMode": {
+    "count": 1,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "runeLoadHistory": {
+    "count": 1,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "runeSkills": {
+    "count": 3,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "voiceSlots": {
+    "count": 3,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
+  },
+  "runeVaults": {
+    "count": 3,
+    "reason": "multi-segment scan (2026-10-31): rust/test fixtures, doc comments and include paths; live sites move to the contract"
   }
 }

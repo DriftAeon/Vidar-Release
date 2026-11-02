@@ -38,8 +38,7 @@ fn read_root_at(path: &Path) -> Result<Value, String> {
 // config, and a unique tmp name means two overlapping saves can't clobber
 // each other's tmp file.
 fn write_config_at(path: &Path, root: &Value) -> Result<(), String> {
-    let json = serde_json::to_string_pretty(root).map_err(|e| e.to_string())?;
-    crate::fsx::atomic_write(path, json.as_bytes())
+    crate::fsx::write_json_pretty(path, root, false)
 }
 
 /// Read-modify-write over vidar.json's generic JSON tree: read (NotFound-only

@@ -3,10 +3,10 @@
 // Pure Node, no deps. The CLI is module-size.mjs; the test is tests/module-size.test.mjs.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, extname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { root as repoRoot } from "../lib/paths.mjs";
 import { isExportedTree } from "../lib/release-layout.mjs";
 
-export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+export const ROOT = repoRoot();
 export const CONTRACT = "contracts/module-size.json";
 export const DOC = "docs/reference/module-boundaries.md";
 export const START = "<!-- ledger:start -->";

@@ -104,7 +104,7 @@ pub fn sha256_hex(text: &str) -> String {
 /// Strip a BOM, CRLF to LF, trailing whitespace off every line and trailing blank lines off the end; one final
 /// newline when anything is left.
 pub fn normalise(raw: &str) -> String {
-    let raw = raw.strip_prefix('\u{FEFF}').unwrap_or(raw).replace("\r\n", "\n");
+    let raw = crate::fsx::strip_bom(raw).replace("\r\n", "\n");
     let mut lines: Vec<&str> = raw.split('\n').map(str::trim_end).collect();
     while lines.last().is_some_and(|l| l.is_empty()) {
         lines.pop();

@@ -55,7 +55,7 @@ const MARK_ACCESSIBLE_NAME: Partial<Record<FlowRunNodeStatus, string>> = {
   ok: "Done",
 };
 
-function statusLabel(status: FlowRunNodeStatus): string {
+export function statusLabel(status: FlowRunNodeStatus): string {
   switch (status) {
     case "idle":
       return "";

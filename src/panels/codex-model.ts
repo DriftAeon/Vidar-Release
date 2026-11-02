@@ -4,8 +4,9 @@
 // which also dispatches the character status. Rendered Codex tabs report their own model
 // (rendered-body.ts) and are skipped.
 import { invoke } from "../ipc";
+import { isAgentId } from "../agents/id";
 import { tabIdentity } from "./sessions/vault-tabs";
-import { setCodexStatus } from "./status";
+import { READS_ROLLOUT, setCodexStatus } from "./status";
 import { getFocusedSession, sessionKind, type FocusedSession } from "./sessions";
 
 // Rollout turn records land at turn start; a /model change shows with the next turn anyway.
@@ -27,7 +28,7 @@ export function watchCodexModel(signal: AbortSignal): void {
   function focus(next: FocusedSession | null): void {
     window.clearInterval(timer);
     timer = undefined;
-    const raw = next?.agent === "codex" && next.cwd !== "" && sessionKind(next.id)?.body === "terminal";
+    const raw = next !== null && isAgentId(next.agent) && READS_ROLLOUT[next.agent] &&next.cwd !== "" && sessionKind(next.id)?.body === "terminal";
     target = raw ? next : null;
     if (!target) return;
     const tab = target;

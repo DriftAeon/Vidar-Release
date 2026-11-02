@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::bare::vault::store::Store;
-use crate::bare::vault::{RuneRef, Template};
+use crate::bare::vault::RuneRef;
 
 struct Root(PathBuf);
 impl Drop for Root {
@@ -19,21 +19,17 @@ fn perm_rune(id: &str, agent: Option<&str>, body: &str) -> String {
     format!("---\nname: {id}\nkind: permission\nscope: [global]\n{agent}{body}description: Test permission\n---\n")
 }
 
-/// A temp root with a copy of the shipped stock library plus `perm-plan`, `perm-auto` and `perm-mcp`, and a
-/// `stock-claude` template.
+/// A temp root with a copy of the shipped Vidar library plus `perm-plan`, `perm-auto` and `perm-mcp`.
 fn root(tag: &str) -> Root {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
     let p = std::env::temp_dir().join(format!("vidar-fv1b-{tag}-{}-{nanos}", std::process::id()));
-    let stock = crate::paths::rune_stock_dir_in(&p);
-    copy_dir(&crate::paths::rune_stock_dir_in(&crate::paths::root()), &stock);
-    let dir = stock.join("permissions");
+    let vidar = crate::paths::rune_vidar_dir_in(&p);
+    copy_dir(&crate::paths::rune_vidar_dir_in(&crate::paths::root()), &vidar);
+    crate::bare::vault::vidar::seed_core(&p);
+    let dir = vidar.join("permissions");
     std::fs::write(dir.join("perm-plan.md"), perm_rune("perm-plan", None, "mode: plan\n")).unwrap();
     std::fs::write(dir.join("perm-auto.md"), perm_rune("perm-auto", None, "mode: auto\nallow:\n  - Bash(ls)\n")).unwrap();
     std::fs::write(dir.join("perm-mcp.md"), perm_rune("perm-mcp", None, "allow:\n  - mcp__x__y\n  - Bash(ls)\n")).unwrap();
-    let tdir = crate::paths::rune_templates_dir_in(&p);
-    std::fs::create_dir_all(&tdir).unwrap();
-    let t = Template { version: 1, id: "stock-claude".into(), name: "Stock Claude".into(), runesets: vec![], runes: vec![stock_ref("bare-identity")] };
-    std::fs::write(tdir.join("stock-claude.json"), serde_json::to_string(&t).unwrap()).unwrap();
     Root(p)
 }
 
@@ -49,14 +45,14 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-fn stock_ref(id: &str) -> RuneRef {
-    RuneRef { library: "stock".into(), id: id.into() }
+fn vidar_ref(id: &str) -> RuneRef {
+    RuneRef { library: "vidar".into(), id: id.into() }
 }
 
-/// A Custom vault holding the named stock runes; its id.
+/// A Custom vault holding the named Vidar runes; its id.
 fn vault(r: &Root, runes: &[&str]) -> String {
-    let refs: Vec<RuneRef> = runes.iter().map(|i| stock_ref(i)).collect();
-    Store::open(&r.0).create_custom(&[], &refs).unwrap().id
+    let refs: Vec<RuneRef> = runes.iter().map(|i| vidar_ref(i)).collect();
+    crate::bare::vault::create_at(&r.0, Some(format!("Pick {}", runes.join(" "))), None, &[], &refs).unwrap().id
 }
 
 fn ask(node: &str, model: &str, vault: Option<&str>, agent: Option<&str>) -> NodeAsk {
@@ -106,12 +102,31 @@ fn codex_nodes_keep_only_mcp_allows_and_no_mode() {
 }
 
 #[test]
-fn unknown_and_foreign_stock_vaults_refuse() {
+fn unknown_and_base_vaults_refuse() {
     let r = root("refuse");
     assert!(node_grant(&r.0, &ask("n", "claude-sonnet-5", Some("nope"), None)).unwrap_err().contains("Unknown Vault"));
-    let other = crate::agent_spec::spec(crate::agent_spec::ALL[1]).label.to_lowercase();
-    let e = node_grant(&r.0, &ask("n", "claude-sonnet-5", Some(&format!("stock-{other}")), Some(crate::agent_spec::spec(crate::agent_spec::ALL[0]).label.to_lowercase().as_str()))).unwrap_err();
-    assert!(e.contains("Stock Vault for Another Agent"), "{e}");
+    assert!(node_grant(&r.0, &ask("n", "claude-sonnet-5", Some("base-main"), None)).unwrap_err().contains("Unknown Vault"));
+}
+
+#[test]
+fn a_node_with_no_vault_refuses_and_starts_no_copy() {
+    let r = root("unset");
+    for unset in [None, Some("  ")] {
+        let e = node_grant(&r.0, &ask("a", "claude-sonnet-5", unset, None)).unwrap_err();
+        assert!(e.ends_with("Pick a Rune Vault for this node."), "{e}");
+    }
+    assert!(Store::open(&r.0).list().unwrap().is_empty());
+}
+
+#[test]
+fn a_granted_vault_is_the_one_approval_names() {
+    let r = root("run-granted");
+    let agent = crate::agent_spec::ALL[0];
+    let v = vault(&r, &["bare-identity"]);
+    let g = node_grant(&r.0, &ask("a", "claude-sonnet-5", Some(&v), None)).unwrap();
+    let approved = crate::bare::flow_vault::approve(&r.0, agent, Some(&g.vault), Some(&g.hash)).unwrap();
+    assert_eq!(approved.vault, v);
+    assert_eq!(Store::open(&r.0).list().unwrap().len(), 1, "no further vault");
 }
 
 #[test]

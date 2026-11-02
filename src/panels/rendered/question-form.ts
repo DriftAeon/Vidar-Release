@@ -95,10 +95,10 @@ export function questionForm(card: HTMLElement, input: unknown, onChange: (answe
     });
     otherRow.addEventListener("click", (e) => { if (e.target !== st.other) st.other.focus(); });
     otherRow.append(st.other);
-    // Codex questions carry an `id` and opt in to Other (`isOther`, default false); Claude's have
-    // neither field and always get the Other row
-    const codex = typeof q.id === "string";
-    if (!codex || q.isOther === true || freeText) optsRow.appendChild(otherRow);
+    // Questions with an `id` opt in to Other (`isOther`, default false); those without
+    // always get the Other row
+    const optsIn = typeof q.id === "string";
+    if (!optsIn || q.isOther === true || freeText) optsRow.appendChild(otherRow);
     box.append(top, optsRow);
     card.appendChild(box);
     state.push(st);

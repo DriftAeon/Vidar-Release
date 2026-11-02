@@ -20,7 +20,6 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::io::{Read, Write};
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,7 +32,7 @@ use crate::agent_spec::Agent;
 use serde_json::Value;
 
 use super::home;
-use crate::job::Job;
+use crate::proc_job::{spawn_into, Job, SpawnExt};
 
 /// stdout and stderr are each held to this many bytes.
 pub const OUT_CAP: usize = 4 * 1024 * 1024;
@@ -44,7 +43,6 @@ pub const MERGE_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 /// Each stream tail kept in a timeout's text.
 const TAIL_CHARS: usize = 300;
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Names the child never inherits (`Build-Env`): the agents' own config and credential variables and Vidar's.
 const DROP_PREFIXES: [&str; 7] = ["ANTHROPIC_", "CLAUDE", "CODEX_", "OPENAI_", "VIDAR_", "FALCON_", "DISABLE_AUTOUPDATER"];
 
@@ -156,17 +154,18 @@ fn env_path_dirs(env: &[(OsString, OsString)]) -> Vec<PathBuf> {
 /// The program and its leading arguments for `agent`: `claude.exe` as the Flow runner finds it, or `node` plus the
 /// `codex.js` the Bare Codex resolver finds beside a `codex` shim (profile `profiles/bare/codex.json`).
 pub fn resolve_exe(agent: &str, root: &Path, env: &[(OsString, OsString)]) -> Result<(PathBuf, Vec<String>), String> {
-    match super::home::agent_of(agent)? {
+    let a = super::home::agent_of(agent)?;
+    match a {
         Agent::Claude => {
             let exe = crate::deps::claude_exe().ok_or("spawn: Claude Code was not found; install it first")?;
             Ok((exe, Vec::new()))
         }
-        Agent::Codex => resolve_codex(root, env),
+        Agent::Codex => resolve_codex(root, env, crate::agent_spec::spec(a).profile_file),
     }
 }
 
-fn resolve_codex(root: &Path, env: &[(OsString, OsString)]) -> Result<(PathBuf, Vec<String>), String> {
-    let path = root.join("profiles").join("bare").join("codex.json");
+fn resolve_codex(root: &Path, env: &[(OsString, OsString)], profile_file: &str) -> Result<(PathBuf, Vec<String>), String> {
+    let path = root.join("profiles").join("bare").join(profile_file);
     let p: CodexProfile = crate::fsx::read_json(&path).map_err(|e| format!("spawn: launch profile {}: {e}", path.display()))?;
     let dirs = env_path_dirs(env);
     let mut bare_env = crate::bare::Env::default();
@@ -219,19 +218,15 @@ pub fn execute_until(spec: &Spec, job: &Job, timeout: Duration, cap: usize, stop
     check_home(spec)?;
     let mut cmd = Command::new(&spec.program);
     cmd.args(&spec.args)
-        .env_clear()
-        .envs(spec.env.iter().map(|(k, v)| (k, v)))
+        .exact_env(spec.env.iter().map(|(k, v)| (k, v)))
         .current_dir(&spec.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-    let mut child = cmd.spawn().map_err(|e| format!("spawn: {} did not start ({e})", spec.program.display()))?;
-    if let Err(e) = job.assign(&child) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(format!("spawn: the child could not join its job object ({e})"));
-    }
+        .stderr(Stdio::piped());
+    let mut child = spawn_into(&mut cmd, job).map_err(|e| match e.kind() {
+        std::io::ErrorKind::Other => format!("spawn: the child could not join its job object ({e})"),
+        _ => format!("spawn: {} did not start ({e})", spec.program.display()),
+    })?;
     let (out_flag, err_flag) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
     let stdin = child.stdin.take();
     let text = spec.stdin.clone();

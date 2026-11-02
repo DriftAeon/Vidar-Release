@@ -5,6 +5,7 @@
 // `primaryAgent` the way Settings does (patch_settings), then moves on. Login is never a gate.
 import { AGENTS } from "../agents/descriptor";
 import { AGENT_IDS } from "../agents/id";
+import { el } from "../dom";
 import { effectivePrimary, primaryAsked, primaryChoices, type PrimaryAgent } from "../agents/primary";
 import { loadConfig, onSettingsChanged } from "../config";
 import { CATALOG, depsReport, onDepsChange } from "../deps/state";
@@ -18,13 +19,6 @@ const LABEL = Object.fromEntries(AGENT_IDS.map((id) => [id, AGENTS[id].name])) a
 
 const LEAN = 54; // hover leans the seam to 54 / 46 toward the hovered side
 const STEP = 70; // after a click the chosen side holds 70 / 30
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
 
 function tile(id: PrimaryAgent, cls: string): HTMLImageElement {
   const img = el("img", cls);
@@ -51,7 +45,7 @@ function setupCard(id: PrimaryAgent): HTMLElement {
   if (version) head.append(el("span", "ob-setup-val ob-mono", version));
   card.append(head);
   if (status?.location) card.append(row("ok", status.location, true));
-  if (entry?.authCheck === "claude" && status) {
+  if (entry?.authCheck === id && AGENTS[id].flowSdk && status) {
     card.append(status.warning ? row("warn", "Not Logged In", false) : row("ok", "Logged In", false));
   }
   return card;

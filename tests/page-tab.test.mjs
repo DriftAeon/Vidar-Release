@@ -10,18 +10,10 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { JSDOM } from "jsdom";
+import { installDom } from "./helpers/jsdom-globals.mjs";
 
-const { window } = new JSDOM("<!doctype html><html><body></body></html>");
+installDom(["Node", "HTMLElement", "HTMLButtonElement", "Event", "CustomEvent", "MouseEvent"]);
 Object.assign(globalThis, {
-  window,
-  document: window.document,
-  Node: window.Node,
-  HTMLElement: window.HTMLElement,
-  HTMLButtonElement: window.HTMLButtonElement,
-  Event: window.Event,
-  CustomEvent: window.CustomEvent,
-  MouseEvent: window.MouseEvent,
   requestAnimationFrame: (cb) => setTimeout(cb, 0),
   cancelAnimationFrame: (h) => clearTimeout(h),
 });

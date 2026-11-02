@@ -3,8 +3,13 @@
 //! Stateless and read-only: every poll re-reads the logs. Shape is `bench-tab-plan.md` D4,
 //! mirrored by `UnrealStatus` in `src/ipc.ts`.
 
+pub mod asset;
+pub mod diff;
 mod discover;
+pub mod graph;
 mod parse;
+pub mod pin;
+mod proxy;
 mod status;
 
 use serde::Serialize;
@@ -90,6 +95,12 @@ pub struct Diag {
 
 async fn blocking<T: Send + 'static>(what: &str, f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(f).await.map_err(|e| format!("{what} task failed: {e}"))?
+}
+
+/// Editor MCP, Rider MCP and RiderLink pills. `root` is the head's project root, when known.
+#[tauri::command]
+pub async fn unreal_mcp_status(root: Option<String>) -> Result<proxy::McpPills, String> {
+    blocking("unreal_mcp_status", move || Ok(proxy::mcp_status_blocking(root.as_deref()))).await
 }
 
 /// A read error comes back as the `Err` string (the TS side shows one error line); it never panics.

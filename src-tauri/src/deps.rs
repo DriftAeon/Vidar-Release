@@ -15,7 +15,6 @@
 
 use std::ffi::OsStr;
 use std::io::Read;
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -24,8 +23,10 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod claude_login;
 pub mod updates;
 
+use crate::proc_job::{wait_bounded, SpawnExt};
 use crate::which::{find_in, find_on_path_exact, is_file_or_alias, registry_env, registry_path_dirs, Hive};
 
 /// Shown when an exe is only on the persisted (registry) PATH: Vidar and its
@@ -36,10 +37,10 @@ const STALE_PATH_DETAIL: &str = "Installed After Launch: Restart Vidar";
 /// every child's) predates it. Never carries the value.
 const STALE_ENV_DETAIL: &str = "Set After Launch: Restart Vidar";
 
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-/// The `authCheck` value whose found exe also gets the Claude Code login check (`claude_auth.rs`).
-const AUTH_CHECK_CLAUDE: &str = "claude";
+/// Whether an entry's found exe also gets the login check (`claude_auth.rs`), by its `authCheck` value.
+fn has_login_check(e: &CatalogEntry) -> bool {
+    claude_login::names_login_check(e.auth_check.as_deref())
+}
 
 const CATALOG_JSON: &str = include_str!("../../contracts/dependencies.json");
 
@@ -65,13 +66,26 @@ struct CatalogEntry {
 }
 
 /// A dep entry's `update`: `package` is the npm package installed next to the exe; `native`
-/// lets a non-npm `.exe` install update itself (`<exe> --version`, `<exe> update`).
+/// lets a non-npm `.exe` install update itself (`<exe> --version`, `<exe> update`); `channel` names
+/// the release channel that self-update reads, which can lag the npm tag.
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct UpdateRule {
     #[serde(default)]
     package: Option<String>,
     #[serde(default)]
     native: bool,
+    #[serde(default)]
+    channel: Option<NativeChannel>,
+}
+
+/// `url` holds `{channel}`; the channel is `setting` in the JSON file `settings` (env vars expanded)
+/// when it is one of `names`, else `names[0]`.
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct NativeChannel {
+    pub url: String,
+    pub settings: String,
+    pub setting: String,
+    pub names: Vec<String>,
 }
 
 /// Internally tagged: an unknown `kind` is a parse error, not a silent skip.
@@ -175,7 +189,7 @@ fn entries() -> Vec<CatalogEntry> {
 /// The Claude Code dep (the entry carrying `authCheck: "claude"`; it lives in the claude pack),
 /// or None when no listed catalog or pack entry declares it.
 fn claude_entry() -> Option<CatalogEntry> {
-    entries().into_iter().find(|e| e.auth_check.as_deref() == Some(AUTH_CHECK_CLAUDE))
+    entries().into_iter().find(has_login_check)
 }
 
 /// The Claude Code exe a spawn can run: the dep probe's `.exe` names on the process PATH, then its
@@ -225,6 +239,9 @@ impl UpdateRule {
     pub(crate) fn native(&self) -> bool {
         self.native
     }
+    pub(crate) fn channel(&self) -> Option<&NativeChannel> {
+        self.channel.as_ref()
+    }
 }
 
 /// Every catalog and pack entry with an `update` rule and an exe probe, in report order.
@@ -263,7 +280,7 @@ fn probe_all(catalog: &Catalog, pack: Vec<Value>, registry_dirs: &[PathBuf]) -> 
         .deps
         .iter()
         .chain(extra.iter())
-        .map(|e| run_probe(&e.id, &e.probe, e.auth_check.as_deref() == Some(AUTH_CHECK_CLAUDE), registry_dirs))
+        .map(|e| run_probe(&e.id, &e.probe, has_login_check(e), registry_dirs))
         .collect()
 }
 
@@ -371,7 +388,7 @@ pub(crate) fn run_bounded_any(program: &OsStr, args: &[&str], timeout: Duration)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        .quiet()
         .spawn()
         .ok()?;
     let mut stdout = child.stdout.take()?;
@@ -381,15 +398,12 @@ pub(crate) fn run_bounded_any(program: &OsStr, args: &[&str], timeout: Duration)
         let _ = stdout.read_to_end(&mut buf);
         let _ = tx.send(buf);
     });
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
+    let status = match wait_bounded(&mut child, deadline) {
+        Ok(Some(status)) => status,
+        _ => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
         }
     };
     let buf = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).ok()?;
@@ -589,7 +603,11 @@ mod tests {
         let catalog = parse_catalog(r#"{ "version": 1, "deps": [] }"#).unwrap();
         let got = extra_entries(&catalog, deps.as_array().unwrap().clone());
         let claude = got.iter().find(|e| e.id == "claude").expect("claude dep");
-        assert_eq!(claude.auth_check.as_deref(), Some(AUTH_CHECK_CLAUDE));
+        assert!(has_login_check(claude));
+        let other = parse_catalog(r#"{ "version": 1, "deps": [
+            { "id": "x", "probe": { "kind": "env", "name": "VIDAR_TEST_UNSET_X" }, "authCheck": "grok" },
+            { "id": "y", "probe": { "kind": "env", "name": "VIDAR_TEST_UNSET_Y" }, "authCheck": "codex" } ] }"#).unwrap();
+        assert!(other.deps.iter().all(|e| !has_login_check(e)), "an unknown or Codex value checks no login");
         let rule = claude.update.as_ref().expect("claude update rule");
         assert_eq!(rule.package(), Some("@anthropic-ai/claude-code"));
         assert!(rule.native());

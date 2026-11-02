@@ -7,7 +7,8 @@
 // in p4 mode the same poll reads `changes_p4_status` and the list is read-only.
 import { getFocusedSession } from "./sessions/lookup";
 import { groupFiles, revertablePaths, type Groups } from "../changes/model";
-import { act, commit, errText, readP4Status, readStatus, renameBranch, syncRepo, type ActVerb, type SyncMode } from "../changes/actions";
+import { errText } from "../err-text";
+import { act, commit, readAssetDiff, readP4Status, readStatus, renameBranch, syncRepo, type ActVerb, type SyncMode } from "../changes/actions";
 import { gitInitPrompt } from "../changes/git-prompt";
 import { getPref, setPref } from "../prefs";
 import { writeToSession } from "./sessions";
@@ -226,6 +227,11 @@ export function mountChangesView(parent: HTMLElement): HTMLElement {
     dismiss: () => { state = { ...state, error: null, done: null }; draw(); },
     gitPrompt: () => void onGitPrompt(),
     backend: onBackend,
+    assetDiff: (path, staged) => {
+      const root = currentRoot();
+      if (!root) return Promise.reject(new Error("No Repository"));
+      return readAssetDiff(root, path, staged);
+    },
   });
   parent.appendChild(view.root);
   focusListener = () => {

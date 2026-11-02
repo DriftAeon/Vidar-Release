@@ -493,13 +493,23 @@ fn mtime_ms_of(md: &fs::Metadata) -> u64 {
    resolved lexically and the existing part is canonicalised (junctions resolve to their
    target), it is inside a root Document serves: the Vidar folder (docs, runs, bridge\display,
    reviews, runes), the user's `~\.claude` and global runes library; or it is an instruction
-   file the Runes view lists (CLAUDE.md, AGENTS.md, GEMINI.md, anything under a `.claude`,
-   `.codex` or `.gemini` folder: loaded by an agent from any project); or Rust saw the OS drop
+   file the Runes view lists (CLAUDE.md, AGENTS.md, anything under a `.claude`
+   or `.codex` folder: loaded by an agent from any project); or Rust saw the OS drop
    that file onto the window (`note_dropped`, fed by the window's drag-drop event, which the
    webview cannot forge). Anything else is refused. */
 
-const INSTRUCTION_NAMES: &[&str] = &["claude.md", "agents.md", "gemini.md", "claude.local.md"];
-const INSTRUCTION_DIRS: &[&str] = &[".claude", ".codex", ".gemini"];
+/// Every agent's project instructions file and personal-override file, from the table.
+fn instruction_names() -> impl Iterator<Item = &'static str> {
+    crate::agent_spec::ALL.iter().flat_map(|a| {
+        let s = crate::agent_spec::spec(*a);
+        std::iter::once(s.instructions_file).chain(s.local_instructions_file)
+    })
+}
+
+/// Every agent's per-user folder name, from the table.
+fn instruction_dirs() -> impl Iterator<Item = &'static str> {
+    crate::agent_spec::ALL.iter().map(|a| crate::agent_spec::spec(*a).user_dir)
+}
 const DROPPED_CAP: usize = 256;
 static DROPPED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
@@ -559,17 +569,17 @@ fn canonical_lenient(p: &Path) -> Option<PathBuf> {
 
 fn is_instruction_file(canon: &Path) -> bool {
     let name = canon.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    if INSTRUCTION_NAMES.contains(&name.as_str()) {
+    if instruction_names().any(|n| n.eq_ignore_ascii_case(&name)) {
         return true;
     }
     canon.parent().into_iter().flat_map(|p| p.components()).any(|c| {
-        INSTRUCTION_DIRS.iter().any(|d| c.as_os_str().to_string_lossy().eq_ignore_ascii_case(d))
+        instruction_dirs().any(|d| c.as_os_str().to_string_lossy().eq_ignore_ascii_case(d))
     })
 }
 
 fn doc_roots() -> Vec<PathBuf> {
     let mut v = vec![crate::paths::root()];
-    v.extend(crate::paths::claude_dir());
+    v.extend(crate::paths::agent_roots());
     v.extend(crate::paths::global_runes_dir());
     v
 }
@@ -618,7 +628,6 @@ pub fn stat_document(path: String) -> Option<u64> {
 // Serialise commands too: another frontend must not pass the same old mtime
 // while an earlier app write is still preparing its replacement.
 static DOCUMENT_WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
-static DOCUMENT_TMP_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[tauri::command]
 pub fn create_document(name: String) -> Result<String, String> {
@@ -648,7 +657,6 @@ fn create_document_in(dir: &Path, name: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn write_document(path: String, text: String, expected_mtime: u64) -> Result<u64, String> {
-    use std::io::Write;
     let _guard = DOCUMENT_WRITES.lock().map_err(|e| e.to_string())?;
     let p = confine_doc(&path)?;
     if text.len() > MAX_DOC_BYTES { return Err("document over 2 MiB".into()); }
@@ -656,22 +664,15 @@ pub fn write_document(path: String, text: String, expected_mtime: u64) -> Result
     if mtime_ms_of(&md) != expected_mtime { return Err("conflict: changed on disk".into()); }
     if more || std::str::from_utf8(&buf).is_err() { return Err("cannot edit an oversized or lossy document".into()); }
     if md.permissions().readonly() { return Err("document is read-only".into()); }
-    let id = DOCUMENT_TMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let tmp = p.with_file_name(format!(".vidar-document-{}-{id}.tmp", std::process::id()));
-    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(|e| e.to_string())?;
-    let prepared = file.write_all(text.as_bytes()).and_then(|_| file.sync_all()).and_then(|_| file.metadata());
-    drop(file);
-    let result = (|| {
-        let written = prepared.map_err(|e| e.to_string())?;
-        // Check again immediately before replacement; polling alone cannot
-        // protect edits made since the frontend loaded its version.
+    // The precheck runs after the tmp is written, right before the rename; polling alone
+    // cannot protect edits made since the frontend loaded its version.
+    let written = crate::fsx::atomic_write_with(&p, text.as_bytes(), || {
         let (current, _, _) = open_drop_file(&p, 0).map_err(|e| format!("conflict: {e}"))?;
         if mtime_ms_of(&current) != expected_mtime { return Err("conflict: changed on disk".into()); }
-        fs::rename(&tmp, &p).map_err(|e| e.to_string())?;
-        Ok(mtime_ms_of(&written))
-    })();
-    if result.is_err() { let _ = fs::remove_file(&tmp); }
-    result
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
+    Ok(mtime_ms_of(&written))
 }
 
 /* ---- passage comments (workbench Document view) ----
@@ -774,34 +775,19 @@ pub fn read_comments(doc_path: String) -> Result<CommentsFile, String> {
 /// same directory, rename over the sidecar. Returns the new mtime.
 #[tauri::command]
 pub fn save_comments(doc_path: String, json: String) -> Result<u64, String> {
-    use std::io::Write;
     let (side, name) = comments_sidecar(&doc_path)?;
     if json.len() > COMMENTS_MAX_BYTES {
         return Err(format!("comments over {} KiB", COMMENTS_MAX_BYTES / 1024));
     }
     let f: CommentsFile = serde_json::from_str(&json).map_err(|e| format!("comments invalid: {e}"))?;
     validate_comments(&f, &name)?;
-    let out = serde_json::to_string_pretty(&f).map_err(|e| e.to_string())?;
     if let Ok(md) = fs::symlink_metadata(&side) {
         use std::os::windows::fs::MetadataExt;
         if md.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 || !md.is_file() {
             return Err("a link sits where the comments file goes — remove it first".into());
         }
     }
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    let tmp = side.with_file_name(format!("{name}.comments.{}-{nanos}.tmp", std::process::id()));
-    {
-        let mut t = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).map_err(|e| e.to_string())?;
-        if let Err(e) = t.write_all(out.as_bytes()).and_then(|_| t.sync_all()) {
-            drop(t);
-            let _ = fs::remove_file(&tmp);
-            return Err(e.to_string());
-        }
-    }
-    if let Err(e) = fs::rename(&tmp, &side) {
-        let _ = fs::remove_file(&tmp);
-        return Err(e.to_string());
-    }
+    crate::fsx::write_json_pretty(&side, &f, false)?;
     let md = fs::metadata(&side).map_err(|e| e.to_string())?;
     Ok(mtime_ms_of(&md))
 }
@@ -815,6 +801,16 @@ mod confine_tests {
         let d = std::env::temp_dir().join(format!("vidar-confine-doc-{tag}-{}-{n}", std::process::id()));
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn instruction_files_of_every_agent_are_recognised() {
+        for p in ["other/AGENTS.md", "other/agents.md", "other/CLAUDE.md", "other/CLAUDE.local.md", "other/.codex/x.md", "other/.claude/x.md"] {
+            assert!(is_instruction_file(Path::new(p)), "{p}");
+        }
+        for p in ["other/README.md", "other/.git/x.md"] {
+            assert!(!is_instruction_file(Path::new(p)), "{p}");
+        }
     }
 
     #[test]
@@ -894,6 +890,43 @@ mod confine_tests {
         assert!(confine_doc_in(&note.to_string_lossy(), &roots, &[note.clone()]).is_ok());
         assert!(confine_doc_in(&other.join("CLAUDE.md").to_string_lossy(), &roots, &[]).is_ok());
         assert!(confine_doc_in(&other.join(".claude").join("r.md").to_string_lossy(), &roots, &[]).is_ok());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn retired_agent_instruction_names_are_refused_and_agents_md_is_accepted() {
+        // A retired agent's instruction names stay refused (allowlisted in the Gemini inventory rule).
+        let (file, dir) = ("GEMINI.md".to_string(), ".gemini".to_string());
+        let base = scratch("retired");
+        let root = base.join("root");
+        let other = base.join("other");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(other.join(&dir)).unwrap();
+        fs::write(other.join(&file), "g").unwrap();
+        fs::write(other.join(&dir).join("x.md"), "x").unwrap();
+        fs::write(other.join("AGENTS.md"), "a").unwrap();
+        let roots = [root];
+        assert!(confine_doc_in(&other.join(&file).to_string_lossy(), &roots, &[]).is_err());
+        assert!(confine_doc_in(&other.join(&dir).join("x.md").to_string_lossy(), &roots, &[]).is_err());
+        assert!(confine_doc_in(&other.join("AGENTS.md").to_string_lossy(), &roots, &[]).is_ok());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn write_document_conflict_leaves_file_and_no_tmp() {
+        let base = scratch("wconflict");
+        let doc = base.join("CLAUDE.md");
+        fs::write(&doc, "old").unwrap();
+        let path = doc.to_string_lossy().into_owned();
+        let mtime = stat_document(path.clone()).expect("stat");
+        let err = write_document(path.clone(), "new".into(), mtime.wrapping_add(1)).unwrap_err();
+        assert!(err.starts_with("conflict"), "{err}");
+        assert_eq!(fs::read_to_string(&doc).unwrap(), "old");
+        let ok = write_document(path, "new".into(), mtime).unwrap();
+        assert!(ok > 0);
+        assert_eq!(fs::read_to_string(&doc).unwrap(), "new");
+        let leftovers = fs::read_dir(&base).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().ends_with(".tmp")).count();
+        assert_eq!(leftovers, 0);
         let _ = fs::remove_dir_all(&base);
     }
 }

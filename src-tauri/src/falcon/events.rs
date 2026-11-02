@@ -599,7 +599,7 @@ mod codex_queries_tests {
     fn only_a_codex_session_on_a_codex_query_host_asks() {
         assert!(CodexQueries::for_attach("s1", &cut("claude"), &[CAPABILITY_CODEX_QUERY.into()])
             .is_none());
-        assert!(CodexQueries::for_attach("s1", &cut("gemini"), &[CAPABILITY_CODEX_QUERY.into()])
+        assert!(CodexQueries::for_attach("s1", &cut("acme"), &[CAPABILITY_CODEX_QUERY.into()])
             .is_none(), "an unknown agent asks nothing");
         assert!(CodexQueries::for_attach("s1", &cut("codex"), &[]).is_none(), "an older host");
         assert!(CodexQueries::for_attach("s1", &json!({}), &[CAPABILITY_CODEX_QUERY.into()])

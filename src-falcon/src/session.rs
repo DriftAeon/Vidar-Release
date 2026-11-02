@@ -46,16 +46,9 @@ pub enum AgentDriver {
 }
 
 impl AgentDriver {
-    pub fn claude(params: &crate::protocol::SpawnParams) -> Self {
-        Self::Claude(ClaudeDriver::new(params))
-    }
     #[cfg(test)]
     pub fn codex(params: &crate::protocol::SpawnParams) -> Self {
         Self::Codex(CodexDriver::new(params))
-    }
-    /// A Codex driver carrying the admitted rune payload for its `thread/start`.
-    pub fn codex_with(params: &crate::protocol::SpawnParams, text: Option<String>) -> Self {
-        Self::Codex(CodexDriver::new(params).with_developer_instructions(text))
     }
     pub fn model(&self) -> Option<String> {
         match self {

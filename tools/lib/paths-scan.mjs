@@ -1,7 +1,7 @@
 // Scan for hard-coded layout paths that should go through the paths contract.
-// Whole-literal matches only: a quoted string whose entire content, after separator
-// normalisation (any run of backslashes -> "/"), stripping leading "./" and "../" and a trailing
-// "/", equals a contract id's rel path. A literal built from
+// A quoted string counts when, after separator normalisation (any run of backslashes -> "/"),
+// stripping leading "./" and "../" and a trailing "/", it equals a contract id's rel path, or
+// (multi-segment paths only) contains one, or its stale tail, at segment boundaries. A literal built from
 // pieces ('bridge' joined with 'review') is counted only through its whole-literal parts.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -34,6 +34,42 @@ function normalise(s) {
   return s.replace(/\\+/g, "/").replace(/^(?:\.{1,2}\/)+/, "").replace(/\/$/, "");
 }
 
+// Multi-segment entries are also matched inside a longer literal, at segment boundaries: the full
+// chain ("runtime/bridge/falcon/bundles") and its stale tail, the chain minus the topmost ancestor
+// ("bridge/falcon/bundles", the layout before a parent moved under another). Longest match wins, so
+// a literal carrying the full chain counts once. Single-segment tails are common words: never matched.
+function buildPartials(index) {
+  const out = [];
+  for (const [p, id] of index) {
+    if (p.split("/").length >= 2) out.push([p, id]);
+    let top = id;
+    for (let n = ids()[top]; n && n.under !== "root"; n = ids()[n.under]) top = n.under;
+    const topRel = ids()[top].rel;
+    if (top !== id && p.startsWith(topRel + "/")) {
+      const tail = p.slice(topRel.length + 1);
+      if (tail.split("/").length >= 2 && !index.has(tail)) out.push([tail, id]);
+    }
+  }
+  return out.sort((a, b) => b[0].length - a[0].length);
+}
+const partialsCache = new WeakMap();
+function partialsFor(index) {
+  if (!partialsCache.has(index)) partialsCache.set(index, buildPartials(index));
+  return partialsCache.get(index);
+}
+function findPartial(norm, partials) {
+  for (const [p, id] of partials) {
+    let at = norm.indexOf(p);
+    while (at !== -1) {
+      const before = at === 0 || norm[at - 1] === "/";
+      const after = norm[at + p.length];
+      if (before && (after === undefined || !/[\w.-]/.test(after))) return id;
+      at = norm.indexOf(p, at + 1);
+    }
+  }
+  return undefined;
+}
+
 // path -> id. Contract order wins on a collision.
 function buildIndex() {
   const index = new Map();
@@ -48,7 +84,8 @@ export function scanText(text, index = buildIndex(), counts = new Map()) {
   for (const m of text.matchAll(LITERAL)) {
     if (SPECIFIER.test(text.slice(Math.max(0, m.index - 16), m.index))) continue;
     if (typePosition(text, m.index)) continue;
-    const id = index.get(normalise(m[2]));
+    const norm = normalise(m[2]);
+    const id = index.get(norm) ?? findPartial(norm, partialsFor(index));
     if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   return counts;

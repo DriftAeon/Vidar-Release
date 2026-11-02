@@ -5,9 +5,9 @@ description: Drive a running Vidar from inside one of its tabs. Spawn, prompt, w
 
 # vidar-control
 
-In a Codex Bare tab the vidar_drive MCP tools come first: same ten verbs (`state`, `read`, `show`, `focus`, `prompt`, `spawn`, `ask`, `unpend`, `wait`, `flow`), same cards, same one-line replies, `isError` where the CLI would exit non-zero. MCP `spawn` and `flow start` default `--cwd`
+In a Bare tab the vidar_drive MCP tools (`mcp__vidar_drive__*` in Claude) come first: same ten verbs (`state`, `read`, `show`, `focus`, `prompt`, `spawn`, `ask`, `unpend`, `wait`, `flow`), same cards, same one-line replies, `isError` where the CLI would exit non-zero. MCP `spawn` and `flow start` default `--cwd`
 to the folder the session was launched in and resolves a relative `brief` against it. The CLI below is the fallback
-when those tools are not listed; `<root>` is the folder in the control CLI line of your Vidar instructions.
+when those tools are not listed; `<root>` is the folder in the control CLI line of your Vidar instructions, else the Vidar install folder.
 
 Works from any Vidar tab (PTY or Falcon-hosted). Do not pre-check `VIDAR_TAB` or `FALCON_SESSION`:
 run the verb; outside a tab the CLI itself exits 4 and says so, and that is the check. One bus round trip per
@@ -79,7 +79,7 @@ Quote the script path: a root with spaces breaks an unquoted one.
 
 `flow start` prepares a straight chain with 1-6 Agent nodes and asks for approval on a Run Flow card. The card shows the full Input, every task and execution modifier. Approve saves and starts the frozen graph; returns `started graph=<id> run=<id>`. Deny returns `denied <comment>` with no graph or run. A save failure returns `err save <reason>` and starts nothing; `err flow busy` means another Flow run is live. A template needs one Input source; `--graph` reads JSON with `name`, `nodes`, and `edges`. MCP `flow` takes `action:"start"`, `template_id` plus `input` or `graph`, and optional `cwd`. With `graph`, `input` fills the graph's single Input node `content` field (exactly one Input node; refused when that field already holds different text).
 
-An agent node may carry `"vault":"<Rune Vault id>"`: the vault it loads, which sets its Permission Mode and the exact tool names it may use without asking; unset = its agent's stock vault. The Run Flow card shows each node's Vault, Permission Mode and Allows. An unknown vault, or another agent's stock vault, is refused. A `permission-allowlist` addon is dropped on receipt; every tool request outside the vault's allows queues for approval.
+An agent node may carry `"vault":"<Rune Vault id>"`: the vault it loads, which sets its Permission Mode and the exact tool names it may use without asking. A node with no vault, or one naming an unknown vault, is refused. The Run Flow card shows each node's Vault, Permission Mode and Allows. A `permission-allowlist` addon is dropped on receipt; every tool request outside the vault's allows queues for approval.
 
 A custom graph is a chain Input → 1-6 agents → Output; every key below is required except `x`/`y` (Vidar lays the graph out itself), `subtitle` and `addons`. Unknown keys are refused with the allowed set named. `model` must be a wired model id; ports are `out` → `in`; each agent needs a `task` field. This graph is tested (`tests/fixtures/flow-minimal-graph.json`):
 

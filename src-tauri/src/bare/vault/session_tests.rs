@@ -1,5 +1,5 @@
-//! src-tauri\src\bare\vault\session_tests.rs — L3c: the thread id a session record takes, the stock
-//! vault a read writes, the floor every Custom vault starts from, and the launcher pre-pick file.
+//! src-tauri\src\bare\vault\session_tests.rs — L3c: the thread id a session record takes, what adopt
+//! and the create command start from, and the launcher pre-pick file.
 
 use std::path::{Path, PathBuf};
 
@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::session::{self, VaultPin};
 use super::store::Store;
-use super::{RuneRef, SetSource, Template};
+use super::{SetSource, VaultFrom};
 
 struct TempDir(PathBuf);
 impl TempDir {
@@ -36,32 +36,23 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-fn stock(id: &str) -> RuneRef {
-    RuneRef { library: "stock".into(), id: id.into() }
+fn installed_set() -> SetSource {
+    SetSource { library: "installed".into(), set: "installed".into() }
 }
 
-fn kit_set() -> SetSource {
-    SetSource { library: "kit".into(), set: "kit".into() }
-}
-
-/// A temp root with the fixture `stock` library, `kit` as an import library and a `stock-claude`
-/// template whose floor is the identity rune.
+/// A temp root with the fixture `vidar` library and `installed` as an import library.
 fn root(tag: &str) -> TempDir {
     let t = TempDir::new(tag);
     let fixture = crate::paths::root().join("tests").join("fixtures").join("rune-vault");
-    copy_dir(&fixture.join("stock-runes"), &crate::paths::rune_stock_dir_in(&t.0));
-    copy_dir(&fixture.join("kit"), &crate::paths::rune_imports_dir_in(&t.0).join("kit"));
-    let dir = crate::paths::rune_templates_dir_in(&t.0);
-    std::fs::create_dir_all(&dir).unwrap();
-    let template = Template { version: 1, id: "stock-claude".into(), name: "Stock Claude".into(), runesets: vec![], runes: vec![stock("bare-identity")] };
-    std::fs::write(dir.join("stock-claude.json"), serde_json::to_string(&template).unwrap()).unwrap();
+    copy_dir(&fixture.join("vidar-runes"), &crate::paths::rune_vidar_dir_in(&t.0));
+    copy_dir(&fixture.join("installed"), &crate::paths::rune_imports_dir_in(&t.0).join("installed"));
     t
 }
 
 #[test]
 fn a_record_takes_its_thread_id_once_and_resume_finds_the_vault_by_it() {
     let t = root("thread");
-    let v = Store::open(&t.0).create_custom(&[kit_set()], &[]).unwrap();
+    let v = Store::open(&t.0).create("Pick", None, &[installed_set()], &[]).unwrap();
     let mut r = session::record("claude", "rendered", "tab-1", VaultPin { id: v.id.clone(), hash: v.hash.clone() }, "", "");
     r.falcon_session = Some("s-0001".into());
     session::write(&t.0, &r).unwrap();
@@ -85,7 +76,7 @@ fn a_record_takes_its_thread_id_once_and_resume_finds_the_vault_by_it() {
 #[test]
 fn a_thread_id_never_lands_on_another_sessions_record() {
     let t = root("thread-wrong");
-    let v = Store::open(&t.0).create_custom(&[kit_set()], &[]).unwrap();
+    let v = Store::open(&t.0).create("Pick", None, &[installed_set()], &[]).unwrap();
     let mut hosted = session::record("codex", "hosted", "tab-1", VaultPin { id: v.id.clone(), hash: v.hash.clone() }, "", "");
     hosted.falcon_session = Some("s-0001".into());
     session::write(&t.0, &hosted).unwrap();
@@ -114,60 +105,52 @@ fn the_thread_id_comes_from_claude_init_or_falcon_thread_only() {
 }
 
 #[test]
-fn reading_a_stock_vault_before_any_launch_writes_it_from_the_template() {
-    let t = root("stock-read");
+fn a_base_id_is_no_vault_and_a_read_never_creates_one() {
+    let t = root("base-read");
     let s = Store::open(&t.0);
-    assert!(s.get("stock-claude").is_err(), "no stock launch yet");
-    let view = super::read_view(&s, "stock-claude", None).unwrap();
-    assert_eq!(view.vault.runes, vec![stock("bare-identity")]);
-    assert!(s.get("stock-claude").is_ok());
-    assert!(super::read_view(&s, "custom-none00", None).is_err(), "a non-stock id is never created by a read");
+    assert!(s.get("base-main").is_err());
+    assert!(super::read_view(&s, Some("base-main"), None).is_err(), "no vault is written from a read");
+    assert!(s.get("base-main").is_err());
+    assert!(super::read_view(&s, Some("custom-none00"), None).is_err(), "a read never creates a vault");
 }
 
 #[test]
-fn an_adopted_session_and_a_set_pick_start_from_the_stock_floor() {
+fn adopt_yields_the_vidar_runeset_then_the_echoed_sets() {
     let t = root("floor");
-    let a = session::adopt(&t.0, "claude", "t-old", "s-old-0001", &[kit_set()]).unwrap();
+    let a = session::adopt(&t.0, "claude", "t-old", "s-old-0001", &[installed_set()]).unwrap();
     let v = Store::open(&t.0).get(&a.vault.id).unwrap();
-    assert!(v.runes.contains(&stock("bare-identity")), "the adopted vault lacks the identity rune: {:?}", v.runes);
-    assert_eq!(v.runesets.iter().map(|c| c.source.clone()).collect::<Vec<_>>(), vec![kit_set()]);
-    // A pick that repeats a floor rune is deduped, so it is the same Custom vault.
-    let again = super::floored_custom(&t.0, "claude", &[kit_set()], &[stock("bare-identity")]).unwrap();
-    assert_eq!(again.id, v.id);
-    assert_eq!(again.runes, vec![stock("bare-identity")]);
-    // No `stock-codex.json`: the pick refuses rather than building a vault without its floor.
-    let e = super::floored_custom(&t.0, "codex", &[kit_set()], &[]).unwrap_err();
-    assert_eq!(e, "Stock Template Missing: stock-codex");
+    let vidar = SetSource { library: "vidar".into(), set: "vidar".into() };
+    assert_eq!(v.runesets.iter().map(|c| c.source.clone()).collect::<Vec<_>>(), vec![vidar.clone(), installed_set()]);
+    // The Vidar Runeset is deduped when the echo repeats it, and every adopt is a new copy with the same hash.
+    let again = super::create_at(&t.0, None, None, &[vidar, installed_set()], &[]).unwrap();
+    assert_ne!(again.id, v.id);
+    assert_eq!(again.hash, v.hash);
 }
 
 #[test]
-fn the_create_command_floors_every_custom_vault_and_refuses_without_an_agent_or_template() {
+fn the_create_command_starts_every_unnamed_vault_from_the_blank() {
     let t = root("create-floor");
-    // A bare pick through the command path gets the floor's identity rune.
-    let v = super::create_at(&t.0, None, None, &[kit_set()], &[], Some("claude")).unwrap();
-    assert!(v.runes.contains(&stock("bare-identity")), "an unfloored Custom vault: {:?}", v.runes);
-    // The launcher's pre-floored pick is the same vault.
-    let again = super::create_at(&t.0, None, None, &[kit_set()], &[stock("bare-identity")], Some("claude")).unwrap();
-    assert_eq!(again.id, v.id);
-    assert_eq!(super::create_at(&t.0, None, None, &[kit_set()], &[], Some("codex")).unwrap_err(), "Stock Template Missing: stock-codex");
-    for agent in [None, Some("..\\x")] {
-        assert!(super::create_at(&t.0, None, None, &[kit_set()], &[], agent).is_err(), "{agent:?}");
-    }
+    let v = super::create_at(&t.0, None, None, &[installed_set()], &[]).unwrap();
+    assert_eq!(v.runesets.first().map(|c| (c.source.library.as_str(), c.source.set.as_str())), Some(("vidar", "vidar")));
+    let bare = super::create_at(&t.0, None, None, &[], &[]).unwrap();
+    assert_eq!(bare.runesets.len(), 1, "the blank vault holds only the Vidar Runeset");
+    // `from` a vault at a hash starts a copy of that vault
+    let from = VaultFrom::Vault { vault: v.id.clone(), hash: v.hash.clone() };
+    let of_v = super::create_at(&t.0, None, Some(from), &[], &[]).unwrap();
+    assert!(of_v.id.starts_with("copy-") && of_v.hash == v.hash);
 }
 
 #[test]
-fn a_grok_agent_is_refused_at_every_vault_boundary_and_nothing_is_written() {
+fn a_grok_agent_is_refused_at_adopt_and_nothing_is_written() {
     let t = root("grok");
-    assert!(session::adopt(&t.0, "grok", "t-g", "s-g-0001", &[kit_set()]).unwrap_err().contains("\"grok\""));
-    assert!(super::floored_custom(&t.0, "grok", &[kit_set()], &[]).unwrap_err().contains("\"grok\""));
-    assert!(super::create_at(&t.0, None, None, &[kit_set()], &[], Some("grok")).is_err());
+    assert!(session::adopt(&t.0, "grok", "t-g", "s-g-0001", &[installed_set()]).unwrap_err().contains("\"grok\""));
     assert!(std::fs::read_dir(crate::paths::rune_vaults_dir_in(&t.0)).map_or(true, |mut d| d.next().is_none()), "a vault was written for grok");
 }
 
 #[test]
 fn adopt_keeps_each_known_agents_body() {
     let t = root("bodies");
-    assert_eq!(session::adopt(&t.0, "claude", "t-a", "s-a-0001", &[kit_set()]).unwrap().body, "rendered");
+    assert_eq!(session::adopt(&t.0, "claude", "t-a", "s-a-0001", &[installed_set()]).unwrap().body, "rendered");
 }
 
 #[test]
@@ -175,11 +158,11 @@ fn the_pre_pick_survives_a_relaunch_through_the_defaults_file() {
     let t = TempDir::new("defaults");
     assert!(super::read_defaults(&t.0).is_empty());
     super::write_default(&t.0, "claude", "custom-abc123").unwrap();
-    super::write_default(&t.0, "codex", "stock-codex").unwrap();
+    super::write_default(&t.0, "codex", "custom-def456").unwrap();
     super::write_default(&t.0, "claude", "mine").unwrap();
     let d = super::read_defaults(&t.0);
     assert_eq!(d.get("claude").map(String::as_str), Some("mine"));
-    assert_eq!(d.get("codex").map(String::as_str), Some("stock-codex"));
+    assert_eq!(d.get("codex").map(String::as_str), Some("custom-def456"));
     assert!(super::write_default(&t.0, "claude", "..\\x").is_err());
     assert!(super::write_default(&t.0, "a b", "mine").is_err());
 }

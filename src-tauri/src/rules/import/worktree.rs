@@ -23,7 +23,7 @@ pub fn roots(dir: &Path) -> Option<(PathBuf, PathBuf)> {
 /// the main copy exists; otherwise `path` unchanged.
 pub fn main_copy(path: &Path, worktree: &Path, main: &Path) -> PathBuf {
     let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
-    if name != "claude.md" && name != "agents.md" {
+    if !crate::agent_spec::ALL.iter().any(|a| name == crate::agent_spec::spec(*a).instructions_file.to_lowercase()) {
         return path.to_path_buf();
     }
     let norm = |p: &Path| p.to_string_lossy().replace('/', "\\");

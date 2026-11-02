@@ -8,7 +8,6 @@
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader};
-use std::os::windows::process::CommandExt;
 use std::process::{ChildStderr, ChildStdout, Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
@@ -19,8 +18,6 @@ use serde_json::Value;
 use crate::listen::WakewordCfg;
 use crate::proc_job::JobChild;
 use crate::voice_slots::Resolved;
-
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum SidecarEvent {
@@ -80,8 +77,7 @@ pub(crate) fn spawn(wake: &Resolved, cfg: &WakewordCfg) -> Result<JobChild, Stri
     cmd.args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
+        .stderr(Stdio::piped());
     JobChild::spawn(&mut cmd)
         .map_err(|e| format!("{}: Cannot Run {}: {e}", wake.adapter, wake.command.display()))
 }

@@ -14,7 +14,7 @@ const { initPtyEvents } = await import("../src/panels/sessions/pty-events.ts");
 initTabState();
 
 test("Raw agent status describes the PTY lifecycle without inventing approval or failure", () => {
-  for (const agent of ["claude", "codex", "gemini", "pi"]) {
+  for (const agent of ["claude", "codex", "pi"]) {
     assert.deepEqual(deriveRaw(agent, true), { phase: "ready", reason: null, tool: null });
     assert.deepEqual(deriveRaw(agent, false), { phase: "dead", reason: null, tool: null });
   }
@@ -36,7 +36,7 @@ test("PTY exit clears green and later metadata cannot revive the terminal", () =
 
 test("stale exits preserve green; an exit before the spawn reply stays stopped", async () => {
   const button = document.createElement("button");
-  const s = { id: "raw-gemini", agent: "gemini", body: "terminal", alive: true,
+  const s = { id: "raw-pi-stale", agent: "pi", body: "terminal", alive: true,
     ptyGen: 2, button, term: { write() {} } };
   const tabs = new Map([[s.id, s]]);
   let exits = 0;

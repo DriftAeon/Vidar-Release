@@ -1,6 +1,6 @@
 //! Flow nodes on their Rune Vault's home: every agent node spawns on the home
 //! its vault builds (`bare/flow_vault.rs`), the way a Rendered tab does, with the vault's payload,
-//! plugins and MCP file and nothing of Flow's own. An unset vault is the agent's stock vault.
+//! plugins and MCP file and nothing of Flow's own. An unset vault is refused.
 //! The envs are built from the allowlist (`bare/env.rs`), so no inherited `ANTHROPIC_*` or
 //! `CODEX_*` rides along.
 //!
@@ -17,9 +17,10 @@ use std::sync::{Arc, Mutex};
 
 use crate::agent_spec::{self, Agent};
 use crate::bare::Env;
+use crate::proc_job::SpawnExt;
 
 use super::child::{lock, RunnerSpec};
-use super::env::{EnvPlan, CLAUDE_MODELS};
+use super::env::{EnvPlan, FIRST_PARTY_MODELS};
 
 /// u1's string, verbatim.
 const NO_LOGIN: &str = "Sign in from a Bare tab";
@@ -38,25 +39,32 @@ pub(super) enum Need {
     Gateway,
 }
 
-/// The agent a backend runs: `sdk` is the Claude sidecar, anything else is an agent id that parses
-/// and has a Flow adapter. An id Vidar does not know, or knows without an adapter, is `None` (the
-/// node refuses).
-pub(super) fn agent_of(backend: &str) -> Option<Agent> {
-    match backend {
-        "sdk" => Some(super::claude::agent()),
-        other => agent_spec::parse(other).filter(|a| need_for(*a, "").is_some() && *a != super::claude::agent()),
+/// The backend word a node carries for an agent: the sidecar agent's is `sdk`, the app-server agent's
+/// is its id.
+fn backend_of(agent: Agent) -> &'static str {
+    match agent {
+        Agent::Claude => "sdk",
+        Agent::Codex => agent.as_str(),
     }
 }
 
-/// What the agent's node needs from its home; `None` for an agent Flow has no adapter for (never
-/// treated as another agent).
-pub(super) fn need_for(agent: Agent, model: &str) -> Option<Need> {
-    if agent == super::claude::agent() {
-        Some(if CLAUDE_MODELS.contains(&model) { Need::Claude } else { Need::Gateway })
-    } else if agent == super::codex::agent() {
-        Some(Need::Codex)
-    } else {
-        None
+/// The agent a backend runs. A word no agent's node carries is `None` (the node refuses).
+pub(super) fn agent_of(backend: &str) -> Option<Agent> {
+    agent_spec::ALL.into_iter().find(|a| backend_of(*a) == backend)
+}
+
+/// What the agent's node needs from its home. Every agent has a Flow adapter; a new one fails to
+/// compile here until it gets one.
+pub(super) fn need_for(agent: Agent, model: &str) -> Need {
+    match agent {
+        Agent::Claude => {
+            if FIRST_PARTY_MODELS.contains(&model) {
+                Need::Claude
+            } else {
+                Need::Gateway
+            }
+        }
+        Agent::Codex => Need::Codex,
     }
 }
 
@@ -91,18 +99,24 @@ pub(super) fn check_once<T>(
 
 /// A Claude-model node needs the login in its vault home's config dir; a gateway node needs none.
 pub(super) fn verify_login(config_dir: &Path, need: Need) -> Result<(), String> {
-    if need == Need::Claude && !config_dir.join(CLAUDE_LOGIN).is_file() {
-        return Err(NO_LOGIN.to_string());
+    match need {
+        Need::Claude => match config_dir.join(CLAUDE_LOGIN).is_file() {
+            true => Ok(()),
+            false => Err(NO_LOGIN.to_string()),
+        },
+        Need::Codex | Need::Gateway => Ok(()),
     }
-    Ok(())
 }
 
 /// Adds `warning` to a spec's warnings (the node still spawns).
 pub(super) fn add_warning(spec: &mut RunnerSpec, warning: String) {
     match spec {
-        RunnerSpec::Claude { warnings, .. } => warnings.push(warning),
-        RunnerSpec::Codex { bare: Some(b), .. } => b.warnings.push(warning),
-        RunnerSpec::Codex { bare: None, .. } => {}
+        RunnerSpec::Sidecar { warnings, .. } => warnings.push(warning),
+        RunnerSpec::AppServer { bare, .. } => {
+            if let Some(b) = bare {
+                b.warnings.push(warning);
+            }
+        }
     }
 }
 
@@ -110,10 +124,7 @@ pub(super) fn add_warning(spec: &mut RunnerSpec, warning: String) {
 /// (`CONTEXT_GATE`, a gateway's `ANTHROPIC_*`). The plan's `remove` list is moot: nothing is
 /// inherited.
 pub(super) fn apply_claude_env(cmd: &mut Command, env: &Env, plan: &EnvPlan) {
-    cmd.env_clear();
-    for (k, v) in env.iter() {
-        cmd.env(k, v);
-    }
+    cmd.exact_env(env.iter());
     for (k, v) in &plan.set {
         cmd.env(k, v);
     }
@@ -126,8 +137,9 @@ pub(super) fn apply_claude_env(cmd: &mut Command, env: &Env, plan: &EnvPlan) {
 /// A Codex node's spawn inputs: the env (with `VIDAR_CTL_TOKEN`), `node`, the per-spawn `-c`
 /// overrides, the vault's instructions and the warnings.
 pub(super) struct BareCodex {
-    /// Also in `env` as `VIDAR_CTL_TOKEN`; flow.rs registers it for the node's lifetime.
-    pub(super) ctl_token: String,
+    /// Also in `env` as `VIDAR_CTL_TOKEN`; flow.rs registers it for the node's lifetime. `None` when the
+    /// vault has no `ctl: yes` rune.
+    pub(super) ctl_token: Option<String>,
     pub(super) env: Env,
     pub(super) node: PathBuf,
     pub(super) args: Vec<String>,
@@ -136,39 +148,13 @@ pub(super) struct BareCodex {
     pub(super) warnings: Vec<String>,
 }
 
-/// Production: the Codex app-server on the home `vault` builds for `tab` (`bare/flow_vault.rs`).
-/// `cwd` gets the trust table when the user's config trusts it.
-pub(super) fn codex_spec(ctl_token: &str, cwd: &str, vault: &str, tab: &str) -> Result<RunnerSpec, String> {
-    let n = crate::bare::flow_vault::codex_node(vault, tab, cwd, ctl_token)?;
-    Ok(codex_spec_from(n, ctl_token))
-}
-
-pub(super) fn codex_spec_from(n: crate::bare::flow_vault::CodexNode, ctl_token: &str) -> RunnerSpec {
-    RunnerSpec::Codex {
-        js: n.js,
-        home: Some(n.home),
-        bare: Some(BareCodex {
-            ctl_token: ctl_token.to_string(),
-            env: n.env,
-            node: n.node,
-            args: n.args,
-            instructions: n.instructions,
-            warnings: n.warnings,
-        }),
-    }
-}
-
-/// The control token a spec's node carries (Bare Codex nodes only).
+/// The control token a spec's node carries: a Claude node's `VIDAR_CTL_TOKEN` env entry, or a Bare Codex
+/// node's minted token.
 pub(super) fn ctl_token_of(spec: &RunnerSpec) -> Option<String> {
     match spec {
-        RunnerSpec::Codex { bare: Some(b), .. } => Some(b.ctl_token.clone()),
-        _ => None,
+        RunnerSpec::Sidecar { env, .. } => env.as_ref().and_then(|e| e.get("VIDAR_CTL_TOKEN")).map(|t| t.to_string_lossy().into_owned()),
+        RunnerSpec::AppServer { bare, .. } => bare.as_ref().and_then(|b| b.ctl_token.clone()),
     }
-}
-
-/// A fresh control token for one Codex node (16 OS-random bytes, hex).
-pub(super) fn mint_ctl_token() -> Result<String, String> {
-    crate::control::secrets::mint()
 }
 
 /// The policy tab id a Flow node's control token is registered under.
@@ -191,19 +177,18 @@ mod tests {
     fn need_follows_agent_and_model() {
         let (claude, other) = (agent_of("sdk").unwrap(), agent_of(agent_spec::ALL[1].as_str()).unwrap());
         assert_ne!(claude, other);
-        assert_eq!(need_for(other, "codex-default"), Some(Need::Codex));
-        assert_eq!(need_for(claude, "claude-opus-5-5"), Some(Need::Claude));
-        assert_eq!(need_for(claude, "some-gateway-model"), Some(Need::Gateway));
+        assert_eq!(need_for(other, "codex-default"), Need::Codex);
+        assert_eq!(need_for(claude, "claude-opus-5-5"), Need::Claude);
+        assert_eq!(need_for(claude, "some-gateway-model"), Need::Gateway);
         assert_eq!(agent_of("not-an-agent"), None, "an unknown agent refuses");
     }
 
     #[test]
-    fn an_agent_without_a_flow_adapter_is_refused_not_run_as_another() {
-        let (claude, codex) = (super::super::claude::agent(), super::super::codex::agent());
+    fn a_backend_word_names_one_agent_and_the_sidecar_agent_has_no_id_backend() {
+        let sidecar = agent_of("sdk").unwrap();
         for a in agent_spec::ALL {
-            let adapted = a == claude || a == codex;
-            assert_eq!(need_for(a, "claude-opus-5-5").is_some(), adapted, "{}", a.as_str());
-            assert_eq!(agent_of(a.as_str()).is_some(), a == codex, "{}", a.as_str());
+            assert_eq!(agent_of(backend_of(a)), Some(a), "{}", a.as_str());
+            assert_eq!(agent_of(a.as_str()).is_some(), a != sidecar, "{}", a.as_str());
         }
     }
 
@@ -265,11 +250,12 @@ mod tests {
             home: PathBuf::from(r"C:\home\codex-home"),
             instructions: Some("rune text".into()),
             warnings: vec!["login note".into()],
+            ctl_token: Some("tok123".into()),
         };
-        let mut spec = codex_spec_from(n, "tok123");
+        let mut spec = super::super::codex::spec_from(n);
         add_warning(&mut spec, "dropped".into());
         assert_eq!(ctl_token_of(&spec).as_deref(), Some("tok123"));
-        let RunnerSpec::Codex { home, bare: Some(b), .. } = spec else { panic!("a Codex spec") };
+        let RunnerSpec::AppServer { home, bare: Some(b), .. } = spec else { panic!("a Codex spec") };
         assert_eq!(home.as_deref(), Some(Path::new(r"C:\home\codex-home")));
         assert_eq!(b.env.get("VIDAR_CTL_TOKEN").and_then(|v| v.to_str()), Some("tok123"));
         assert_eq!(b.instructions.as_deref(), Some("rune text"));

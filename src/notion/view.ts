@@ -3,6 +3,7 @@
 // so its scroll and filters are kept; the data-source browser is built on drill-in and disposed on Back,
 // and focus returns to its row. The token is read from its field once, on submit, and the field is emptied
 // at once. Remote text goes in through textContent or title only.
+import { el, iconBtn, textBtn } from "../dom";
 import { iconImg } from "../icon-img";
 import { lucide } from "../icons";
 import { brandIcon, buildEmptyState, connectActions } from "../panels/empty-state";
@@ -55,28 +56,14 @@ export interface NotionView {
   dispose(): void;
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  n.className = cls;
-  if (text !== undefined) n.textContent = text;
-  return n;
-}
-
-function iconBtn(icon: Node, tip: string, run: () => void): HTMLButtonElement {
-  const b = el("button", "nt-ico");
-  b.type = "button";
-  b.title = tip;
-  b.setAttribute("aria-label", tip);
-  b.append(icon);
+/** Wires a click on a button built with the dom.ts helpers. */
+function onClick(b: HTMLButtonElement, run: () => void): HTMLButtonElement {
   b.addEventListener("click", () => run());
   return b;
 }
 
-function textBtn(label: string, cls: string, run: () => void): HTMLButtonElement {
-  const b = el("button", cls, label);
-  b.type = "button";
-  b.addEventListener("click", () => run());
-  return b;
+function icoBtn(icon: Node, tip: string, run: () => void): HTMLButtonElement {
+  return onClick(iconBtn(icon, tip, tip, "nt-ico"), run);
 }
 
 interface Level {
@@ -152,14 +139,14 @@ export function buildNotionView(h: Handlers, topAdapter: Adapter): NotionView {
   token.autocomplete = "new-password";
   field.append(el("span", "nt-field-label", "Token"), token);
   // personal token first: it reads what its owner can open, with no per-page sharing
-  const link = textBtn("Create a Personal Token", "nt-link", () => h.openTokens());
+  const link = onClick(textBtn("Create a Personal Token", "nt-link"), () => h.openTokens());
   const formNote = el("span", "nt-sub");
   formNote.textContent = "Create a personal access token with the Notion API capability, then paste it. A connection token also works but reads only the pages you share with it. Either is kept in Windows Credential Manager, never in vidar.json."; // note-ok: user, 2026-10-22
-  const connLink = textBtn("Use a Connection Instead", "nt-link", () => h.openConnections());
+  const connLink = onClick(textBtn("Use a Connection Instead", "nt-link"), () => h.openConnections());
   const formActs = el("div", "nt-actions wb-actions");
   const connect = el("button", "nt-primary wb-card-btn wb-card-btn-primary", "Connect");
   connect.type = "submit";
-  const cancel = textBtn("Cancel", "nt-cancel wb-card-btn",() => h.cancel());
+  const cancel = onClick(textBtn("Cancel", "nt-cancel wb-card-btn"), () => h.cancel());
   formActs.append(connect, cancel);
   form.append(el("div", "nt-form-title", "Connect Notion"), formErr, field, link, formNote, connLink, formActs);
   form.addEventListener("submit", (e) => {
@@ -171,8 +158,8 @@ export function buildNotionView(h: Handlers, topAdapter: Adapter): NotionView {
 
   // top level: workspace, count, Refresh, Disconnect
   const ws = el("span", "nt-head-title jx-site pane-head-card");
-  const top = buildLevel(topAdapter, [ws], [iconBtn(iconImg("disconnect"), "Disconnect", () => h.disconnect())],
-    iconBtn(iconImg("refresh"), "Refresh", () => h.refresh()));
+  const top = buildLevel(topAdapter, [ws], [icoBtn(iconImg("disconnect"), "Disconnect", () => h.disconnect())],
+    icoBtn(iconImg("refresh"), "Refresh", () => h.refresh()));
   root.append(notice, form, top.browser.root);
 
   let src: (Level & { id: string; adapter: Adapter; title: HTMLElement }) | null = null;
@@ -189,8 +176,8 @@ export function buildNotionView(h: Handlers, topAdapter: Adapter): NotionView {
   function openSource(s: SourceState): void {
     closeSource();
     const title = el("span", "nt-head-title jx-site pane-head-card");
-    const back = iconBtn(lucide("arrow-left"), "Back to Notion", () => h.back());
-    const L = buildLevel(s.adapter, [back, title], [], iconBtn(iconImg("refresh"), "Refresh", () => h.refresh()));
+    const back = icoBtn(lucide("arrow-left"), "Back to Notion", () => h.back());
+    const L = buildLevel(s.adapter, [back, title], [], icoBtn(iconImg("refresh"), "Refresh", () => h.refresh()));
     L.browser.root.tabIndex = -1;
     root.appendChild(L.browser.root);
     src = { ...L, id: s.id, adapter: s.adapter, title };

@@ -3,16 +3,13 @@ import { label } from "../../format";
 
 export type RuneState = "off" | "on" | "shadow";
 
-export interface StatefulRune { on: boolean; state?: RuneState; required?: boolean; addable?: boolean }
+export interface StatefulRune { on: boolean; state?: RuneState; required?: boolean }
 
 export const REQUIRED_TIP = "Required: can't be turned off or shadowed in any set.";
 export const SHADOW_TIP = "Shadow: listed in the launch manifest, not loaded.";
 
-export const runeState = (rune: StatefulRune, overrideOff = false): RuneState =>
-  rune.required ? "on" : overrideOff ? "off" : rune.state ?? (rune.on ? "on" : "off");
-
-export const nextRuneState = (state: RuneState, addable = false): RuneState =>
-  state === "off" ? "on" : state === "on" && !addable ? "shadow" : "off";
+export const nextRuneState = (state: RuneState): RuneState =>
+  state === "off" ? "on" : state === "on" ? "shadow" : "off";
 
 export const stateLabel = (state: RuneState): string => `State: ${label(state)}`;
 

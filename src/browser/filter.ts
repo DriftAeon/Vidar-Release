@@ -2,6 +2,8 @@
 // buckets, and the sanitiser for the persisted selection (`browser.filters`). Pure, no DOM; a leaf module
 // so it takes only type imports. prefs-core stores `browser.filters` unsanitised: the shell calls
 // `cleanFilters` on read and `writeSource` then `cleanFilters` before every set.
+// @ts-ignore TS5097: node --test loads this pure module directly
+import { jsonBytes } from "../json.ts";
 import type { Facet, Item } from "./types";
 
 /** Facet id -> selected values. */
@@ -103,8 +105,6 @@ function cleanSelection(v: unknown): Selection | null {
   return entries.length ? Object.fromEntries(entries) : null;
 }
 
-const bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
-
 /** Sanitise on read and on write. One bad facet drops alone; a bad source drops alone. Over 50 sources, or over
  *  64 KB serialised, the oldest-written source keys (earliest in insertion order) drop first. Non-objects read {}. */
 export function cleanFilters(raw: unknown): Filters {
@@ -115,7 +115,7 @@ export function cleanFilters(raw: unknown): Filters {
     if (sel) entries.push([src, sel]);
   }
   if (entries.length > MAX_SOURCES) entries = entries.slice(entries.length - MAX_SOURCES);
-  while (entries.length > 0 && bytes(Object.fromEntries(entries)) > MAX_FILTER_BYTES) entries.shift();
+  while (entries.length > 0 && jsonBytes(Object.fromEntries(entries)) > MAX_FILTER_BYTES) entries.shift();
   return Object.fromEntries(entries);
 }
 

@@ -1,5 +1,5 @@
-//! Jira Issues bench tab (docs/projects/jira/issues-tab-plan.md). `http` is the WinHTTP
-//! transport behind the `Transport` seam; `api` builds the search request and maps the reply;
+//! Jira Issues bench tab (docs/projects/jira/issues-tab-plan.md). `http` is the Basic-auth
+//! `Client` over the shared `net::Transport` seam; `api` builds the search request and maps the reply;
 //! `config` validates vidar.json `jira`; `vault` keeps the token in Credential Manager;
 //! `jql` composes scope plus filters into JQL; `commands` are the Tauri commands: `jira_status`,
 //! `jira_connect`, `jira_disconnect`, `jira_issues`,`jira_types`, `jira_projects`, `jira_issue`,

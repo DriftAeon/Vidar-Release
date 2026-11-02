@@ -3,19 +3,16 @@
 //! accepts both `REG_SZ` and `REG_EXPAND_SZ`, so a key set via the System Properties dialog,
 //! or by a vendor installer that writes `REG_EXPAND_SZ`, still reads back.
 
-use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 
-/// Same flag every spawning module in this crate sets: without it, `reg query` flashes
-/// a console window.
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+use crate::proc_job::SpawnExt;
 
 /// Reads one value out of `HKCU\Environment` by name. `None` on any failure to spawn,
 /// a non-zero exit (value not set) or a value that doesn't parse.
 pub fn registry_value(name: &str) -> Option<String> {
     let output = Command::new("reg")
         .args(["query", "HKCU\\Environment", "/v", name])
-        .creation_flags(CREATE_NO_WINDOW)
+        .quiet()
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()

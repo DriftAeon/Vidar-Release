@@ -4,8 +4,6 @@
 //! repeat reads from here. The list and the wire parse live on `Agent` in protocol.rs. Host-compiled
 //! Falcon files never reference this module.
 //! `tests/agent-ids-parity.test.mjs` pins `ALL`, `AGENT_IDS` and the `protocol.rs` variants to one list.
-// read by M1 D2-D4c
-#![allow(dead_code)]
 
 pub(crate) use crate::falcon::Agent;
 
@@ -34,11 +32,36 @@ pub struct Carries {
     pub model: Option<&'static str>,
     pub plugin: Option<&'static str>,
     pub output_style: Option<&'static str>,
+    /// The settings file (`kind: setting`); both agents carry one.
+    pub setting: Option<&'static str>,
+    /// Switches the agent's own skills and plugins off from what a vault left unplaced
+    /// (`bare::builtin_off`): settings keys for Claude, a config block for Codex.
+    pub builtin_off: fn(&crate::bare::set_loadout::BuiltIns, &[String]) -> crate::bare::builtin_off::BuiltInWrite,
     /// Called once with an item's whole list and mode (`rune_items::map_item`), or as
     /// `(&[entry], None)` per entry and `(&[], Some(mode))` once (`set_loadout`'s post-pass).
     pub permission: fn(entries: &[String], mode: Option<&str>) -> PermissionCarry,
     /// A hook's event and matcher the agent cannot run, as the reason; `None` = carried.
     pub guard: fn(event: &str, matcher: Option<&str>) -> Option<String>,
+}
+
+impl Carries {
+    /// The one kind-indexed lookup (E5): `Some(Some(reason))` when this agent does not carry the item kind,
+    /// `Some(None)` when it does, and `None` for a name that is no item kind. A permission and a hook are
+    /// carried per entry and event (`permission`, `guard`), so they read as carried here.
+    #[cfg_attr(not(test), allow(dead_code))] // only the table test below walks the kinds through it
+    pub fn of(&self, kind: &str) -> Option<Option<&'static str>> {
+        Some(match kind {
+            "skill" => self.skill,
+            "agent" => self.agent,
+            "mcp" => self.mcp,
+            "model" => self.model,
+            "plugin" => self.plugin,
+            "output-style" => self.output_style,
+            "setting" => self.setting,
+            "permission" | "hook" => None,
+            _ => return None,
+        })
+    }
 }
 
 pub struct AgentSpec {
@@ -65,6 +88,32 @@ pub struct AgentSpec {
     pub gen_dir: &'static str,
     /// The agent's project instructions file name.
     pub instructions_file: &'static str,
+    /// The personal-override instructions file beside it, when the agent reads one.
+    pub local_instructions_file: Option<&'static str>,
+    /// The agent's per-user folder under the home directory (`~/.claude`). Not `config_dir`, which is the
+    /// folder inside a Bare home.
+    pub user_dir: &'static str,
+    /// The npm package its pack updates from (`content/packs/<id>/pack.json` `update.package`).
+    pub npm_package: Option<&'static str>,
+    /// The command names a shell line may start with; the first is the bare `as_str` name.
+    pub commands: &'static [&'static str],
+    /// The prefix of the agent's model ids, when it has one.
+    pub model_prefix: Option<&'static str>,
+    /// Whether a Bare spawn of this agent rides a launcher row key (`bare::admit_row_key`); a key on an
+    /// agent that does not is refused.
+    pub rides_row_key: bool,
+    /// The session record body a Falcon adopt with no record writes (`vault::session::adopt`).
+    pub adopt_body: &'static str,
+    /// Whether a plain (profile-less) Rendered spawn mints a control secret; a Bare one follows `bare::ctl_for`.
+    pub plain_rendered_mints: bool,
+    /// The top-level keys the agent's setting rune file must hold (dotted for a TOML table): a file
+    /// missing one refuses the spawn. Claude's are the keys `home::validate` compares plus the three
+    /// built-in switches; Codex's are the keys `validate_codex_with` pins plus `notify` and `analytics`.
+    pub setting_keys: &'static [&'static str],
+    /// Reads the setting file (rune id, path, `setting_keys`) and refuses one missing a key.
+    pub check_setting: fn(&str, &std::path::Path, &[&str]) -> Result<(), String>,
+    /// Prepares a Raw (PTY) bare launch: the launch folder in, the folder and the launch out.
+    pub raw_prepare: crate::pty::RawPrepare,
     pub carries: Carries,
 }
 
@@ -110,6 +159,30 @@ static CLAUDE: AgentSpec = AgentSpec {
     login_record: Some("claude"),
     gen_dir: "gen-claude",
     instructions_file: "CLAUDE.md",
+    local_instructions_file: Some("CLAUDE.local.md"),
+    user_dir: ".claude",
+    npm_package: Some("@anthropic-ai/claude-code"),
+    commands: &["claude", "claude.exe"],
+    model_prefix: Some("claude-"),
+    rides_row_key: false,
+    adopt_body: "rendered",
+    plain_rendered_mints: true,
+    setting_keys: &[
+        "autoMemoryEnabled",
+        "claudeMdExcludes",
+        "disableClaudeAiConnectors",
+        "hooks",
+        "permissions",
+        "pluginConfigs",
+        "statusLine",
+        "syncClaudeAiPlugins",
+        "syncClaudeAiSkills",
+        "skillOverrides",
+        "disableBundledSkills",
+        "enabledPlugins",
+    ],
+    check_setting: crate::bare::home::check_settings_keys,
+    raw_prepare: crate::pty::raw_prepare_claude,
     carries: Carries {
         skill: None,
         agent: None,
@@ -117,6 +190,8 @@ static CLAUDE: AgentSpec = AgentSpec {
         model: None,
         plugin: None,
         output_style: None,
+        setting: None,
+        builtin_off: crate::bare::builtin_off::settings_keys_for,
         permission: claude_permission,
         guard: claude_guard,
     },
@@ -135,6 +210,35 @@ static CODEX: AgentSpec = AgentSpec {
     login_record: Some("codex"),
     gen_dir: "gen-codex",
     instructions_file: "AGENTS.md",
+    local_instructions_file: None,
+    user_dir: ".codex",
+    npm_package: Some("@openai/codex"),
+    commands: &["codex", "codex.exe", "codex.cmd", "codex.ps1"],
+    model_prefix: None,
+    rides_row_key: true,
+    adopt_body: "hosted",
+    plain_rendered_mints: false,
+    setting_keys: &[
+        "project_doc_max_bytes",
+        "project_root_markers",
+        "developer_instructions",
+        "notify",
+        "sandbox_mode",
+        "suppress_unstable_features_warning",
+        "cli_auth_credentials_store",
+        "mcp_oauth_credentials_store",
+        "skills.include_instructions",
+        "windows.sandbox",
+        "sandbox_workspace_write.writable_roots",
+        "sandbox_workspace_write.network_access",
+        "sandbox_workspace_write.exclude_tmpdir_env_var",
+        "sandbox_workspace_write.exclude_slash_tmp",
+        "analytics.enabled",
+        "features.daemon_auto_start",
+        "features.prefer_mxc",
+    ],
+    check_setting: crate::bare::home::check_config_keys,
+    raw_prepare: crate::pty::raw_prepare_codex,
     carries: Carries {
         skill: None,
         agent: None,
@@ -142,6 +246,8 @@ static CODEX: AgentSpec = AgentSpec {
         model: None,
         plugin: Some("Codex has no plugins"),
         output_style: Some("Codex has no output style"),
+        setting: None,
+        builtin_off: crate::bare::builtin_off::config_block,
         permission: codex_permission,
         guard: codex_guard,
     },
@@ -162,6 +268,29 @@ mod tests {
     fn parse_round_trips_as_str() {
         for a in ALL {
             assert_eq!(parse(a.as_str()), Some(a));
+        }
+    }
+
+    #[test]
+    fn a_plain_rendered_claude_mints_a_secret_and_a_plain_rendered_codex_does_not() {
+        assert!(spec(Agent::Claude).plain_rendered_mints);
+        assert!(!spec(Agent::Codex).plain_rendered_mints);
+    }
+
+    #[test]
+    fn carries_of_knows_every_item_kind_and_no_other() {
+        for a in ALL {
+            for k in crate::rules::rune::ITEM_KINDS {
+                assert!(spec(a).carries.of(k).is_some(), "{k}");
+            }
+            assert!(spec(a).carries.of("rule").is_none());
+        }
+    }
+
+    #[test]
+    fn commands_lead_with_the_bare_id() {
+        for a in ALL {
+            assert_eq!(spec(a).commands[0], a.as_str());
         }
     }
 

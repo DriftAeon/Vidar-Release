@@ -12,6 +12,7 @@
 import { invoke } from "../ipc";
 import { invalidateConfig, loadConfig, onSettingsChanged, type VidarConfig } from "../config";
 import { isShortcutsModalOpen, REVERT_EVENT } from "./modal";
+import { wsButton } from "../dom";
 import { addSettingRow } from "./registry";
 
 type SetError = (msg: string) => void;
@@ -66,13 +67,6 @@ async function patch(key: "editor" | "riderPath", value: unknown): Promise<strin
   }
 }
 
-function button(label: string, cls = ""): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = `ws-btn ${cls}`.trim();
-  b.textContent = label;
-  return b;
-}
 
 function input(cls: string, placeholder: string): HTMLInputElement {
   const el = document.createElement("input");
@@ -96,7 +90,7 @@ function control(setError: SetError): HTMLElement {
 
   const exe = input("ag-label", "Exe");
   const args = input("ag-cmd", "Args With {file}");
-  const saveBtn = button("Save");
+  const saveBtn = wsButton("Save");
   const presets = document.createElement("div");
   presets.className = "editor-presets";
   const presetLabel = document.createElement("span");
@@ -127,7 +121,7 @@ function control(setError: SetError): HTMLElement {
     const code = document.createElement("code");
     code.textContent = saved.riderPath;
     text.append("Using Rider Path: ", code);
-    const clear = button("Clear", "ws-remove");
+    const clear = wsButton("Clear", "ws-remove");
     clear.title = "Removes riderPath from vidar.json. Links stop opening Rider after a restart.";
     clear.addEventListener("click", () => {
       clear.disabled = true;
@@ -175,7 +169,7 @@ function control(setError: SetError): HTMLElement {
   }
   saveBtn.addEventListener("click", save);
   for (const [name, value] of PRESETS) {
-    const b = button(name);
+    const b = wsButton(name);
     b.title = `Args: ${value}`;
     b.addEventListener("click", () => {
       args.value = value;

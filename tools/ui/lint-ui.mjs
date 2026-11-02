@@ -41,9 +41,10 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname, extname } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
+import { root as repoRoot } from "../lib/paths.mjs";
 
-const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const REPO = repoRoot();
 const BASELINE = join(REPO, "tools", "ui", "lint-baseline.json");
 
 // new-ui scale (the only values new rules use) and legacy scale (kept for existing rules).
@@ -108,7 +109,9 @@ function walkCss(dir, out = []) {
   for (const n of names) {
     if (n === "node_modules") continue;
     const p = join(dir, n);
-    const st = statSync(p);
+    // A file another process removed mid-walk (a test's temp file under src) is skipped, not a crash.
+    let st;
+    try { st = statSync(p); } catch { continue; }
     if (st.isDirectory()) walkCss(p, out);
     else if (/\.(css|ts)$/i.test(n) && !/\.d\.ts$/i.test(n)) out.push(p);
   }

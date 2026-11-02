@@ -1,4 +1,4 @@
-// runes/bare/view-entry.ts and onboarding/runes-row.ts: the First Runeset step's pure parts.
+// runes/bare/view-entry.ts and onboarding/runes-row.ts: the Runeset step's pure parts.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { startView, doneGate } from "../src/runes/bare/view-entry.ts";

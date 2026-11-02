@@ -17,12 +17,12 @@
 // --check prints the MCP servers the sandbox's Claude config names and exits 1 unless there are none.
 // Refuses (exit 2): a <base> that neither holds .vidar-sandbox nor sits under %TEMP%.
 // Fails (exit 1): git errors, a non-empty --check.
-import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve as pathResolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveHome } from "../lib/agent-env.mjs";
+import { git as gitIn } from "../lib/git.mjs";
 import { resolve, root } from "../lib/paths.mjs";
 import { SEED as RUNES_SEED, plan as runesPlan } from "./runes-seed.mjs";
 
@@ -136,11 +136,7 @@ function readManifest(base) {
   return { entries: (m.entries ?? []).filter((e) => ok(e.path)), dirs: (m.dirs ?? []).filter(ok) };
 }
 
-function git(cwd, args) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith("GIT_")));
-  const r = spawnSync("git", args, { cwd, env, encoding: "utf8" });
-  if (r.status !== 0) throw new Failed(`git ${args.join(" ")} failed in ${cwd}: ${(r.stderr || r.error?.message || "").trim()}`);
-}
+const git = (cwd, args) => gitIn(cwd, args, Failed);
 
 /** MCP servers named by the sandbox's Claude state and settings, and the fixture's .mcp.json. */
 export function mcpServers(base) {

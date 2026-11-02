@@ -1,14 +1,13 @@
 // Toolbench: the bottom half of the right panel. A Photoshop-style tool grid
 // over an options strip that belongs to whichever tool is armed.
 //
-// The distinction from the macro strip is target: a macro fires the instant you
-// click it, a tool is armed and then acts on something. The distinction from
-// inspect mode is scope — inspect suppresses clicks globally at the capture
+// The distinction from inspect mode is scope — inspect suppresses clicks globally at the capture
 // phase (it has to; it inspects Vidar itself), whereas a tool only ever listens
 // on its own canvas. That is why inspect stays in the bottom bar and these
 // don't, and why the two are mutually exclusive below.
 
 import { exitInspect, onInspectEnter } from "./inspect";
+import { notifyModulesChanged } from "../modules/hidden";
 import { getPref, setPref } from "../prefs";
 import { applyOrder, enableReorder } from "./reorder";
 import { openModuleContextMenu, type ModuleMenuAction } from "../modules/context-menu";
@@ -75,7 +74,7 @@ function setSavedVisibility(id: string, visible: boolean) {
   const key = `tool:${id}`;
   const hidden = getPref("modules.hidden") ?? [];
   const next = visible ? hidden.filter((entry) => entry !== key) : [...hidden, key];
-  if (setPref("modules.hidden", next)) document.dispatchEvent(new document.defaultView!.CustomEvent("vidar-modules-change"));
+  if (setPref("modules.hidden", next)) notifyModulesChanged();
 }
 
 function toolMenuActions(clicked?: string): ModuleMenuAction[] {
