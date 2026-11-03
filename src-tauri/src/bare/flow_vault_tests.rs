@@ -296,6 +296,9 @@ fn a_rule_rune_rides_the_claude_payload_and_the_codex_instructions() {
 
 #[test]
 fn a_plugin_rune_rides_the_claude_argv_as_set_plugin() {
+    if crate::paths::missing_input(&crate::paths::root().join("plugins").join("roster")) {
+        return;
+    }
     let r = root("plugin");
     let vidar = crate::paths::rune_vidar_dir_in(&r.0);
     std::fs::write(

@@ -269,8 +269,7 @@ mod tests {
     #[test]
     fn codex_discovery_never_echoes_a_config_value_or_url() {
         // The source export drops every file named AGENTS.md (.gitattributes export-ignore), this fixture included.
-        if !fixture().join("AGENTS.md").exists() {
-            eprintln!("skipped: tests/fixtures/codex-home/AGENTS.md is not in this tree (export-ignored by name)");
+        if crate::paths::missing_input(&fixture().join("AGENTS.md")) {
             return;
         }
         let root = temp("echo");

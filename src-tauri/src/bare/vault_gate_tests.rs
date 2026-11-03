@@ -419,6 +419,10 @@ fn every_kind_in_a_vault_reaches_a_codex_session_and_mode_and_plugin_warn_unsupp
 
 #[test]
 fn a_hosted_session_still_shows_its_original_vault_after_a_variant_and_a_new_tab() {
+    // The full vault holds the roster plugin rune, which the hosted spawn refuses without plugins\roster.
+    if crate::paths::missing_input(&crate::paths::root().join("plugins").join("roster")) {
+        return;
+    }
     let fx = Fx::new("readopt");
     let v = full_vault(&fx, "Gate Readopt");
     let mut launch = fx.hosted(&fx.home("hosted"), &v.id).unwrap();

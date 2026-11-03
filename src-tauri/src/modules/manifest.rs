@@ -696,11 +696,9 @@ mod contract_extension_tests {
     fn raw_launch_script_must_be_owned() {
         let contract: Contract = serde_json::from_str(include_str!("../../../contracts/modules.json")).unwrap();
         let local = crate::paths::packs_dir().join("local");
-        if !local.exists() {
-            eprintln!("skipped: {} is not in this tree (pack not shipped)", local.display());
-            return;
+        if !crate::paths::missing_input(&local) {
+            assert!(read_pack("local", &local, &contract).is_ok());
         }
-        assert!(read_pack("local", &local, &contract).is_ok());
         let mut value: Value = serde_json::from_str(include_str!("../../../tests/fixtures/modules/launch-script-outside.json")).unwrap();
         let check = |value: Value| {
             let decl: ModuleDecl = serde_json::from_value(value).unwrap();

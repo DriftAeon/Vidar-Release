@@ -121,6 +121,39 @@ pub fn root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Test-only: true when the checkout is an exported source tree (the public clone, or a zip's
+/// source). tools\release\ is export-ignored, so only the private repo has export.ps1; mirrors
+/// `isExportedTree` in tools/lib/release-layout.mjs.
+#[cfg(test)]
+pub fn is_exported_tree() -> bool {
+    !contract::resolve(&root(), "tools").join("release").join("export.ps1").is_file()
+}
+
+/// Test-only: true (and the skip logged) when a test input the export does not ship is absent,
+/// so the test returns early; the Rust side of `missingInputs` in tests/helpers/optional-input.mjs.
+/// Usage: `if crate::paths::missing_input(&path) { return; }`.
+#[cfg(test)]
+pub fn missing_input(path: &Path) -> bool {
+    if path.exists() {
+        return false;
+    }
+    // Lexically fold `..` so `<root>/src-tauri/../tools/x` shows as `tools/x`.
+    let mut folded = PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => {
+                folded.pop();
+            }
+            other => folded.push(other.as_os_str()),
+        }
+    }
+    let root = root();
+    let shown = folded.strip_prefix(&root).unwrap_or(&folded);
+    assert!(is_exported_tree(), "{} is missing from the private tree", shown.display());
+    eprintln!("skipped: {} is not in this tree (not shipped)", shown.display());
+    true
+}
+
 // STATE: config, window state, bridge\*.
 // ---- config.rs ----
 pub fn config_path() -> PathBuf {

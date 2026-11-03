@@ -132,11 +132,7 @@ mod tests {
 
     /// The fixture library is not shipped (tests/fixtures/rune-lib is export-ignored): its tests return early.
     fn fixture_absent() -> bool {
-        let absent = !root().exists();
-        if absent {
-            eprintln!("skipped: tests/fixtures/rune-lib is not in this tree (not shipped)");
-        }
-        absent
+        crate::paths::missing_input(&root())
     }
 
     fn render_with(ctx: &RenderCtx) -> set::Rendered {

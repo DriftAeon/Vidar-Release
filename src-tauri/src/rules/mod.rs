@@ -364,8 +364,7 @@ mod tests {
 
     #[test]
     fn golden_matches_node() {
-        if !fixture_root().exists() {
-            eprintln!("skipped: tests/fixtures/rune-lib is not in this tree (not shipped)");
+        if crate::paths::missing_input(&fixture_root()) {
             return;
         }
         let lib = Library::open(&fixture_root().join("runes")).unwrap();
@@ -380,8 +379,7 @@ mod tests {
 
     #[test]
     fn header_cases() {
-        if !fixture_root().exists() {
-            eprintln!("skipped: tests/fixtures/rune-lib is not in this tree (not shipped)");
+        if crate::paths::missing_input(&fixture_root()) {
             return;
         }
         let dir = fixture_root().join("headers");

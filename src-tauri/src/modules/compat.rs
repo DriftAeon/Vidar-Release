@@ -199,7 +199,9 @@ mod tests {
             assert!(check_pack_compat(&pack, env!("CARGO_PKG_VERSION"), CORE_CONTRACT).is_ok(), "{}", file.display());
             n += 1;
         }
-        assert!(n >= 8, "only {n} packs found");
+        // A release set prunes the packs its modules exclude, so an exported tree holds fewer.
+        let min = if crate::paths::is_exported_tree() { 1 } else { 8 };
+        assert!(n >= min, "only {n} packs found");
     }
 
     #[test]

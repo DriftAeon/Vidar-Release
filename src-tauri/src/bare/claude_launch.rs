@@ -493,6 +493,9 @@ mod tests {
     #[test]
     fn the_claude_floor_is_what_the_vault_holds() {
         let root = crate::paths::root();
+        if crate::paths::missing_input(&root.join("plugins").join("roster")) {
+            return;
+        }
         let dir = |n: &str| root.join("plugins").join(n).to_string_lossy().into_owned();
         let mut l = set_loadout::Loadout { plugins: vec![dir("roster"), dir("gate")], ..Default::default() };
         l.permissions.allow = vec!["mcp__vidar_drive".into(), "Bash(git status:*)".into()];

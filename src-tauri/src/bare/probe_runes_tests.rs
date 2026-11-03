@@ -581,8 +581,7 @@ fn rune_text(kind: &str, activate: Option<&str>, description: Option<&str>) -> S
 /// vault, which resolves for each agent in the scratch root and is never stored.
 #[test]
 fn probe_fixture_resolves_the_blank_vault_for_both_agents() {
-    if !crate::paths::runes_dir().exists() {
-        eprintln!("skipped: the repo runes/ library is not in this tree (not shipped)");
+    if crate::paths::missing_input(&crate::paths::runes_dir()) {
         return;
     }
     let (scratch, _cwd, config, _slotted) = fixture(ROW, None).expect("fixture");

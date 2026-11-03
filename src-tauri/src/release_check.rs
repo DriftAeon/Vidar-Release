@@ -287,7 +287,10 @@ mod tests {
         // Read at run time, not include_str!: a test-only read is no compile-time input of the build.
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/release/pack-index.mjs");
         // The public export drops tools/release/, so there is nothing to compare against there.
-        let Ok(tool) = std::fs::read_to_string(&path) else { return };
+        if crate::paths::missing_input(&path) {
+            return;
+        }
+        let tool = std::fs::read_to_string(&path).unwrap();
         let line = tool.lines().find(|l| l.contains("export const PACK_UPDATABLE")).unwrap();
         let ids: Vec<&str> = line.split('"').skip(1).step_by(2).collect();
         assert_eq!(ids, PACK_UPDATABLE);

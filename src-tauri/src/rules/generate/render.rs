@@ -261,8 +261,7 @@ mod tests {
     #[test]
     fn keys_equal_header_mjs() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/runes/header.mjs");
-        if !path.exists() {
-            eprintln!("skipped: tools/runes/header.mjs is not in this tree (runes cooking is not shipped)");
+        if crate::paths::missing_input(&path) {
             return;
         }
         let text = std::fs::read_to_string(path).unwrap();
