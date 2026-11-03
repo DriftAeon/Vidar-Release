@@ -3656,6 +3656,57 @@ fn a_codex_hook_line_quotes_flags_and_doubles_every_pwsh_quote_character() {
     assert_eq!(ps_quote("O\u{2019}Brien"), "'O\u{2019}\u{2019}Brien'");
 }
 
+/// The pin probe's spawn: Raw Claude and Raw Codex on the in-memory blank vault prepare with no vault on
+/// disk; the Raw lock at spawn skips a vault that is never stored, and none is written.
+#[test]
+fn raw_spawns_on_the_blank_vault_need_no_stored_vault() {
+    let fx = RowFx::new("raw-blank");
+    fx.agents(serde_json::json!([]));
+    let opts = LaunchOpts { config: Some(&fx.config), blank_vault: true, ..Default::default() };
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| false };
+    prepare_with("bare", &crate::paths::root(), &fx.home("claude"), inherited(), &Ambient::default(), &guard(), &probes, &opts).expect("Raw Claude on the blank vault");
+    let cprobes = CodexProbes { find: &fake_find, codex: &codex_probes_ok };
+    prepare_codex_for(Surface::Tui, "bare", &crate::paths::root(), &fx.home("codex"), inherited(), &Ambient::default(), &guard(), &cprobes, &opts, None).expect("Raw Codex on the blank vault");
+    assert!(super::vault::store::Store::open(&fx.t.0).list().unwrap().is_empty(), "the blank vault was stored");
+}
+
+/// The mode the shipped `mode-auto` permission rune starts a session in (the probe's mode).
+fn probe_mode(root: &Path) -> String {
+    let lib = crate::rules::library::Library::open(&crate::paths::rune_vidar_dir_in(root)).expect("the shipped Vidar library");
+    let entry = lib.entry("mode-auto").expect("library index").expect("the shipped mode-auto rune");
+    let mode = lib.load(&entry).expect("mode-auto loads").item.mode.expect("mode-auto carries a mode");
+    assert!(claude_line::mode_allowed(&mode), "{mode}");
+    mode
+}
+
+/// The pin probe's host argv from Raw's: the blank vault carries no permission rune and starts `default`, so the
+/// probe adds what the shipped `mode-auto` rune puts on a Raw line (`--permission-mode auto`), drops
+/// `--remote-control` (a one-shot print run) and appends `-p <prompt>`. The blank vault itself is untouched.
+fn probe_args(root: &Path, args: &[String], prompt: &str) -> Vec<String> {
+    let mut args = args.to_vec();
+    let line = args.pop().expect("Raw's host line").replace(" '--remote-control'", "");
+    args.push(format!("{line} {} {} -p {}", ps_quote("--permission-mode"), ps_quote(&probe_mode(root)), ps_quote(prompt)));
+    args
+}
+
+/// The probe spawn runs in auto mode (verify-pin check 4) while the blank vault's own Raw line carries no mode.
+#[test]
+fn the_pin_probe_spawn_runs_in_auto_mode_and_the_blank_vault_stays_default() {
+    let fx = RowFx::new("probe-auto");
+    fx.agents(serde_json::json!([]));
+    let opts = LaunchOpts { config: Some(&fx.config), blank_vault: true, ..Default::default() };
+    let probes = Probes { find: &fake_find, version: &|_, _| Some(pinned("claude")), remote_control: &|| true };
+    let launch = prepare_with("bare", &crate::paths::root(), &fx.home("claude"), inherited(), &Ambient::default(), &guard(), &probes, &opts).expect("Raw Claude on the blank vault");
+    let line = launch.args.last().unwrap();
+    assert!(!line.contains("--permission-mode"), "the blank vault carries a mode: {line}");
+    assert!(line.contains("'--remote-control'"), "{line}");
+    let probe = probe_args(&crate::paths::root(), &launch.args, "Say hi.");
+    assert_eq!(probe.len(), launch.args.len());
+    let probe_line = probe.last().unwrap();
+    assert!(probe_line.ends_with(" '--permission-mode' 'auto' -p 'Say hi.'"), "{probe_line}");
+    assert!(!probe_line.contains("--remote-control"), "{probe_line}");
+}
+
 /// Pin probe (`node tools/bare/probe-pin.mjs` runs it): one real Raw Bare Claude turn through the real
 /// `prepare`, in a temp cwd holding a canary CLAUDE.md, then the launch manifest with the final env names.
 /// Writes into the real Bare home (manifest, transcript); needs VIDAR_PROBE_PROMPT. Never run by default.
@@ -3686,10 +3737,8 @@ fn probe_pin_runs_one_real_raw_bare_turn() {
     let names: Vec<String> = env.iter().map(|(k, _)| k.to_string_lossy().into_owned()).collect();
     launch.write_manifest("pin-probe", names.iter().map(String::as_str)).expect("manifest");
 
-    // Raw's host line, with -p appended; --remote-control is dropped (a one-shot print run).
-    let mut args = launch.args.clone();
-    let line = args.pop().unwrap().replace(" '--remote-control'", "");
-    args.push(format!("{line} -p {}", ps_quote(&prompt)));
+    // Raw's host line in auto mode, with -p appended (`probe_args`).
+    let args = probe_args(&crate::paths::root(), &launch.args, &prompt);
     let out = std::env::temp_dir().join(format!("vidar-pin-probe-{}.out", std::process::id()));
     let file = std::fs::File::create(&out).unwrap();
     let mut cmd = std::process::Command::new(&launch.program);

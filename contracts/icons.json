@@ -7,6 +7,7 @@
     "fatcow": {"name":"FatCow Farm-Fresh Icons 3.9.2 (gammasoft/fatcow e6ee233)","licence":"CC BY 3.0 US: credit FatCow, http://www.fatcow.com/free-icons"},
     "brands": {"name":"Simple Icons","licence":"CC0 (marks are trademarks of their owners)"},
     "own": {"name":"Vidar original art","licence":"own work"},
+    "toolbox-recolors": {"name":"Fluent Color toolbox, recoloured (Vidar)","licence":"MIT"},
     "lucide": {"name":"lucide-static","licence":"ISC"},
     "apps": {"name":"Installed app icons (local copies)","licence":"Vendor app icons, local use only"}
   },
@@ -127,8 +128,11 @@
     "people-community": {"source":"fluent-color/svg/ic_fluent_people_community_24_color.svg"},
     "scales": {"source":"noto-emoji/svg/emoji_u2696.svg"},
     "safe": {"source":"flat-color-icons/svg/safe.svg"},
-    "safe-gold": {"source":"own/safe-gold.svg","note":"recoloured from flat-color-icons safe.svg to a gold ramp (body #b19234); Start picker vault cards"},
-    "library": {"source":"flat-color-icons/svg/library.svg","note":"Rune Library title marks"}
+    "safe-gold": {"source":"own/safe-gold.svg","note":"recoloured from flat-color-icons safe.svg to a marigold ramp (body #ef9a0c); Start picker vault cards"},
+    "library": {"source":"flat-color-icons/svg/library.svg","note":"Rune Library title marks"},
+    "notebook": {"source":"fluent-color/svg/ic_fluent_notebook_24_color.svg","note":"Memory runes and memory bands in Bare agent view and file heads"},
+    "toolbox-ocean": {"source":"toolbox-recolors/ic_fluent_toolbox_24_ocean.svg","note":"Modules: Settings category and module runesets in the Rune Library"},
+    "robot": {"source":"noto-emoji/svg/emoji_u1f916.svg","note":"Auto Mode runeset in the Rune Library"}
   },
   "tools": {
     "Thought": "thought",

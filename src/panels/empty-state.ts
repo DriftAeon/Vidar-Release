@@ -3,10 +3,8 @@
 // (Changes) draw through it; the CSS is src/styles/empty-state.css. Remote or runtime text goes in through
 // textContent or title only.
 import { button, span } from "../dom";
-import { iconImg } from "../icon-img";
+import { iconImg, type ColorIcon } from "../icon-img";
 import { lucide } from "../icons";
-
-export type ModuleBrand = "jira" | "slack" | "notion";
 
 export interface EmptyStateOptions {
   icon: Element;
@@ -20,9 +18,9 @@ export interface EmptyStateOptions {
 
 export const HIDE_TIP = "Hides this tab. Settings › Modules shows it again.";
 
-/** The module's colour mark, sized by the empty-state CSS. */
-export function brandIcon(brand: ModuleBrand): Element {
-  const img = iconImg(brand);
+/** A colour mark (a module's brand, or Changes' folder), sized by the empty-state CSS. */
+export function brandIcon(name: ColorIcon): Element {
+  const img = iconImg(name);
   img.classList.add("es-icon");
   return img;
 }

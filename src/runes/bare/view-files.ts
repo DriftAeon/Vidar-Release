@@ -11,7 +11,7 @@ import { AGENTS } from "../../agents/descriptor.ts";
 
 // Head order; names and hues come from kind-groups.ts (the file kind `rules` is the rune kind `rule`)
 const FILE_KINDS: BareFileKind[] = ["rules", "memory", "skill", "agent", "hook", "mcp"];
-const FILE_HEAD_ICON: Partial<Record<BareFileKind, ColorIcon>> = { rules: "rules", memory: "memory-card" };
+const FILE_HEAD_ICON: Partial<Record<BareFileKind, ColorIcon>> = { rules: "rules", memory: "notebook" };
 
 export interface FilesViewArgs {
   agent: AgentId; sources: BareLocalSources | null; sourcesErr: string | null; ticked: Set<string>;

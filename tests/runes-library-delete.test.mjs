@@ -35,7 +35,7 @@ const setCard = (root, set) => root.querySelector(`.runes-lib-groups > details.r
 
 test("an import library's rune offers Delete Rune; a Vidar rune does not", () => {
   const { root, calls } = draw();
-  const rune1 = labelled(root, "Delete Rune");
+  const rune1 = labelled(root, "Delete");
   assert.equal(rune1.length, 2, "mine/one and mine/loose");
   rune1[0].click();
   assert.deepEqual(calls, [["ask", { library: "mine", id: "one" }]]);
@@ -67,7 +67,7 @@ test("a rune's confirm sits on its own card, replacing its Delete Rune button, w
   assert.equal(row.previousElementSibling.tagName, "SUMMARY", "right under the card's head");
   assert.equal(row.querySelector(".runes-delete-text").textContent,
     "Delete one? It moves to the library backup. Unlocked vaults that hold it drop it; locked sessions keep their copy.");
-  assert.equal(labelled(row.closest("details.runes-rn"), "Delete Rune").length, 0, "the button is replaced until answered");
+  assert.equal(labelled(row.closest("details.runes-rn"), "Delete").filter((b) => !row.contains(b)).length, 0, "the button is replaced until answered");
   assert.deepEqual([...row.querySelectorAll("button")].map((b) => b.textContent), ["Delete", "Cancel"], "text left, then Delete, Cancel");
   labelled(row, "Delete")[0].click();
   labelled(row, "Cancel")[0].click();
@@ -89,7 +89,7 @@ test("a rules-library rune offers no Delete Rune", () => {
     runes: [rune("runes", "r1"), rune("mine", "one")],
     runesets: [{ library: "runes", set: "rules", members: [{ library: "runes", id: "r1" }], fixed: true }],
   });
-  assert.equal(labelled(root, "Delete Rune").length, 1, "only mine/one");
+  assert.equal(labelled(root, "Delete").length, 1, "only mine/one");
 });
 
 test("the runeset confirm replaces Delete Runeset at the end of the opened card and says its runes stay", () => {
@@ -116,7 +116,7 @@ test("the vault pane draws no delete action", () => {
   const root = document.createElement("div");
   root.append(...vaultModify({ view: { ...view, runes: [rune("mine", "one")], vault: { ...view.vault, runes: [{ library: "mine", id: "one" }] } },
     removed: [], pending: null, busy: false, card: { openInDocument: () => {}, note: () => {} }, trackOpen: () => {}, pick: async () => {}, pend: inert }));
-  assert.equal(labelled(root, "Delete Rune").length + labelled(root, "Delete Runeset").length, 0);
+  assert.equal(labelled(root, "Delete").length + labelled(root, "Delete Runeset").length, 0);
 });
 
 test("without drops one rune", () => {

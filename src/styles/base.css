@@ -1,7 +1,8 @@
 
 * { box-sizing: border-box; margin: 0; }
 html, body, #app { height: 100%; }
-body { background: var(--bg); color: var(--fg); overflow: hidden; }
+/* the zero feature is for Cascadia Mono (alternate zero); Segoe UI has none, so UI text ignores it */
+body { background: var(--bg); color: var(--fg); overflow: hidden; font-feature-settings: "zero"; }
 
 ::selection { background: var(--accent); color: var(--bg); }
 /* House button under every rule: :where() has zero specificity, so any class or id rule wins,

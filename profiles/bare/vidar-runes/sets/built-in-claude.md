@@ -1,14 +1,9 @@
 ---
-name: built-in
+name: built-in-claude
 kind: set
 scope: [global]
-description: The skills and plugins Claude Code and Codex ship with; every one is off in a vault unless placed
+description: The skills and plugins Claude Code ships with; every one is off in a vault unless placed
 ---
-<?rune codex-imagegen?>
-<?rune codex-openai-docs?>
-<?rune codex-review-agent?>
-<?rune codex-skill-creator?>
-<?rune codex-skill-installer?>
 <?rune claude-design-sync?>
 <?rune claude-dataviz?>
 <?rune claude-update-config?>

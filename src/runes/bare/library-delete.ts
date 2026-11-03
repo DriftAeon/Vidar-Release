@@ -4,7 +4,7 @@
 // stay in the library. Each action asks first on an inline confirm row; nothing here writes a file or a launcher row.
 import { confirmRow, el } from "../../dom";
 
-export const DELETE_RUNE_LABEL = "Delete Rune";
+export const DELETE_RUNE_LABEL = "Delete"; // the rune's own card says which rune
 export const DELETE_RUNESET_LABEL = "Delete Runeset";
 export const VIDAR_LIBRARY = "vidar";
 /** The one runeset of the Vidar library every Rune Vault holds (Rust `VIDAR_SET`). */

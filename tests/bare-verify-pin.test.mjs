@@ -19,7 +19,8 @@ const PROFILE = `{
 }
 `;
 
-// opts: env, version, mode, loads, canary, turn ("in" | "out" | "none"), manifestVersion
+// opts: env, version, mode, loads, canary, turn ("in" | "out" | "none" | "refused"), manifestVersion,
+// falcon (a Falcon-hosted manifest: no binary.version)
 function fixture(opts = {}) {
   const root = mkdtempSync(join(tmpdir(), "vidar-verify-pin-"));
   const home = join(root, "home");
@@ -32,15 +33,18 @@ function fixture(opts = {}) {
   writeFileSync(profile, PROFILE);
   const manifest = {
     agent: "claude", createdUtc: "2020-01-01T00:00:00Z",
-    binary: { version: opts.manifestVersion === undefined ? V : opts.manifestVersion },
+    binary: { version: opts.falcon ? null : opts.manifestVersion === undefined ? V : opts.manifestVersion, verifiedVersion: "1.0.0" },
     envNames: opts.env ?? ["Path", "TEMP", "CLAUDE_CONFIG_DIR", "VIDAR_TAB_NAME", "HOMEDRIVE"],
     homes: { home, claudeConfig: join(home, "claude-config") },
+    ...(opts.falcon ? { program: "falcon", args: [], falconSession: "s1-00000001" } : {}),
   };
   writeFileSync(join(home, "manifests", "2026-01-01T000000000Z-s1-1.json"), JSON.stringify(manifest));
   const lines = [{ type: "user", cwd, version: opts.version ?? V, permissionMode: opts.mode ?? "auto" }];
   for (let i = 0; i < (opts.loads ?? 0); i++) lines.push({ type: "attachment", attachment: { type: "instructions" } });
   const turn = opts.turn ?? "in";
-  if (turn !== "none") {
+  if (turn === "refused") {
+    lines.push({ type: "user", toolUseResult: "Error: This command requires approval", message: { content: [{ type: "tool_result", is_error: true, content: "This command requires approval" }] } });
+  } else if (turn !== "none") {
     const out = turn === "in" ? join(home, "user-home", "Temp") + "\\" : "Z:\\elsewhere\\Temp\\";
     lines.push({ type: "user", toolUseResult: { stdout: out + "\r\n", stderr: "", interrupted: false, isImage: false } });
   }
@@ -87,21 +91,58 @@ for (const [name, opts, row] of FAILS) {
   });
 }
 
-test("the default manifest is the newest Raw one, skipping a newer hosted one", () => {
+test("the default manifest skips a newer one that is neither Raw nor Falcon-hosted", () => {
   with_({}, (f) => {
-    const hosted = { agent: "claude", createdUtc: "2020-01-01T00:00:00Z", binary: {}, envNames: ["Path", "SOME_SECRET"], homes: { home: f.home } };
-    writeFileSync(join(f.home, "manifests", "2027-01-01T000000000Z-s2-1.json"), JSON.stringify(hosted));
+    const other = { agent: "claude", createdUtc: "2020-01-01T00:00:00Z", binary: {}, envNames: ["Path", "SOME_SECRET"], homes: { home: f.home } };
+    writeFileSync(join(f.home, "manifests", "2027-01-01T000000000Z-s2-1.json"), JSON.stringify(other));
     const r = run(f);
     assert.equal(r.code, 0, r.out + r.err);
     assert.match(r.out, /2026-01-01T000000000Z-s1-1\.json/);
   });
 });
 
-test("no Raw manifest exits 2 asking for a Raw Bare tab", () => {
+test("a newer Falcon-hosted manifest is the default", () => {
+  with_({}, (f) => {
+    const hosted = { agent: "claude", program: "falcon", createdUtc: "2020-01-01T00:00:00Z", binary: { version: null, verifiedVersion: "1.0.0" }, envNames: ["Path"], homes: { home: f.home, claudeConfig: join(f.home, "claude-config") } };
+    writeFileSync(join(f.home, "manifests", "2027-01-01T000000000Z-s2-1.json"), JSON.stringify(hosted));
+    const r = run(f);
+    assert.equal(r.code, 0, r.out + r.err);
+    assert.match(r.out, /2027-01-01T000000000Z-s2-1\.json/);
+  });
+});
+
+test("a Falcon transcript mixing versions fails check 2", () => {
+  with_({ falcon: true }, (f) => {
+    writeFileSync(f.transcript, readFileSync(f.transcript, "utf8") + JSON.stringify({ type: "user", version: "9.9.9" }) + "\n");
+    const r = run(f);
+    assert.equal(r.code, 1, r.out + r.err);
+    assert.match(r.out, /^FAIL\s+2 version\s+transcript mixes 9\.8\.7,9\.9\.9/m);
+  });
+});
+
+test("a Falcon manifest takes the transcript version, says so, and --write pins it", () => {
+  with_({ falcon: true }, (f) => {
+    const r = run(f, ["--write"]);
+    assert.equal(r.code, 0, r.out + r.err);
+    assert.match(r.out, /^PASS\s+2 version\s+transcript 9\.8\.7; the manifest records no running version \(Falcon-hosted\), so the transcript's stands$/m);
+    assert.match(r.out, /^\[Chore\] Bare - Verify Claude 9\.8\.7$/m);
+    assert.equal(readFileSync(f.profile, "utf8"), PROFILE.replace('"1.0.0"', `"${V}"`), "the old pin (binary.verifiedVersion) is never the version written");
+  });
+});
+
+test("no Raw or Falcon-hosted manifest exits 2 asking for a Bare tab", () => {
   with_({ manifestVersion: null }, (f) => {
     const r = run(f);
     assert.equal(r.code, 2);
-    assert.match(r.err, /Raw Bare tab is needed/);
+    assert.match(r.err, /a Bare tab is needed/);
+  });
+});
+
+test("a refused tool call is named in check 5's detail", () => {
+  with_({ turn: "refused" }, (f) => {
+    const r = run(f);
+    assert.equal(r.code, 2);
+    assert.match(r.out, /^UNKNOWN\s+5 temp\s+no check turn: the tool call was refused \(This command requires approval\)$/m);
   });
 });
 

@@ -31,7 +31,7 @@ button.ob-half.picked { outline: var(--space-2) solid var(--ob-agent); outline-o
 button.ob-half:focus-visible { outline: var(--space-2) solid var(--fg-bright); outline-offset: calc(var(--space-2) * -1); }
 button.ob-half:disabled { opacity: 0.45; cursor: default; }
 .ob-tile { width: calc(var(--row-32) * 4); height: calc(var(--row-32) * 4); border-radius: var(--radius-6); display: block; }
-.ob-name { font-family: var(--font-title); font-size: var(--font-16); font-weight: var(--weight-bold); }
+.ob-name { font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-16); font-weight: var(--weight-bold); }
 .ob-absent { font-size: var(--font-12); color: var(--fg); } /* the disabled side is already dimmed as a whole */
 
 /* setup view: the chosen side wide, the other narrow and dimmed */

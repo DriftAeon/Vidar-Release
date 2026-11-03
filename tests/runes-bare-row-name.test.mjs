@@ -21,6 +21,8 @@ test("idLabel: set and library ids read in Title Case", () => {
   assert.equal(idLabel("team-mine"), "Team Mine");
   assert.equal(idLabel("vidar-recall"), "Vidar Recall");
   assert.equal(idLabel("team"), "Team");
+  assert.equal(idLabel("built-in-claude"), "Built In Claude");
+  assert.equal(idLabel("built-in-codex"), "Built In Codex");
   assert.equal(idLabel(""), "");
 });
 

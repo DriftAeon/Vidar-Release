@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PERMISSION_MODES } from "../src/agents/protocol.ts";
+import { missingInputs } from "./helpers/optional-input.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -45,7 +46,7 @@ test("the control spawn verb reads its effort levels from contracts/effort-level
   assert.ok(!/\[\s*"low"[^\]]*\]\.includes\(effort\)/.test(verbs), "no effort literal restated in verbs.mjs");
 });
 
-test("the lab case modes are the permission-mode contract with dontAsk in place of auto", () => {
+test("the lab case modes are the permission-mode contract with dontAsk in place of auto", { skip: missingInputs(import.meta.url, "../tools/lab/cases.mjs") ?? false }, () => {
   const modes = JSON.parse(readFileSync(resolve(ROOT, "contracts/permission-modes.json"), "utf8"));
   const cases = readFileSync(resolve(ROOT, "tools/lab/cases.mjs"), "utf8");
   const literal = cases.match(/const MODES = (\[[^\]]*\])/);

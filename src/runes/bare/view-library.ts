@@ -13,17 +13,19 @@ import type { RuneItem, RunesLoaded } from "../types";
 import type { LibraryRuneset, SetSource } from "../../ipc";
 import { checkBox, checkSlot } from "../check-box";
 import { el } from "../../dom";
+import { iconImg } from "../../icon-img";
 import type { VaultView, VaultViewRune } from "./cake";
 import { idLabel } from "./row-name";
 import { stateLabel, stateTooltip } from "./rune-state";
 import { runeGroups, SATCHEL_TITLE } from "./rune-groups";
 import { libraryTargets, rowState, setTarget, type Pending, type PendingCtl, type Target } from "./vault-pending";
-import { isVidarSet, LABEL_REQUIRED, libCard, lockedBox, runeLock, TIP_REQUIRED, TIP_RUNESET, type RuneCtl } from "./view-vault";
+import { isVidarSet, LABEL_REQUIRED, libCard, lockedBox, MODULE_SET_KEYS, runeLock, TIP_REQUIRED, TIP_RUNESET, type RuneCtl } from "./view-vault";
 import {
   DELETE_RUNE_LABEL, DELETE_RUNESET_LABEL, deletable, deleteButton, deleteInline, runesetConfirmText, sameTarget, type DeleteTarget,
 } from "./library-delete";
 
 export const LIBRARY_TITLE = "Rune Library";
+const MODULES_TITLE = "Modules";
 const TIP_ROW = "Loads this rune in the tab's vault after Done.";
 const TIP_DELETE_RUNE = "Moves this rune out of its library into the library backup.";
 const TIP_DELETE_RUNESET = "Moves this runeset into the library backup; its runes stay in the library.";
@@ -92,6 +94,10 @@ export function libraryPane(c: LibraryPaneCtx): HTMLElement[] {
   // the one grouping function (rune-groups.ts), shared with the vault pane
   const g = runeGroups({ sets: (c.runesets ?? []).map((s) => ({ source: { library: s.library, set: s.set }, members: s.members, on: false })), runes: c.runes });
   const group = el("section", "runes-group runes-lib-groups");
+  // module runesets sit below every other card (Satchel included), under the Modules heading; the grouping function
+  // stays shared with the vault pane, so the split lives here
+  const isModule = (s: SetSource): boolean => MODULE_SET_KEYS.has(`set:${s.library}/${s.set}`);
+  const modules: HTMLElement[] = [];
   for (const { source, runes } of g.sets) {
     const set = (c.runesets ?? []).find((s) => s.library === source.library && s.set === source.set)!;
     const t: Target = setTarget(set, c.runesets ?? [], c.runes);
@@ -108,7 +114,7 @@ export function libraryPane(c: LibraryPaneCtx): HTMLElement[] {
     // Delete Runeset sits inside the open card after its kind groups, where the vault pane's runeset cards put their
     // attachments; the Vidar Runeset and template runesets (`fixed`) have none
     if (!set.fixed) card.appendChild(runesetDelete(c, set, card));
-    group.appendChild(card);
+    if (isModule(source)) modules.push(card); else group.appendChild(card);
   }
   if (g.satchel.length) {
     // no runeset to add: the head holds the checkbox's empty slot, so its title lines up with the runeset heads
@@ -116,6 +122,11 @@ export function libraryPane(c: LibraryPaneCtx): HTMLElement[] {
     delete card.dataset.library; // the satchel spans libraries: each rune card names its own
     card.classList.add("runes-satchel");
     group.appendChild(card);
+  }
+  if (modules.length) {
+    const mark = el("div", "runes-lib-modules");
+    mark.append(iconImg("toolbox-ocean"), el("span", "runes-lib-modules-word", MODULES_TITLE), iconImg("toolbox-ocean"));
+    group.append(mark, ...modules);
   }
   if (group.childElementCount) out.push(group);
   return out;

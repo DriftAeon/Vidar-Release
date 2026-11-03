@@ -57,8 +57,12 @@ fn shipped_setting(root: &Path, agent: Agent) -> Option<set_loadout::SettingRef>
 }
 
 /// Raw bodies lock at spawn (model: Raw has no first-message hook): `Store::lock(id, FirstMessage, hash)`.
-/// A vault already locked at this hash stands; another hash refuses the spawn.
+/// A vault already locked at this hash stands; another hash refuses the spawn. The blank vault
+/// (`vidar::blank_vault`) is never on disk, so it has no record to lock and stands as built.
 pub(super) fn lock_at_spawn(root: &Path, v: &Vault) -> Result<(), String> {
+    if super::vault::vidar::is_blank(v) {
+        return Ok(());
+    }
     Store::open(&store_root(root)).lock(&v.id, LockedBy::FirstMessage, &v.hash).map(|_| ()).map_err(|e| format!("{e}; Bare spawn refused"))
 }
 

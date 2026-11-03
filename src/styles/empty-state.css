@@ -10,7 +10,7 @@
 .empty-state > .es-icon { flex: none; width: var(--row-28); height: var(--row-28); margin-bottom: var(--space-4); }
 .empty-state > svg.es-icon { stroke-width: 1.5; }
 .empty-state .es-title {
-  color: var(--fg); font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong);
+  color: var(--fg); font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-strong);
   overflow-wrap: anywhere;
 }
 .empty-state .es-note { max-width: 260px; text-wrap: balance; }

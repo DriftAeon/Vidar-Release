@@ -12,7 +12,7 @@ const PINNED = ["rule"];
 const FIRST = ["skill", "agent", "hook"];
 const ORDER = [...PINNED, ...FIRST.filter((k) => !PINNED.includes(k)), ...Object.keys(KINDS).filter((k) => !PINNED.includes(k) && !FIRST.includes(k))];
 // kinds with a colour token (runes.css `.runes-set.hue-<kind>`); the rest stay grey
-const HUED = new Set(["skill", "agent", "hook", "mcp", "rule", "plugin"]);
+const HUED = new Set(["skill", "agent", "hook", "mcp", "rule", "plugin", "permission", "setting", "fact"]);
 
 /** A kind group's head: the kind's plural (kind-icons.ts), as Modify's heads read (Skills, MCPs). */
 export const kindHeadName = (kind: string): string =>

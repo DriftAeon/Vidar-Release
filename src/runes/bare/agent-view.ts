@@ -226,7 +226,7 @@ export function createAgentView(deps: AgentViewDeps): AgentView {
         const kind = el("div", "runes-gen-kind");
         const head = el("div", "runes-gen-kind-head");
         const ico = el("span", "runes-gen-ico");
-        ico.appendChild(iconImg(band.kind === "memory" ? "memory-card" : "rules"));
+        ico.appendChild(iconImg(band.kind === "memory" ? "notebook" : "rules"));
         head.append(ico, el("span", "runes-gen-kind-name", band.name));
         kind.appendChild(head);
         for (const src of band.sources) {

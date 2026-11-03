@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ids, resolve as resolveNode } from "../tools/lib/paths.mjs";
 import { scanRepo, scanText } from "../tools/lib/paths-scan.mjs";
+import { missingInputs } from "./helpers/optional-input.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -51,7 +52,8 @@ test("a stale multi-segment tail or a full chain inside a longer literal counts"
   assert.equal(scanText(`const a = "falcon/bundlesx"; const b = "xbridge/falcon/bundles";`).size, 0);
 });
 
-test("the old release-zip bundle literal is flagged, HEAD's script is clean", () => {
+// release-zip.ps1 and its history are private: the exported tree has neither.
+test("the old release-zip bundle literal is flagged, HEAD's script is clean", { skip: missingInputs(import.meta.url, "../tools/release/release-zip.ps1") ?? false }, () => {
   const old = execFileSync("git", ["show", "58843bef^:tools/release/release-zip.ps1"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(scanText(old).get("falconBundles"), 1);
   const now = readFileSync(join(ROOT, "tools", "release", "release-zip.ps1"), "utf8");

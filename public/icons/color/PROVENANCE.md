@@ -123,7 +123,10 @@ Copies checked into the repo (never links to the icon library on disk). Source s
 | people-community.svg | fluent-color/svg/ic_fluent_people_community_24_color.svg | Fluent Color, MIT |
 | scales.svg | noto-emoji/svg/emoji_u2696.svg | Noto Emoji, Apache-2.0 |
 | safe.svg | flat-color-icons/svg/safe.svg | flat-color-icons (icons8), MIT |
-| safe-gold.svg | own/safe-gold.svg | Vidar original art, own work; recoloured from flat-color-icons safe.svg to a gold ramp (body #b19234); Start picker vault cards |
+| safe-gold.svg | own/safe-gold.svg | Vidar original art, own work; recoloured from flat-color-icons safe.svg to a marigold ramp (body #ef9a0c); Start picker vault cards |
 | library.svg | flat-color-icons/svg/library.svg | flat-color-icons (icons8), MIT; Rune Library title marks |
+| notebook.svg | fluent-color/svg/ic_fluent_notebook_24_color.svg | Fluent Color, MIT; Memory runes and memory bands in Bare agent view and file heads |
+| toolbox-ocean.svg | toolbox-recolors/ic_fluent_toolbox_24_ocean.svg | Fluent Color toolbox, recoloured (Vidar), MIT; Modules: Settings category and module runesets in the Rune Library |
+| robot.svg | noto-emoji/svg/emoji_u1f916.svg | Noto Emoji, Apache-2.0; Auto Mode runeset in the Rune Library |
 
 Loaded by `src/icon-img.ts` (`iconImg(name)`).

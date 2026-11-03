@@ -5,25 +5,27 @@
 //                                      [--write]
 //   --home        a Bare home (the folder holding manifests and claude-config); default the newest folder under
 //                 %LOCALAPPDATA%\Vidar\homes that has a manifests folder.
-//   --manifest    a launch manifest; default the newest Claude one in <home>\manifests that records a
-//                 binary.version (a Raw Bare launch; hosted ones record none and are skipped).
+//   --manifest    a launch manifest; default the newest one for this agent in <home>\manifests: a Raw Bare launch
+//                 (records binary.version) or a Falcon-hosted one (`program: "falcon"`, binary.version null).
 //   --transcript  a session transcript (.jsonl); default the newest under the manifest's claude-config\projects
 //                 modified after the manifest's createdUtc whose lines carry a cwd.
 //   --profile     the profile whose overlay names are allowed and whose verifiedVersion --write edits;
 //                 default profiles\bare\claude.json in this repo.
-//   --write       when every check passes, rewrite only the `verifiedVersion` line of the profile to the manifest's
-//                 binary version. Nothing else is written, ever.
+//   --write       when every check passes, rewrite only the `verifiedVersion` line of the profile to the running
+//                 version (check 2's). Nothing else is written, ever.
 //
 // Checks (PASS / FAIL / UNKNOWN, each with evidence):
 //   1 env     every manifest env name is allowed (contracts/agent-env.json `allow`, the profile overlays, Vidar's own
 //             VIDAR_* / FALCON_SESSION / HOMEDRIVE / HOMEPATH / `=X:` drive entries) and none is in `drop`.
-//   2 version the transcript's `version` equals the manifest's binary version (UNKNOWN when the manifest has none,
-//             as a Falcon-hosted launch records none).
+//   2 version the transcript's `version` equals the manifest's binary.version (a Raw launch). A Falcon-hosted
+//             manifest records none: a single transcript version stands and the PASS detail says so.
+//             binary.verifiedVersion is the old pin and is never read as the running version.
 //   3 loads   a CLAUDE.md or AGENTS.md sits in the session cwd and the transcript holds 0 `instructions` /
 //             `nested_memory` attachments (UNKNOWN without that canary file).
 //   4 mode    every `permissionMode` in the transcript is `auto`.
 //   5 temp    the check turn's tool result (stdout of GetTempPath) is a path under the Bare home.
-// No check turn in the transcript: prints the prompt to paste into a Bare tab, exits 2.
+// No check turn in the transcript: prints the prompt to paste into a Bare tab, exits 2 (check 5's detail names a
+// refused tool call, as a print run outside auto mode records).
 // On all PASS prints the commit subject and body for the bump.
 //
 // Refuses: no home, manifest or transcript found (exit 2); --write unless all five checks pass (exit 1).
@@ -66,6 +68,7 @@ function defaultHome() {
   return dirs[0] ?? null;
 }
 
+// A Raw launch records binary.version; a Falcon-hosted one records `program: "falcon"` and no version.
 function newestClaudeManifest(home) {
   const dir = join(home, "manifests");
   if (!existsSync(dir)) return null;
@@ -73,10 +76,16 @@ function newestClaudeManifest(home) {
   for (const n of names) {
     try {
       const m = readJson(join(dir, n));
-      if (m.agent === "claude" && m.binary?.version) return join(dir, n);
+      if (m.agent === "claude" && (m.binary?.version || m.program === "falcon")) return join(dir, n);
     } catch { /* skip unreadable */ }
   }
   return null;
+}
+
+// The running version the launch records: a Raw manifest's binary.version; a Falcon-hosted one records none (null).
+// binary.verifiedVersion is the old pin, never the running version.
+function runningVersion(manifest) {
+  return manifest.binary?.version ? { version: manifest.binary.version, from: "manifest" } : null;
 }
 
 function listJsonl(dir) {
@@ -129,12 +138,18 @@ function checkEnv(manifest, contract, profile) {
   return ["PASS", `${manifest.envNames.length} names, all allowed, none dropped`];
 }
 
-function checkVersion(manifest, lines) {
+// The transcript's versions against the launch's running version; with none recorded (a Falcon-hosted launch) a
+// single transcript version stands, and the detail says so.
+function checkVersion(running, lines) {
   const seen = [...new Set(lines.map((l) => l.version).filter((v) => typeof v === "string"))];
-  const want = manifest.binary?.version;
   if (!seen.length) return ["UNKNOWN", "transcript carries no version"];
-  if (!want) return ["UNKNOWN", `manifest binary.version is empty; transcript ${seen.join(",")}`];
-  return seen.length === 1 && seen[0] === want ? ["PASS", `transcript ${seen[0]} = manifest ${want}`] : ["FAIL", `transcript ${seen.join(",")} vs manifest ${want}`];
+  if (!running) {
+    return seen.length === 1
+      ? ["PASS", `transcript ${seen[0]}; the manifest records no running version (Falcon-hosted), so the transcript's stands`]
+      : ["FAIL", `transcript mixes ${seen.join(",")}; the manifest records no running version`];
+  }
+  const want = running.version;
+  return seen.length === 1 && seen[0] === want ? ["PASS", `transcript ${seen[0]} = ${running.from} ${want}`] : ["FAIL", `transcript ${seen.join(",")} vs ${running.from} ${want}`];
 }
 
 function checkLoads(lines) {
@@ -159,6 +174,13 @@ function checkTurn(lines) {
   return null;
 }
 
+// Why a transcript holds no check turn: a refused tool call records its error as a string toolUseResult (in
+// `default` mode a print run's command "requires approval"). Null when no call was refused.
+function refusedTurn(lines) {
+  const r = lines.find((l) => typeof l.toolUseResult === "string" && /^Error:/.test(l.toolUseResult));
+  return r ? r.toolUseResult.replace(/^Error:\s*/, "").split(/\r?\n/)[0] : null;
+}
+
 function under(path, home) {
   const norm = (p) => pathResolve(p).toLowerCase();
   return (norm(path) + sep).startsWith(norm(home) + sep);
@@ -169,8 +191,9 @@ function main() {
   const profilePath = o.profile ? pathResolve(o.profile) : join(REPO, "profiles", "bare", "claude.json");
   const home = o.home ? pathResolve(o.home) : defaultHome();
   const manifestPath = o.manifest ? pathResolve(o.manifest) : home && newestClaudeManifest(home);
-  if (!manifestPath || !existsSync(manifestPath)) die(2, "No Raw Bare Claude manifest (one recording binary.version) found: a Raw Bare tab is needed (hosted launches record no version). Use --home or --manifest.");
+  if (!manifestPath || !existsSync(manifestPath)) die(2, "No Bare Claude manifest (a Raw one recording binary.version, or a Falcon-hosted one) found: a Bare tab is needed. Use --home or --manifest.");
   const manifest = readJson(manifestPath);
+  const running = runningVersion(manifest);
   const bareHome = manifest.homes?.home || home || dirname(dirname(manifestPath));
   const configDir = manifest.homes?.claudeConfig || join(bareHome, "claude-config");
   const created = Date.parse(manifest.createdUtc ?? "") || 0;
@@ -181,12 +204,13 @@ function main() {
   const contract = readJson(join(REPO, "contracts", "agent-env.json"));
 
   const turn = checkTurn(lines);
+  const refused = turn ? null : refusedTurn(lines);
   const rows = [
     ["1 env", ...checkEnv(manifest, contract, profile)],
-    ["2 version", ...checkVersion(manifest, lines)],
+    ["2 version", ...checkVersion(running, lines)],
     ["3 loads", ...checkLoads(lines)],
     ["4 mode", ...checkMode(lines)],
-    ["5 temp", ...(turn ? (under(turn, bareHome) ? ["PASS", `${turn} is under ${bareHome}`] : ["FAIL", `${turn} is outside ${bareHome}`]) : ["UNKNOWN", "no check turn"])],
+    ["5 temp", ...(turn ? (under(turn, bareHome) ? ["PASS", `${turn} is under ${bareHome}`] : ["FAIL", `${turn} is outside ${bareHome}`]) : ["UNKNOWN", refused ? `no check turn: the tool call was refused (${refused})` : "no check turn"])],
   ];
   console.log(`manifest   ${manifestPath}\ntranscript ${transcript}`);
   for (const [name, verdict, ev] of rows) console.log(`${verdict.padEnd(8)} ${name.padEnd(10)} ${ev}`);
@@ -195,7 +219,8 @@ function main() {
     console.log(`\nNo check turn in the transcript. Paste into a Bare tab, then rerun:\n${PROMPT}`);
     process.exit(2);
   }
-  const v = manifest.binary?.version;
+  // All PASS means the transcript carries one version, equal to the running one where that is recorded.
+  const v = running?.version ?? lines.find((l) => typeof l.version === "string")?.version;
   if (rows.some((r) => r[1] === "FAIL")) process.exit(1);
   if (rows.some((r) => r[1] === "UNKNOWN")) {
     if (o.write) die(1, "--write needs all five checks to pass.");

@@ -35,6 +35,13 @@ test("read mode: kind heads in Modify order, then KINDS order, each with its car
   assert.ok(tracked.filter(([k]) => k.startsWith("kind:")).every(([, dflt]) => dflt === true), "kind heads default open");
 });
 
+test("permission, setting and fact kinds take their own hue classes", () => {
+  assert.equal(kindGroups.kindHue("permission"), "hue-permission");
+  assert.equal(kindGroups.kindHue("setting"), "hue-setting");
+  assert.equal(kindGroups.kindHue("fact"), "hue-fact");
+  assert.equal(kindGroups.kindHue("memory"), "hue-none");
+});
+
 test("read mode: a single-kind runeset keeps its one head; an empty kind draws none", () => {
   const { root } = draw([m("a", "fact"), m("b", "fact")], { readOnly: true });
   assert.deepEqual(heads(root).map((h) => [h[1], h[2], h[4]]), [["Facts", "2/2", ["a", "b"]]]);

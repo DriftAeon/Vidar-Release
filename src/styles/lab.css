@@ -29,7 +29,7 @@
 .lab-group { display: flex; flex-direction: column; gap: var(--space-2); }
 .lab-group-head, .lab-sec-head {
   margin: 0; padding-bottom: var(--space-2); border-bottom: var(--border-w) solid var(--border);
-  font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg);
+  font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg);
 }
 .lab-item {
   display: flex; align-items: center; gap: var(--space-8); width: 100%; height: var(--row-24); padding: 0 var(--space-8); text-align: left;

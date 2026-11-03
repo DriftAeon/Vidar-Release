@@ -19,8 +19,13 @@ function fileName(path: string): string {
   return titleWords(last.replace(EXT, "")) || last;
 }
 
-/** A set, library or rune id in Title Case (format.ts titleWords), the id itself when that is empty: `kit-mine` → Kit Mine. */
-export const idLabel = (id: string): string => titleWords(id) || id;
+/** A set, library or rune id in Title Case (format.ts titleWords), the id itself when that is empty: `kit-mine` → Kit Mine.
+ *  The two built-in sets keep "In" capitalised (titleWords would lower it after the first word). */
+const BUILT_IN = /^built-in-(.+)$/;
+export const idLabel = (id: string): string => {
+  const agent = BUILT_IN.exec(id)?.[1];
+  return agent ? `Built In ${titleWords(agent)}` : titleWords(id) || id;
+};
 
 /** The text a tick row shows: an MCP server id in the same Title Case skills get (`vidar-control` → Vidar Control);
  *  the raw id stays in the row's title. */

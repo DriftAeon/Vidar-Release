@@ -77,6 +77,40 @@ test("a rune naming its set joins it (an unlisted set appended off), and the sat
   assert.deepEqual(g.satchel.map((o) => o.rune.id), ["x"]);
 });
 
+test("module runesets sit after the Rune Satchel under a Modules heading; Vidar Drive stays in the Vidar runeset", () => {
+  const runes = [rune("vidar", "vidar-drive"), rune("vidar", "jira-rule"), rune("vidar", "changes-rule"), rune("mine", "a"), rune("mine", "loose")];
+  const sets = [set("vidar", "vidar", [ref("vidar", "vidar-drive")], true), set("vidar", "changes", [ref("vidar", "changes-rule")]),
+    set("mine", "team", [ref("mine", "a")]), set("vidar", "jira", [ref("vidar", "jira-rule")])];
+  const { root } = draw(runes, sets);
+  assert.deepEqual(heads(root), ["Vidar", "Team", "Rune Satchel", "Changes", "Jira"]);
+  const kids = [...root.querySelector(".runes-lib-groups").children];
+  const mark = root.querySelector(".runes-lib-modules");
+  assert.equal(mark.querySelector(".runes-lib-modules-word").textContent, "Modules");
+  assert.equal(mark.querySelectorAll("img.icn").length, 2);
+  for (const img of mark.querySelectorAll("img.icn")) assert.match(img.getAttribute("src"), /toolbox-ocean\./, "the heading keeps the toolbox");
+  for (const id of ["changes", "jira"]) {
+    const src = root.querySelector(`[data-runeset="${id}"] > .runes-set-head .runes-scp img.icn`).getAttribute("src");
+    assert.match(src, new RegExp(`/icons/color/${id}\\.`), `${id} card draws its own icon`);
+  }
+  assert.ok(kids.indexOf(mark) > kids.indexOf(root.querySelector(".runes-satchel")));
+  assert.ok(kids.indexOf(mark) < kids.indexOf(root.querySelector('[data-runeset="changes"]')));
+  assert.deepEqual(ids(root.querySelector('[data-runeset="vidar"]')), ["vidar/vidar-drive"]);
+});
+
+test("each module runeset card draws its own module icon", () => {
+  const ids5 = ["changes", "jira", "notion", "slack", "unreal"];
+  const { root } = draw(ids5.map((i) => rune("vidar", `${i}-rule`)), ids5.map((i) => set("vidar", i, [ref("vidar", `${i}-rule`)])));
+  for (const id of ids5) {
+    const src = root.querySelector(`[data-runeset="${id}"] > .runes-set-head .runes-scp img.icn`).getAttribute("src");
+    assert.match(src, new RegExp(`/icons/color/${id}\\.`), `${id} card draws its own icon`);
+  }
+});
+
+test("no Modules heading without module runesets", () => {
+  const { root } = draw([rune("mine", "a"), rune("mine", "loose")], [set("mine", "team", [ref("mine", "a")])]);
+  assert.equal(root.querySelector(".runes-lib-modules"), null);
+});
+
 test("the title sits in a head row with the vault pane head's classes", () => {
   const { root } = draw(null, []);
   const head = root.querySelector(".runes-lib-head");
@@ -93,4 +127,39 @@ test("a library-pane runeset card takes the Satchel hue; the same runeset in the
   const vault = libCard(host, runes, "Installed", "installed", false, ctl, () => false, undefined, () => false, "installed", false);
   assert.ok(lib.classList.contains("hue-set") && !lib.classList.contains("hue-installed"), lib.className);
   assert.ok(vault.classList.contains("hue-installed") && !vault.classList.contains("hue-set"), vault.className);
+});
+
+test("the library lists Built In Claude and Built In Codex, each with its agent's tab icon and only its own runes", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { markFor } = await import("../src/launcher/menu-rows.ts");
+  const dir = new URL("../profiles/bare/vidar-runes/sets/", import.meta.url);
+  const members = (f) => [...readFileSync(new URL(f, dir), "utf8").matchAll(/<\?rune ([\w-]+)\?>/g)].map((m) => m[1]);
+  const claude = members("built-in-claude.md"), codex = members("built-in-codex.md");
+  assert.ok(claude.length && codex.length);
+  assert.ok(claude.every((id) => id.startsWith("claude-")), "no codex rune in the Claude set");
+  assert.ok(codex.every((id) => id.startsWith("codex-")), "no claude rune in the Codex set");
+  assert.throws(() => readFileSync(new URL("built-in.md", dir)), "the combined set is gone");
+  const runes = [...claude, ...codex].map((id) => rune("vidar", id, "skill"));
+  const { root } = draw(runes, [set("vidar", "built-in-claude", claude.map((id) => ref("vidar", id))), set("vidar", "built-in-codex", codex.map((id) => ref("vidar", id)))]);
+  assert.deepEqual(heads(root).slice(0, 2), ["Built In Claude", "Built In Codex"]);
+  for (const [name, agent, want] of [["built-in-claude", "claude", claude], ["built-in-codex", "codex", codex]]) {
+    const card = root.querySelector(`details[data-runeset="${name}"]`);
+    assert.deepEqual(ids(card).sort(), want.map((id) => `vidar/${id}`).sort());
+    assert.equal(card.querySelector(".runes-set-head .runes-scp img").getAttribute("src"), markFor(agent).icon);
+  }
+  // the Vidar Runeset draws Vidar's window icon, every other set keeps its glyph (no asset image)
+  const v = draw([rune("vidar", "x"), rune("mine", "y")], [set("vidar", "vidar", [ref("vidar", "x")], true), set("mine", "team", [ref("mine", "y")])]).root;
+  const src = (name) => v.querySelector(`details[data-runeset="${name}"] .runes-set-head .runes-scp img`).getAttribute("src");
+  assert.match(src("vidar"), /titlebar-32/);
+  assert.doesNotMatch(src("team"), /titlebar-32|claude|openai/);
+  // the Rune Satchel draws the backpack asset, not the globe
+  const sat = draw([rune("mine", "loose")], []).root.querySelector(".runes-satchel .runes-set-head .runes-scp");
+  assert.match(sat.querySelector("img").getAttribute("src"), /rune-satchel/);
+  assert.equal(sat.querySelector("img").classList.contains("grey"), false);
+  assert.equal(sat.querySelector("svg"), null, "no globe glyph beside it");
+  // Auto Mode draws the robot face; the other sets keep the globe
+  const am = draw([rune("vidar", "x"), rune("mine", "y")], [set("vidar", "auto-mode", [ref("vidar", "x")], true), set("mine", "team", [ref("mine", "y")])]).root;
+  const icon = (name) => am.querySelector(`details[data-runeset="${name}"] .runes-set-head .runes-scp img`).getAttribute("src");
+  assert.match(icon("auto-mode"), /robot/);
+  assert.doesNotMatch(icon("team"), /robot/);
 });

@@ -3,7 +3,7 @@
   "id": "bare",
   "agent": "claude",
   "binary": { "name": "claude.exe", "resolve": "allowlisted Path" },
-  "verifiedVersion": "2.1.316",
+  "verifiedVersion": "2.1.317",
   "host": { "name": "pwsh.exe", "args": ["-NoProfile", "-Command"] },
   "args": [
     "--setting-sources", "user",
@@ -73,7 +73,7 @@
     "profiles/bare/vidar-runes/skills/built-in/claude/claude-update-config.md",
     "profiles/bare/vidar-runes/skills/built-in/claude/claude-verify.md",
     "profiles/bare/vidar-runes/skills/built-in/claude/claude-workflow-authoring.md",
-    "profiles/bare/vidar-runes/sets/built-in.md",
+    "profiles/bare/vidar-runes/sets/built-in-claude.md",
     "profiles/bare/vidar-runes/permissions/drive-allow.md",
     "profiles/bare/vidar-runes/permissions/mode-auto.md",
     "profiles/bare/vidar-runes/hooks/guard-driver.md",

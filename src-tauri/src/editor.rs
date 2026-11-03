@@ -63,15 +63,21 @@ pub fn open_in_editor(path: String, line: u32) -> Result<(), String> {
     // Editors may not accept the \\?\ long-path prefix — hand them the plain form.
     let plain = cs.trim_start_matches("\\\\?\\").to_string();
     // spawn, never wait: first Rider launch takes seconds
-    Command::new(&exe)
-        .args(expand_args(&arg_template, &plain, line))
-        .scrubbed()
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+    editor_command(&exe, expand_args(&arg_template, &plain, line))
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The editor launch command: argv as given, session env scrubbed, stdio detached.
+fn editor_command(exe: &str, args: Vec<String>) -> Command {
+    let mut cmd = Command::new(exe);
+    cmd.args(args)
+        .scrubbed()
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    cmd
 }
 
 /// .exe only: Command::new on a .cmd/.bat hands the argv to cmd.exe, which re-parses it.
@@ -153,6 +159,19 @@ fn expand_args(template: &[String], file: &str, line: u32) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::settings::schema::EditorCfg;
+
+    #[test]
+    fn editor_command_carries_the_env_scrub() {
+        let cmd = editor_command("C:\\code.exe", vec!["a b".into()]);
+        let envs: Vec<_> = cmd.get_envs().collect();
+        for key in crate::proc_job::SCRUBBED_ENV {
+            assert!(
+                envs.iter().any(|(k, v)| *k == std::ffi::OsStr::new(key) && v.is_none()),
+                "{key} not scrubbed"
+            );
+        }
+        assert_eq!(cmd.get_args().collect::<Vec<_>>(), vec![std::ffi::OsStr::new("a b")]);
+    }
 
     #[test]
     fn editor_key_wins_then_rider_path_then_none() {

@@ -131,7 +131,7 @@
 #new-session .tab-face::after { width: var(--space-2); height: var(--space-16); }
 .tab-title {
   grid-row: 1; grid-column: 2; min-width: 0; height: var(--line-20); line-height: var(--line-20);
-  font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); /* title type, always bold (2026-10-10) */
+  font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-strong); /* title type, always bold (2026-10-10) */
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* viewed session's title in the theme accent (2026-10-13); hover lifts it to --fg because

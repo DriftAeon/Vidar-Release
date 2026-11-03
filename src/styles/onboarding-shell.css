@@ -17,7 +17,7 @@
   position: absolute; top: var(--space-24); left: var(--ob-seam); transform: translateX(-50%);
   padding: var(--space-4) var(--space-12);
   background: var(--bg); border: var(--border-w) solid var(--border-strong); border-radius: var(--radius-4);
-  font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong);
+  font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-strong);
   white-space: nowrap; pointer-events: none;
 }
 .ob-label:empty { display: none; }

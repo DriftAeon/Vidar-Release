@@ -17,6 +17,18 @@ import { setCard, setHead } from "../set-card";
 import { byKind, kindGroup } from "../kind-groups";
 import { idLabel } from "./row-name";
 import { VIDAR_LIBRARY, VIDAR_SET } from "./library-delete";
+import { BENCH_ICONS } from "../../panels/workbench-modules";
+import bundles from "../../../contracts/module-bundles.json" with { type: "json" };
+
+/** Card keys of the module runesets (one per module in the vidar library, `sets/<id>.md`): they draw their module's bench icon (BENCH_ICONS), not the globe. */
+export const MODULE_SET_KEYS:ReadonlySet<string> = new Set(Object.keys(bundles.bundles).map((id) => `set:${VIDAR_LIBRARY}/${id}`));
+/** Card keys of the two built-in runesets -> the agent whose session-tab icon their head draws. */
+const AGENT_SET_KEY = new RegExp(`^set:${VIDAR_LIBRARY}/built-in-(.+)$`);
+const agentOfSetKey = (key: string): string | undefined => AGENT_SET_KEY.exec(key)?.[1];
+import { markFor } from "../../launcher/menu-rows";
+import vidarIcon from "../../../src-tauri/icons/titlebar-32.png"; // the window's own icon (caption.ts draws the same file)
+import satchelIcon from "../../assets/rune-satchel.png"; // the Rune Satchel's backpack
+import { assetImg } from "../../settings/build/view";
 import { button, el } from "../../dom";
 import { vaultLibraries, type VaultView, type VaultViewRune } from "./cake";
 import { hueOf } from "./view-data";
@@ -243,7 +255,12 @@ export function libCard(c: CardHost, runes: VaultViewRune[], name: string, key: 
   for (const r of runes) { const b = r.recall ? lib.onDemand?.[oi++] : lib.bricks[bi++]; if (b) src.set(b, r); }
   const dimB = (b: (typeof bricks)[number]): boolean => dim(b.id, src.get(b));
   const on = bricks.filter((b) => !dimB(b)).length;
-  const det = setCard(library ? "hue-set" : hueOf(lib), setHead(name, `${on}/${bricks.length}`, "globe", undefined, headCheck));
+  const agent = agentOfSetKey(key);
+  // the agent's own session-tab art (the launcher's vendor mark), or Vidar's window icon for the Vidar Runeset, not the globe
+  const art = agent ? markFor(agent)?.icon : key === `set:${VIDAR_LIBRARY}/${VIDAR_SET}` ? vidarIcon : key === "satchel" ? satchelIcon : undefined;
+  const head = setHead(name, `${on}/${bricks.length}`, art ? null : MODULE_SET_KEYS.has(key) ? BENCH_ICONS[key.slice(`set:${VIDAR_LIBRARY}/`.length)] ?? "globe" : key === `set:${VIDAR_LIBRARY}/auto-mode` ? "robot" : "globe", undefined, headCheck);
+  if (art) head.querySelector(".runes-scp")?.appendChild(assetImg(art));
+  const det = setCard(library ? "hue-set" : hueOf(lib), head);
   det.dataset.library = runes[0]?.set?.library ?? runes[0]?.library ?? key;
   // the Rune Library opens its cards and folds their kind groups (rules and facts run long); the vault pane the reverse
   c.trackOpen(det, open, library);

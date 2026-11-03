@@ -31,7 +31,7 @@
 
 /* Generating: one line per source */
 /* heading labels between rune rows: plain text, not clickable, spacing above and no rule. Sub-labels stay plain */
-.runes-bare-label { margin-top: var(--space-8); padding-left: var(--space-4); font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); pointer-events: none; user-select: none; }
+.runes-bare-label { margin-top: var(--space-8); padding-left: var(--space-4); font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-bold); color: var(--fg); pointer-events: none; user-select: none; }
 .runes-bare-label.sub { margin-top: var(--space-4); padding-left: var(--space-12); font-family: var(--font-ui); font-size: var(--font-12); font-weight: var(--weight-regular); color: var(--fg-dim); }
 .runes-tray > .runes-bare-label:first-child { margin-top: 0; }
 .runes-bare-lines { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -193,9 +193,30 @@
   flex: none; min-width: 0; box-sizing: border-box; height: var(--row-32); line-height: calc(var(--row-32) - 2 * var(--border-w));
   margin-block: calc((var(--row-24) - var(--row-32)) / 2);
   padding: 0 var(--space-8); border-block: var(--border-w) solid var(--border-strong);
-  font-family: var(--font-title); font-size: var(--font-24); font-weight: var(--weight-strong); color: var(--fg);
+  font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-24); font-weight: var(--weight-strong); color: var(--fg);
   text-transform: uppercase; letter-spacing: var(--tracking-inscribed);
   text-indent: var(--tracking-inscribed); /* balances the tracking left after the last letter */
+}
+.runes-lib-groups { gap: var(--space-8); } /* library runeset cards breathe more than the shared 4px group gap */
+/* An open library card wears a 3px frame on its left, right and bottom (the top stays the 1px under the head); the ring below
+   covers its outer pixel, leaving 2px of fill visible. The 2 extra pixels
+   come out of the insets inside, so the content edge, the kind groups and every checkbox x stay where the 1px frame had them:
+   the head's side pad and the kind groups' side and last-bottom margins each give 2px back; the nested head's padding calc
+   (runes-bare.css nested has-check) already subtracts the nested border only, so 3 + 2 + 1 + pad = 1 + 4 + 1 + pad holds as is. */
+.runes-lib-groups > .runes-card[open] { border-width: var(--border-w) calc(var(--border-w) * 3) calc(var(--border-w) * 3); }
+.runes-lib-groups > .runes-card[open] > .runes-set-head { padding-inline: calc(var(--space-12) - var(--border-w) * 2); }
+.runes-lib-groups > .runes-card[open] > .runes-set { margin-inline: calc(var(--space-4) - var(--border-w) * 2); }
+.runes-lib-groups > .runes-card[open] > .runes-set:last-child { margin-bottom: calc(var(--space-6) - var(--border-w) * 2); } /* legacy space-6: the tray's own inset (runes.css last-child), less the 2 extra frame pixels */
+.runes-lib-groups > .runes-set.hue-set { --set-fill: var(--fill-runeset-library); } /* head fill; --set-frame and the hover mix follow it */
+/* a lighter blue ring over the frame's outer pixel, so the dark cards read on a blue pane; never the accent, which means selected */
+.runes-lib-groups > .runes-set.hue-set { outline: var(--border-w) solid var(--ring-runeset-library); outline-offset: calc(-1 * var(--border-w)); }
+/* The Modules heading: the pane title's inscription one size down, hairlines above and below the word, an icon each side */
+.runes-lib-modules { display: flex; align-items: center; justify-content: center; gap: var(--space-8); margin-top: var(--space-16); margin-bottom: var(--space-4); }
+.runes-lib-modules .icn { width: var(--space-16); height: var(--space-16); }
+.runes-lib-modules-word {
+  padding: 0 var(--space-8); border-block: var(--border-w) solid var(--border); line-height: var(--line-20);
+  font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-strong); color: var(--fg);
+  text-transform: uppercase; letter-spacing: var(--tracking-inscribed); text-indent: var(--tracking-inscribed);
 }
 /* Delete Runeset's row at the end of an open runeset card, after the kind groups (the .rp-actions row) */
 .runes-set-acts { padding: var(--space-6) var(--space-4); } /* legacy space-6: the tray's own inset, as the last kind group's bottom margin this row replaces */
@@ -227,7 +248,7 @@
 .runes-bare .runes-rn.act-paths:not(.is-dim) { opacity: 0.85; }
 .runes-bare .runes-glob { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--font-11); color: var(--fg-dim); }
 .runes-fork { padding: var(--space-8) var(--space-12); }
-.runes-fork-input { min-width: 0; flex: 1; box-sizing: border-box; background: var(--bg); color: var(--fg); border: var(--border-w) solid var(--accent); border-radius: var(--radius-4); padding: 0 var(--space-8); font: var(--weight-strong) var(--font-16)/var(--line-20) var(--font-title); }
+.runes-fork-input { min-width: 0; flex: 1; box-sizing: border-box; background: var(--bg); color: var(--fg); border: var(--border-w) solid var(--accent); border-radius: var(--radius-4); padding: 0 var(--space-8); font: var(--weight-strong) var(--font-16)/var(--line-20) var(--font-title); font-feature-settings: normal; }
 .runes-fork-input:hover:not(:disabled) { border-color: var(--fg); }
 .runes-fork-input:focus-visible { outline: var(--border-w) solid var(--accent); outline-offset: var(--space-2); }
 .runes-fork-input:active:not(:disabled) { background: var(--bg-selected); }

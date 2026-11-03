@@ -17,6 +17,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJson } from "../lib/json.mjs";
 import { root as repoRoot } from "../lib/paths.mjs";
+import { isExportedTree } from "../lib/release-layout.mjs";
 import { LANGS, applyPins, capsOf, checkFixture, gather, idUnionProblems, nextFixture, ownsMatch, pinRefusal, scopeFiles, strictCounts, tableIds, tierOf } from "./key-words.mjs";
 
 // AGENT_LITERALS_ROOT / AGENT_LITERALS_FIXTURE point the CLI at a temp tree (tests only).
@@ -191,6 +192,7 @@ const arg = (flags, name) => { const i = flags.indexOf(name); return i >= 0 && f
 const readJsonOr = (p, d) => (existsSync(p) ? readJson(p) : d);
 const writeJson = (p, v) => writeFileSync(p, JSON.stringify(v, null, 2) + "\n");
 const rel = (p) => relative(ROOT, p).replace(/\\/g, "/");
+const EXPORTED = isExportedTree(ROOT);
 const CLASSES = ["S1", "S2", "S3", "S4", "F", "St", "C"];
 
 /** Modified or untracked paths among the fixtures and the scanned files only (L7); schemas under src-tauri/gen ignored. */
@@ -237,7 +239,9 @@ async function keysMain(flags, schema3) {
   const g = await gather(ROOT, langs, pinTarget ? [pinTarget.replace(/:\d+$/, "").replace(/\\/g, "/")] : only);
   for (const l of g.missing) console.log(`missing scanner: ${l}`);
   const pinsDoc = readJsonOr(PINS,{ $schema: 1, pins: [] });
-  const { unpinned, problems } = applyPins(g.entries, pinsDoc.pins ?? [], g.loaded, only);
+  // An exported tree lacks its export-ignored files (tools/release/ and the like): a pin on one is absent by design there, not dead.
+  const pins = (pinsDoc.pins ?? []).filter((p) => !(EXPORTED && p.file && !existsSync(join(ROOT, p.file))));
+  const { unpinned, problems } = applyPins(g.entries, pins, g.loaded, only);
   const cur = { caps: capsOf(g.entries), strict: strictCounts(unpinned) };
   const exit = (code) => process.exit(code);
   if (pinTarget) {

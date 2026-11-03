@@ -4,7 +4,7 @@
 .br-full { display: flex; flex-direction: column; gap: var(--space-16); outline: none; }
 .br-full-top { display: flex; align-items: center; gap: var(--space-8); height: var(--row-28); min-width: 0; }
 .br-grow { flex: 1; }
-.br-full-title { font-family: var(--font-title); font-size: var(--font-13); font-weight: var(--weight-strong); line-height: var(--line-20); overflow-wrap: anywhere; }
+.br-full-title { font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-13); font-weight: var(--weight-strong); line-height: var(--line-20); overflow-wrap: anywhere; }
 .br-full-icon { margin-right: var(--space-8); }
 .br-full .br-fields { flex: none; }
 .br-stack { display: flex; flex-direction: column; gap: var(--space-16); }

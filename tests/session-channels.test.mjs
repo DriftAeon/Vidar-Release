@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { missingInputs } from "./helpers/optional-input.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
@@ -27,9 +28,12 @@ test("every carrier is plumbing or a Rust rune kind", () => {
   assert.deepEqual(rows.filter((r) => !known.has(r.carrier)).map((r) => `${r.id}: ${r.carrier}`), []);
 });
 
-test("every key is a header key", () => {
+test("every key is a header key", { skip: missingInputs(import.meta.url, "../tools/runes/header.mjs") ?? false }, () => {
   const header = read("tools/runes/header.mjs");
   for (const k of KEYS) assert.ok(header.includes(`"${k}"`) || header.includes(`${k}:`), `${k} not in header.mjs`);
+});
+
+test("every row key is a known key", () => {
   assert.deepEqual(rows.filter((r) => "key" in r && !KEYS.includes(r.key)).map((r) => `${r.id}: ${r.key}`), []);
 });
 

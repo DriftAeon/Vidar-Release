@@ -110,6 +110,10 @@
 .runes-set.hue-hook { --set-fill: var(--fill-hook); --set-ink: var(--fg); } /* white like the other heads, about 2.7:1 on the gold; the fill may change later */
 .runes-set.hue-rule { --set-fill: var(--fill-rule); --set-ink: var(--fg); }
 .runes-set.hue-plugin { --set-hue: var(--fill-plugin); --set-fill: var(--fill-plugin); --set-ink: var(--fg); }
+.runes-set.hue-mcp { --set-fill: var(--fill-mcp); --set-ink: var(--fg); }
+.runes-set.hue-permission { --set-fill: var(--fill-permission); --set-ink: var(--fg); }
+.runes-set.hue-setting { --set-fill: var(--fill-setting); --set-ink: var(--fg); }
+.runes-set.hue-fact { --set-fill: var(--fill-fact); --set-ink: var(--fg); }
 .runes-set.hue-vidar { --set-fill: var(--fill-vidar); --set-ink: var(--fg); }
 .runes-set:has(> .runes-set-head:hover) { --set-frame: color-mix(in srgb, var(--set-fill) 88%, var(--fg)); }
 .runes-set > .runes-set, .runes-card { border: var(--border-w) solid var(--set-frame); }
@@ -129,7 +133,7 @@
 .runes-card > .runes-set-head {
   box-sizing: border-box; padding: var(--space-6) var(--space-12); /* legacy space-6: the bigger name and icon take back the 8px pad's height */
 }
-.runes-card > .runes-set-head .runes-sn { font-family: var(--font-title); font-size: var(--font-16); }
+.runes-card > .runes-set-head .runes-sn { font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-16); }
 .runes-card > .runes-set-head .runes-scp .icn { width: var(--space-16); height: var(--space-16); }
 .runes-scp { display: flex; }
 .runes-scp .icn, .runes-chip .icn, .runes-cond .icn { width: var(--space-12); height: var(--space-12); flex: none; }

@@ -23,7 +23,7 @@
 .vpick-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
 .vpick-name-row { display: flex; align-items: center; gap: var(--space-8); }
 .vpick-icon { flex: none; width: var(--font-16); height: var(--font-16); }
-.vpick-name { flex: none; font-family: var(--font-title); font-size: var(--font-16); font-weight: var(--weight-strong); }
+.vpick-name { flex: none; font-family: var(--font-title); font-feature-settings: normal; font-size: var(--font-16); font-weight: var(--weight-strong); }
 .vpick-body { padding: var(--space-4); border-top: var(--border-w) solid var(--vpick-fill); }
 /* Start and its divider sit at the panel's foot, clear of the cards: .vpick fills the scroll box */
 .runes-list:has(> .vpick) { min-height: 100%; }

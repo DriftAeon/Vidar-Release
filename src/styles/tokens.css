@@ -189,11 +189,18 @@
   --fill-hook: #ab871a; /* gold (was #4b462b); bright, so its ink is --bg */
   --fill-vidar: #5e1417; /* red (was #71181b, #493039) */
   --fill-rule: #233459; /* blue (was #2e3e58) */
-  --fill-plugin: #51302e; /* #b00500's hue at the other fills' depth and saturation */
+  /* The four below: each base hue with 15 points less HSL saturation and 8 points less lightness. */
+  --fill-plugin: #543442; /* plum, from #7a3655 */
+  --fill-permission: #514262; /* purple, from #65438a */
+  --fill-setting: #3c432a; /* olive, from #58672e */
+  --fill-mcp: #21464e; /* teal, from #226776 */
+  --fill-fact: #78443d; /* brick, from #a4473a */
   /* Generated rune libraries' set-head hue (2026-10-20) */
   --hue-generated: #3fbfb0;
   /* Set-only libraries (Add Runeset) and the Inherited Runes card */
   --hue-set: #906621; /* brown (was the salmon #e07a7a) */
+  --fill-runeset-library: #060d18; /* the Rune Library's runeset cards, head fill and frame: a near-black blue */
+  --ring-runeset-library: #647282; /* their 1px ring: #2c405b mixed 30% toward --fg */
   --hue-inherited: #4f7df0;
   /* Claude's own sets (the Claude runeset): the Flow Output orange, so they part from the base runeset and the Vidar Runeset */
   --hue-agent-claude-set: #c97a4a;

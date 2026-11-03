@@ -53,8 +53,9 @@ const ASSET_ICONS: Record<string, string> = {
   "codex-profiles": openaiIcon, "agent-profiles": claudeIcon, eyedropper: pickerIcon, falcon: falconIcon,
 };
 
-function assetImg(src: string): HTMLImageElement {
+export function assetImg(src: string): HTMLImageElement {
   const img = iconImg("mic"); // same class and a11y attributes as every other row mark
+  img.classList.remove("icn-grey"); // "mic" is a grey icon; these marks keep their own colour
   img.src = src;
   return img;
 }

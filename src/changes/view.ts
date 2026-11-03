@@ -7,7 +7,7 @@
 import { el, iconBtn as domIconBtn, textBtn } from "../dom";
 import { iconImg } from "../icon-img";
 import { lucide, type LucideName } from "../icons";
-import { clearEmptyState, fillEmptyState, goButton } from "../panels/empty-state";
+import { brandIcon, clearEmptyState, fillEmptyState, goButton } from "../panels/empty-state";
 import type { ChangesStatus, P4Status, UnrealAssetDiff } from "../ipc";
 import { ASSET_DIFF_TIP, isAssetFile, slotKey } from "./asset-diff";
 import { buildSlots } from "./asset-slots";
@@ -389,7 +389,7 @@ export function buildView(h: Handlers): View {
 
   function drawNoRepo(cwd: string, note: string | null) {
     fillEmptyState(empty, {
-      icon: lucide("folder-x", "icn"),
+      icon: brandIcon("folder"),
       title: "Not a Git Repository",
       path: cwd,
       actions: [goButton("Generate Git Prompt", () => h.gitPrompt())],
@@ -539,7 +539,7 @@ export function buildView(h: Handlers): View {
     applyLock(s);
     list.hidden = !(repo && total > 0) && !(p4ok && p4n > 0);
     const noP4 = p4 !== null && p4.kind === "no-p4" ? p4 : null;
-    if (s.mode === "no-folder") drawEmpty("folder", "No Folder", null);
+    if (s.mode === "no-folder") fillEmptyState(empty, { icon: brandIcon("folder"), title: "No Folder" });
     else if (s.mode === "no-repo") drawNoRepo(s.cwd, s.note);
     else if (noP4) drawNoP4(noP4.reason);
     else if (repo && total === 0) drawEmpty(null, "No Changes", null);
