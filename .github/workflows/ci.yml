@@ -46,8 +46,20 @@ jobs:
           Copy-Item dist/assets dist-falcon/assets -Recurse
           Copy-Item dist/icons dist-falcon/icons -Recurse
 
+      # The test steps tee their output and, on failure, print one ::error annotation per failing
+      # test (tools/gate/ci-annotate.ps1): annotations are public, job logs need auth.
+      # tools/release/ci-local.ps1 runs these same run blocks locally; keep them self-contained.
       - name: Node tests
-        run: npm test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
+          $log = Join-Path ($env:RUNNER_TEMP ?? $env:TEMP) 'node-test.log'
+          $env:NODE_OPTIONS = '--test-reporter=tap --test-reporter-destination=stdout'
+          npm test 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE ?? 1
+          if ($code -ne 0) { pwsh -NoProfile -File tools/gate/ci-annotate.ps1 -Kind node -Log $log -Title 'Node test' }
+          exit $code
 
       - name: Cargo check (Vidar)
         run: cargo check --manifest-path src-tauri/Cargo.toml
@@ -56,7 +68,26 @@ jobs:
         run: cargo check --manifest-path src-falcon/Cargo.toml
 
       - name: Cargo test (Vidar)
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        id: vidar_test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
+          $log = Join-Path ($env:RUNNER_TEMP ?? $env:TEMP) 'cargo-test-vidar.log'
+          cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE ?? 1
+          if ($code -ne 0) { pwsh -NoProfile -File tools/gate/ci-annotate.ps1 -Kind cargo -Log $log -Title 'Vidar test' }
+          exit $code
 
+      # Runs after a failed Vidar test too, so one push reports both crates.
       - name: Cargo test (Falcon)
-        run: cargo test --manifest-path src-falcon/Cargo.toml
+        if: ${{ !cancelled() && steps.vidar_test.conclusion != 'skipped' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
+          $log = Join-Path ($env:RUNNER_TEMP ?? $env:TEMP) 'cargo-test-falcon.log'
+          cargo test --manifest-path src-falcon/Cargo.toml --no-fail-fast 2>&1 | ForEach-Object { "$_" } | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE ?? 1
+          if ($code -ne 0) { pwsh -NoProfile -File tools/gate/ci-annotate.ps1 -Kind cargo -Log $log -Title 'Falcon test' }
+          exit $code

@@ -345,8 +345,12 @@ mod tests {
         d
     }
 
+    /// One-shot identity for every test git call: the CI runner has none, and `git merge` refuses
+    /// before merging without one (no conflict, so the conflict test saw a clean path).
+    const ID: [&str; 6] = ["-c", "user.name=t", "-c", "user.email=t@t.t", "-c", "core.autocrlf=false"];
+
     fn g(cwd: &Path, args: &[&str]) {
-        let mut full = vec!["-c", "user.name=t", "-c", "user.email=t@t.t", "-c", "core.autocrlf=false"];
+        let mut full = ID.to_vec();
         full.extend_from_slice(args);
         git(cwd, &full, &GitOpts::read(Duration::from_secs(30), 1 << 20)).unwrap();
     }
@@ -512,7 +516,9 @@ mod tests {
         g(&r, &["switch", "-q", &here]);
         put(&r, "BP_C.uasset", "empty");
         g(&r, &["commit", "-qam", "main"]);
-        let _ = crate::gitrun::run(&r, &["merge", "side"], &GitOpts::read(Duration::from_secs(30), 1 << 20)).unwrap();
+        let merge = [&ID[..], &["merge", "side"]].concat();
+        let (code, _) = crate::gitrun::run(&r, &merge, &GitOpts::read(Duration::from_secs(30), 1 << 20)).unwrap();
+        assert_eq!(code, Some(1), "the merge must stop on the conflict");
         let (d, _) = run(&r, &p("BP_C.uasset"), false);
         assert_eq!((d.status, d.rows.len(), d.notes), (DiffStatus::Unknown, 0, vec![N_CONFLICT.to_string()]));
     }

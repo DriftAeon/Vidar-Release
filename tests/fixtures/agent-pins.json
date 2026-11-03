@@ -652,6 +652,12 @@
       "why": "wire-name"
     },
     {
+      "file": "tools/release/ci-local.ps1",
+      "anchor": "ci-local: ] $Set = 'claude-codex' , [ switch",
+      "n": 1,
+      "why": "wire-name"
+    },
+    {
       "file": "tools/release/pack-index.mjs",
       "anchor": "PACK_UPDATABLE: , \"agent-profiles\" , \"codex-profiles\" , \"voice-stock\" ,",
       "n": 1,
